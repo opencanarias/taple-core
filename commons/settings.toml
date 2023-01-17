@@ -1,0 +1,17 @@
+[network]
+p2pport = 50000
+addr = "127.0.0.1"
+access-points = []
+
+[node]
+httpport = 3000
+key-derivator = "Ed25519"
+digest-derivator = "Blake3_256"
+replication-factor = 0.25
+timeout = 3000
+
+[database]
+path = "./store"
+
+[governance]
+members = []

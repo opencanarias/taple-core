@@ -1,0 +1,25 @@
+[package]
+name = "ledger"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = { version = "1.20.1", features = ["sync", "rt", "time"] }
+async-trait = "0.1.56"
+thiserror = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+base64 = "0.13"
+serde_json = "1.0"
+log = "0.4"
+jsonschema = "0.16"
+chrono={ version = "0.4", features = ["clock"]}
+
+commons = { path = "../commons" }
+governance = { path = "../governance" }
+message = { path = "../message" }
+
+[dev-dependencies]
+leveldb = "0.8"
+tempdir = "0.3"
