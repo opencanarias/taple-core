@@ -1,0 +1,22 @@
+[package]
+name = "governance"
+version = "0.0.1"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "governance"
+path = "src/lib.rs"
+bench = false
+
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+tokio = { version = "1.20.1", features = ["sync", "rt", "time"] }
+thiserror = "1.0"
+rand = { version = "0.8",  features = ["small_rng"] } #Elimina en futuro. Usandose para crypto_utils en governance.rs:19:35
+jsonschema = "0.16"
+serde_json = "1.0"
+log = "0.4"
+async-trait = "0.1.58"
+commons = { path = "../commons" }
