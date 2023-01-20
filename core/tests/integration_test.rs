@@ -122,6 +122,57 @@ fn not_database_conflict() {
 }
 
 #[test]
+fn event_creation_json_patch() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        let mut node = NodeBuilder::new()
+            .with_addr("/memory".into())
+            .with_p2p_port(40000)
+            .with_seed("40000".into())
+            .with_pass_votation(1)
+            .with_dev_mode(true)
+            .with_timeout(100)
+            .build();
+        node.start().await.unwrap();
+        let node = node.get_api();
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        let result = node
+            .create_governance(RequestPayload::Json(
+                serde_json::to_string(&governance_one()).unwrap(),
+            ))
+            .await;
+        let governance_id = result.unwrap().subject_id.unwrap();
+        let result = node
+            .create_subject(
+                governance_id.clone(),
+                "prueba".into(),
+                "".into(),
+                RequestPayload::Json(
+                    serde_json::to_string(&serde_json::json!({"a": "test"})).unwrap(),
+                ),
+            )
+            .await;
+        assert!(result.is_ok());
+        let subject_id = result.unwrap().subject_id.unwrap();
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        let result = node
+            .create_event(
+                subject_id.clone(),
+                RequestPayload::JsonPatch(String::from("[{\"op\":\"replace\",\"path\":\"/a\",\"value\":\"test\"}]")),
+            )
+            .await;
+        assert!(result.is_ok());
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let result = node.get_subject(subject_id).await;
+        assert!(result.is_ok());
+        let result = result.unwrap();
+        assert_eq!(result.sn, 1);
+        let result = node.shutdown().await;
+        assert!(result.is_ok());
+    });
+}
+
+#[test]
 fn governance_transmission() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
@@ -551,6 +602,86 @@ fn event_creation() {
 }
 
 #[test]
+fn event_creation_case_100_quorum_and_not_self_validation() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        let mut node = NodeBuilder::new()
+            .with_addr("/memory".into())
+            .with_p2p_port(40000)
+            .with_seed("40000".into())
+            .with_timeout(100)
+            .with_pass_votation(1)
+            .with_dev_mode(true)
+            .build();
+        node.start().await.unwrap();
+        let node = node.get_api();
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        let mut node_two = NodeBuilder::new()
+            .with_addr("/memory".into())
+            .with_p2p_port(40001)
+            .with_seed("40001".into())
+            .with_timeout(100)
+            .with_pass_votation(1)
+            .with_dev_mode(true)
+            .add_access_point(
+                "/memory/40000/p2p/12D3KooWBGEMfdAeRHp5eZ1zTpyEeZyvJYoBrDo9WLEtjWZWnCwD".into(),
+            )
+            .build();
+        node_two.start().await.unwrap();
+        let node_two = node_two.get_api();
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        let result = node
+            .create_governance(RequestPayload::Json(
+                serde_json::to_string(&governance_two_100()).unwrap(),
+            ))
+            .await;
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        let governance_id = result.unwrap().subject_id.unwrap();
+        let result = node
+            .create_subject(
+                governance_id.clone(),
+                "prueba".into(),
+                "namespace1".into(),
+                RequestPayload::Json(
+                    serde_json::to_string(&serde_json::json!({
+                        "a": "69"
+                    }))
+                    .unwrap(),
+                ),
+            )
+            .await;
+        assert!(result.is_ok());
+        let subject_id = result.unwrap().subject_id.unwrap();
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        let result = node
+            .create_event(
+                subject_id.clone(),
+                RequestPayload::Json(
+                    serde_json::to_string(&serde_json::json!({
+                        "a": "70"
+                    }))
+                    .unwrap(),
+                ),
+            )
+            .await;
+        assert!(result.is_ok());
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+        let sn_first = node.get_subject(subject_id.clone()).await;
+        assert!(sn_first.is_ok());
+        let sn_first = sn_first.unwrap().sn;
+        let sn_second = node_two.get_subject(subject_id.clone()).await;
+        assert!(sn_second.is_ok());
+        let sn_second = sn_second.unwrap().sn;
+        assert_eq!(sn_first, sn_second);
+        let result = node.shutdown().await;
+        assert!(result.is_ok());
+        let result = node_two.shutdown().await;
+        assert!(result.is_ok());
+    });
+}
+
+
+#[test]
 fn event_creation_not_allowed() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
@@ -671,7 +802,6 @@ fn event_creation_failed() {
             )
             .await;
         assert!(result.is_err());
-        println!("{:?}", result);
         let result = node.shutdown().await;
         tokio::time::sleep(Duration::from_secs(1)).await;
         assert!(result.is_ok());
@@ -728,7 +858,133 @@ fn add_new_member_to_governance() {
         tokio::time::sleep(Duration::from_secs(1)).await;
         assert!(result.is_ok());
         let result =
-            get_signatures_with_timeout(node.clone(), governance_id.clone(), 1, 2, 5000).await;
+            get_signatures_with_timeout(node.clone(), governance_id.clone(), 1, 2, 1000).await;
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        assert!(result.is_ok());
+        let result = node_two.get_subject(governance_id.clone()).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().sn, 1);
+        let result = Arc::try_unwrap(node).unwrap().shutdown().await;
+        assert!(result.is_ok());
+        let result = Arc::try_unwrap(node_two).unwrap().shutdown().await;
+        assert!(result.is_ok());
+    });
+}
+
+#[test]
+fn add_new_member_to_governance_all_acceptance_true() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        let mut node = NodeBuilder::new()
+            .with_addr("/memory".into())
+            .with_p2p_port(40000)
+            .with_seed("40000".into())
+            .with_timeout(100)
+            .build();
+        node.start().await.unwrap();
+        let node = node.get_api();
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        let mut node_two = NodeBuilder::new()
+            .with_addr("/memory".into())
+            .with_p2p_port(40001)
+            .with_seed("40001".into())
+            .with_timeout(100)
+            .add_access_point(
+                "/memory/40000/p2p/12D3KooWBGEMfdAeRHp5eZ1zTpyEeZyvJYoBrDo9WLEtjWZWnCwD".into(),
+            )
+            .build();
+        node_two.start().await.unwrap();
+        let node_two = node_two.get_api();
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        let result = node
+            .create_governance(RequestPayload::Json(
+                serde_json::to_string(&governance_one()).unwrap(),
+            ))
+            .await;
+        let governance_id = result.unwrap().subject_id.unwrap();
+        let node = Arc::new(node);
+        let node_two = Arc::new(node_two);
+        let result =
+            get_signatures_with_timeout(node.clone(), governance_id.clone(), 0, 1, 5000).await;
+        assert!(result.is_ok());
+        let result = node_two.get_subject(governance_id.clone()).await;
+        assert!(result.is_err());
+        let result = node
+            .create_event(
+                governance_id.clone(),
+                RequestPayload::Json(serde_json::to_string(&governance_two_allowance_all_false()).unwrap()),
+            )
+            .await;
+        assert!(result.is_ok());
+        let id = result.unwrap().request_id;
+        let result = node.approval_request(id, Acceptance::Accept).await;
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        assert!(result.is_ok());
+        let result =
+            get_signatures_with_timeout(node.clone(), governance_id.clone(), 1, 2, 1000).await;
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        assert!(result.is_ok());
+        let result = node_two.get_subject(governance_id.clone()).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().sn, 1);
+        let result = Arc::try_unwrap(node).unwrap().shutdown().await;
+        assert!(result.is_ok());
+        let result = Arc::try_unwrap(node_two).unwrap().shutdown().await;
+        assert!(result.is_ok());
+    });
+}
+
+#[test]
+fn add_new_member_to_governance_051_quorum() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async {
+        let mut node = NodeBuilder::new()
+            .with_addr("/memory".into())
+            .with_p2p_port(40000)
+            .with_seed("40000".into())
+            .with_timeout(100)
+            .build();
+        node.start().await.unwrap();
+        let node = node.get_api();
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        let mut node_two = NodeBuilder::new()
+            .with_addr("/memory".into())
+            .with_p2p_port(40001)
+            .with_seed("40001".into())
+            .with_timeout(100)
+            .add_access_point(
+                "/memory/40000/p2p/12D3KooWBGEMfdAeRHp5eZ1zTpyEeZyvJYoBrDo9WLEtjWZWnCwD".into(),
+            )
+            .build();
+        node_two.start().await.unwrap();
+        let node_two = node_two.get_api();
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        let result = node
+            .create_governance(RequestPayload::Json(
+                serde_json::to_string(&governance_one()).unwrap(),
+            ))
+            .await;
+        let governance_id = result.unwrap().subject_id.unwrap();
+        let node = Arc::new(node);
+        let node_two = Arc::new(node_two);
+        let result =
+            get_signatures_with_timeout(node.clone(), governance_id.clone(), 0, 1, 5000).await;
+        assert!(result.is_ok());
+        let result = node_two.get_subject(governance_id.clone()).await;
+        assert!(result.is_err());
+        let result = node
+            .create_event(
+                governance_id.clone(),
+                RequestPayload::Json(serde_json::to_string(&governance_two_051()).unwrap()),
+            )
+            .await;
+        assert!(result.is_ok());
+        let id = result.unwrap().request_id;
+        let result = node.approval_request(id, Acceptance::Accept).await;
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        assert!(result.is_ok());
+        let result =
+            get_signatures_with_timeout(node.clone(), governance_id.clone(), 1, 2, 1000).await;
         tokio::time::sleep(Duration::from_secs(1)).await;
         assert!(result.is_ok());
         let result = node_two.get_subject(governance_id.clone()).await;
@@ -1337,7 +1593,7 @@ fn test_get_rejected_event() {
             .build();
         node.start().await.unwrap();
         let node = node.get_api();
-        tokio::time::sleep(Duration::from_secs(1)).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
         let mut node_two = NodeBuilder::new()
             .with_addr("/memory".into())
             .with_p2p_port(40001)
@@ -1349,7 +1605,7 @@ fn test_get_rejected_event() {
             .build();
         node_two.start().await.unwrap();
         let node_two = node_two.get_api();
-        tokio::time::sleep(Duration::from_secs(1)).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
         let mut node_three = NodeBuilder::new()
             .with_addr("/memory".into())
             .with_p2p_port(40002)
@@ -1361,12 +1617,13 @@ fn test_get_rejected_event() {
             .build();
         node_three.start().await.unwrap();
         let node_three = node_three.get_api();
-        tokio::time::sleep(Duration::from_secs(1)).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
         let result = node
             .create_governance(RequestPayload::Json(
                 serde_json::to_string(&governance_two()).unwrap(),
             ))
             .await;
+        assert!(result.is_ok());
         let governance_id = result.unwrap().subject_id.unwrap();
         let node = Arc::new(node);
         let node_two = Arc::new(node_two);
@@ -1416,6 +1673,7 @@ fn test_get_rejected_event() {
         let result =
             get_signatures_with_timeout(node_three.clone(), governance_id.clone(), 2, 3, 1000)
                 .await;
+        tokio::time::sleep(Duration::from_millis(500)).await;
         assert!(result.is_ok());
         let result = node_three.get_subject(governance_id.clone()).await;
         assert!(result.is_ok());

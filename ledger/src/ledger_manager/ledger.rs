@@ -312,8 +312,12 @@ impl Ledger {
                 .get_event_from_db(&subject_id, sn)
                 .expect("Tiene que haber evento");
             match self.apply_event_sourcing(event, subject_schema) {
-                Ok(ledger_state) => Ok(ledger_state),
-                Err(e) => Err(e),
+                Ok(ledger_state) => {
+                    Ok(ledger_state)
+                },
+                Err(e) => {
+                    Err(e)
+                },
             }
         } else {
             Ok(ledger_state)

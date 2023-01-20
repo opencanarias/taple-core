@@ -2,22 +2,24 @@ use commons::{
     channel::{ChannelData, MpscChannel},
     identifier::KeyIdentifier,
 };
+use futures::future::{AbortHandle, Abortable, Aborted};
+use log::debug;
 use serde::{de::DeserializeOwned, Serialize};
-use std::sync::Arc;
+use std::collections::HashMap;
+use tokio::task::JoinHandle;
 
-use super::{algorithm::Algorithm, MessageTask};
+use super::algorithm::Algorithm;
 
 use crate::{
     error::Error, message_sender::MessageSender, MessageConfig, MessageTaskCommand,
     TaskCommandContent,
 };
-use dashmap::DashMap;
 
 pub struct MessageTaskManager<T>
 where
     T: TaskCommandContent + Serialize + DeserializeOwned,
 {
-    list: Arc<DashMap<String, MessageTask<T>>>,
+    list: HashMap<String, (JoinHandle<Result<Result<(), Error>, Aborted>>, AbortHandle)>,
     receiver: MpscChannel<MessageTaskCommand<T>, ()>,
     sender: MessageSender,
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
@@ -32,7 +34,7 @@ impl<T: TaskCommandContent + Serialize + DeserializeOwned + 'static> MessageTask
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
     ) -> MessageTaskManager<T> {
         MessageTaskManager {
-            list: Arc::new(DashMap::new()),
+            list: HashMap::new(),
             receiver,
             sender,
             shutdown_sender,
@@ -70,12 +72,13 @@ impl<T: TaskCommandContent + Serialize + DeserializeOwned + 'static> MessageTask
             } {
                 MessageTaskCommand::Request(id, message, targets, config) => match id {
                     Some(id) => {
-                        self.create_indefinite_message_task(id, message, targets, config)?
+                        self.create_indefinite_message_task(id, message, targets, config)
+                            .await?;
                     }
                     None => self.create_message_task(message, targets, config)?,
                 },
                 MessageTaskCommand::Cancel(id) => {
-                    self.cancel_message_task(&id).await?;
+                    self.cancel_task(&id).await?;
                 }
             },
             None => {
@@ -85,34 +88,57 @@ impl<T: TaskCommandContent + Serialize + DeserializeOwned + 'static> MessageTask
         Ok(())
     }
 
-    pub(crate) fn create_indefinite_message_task(
+    async fn create_indefinite_message_task(
         &mut self,
         id: String,
         content: T,
         targets: Vec<KeyIdentifier>,
         config: MessageConfig,
     ) -> Result<(), Error> {
-        if let Some(mut entry) = self.list.get_mut(&id) {
-            entry.change_data(content);
-        } else {
-            self.list.insert(
-                id.clone(),
-                MessageTask::new(
-                    content,
+        if let Some(_entry) = self.list.get(&id) {
+            self.cancel_task(&id).await?;
+        }
+        let (abort_handle, abort_registration) = AbortHandle::new_pair();
+        self.list.insert(
+            id,
+            (
+                tokio::spawn(Abortable::new(
                     Algorithm::make_indefinite_future(
-                        id,
-                        self.list.clone(),
                         self.sender.clone(),
                         config,
+                        content,
+                        targets,
                     ),
-                    targets,
-                ),
-            );
-        }
+                    abort_registration,
+                )),
+                abort_handle,
+            ),
+        );
         Ok(())
     }
 
-    pub(crate) fn create_message_task(
+    async fn cancel_task(&mut self, id: &String) -> Result<(), Error> {
+        let Some((tokio_handler, abort_handler)) = self.list.remove(id) else {
+            return Ok(())
+        };
+        abort_handler.abort();
+        match tokio_handler.await {
+            Err(error) => return Err(Error::TaskError { source: error }),
+            Ok(inner_state) => match inner_state {
+                Ok(task_result) => {
+                    if let Err(e) = task_result {
+                        debug!("Indefinite task did finish with error {:?}", e);
+                    }
+                }
+                Err(_) => {
+                    debug!("Task {} properly cancelled", id);
+                }
+            },
+        };
+        Ok(())
+    }
+
+    fn create_message_task(
         &mut self,
         content: T,
         targets: Vec<KeyIdentifier>,
@@ -124,15 +150,6 @@ impl<T: TaskCommandContent + Serialize + DeserializeOwned + 'static> MessageTask
             self.sender.clone(),
             config,
         ));
-        Ok(())
-    }
-
-    pub(crate) async fn cancel_message_task(&self, id: &String) -> Result<(), Error> {
-        let task = { self.list.remove(id) };
-        if let Some((_, data)) = task {
-            data.abort().await?;
-            return Ok(());
-        }
         Ok(())
     }
 }
