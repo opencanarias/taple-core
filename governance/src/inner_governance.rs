@@ -400,7 +400,7 @@ impl InnerGovernance {
                 let payload = additional_payload.unwrap();
                 let properties: Value = serde_json::from_str(&payload)
                 .map_err(|_| InternalError::DeserializationError)?;
-                return self.check_invokation(&properties, invokator, None, &"governance".into());
+                return self.check_invokation(&properties, invokator, Some(metadata.unwrap().owner.to_str()), &"governance".into());
             } else if metadata.is_some() {
                 let metadata = metadata.unwrap();
                 let governance_id = metadata.governance_id;

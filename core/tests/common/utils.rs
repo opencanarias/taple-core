@@ -274,6 +274,333 @@ pub fn governance_two() -> serde_json::Value {
     })
 }
 
+
+#[allow(dead_code)]
+pub fn governance_two_100() -> serde_json::Value {
+    serde_json::json!({
+            "members": [
+                {
+                    "id": "Open Canarias",
+                    "tags": {},
+                    "description": "a",
+                    "key": "EFXv0jBIr6BtoqFMR7G_JBSuozRc2jZnu5VGUH2gy6-w"
+                },
+                {
+                    "id": "Acciona",
+                    "tags": {},
+                    "description": "b",
+                    "key": "ECQnl-h1vEWmu-ZlPuweR3N1x6SUImyVdPrCLmnJJMyU",
+                },
+            ],
+            "schemas": [
+                {
+                    "id": "prueba",
+                    "tags": {},
+                    "content": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "a"
+                        ],
+                        "properties": {
+                            "a": {"type": "string"}
+                        }
+                    }
+                }
+            ],
+            "policies": [
+                {
+                    "id": "prueba",
+                    "validation": {
+                        "quorum": 1,
+                        "validators": [
+                            "ECQnl-h1vEWmu-ZlPuweR3N1x6SUImyVdPrCLmnJJMyU"
+                        ]
+                    },
+                    "approval": {
+                        "quorum": 0.5,
+                        "approvers": []
+                    },
+                    "invokation": {
+                        "owner": {
+                            "allowance": true,
+                            "approvalRequired": false
+                        },
+                        "set": {
+                            "allowance": false,
+                            "approvalRequired": false,
+                            "invokers": []
+                        },
+                        "all": {
+                            "allowance": true,
+                            "approvalRequired": true,
+                        },
+                        "external": {
+                            "allowance": false,
+                            "approvalRequired": false
+                        }
+                    }
+                },
+                {
+                    "id": "governance",
+                    "validation": {
+                        "quorum": 0.5,
+                        "validators": [
+                            "EFXv0jBIr6BtoqFMR7G_JBSuozRc2jZnu5VGUH2gy6-w",
+                            "ECQnl-h1vEWmu-ZlPuweR3N1x6SUImyVdPrCLmnJJMyU"
+                        ]
+                    },
+                    "approval": {
+                        "quorum": 1.0,
+                        "approvers": [
+                            "EFXv0jBIr6BtoqFMR7G_JBSuozRc2jZnu5VGUH2gy6-w",
+                            "ECQnl-h1vEWmu-ZlPuweR3N1x6SUImyVdPrCLmnJJMyU"
+                        ]
+                    },
+                    "invokation": {
+                        "owner": {
+                            "allowance": true,
+                            "approvalRequired": true
+                        },
+                        "set": {
+                            "allowance": false,
+                            "approvalRequired": false,
+                            "invokers": []
+                        },
+                        "all": {
+                            "allowance": true,
+                            "approvalRequired": true,
+                        },
+                        "external": {
+                            "allowance": false,
+                            "approvalRequired": false
+                        }
+                    }
+                },
+            ]
+    })
+}
+
+#[allow(dead_code)]
+pub fn governance_two_allowance_all_false() -> serde_json::Value {
+    serde_json::json!({
+            "members": [
+                {
+                    "id": "Open Canarias",
+                    "tags": {},
+                    "description": "a",
+                    "key": "EFXv0jBIr6BtoqFMR7G_JBSuozRc2jZnu5VGUH2gy6-w"
+                },
+                {
+                    "id": "Acciona",
+                    "tags": {},
+                    "description": "b",
+                    "key": "ECQnl-h1vEWmu-ZlPuweR3N1x6SUImyVdPrCLmnJJMyU",
+                },
+            ],
+            "schemas": [
+                {
+                    "id": "prueba",
+                    "tags": {},
+                    "content": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "a"
+                        ],
+                        "properties": {
+                            "a": {"type": "string"}
+                        }
+                    }
+                }
+            ],
+            "policies": [
+                {
+                    "id": "prueba",
+                    "validation": {
+                        "quorum": 0.5,
+                        "validators": [
+                            "EFXv0jBIr6BtoqFMR7G_JBSuozRc2jZnu5VGUH2gy6-w",
+                            "ECQnl-h1vEWmu-ZlPuweR3N1x6SUImyVdPrCLmnJJMyU"
+                        ]
+                    },
+                    "approval": {
+                        "quorum": 0.5,
+                        "approvers": [
+                            "EFXv0jBIr6BtoqFMR7G_JBSuozRc2jZnu5VGUH2gy6-w",
+                            "ECQnl-h1vEWmu-ZlPuweR3N1x6SUImyVdPrCLmnJJMyU"
+                        ]
+                    },
+                    "invokation": {
+                        "owner": {
+                            "allowance": true,
+                            "approvalRequired": true
+                        },
+                        "set": {
+                            "allowance": false,
+                            "approvalRequired": false,
+                            "invokers": []
+                        },
+                        "all": {
+                            "allowance": true,
+                            "approvalRequired": true,
+                        },
+                        "external": {
+                            "allowance": false,
+                            "approvalRequired": false
+                        }
+                    }
+                },
+                {
+                    "id": "governance",
+                    "validation": {
+                        "quorum": 0.5,
+                        "validators": [
+                            "EFXv0jBIr6BtoqFMR7G_JBSuozRc2jZnu5VGUH2gy6-w",
+                            "ECQnl-h1vEWmu-ZlPuweR3N1x6SUImyVdPrCLmnJJMyU"
+                        ]
+                    },
+                    "approval": {
+                        "quorum": 0.5,
+                        "approvers": [
+                            "EFXv0jBIr6BtoqFMR7G_JBSuozRc2jZnu5VGUH2gy6-w",
+                            "ECQnl-h1vEWmu-ZlPuweR3N1x6SUImyVdPrCLmnJJMyU"
+                        ]
+                    },
+                    "invokation": {
+                        "owner": {
+                            "allowance": true,
+                            "approvalRequired": true
+                        },
+                        "set": {
+                            "allowance": false,
+                            "approvalRequired": false,
+                            "invokers": []
+                        },
+                        "all": {
+                            "allowance": false,
+                            "approvalRequired": false,
+                        },
+                        "external": {
+                            "allowance": false,
+                            "approvalRequired": false
+                        }
+                    }
+                },
+            ]
+    })
+}
+
+#[allow(dead_code)]
+pub fn governance_two_051() -> serde_json::Value {
+    serde_json::json!({
+            "members": [
+                {
+                    "id": "Open Canarias",
+                    "tags": {},
+                    "description": "a",
+                    "key": "EFXv0jBIr6BtoqFMR7G_JBSuozRc2jZnu5VGUH2gy6-w"
+                },
+                {
+                    "id": "Acciona",
+                    "tags": {},
+                    "description": "b",
+                    "key": "ECQnl-h1vEWmu-ZlPuweR3N1x6SUImyVdPrCLmnJJMyU",
+                },
+            ],
+            "schemas": [
+                {
+                    "id": "prueba",
+                    "tags": {},
+                    "content": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                            "a"
+                        ],
+                        "properties": {
+                            "a": {"type": "string"}
+                        }
+                    }
+                }
+            ],
+            "policies": [
+                {
+                    "id": "prueba",
+                    "validation": {
+                        "quorum": 0.5,
+                        "validators": [
+                            "EFXv0jBIr6BtoqFMR7G_JBSuozRc2jZnu5VGUH2gy6-w",
+                            "ECQnl-h1vEWmu-ZlPuweR3N1x6SUImyVdPrCLmnJJMyU"
+                        ]
+                    },
+                    "approval": {
+                        "quorum": 0.5,
+                        "approvers": [
+                            "EFXv0jBIr6BtoqFMR7G_JBSuozRc2jZnu5VGUH2gy6-w",
+                            "ECQnl-h1vEWmu-ZlPuweR3N1x6SUImyVdPrCLmnJJMyU"
+                        ]
+                    },
+                    "invokation": {
+                        "owner": {
+                            "allowance": true,
+                            "approvalRequired": true
+                        },
+                        "set": {
+                            "allowance": false,
+                            "approvalRequired": false,
+                            "invokers": []
+                        },
+                        "all": {
+                            "allowance": true,
+                            "approvalRequired": true,
+                        },
+                        "external": {
+                            "allowance": false,
+                            "approvalRequired": false
+                        }
+                    }
+                },
+                {
+                    "id": "governance",
+                    "validation": {
+                        "quorum": 0.51,
+                        "validators": [
+                            "EFXv0jBIr6BtoqFMR7G_JBSuozRc2jZnu5VGUH2gy6-w",
+                            "ECQnl-h1vEWmu-ZlPuweR3N1x6SUImyVdPrCLmnJJMyU"
+                        ]
+                    },
+                    "approval": {
+                        "quorum": 0.51,
+                        "approvers": [
+                            "EFXv0jBIr6BtoqFMR7G_JBSuozRc2jZnu5VGUH2gy6-w",
+                            "ECQnl-h1vEWmu-ZlPuweR3N1x6SUImyVdPrCLmnJJMyU"
+                        ]
+                    },
+                    "invokation": {
+                        "owner": {
+                            "allowance": true,
+                            "approvalRequired": true
+                        },
+                        "set": {
+                            "allowance": false,
+                            "approvalRequired": false,
+                            "invokers": []
+                        },
+                        "all": {
+                            "allowance": true,
+                            "approvalRequired": true,
+                        },
+                        "external": {
+                            "allowance": false,
+                            "approvalRequired": false
+                        }
+                    }
+                },
+            ]
+    })
+}
+
 #[allow(dead_code)]
 pub fn governance_three() -> serde_json::Value {
     serde_json::json!({

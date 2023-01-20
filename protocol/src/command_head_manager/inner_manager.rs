@@ -727,15 +727,17 @@ impl<
         event: &Event,
     ) -> Result<Vec<MessageTaskCommand<ProtocolManagerMessages>>, ProtocolErrors> {
         let mut validators = self.governance.get_validators(event.clone()).await?;
+        if validators.contains(&self.signature_manager.get_own_identifier()) {
+            self.sign_event_if_needed(
+                &event.event_content.subject_id,
+                event.event_content.sn,
+                HashSet::new(),
+            )
+            .await?;
+        }
         validators.remove(&self.signature_manager.get_own_identifier());
-        self.sign_event_if_needed(
-            &event.event_content.subject_id,
-            event.event_content.sn,
-            HashSet::new(),
-        )
-        .await?;
         Ok(vec![utils::build_request_signature(
-            validators.clone(),
+            HashSet::new(),
             Vec::from_iter(validators),
             event.event_content.subject_id.clone(),
             event.event_content.sn,
@@ -765,7 +767,6 @@ impl<
     > {
         let (tasks, result) = match &request.request {
             EventRequestType::Create(_data) => {
-                // println!("EVENT REQUEST {:?}", request);
                 let ledger_response = self.ledger.create_event(request, approved).await;
                 match ledger_response {
                     Ok((event, _)) => {

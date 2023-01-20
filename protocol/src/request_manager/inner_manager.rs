@@ -611,7 +611,7 @@ impl<
                         Vec::from_iter(targets),
                         request,
                         expected_sn,
-                        0,
+                        ONE_MINUTE,
                     )),
                 ))
             }

@@ -9,7 +9,10 @@ edition = "2021"
 tokio = { version = "1.20", features = ["default", "time", "rt", "rt-multi-thread", "sync", "macros"] }
 serde_json = "1.0"
 
+hex = "0.4.3"
+
 core = { path = "../../core" }
+commons = { path = "../../commons" }
 
 [dependencies.libp2p]
 version = "0.44"

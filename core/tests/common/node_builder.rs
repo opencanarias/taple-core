@@ -16,6 +16,7 @@ pub struct NodeBuilder {
     seed: Option<String>,
     pass_votation: Option<u32>,
     dev_mode: Option<bool>,
+    secret_key: Option<String>,
 }
 
 impl NodeBuilder {
@@ -32,6 +33,7 @@ impl NodeBuilder {
             seed: None,
             pass_votation: None,
             dev_mode: None,
+            secret_key: None,
         }
     }
 
@@ -44,7 +46,7 @@ impl NodeBuilder {
             },
             node: NodeSettings {
                 key_derivator: self.key_derivator.take().unwrap_or(KeyDerivator::Ed25519),
-                secret_key: None,
+                secret_key: self.secret_key,
                 seed: self.seed,
                 digest_derivator: self
                     .digest_derivator
@@ -91,6 +93,12 @@ impl NodeBuilder {
     #[allow(dead_code)]
     pub fn with_seed(mut self, seed: String) -> Self {
         self.seed = Some(seed);
+        self
+    }
+
+    #[allow(dead_code)]
+    pub fn with_secret_key(mut self, sk: String) -> Self {
+        self.secret_key = Some(sk);
         self
     }
 

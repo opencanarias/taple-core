@@ -6,12 +6,11 @@ This article explains where to get help with remark. Please read through the fol
 
 ## Asking quality questions
 
-Questions can go to GitHub discussions.
+Questions can go to [GitHub discussions](https://github.com/opencanarias/taple-core/discussions).
 
 Help us help you! Spend time framing questions and add links and resources. Spending the extra time up front can help save everyone time in the long run. Here are some tips:
 
 * Read through the documentation
-* [Talk to a duck!](https://rubberduckdebugging.com/)
 * Don’t fall for the [XY problem](https://meta.stackexchange.com/questions/66377/what-is-the-xy-problem/66378#66378)
 * Search to find out if a similar question has been asked
 * Try to define what you need help with:

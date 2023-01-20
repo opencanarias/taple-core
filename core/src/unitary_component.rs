@@ -202,7 +202,7 @@ impl Taple {
                 dev_mode: false,
             },
             database: DatabaseSettings {
-                path: "/tmp/data".into(),
+                path: "".into(),
             },
         }
     }
