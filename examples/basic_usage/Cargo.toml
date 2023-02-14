@@ -15,7 +15,7 @@ keywords = ["blockchain", "distributed-ledger", "taple", "sustainability"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tokio = { version = "1.20", features = ["default", "time", "rt", "rt-multi-thread", "sync", "macros"] }
+tokio = { workspace = true, features = ["default", "time", "rt", "rt-multi-thread", "sync", "macros"] }
 serde_json = "1.0"
 
 hex = "0.4.3"

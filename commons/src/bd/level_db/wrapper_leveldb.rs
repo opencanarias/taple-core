@@ -277,7 +277,7 @@ where
             // Stop when it returns None
             let (key, bytes) = value;
             let quantity = quantity.abs() as usize;
-            if key.0.starts_with(&table_name) && count < quantity {
+            if key.0.starts_with(&table_name) && (quantity == 0 || count < quantity) {
                 let key = {
                     let StringKey(value) = key;
                     // Remove the table name from the key

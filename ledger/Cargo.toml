@@ -15,7 +15,7 @@ keywords = ["blockchain", "distributed-ledger", "taple", "sustainability"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tokio = { version = "1.20.1", features = ["sync", "rt", "time"] }
+tokio = { workspace = true, features = ["sync", "rt", "time"] }
 async-trait = "0.1.56"
 thiserror = "1.0"
 serde = { version = "1.0", features = ["derive"] }
