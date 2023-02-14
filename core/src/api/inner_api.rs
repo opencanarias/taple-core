@@ -38,6 +38,8 @@ pub(crate) struct InnerAPI {
     db: DB,
 }
 
+const MAX_QUANTITY: isize = 100;
+
 impl InnerAPI {
     pub fn new(
         keys: KeyPair,
@@ -199,9 +201,9 @@ impl InnerAPI {
             Some(format!("{}", data.from.unwrap()))
         };
         let quantity = if data.quantity.is_none() {
-            0isize
+            MAX_QUANTITY
         } else {
-            data.quantity.unwrap() as isize
+            (data.quantity.unwrap() as isize).min(MAX_QUANTITY)
         };
         let Ok(id) = DigestIdentifier::from_str(&data.subject_id) else {
             return APIResponses::GetEventsOfSubject(Err(ApiError::InvalidParameters));
