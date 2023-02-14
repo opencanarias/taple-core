@@ -109,17 +109,6 @@ impl TapleDB for DB {
                 }
             }
         };
-        let quantity = match cursor {
-            CursorIndex::FromBeginning => quantity.abs(),
-            CursorIndex::FromEnding => {
-                if quantity > 0 {
-                    quantity * -1
-                } else {
-                    quantity
-                }
-            }
-            CursorIndex::FromKey(_) => quantity,
-        };
         events_by_subject
             .get_range(&cursor, quantity)
             .into_iter()

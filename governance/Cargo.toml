@@ -12,7 +12,7 @@ bench = false
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
-tokio = { version = "1.20.1", features = ["sync", "rt", "time"] }
+tokio = { workspace = true, features = ["sync", "rt", "time"] }
 thiserror = "1.0"
 rand = { version = "0.8",  features = ["small_rng"] } #Elimina en futuro. Usandose para crypto_utils en governance.rs:19:35
 jsonschema = "0.16"
