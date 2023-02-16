@@ -3,11 +3,11 @@ use thiserror::Error;
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum RequestError {
     #[error("Governance requested not found")]
-    GovernanceNotFound,
+    GovernanceNotFound(String),
     #[error("Subject requested not found")]
     SubjectNotFound,
     #[error("Schema requested not found")]
-    SchemaNotFound,
+    SchemaNotFound(String),
     #[error("JSON Schema compile error")]
     JSONCompileError,
     #[error("Invalid KeyIdentifier {0}")]
@@ -20,6 +20,10 @@ pub enum RequestError {
     InvalidRequestType,
     #[error("Schema Not Found in policies")]
     SchemaNotFoundInPolicies,
+    #[error("The specified governance ID is of a subject")]
+    InvalidGovernanceID,
+    #[error("Unexpect Payload")]
+    UnexpectedPayloadType
 }
 
 #[derive(Error, Debug)]

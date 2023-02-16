@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, str::FromStr};
 
 use crate::{
     crypto::{KeyMaterial, KeyPair, Payload, DSA},
@@ -140,6 +140,10 @@ impl Subject {
                                     .as_str()
                                     .expect("Hay id y es str")
                                     .to_owned();
+                                // Check if the member ID is valid
+                                let Ok(_) = KeyIdentifier::from_str(&member_id) else {
+                                    return Err(SubjectError::InvalidMemberIdentifier(member_id.to_owned()))
+                                };
                                 let true = member_ids.insert(member_id) else {
                                     return Err(SubjectError::DuplicatedSchemaOrMember);
                                 };

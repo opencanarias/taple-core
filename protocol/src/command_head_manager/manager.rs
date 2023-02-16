@@ -1,15 +1,13 @@
 use async_trait::async_trait;
-use chrono::Utc;
 use commons::{
     channel::{ChannelData, MpscChannel, SenderEnd},
     config::TapleSettings,
     crypto::KeyPair,
     identifier::{DigestIdentifier, KeyIdentifier},
     models::{
-        approval_signature::ApprovalResponse,
         event::Event,
         event_request::{
-            CreateRequest, EventRequest, EventRequestType, RequestPayload, StateRequest,
+            EventRequest, EventRequestType,
         },
         notification::Notification,
         signature::Signature,
@@ -85,30 +83,8 @@ pub trait CommandManagerInterface {
     ) -> Result<Value, ResponseError>;
     async fn create_event(
         &self,
-        subject_id: DigestIdentifier,
-        payload: RequestPayload,
-        request_signature: Signature,
-        approvals: HashSet<ApprovalResponse>,
-        timestamp: Option<i64>,
+        request: EventRequest,
         approved: bool,
-    ) -> Result<Event, ResponseError>;
-    async fn create_subject(
-        &self,
-        governance_id: DigestIdentifier,
-        schema_id: String,
-        namespace: String,
-        payload: RequestPayload,
-        request_signature: Signature,
-        approvals: HashSet<ApprovalResponse>,
-        timestamp: Option<i64>,
-    ) -> Result<Event, ResponseError>;
-    async fn create_governance(
-        &self,
-        namespace: String,
-        payload: RequestPayload,
-        request_signature: Signature,
-        approvals: HashSet<ApprovalResponse>,
-        timestamp: Option<i64>,
     ) -> Result<Event, ResponseError>;
 }
 
@@ -373,31 +349,22 @@ impl CommandManagerInterface for CommandAPI {
     }
     async fn create_event(
         &self,
-        subject_id: DigestIdentifier,
-        payload: RequestPayload,
-        request_signature: Signature,
-        approvals: HashSet<ApprovalResponse>,
-        timestamp: Option<i64>,
+        request: EventRequest,
         approved: bool,
     ) -> Result<Event, ResponseError> {
-        let response = self
-            .sender
-            .ask(Commands::CreateEventMessage(
-                EventRequest {
-                    request: EventRequestType::State(StateRequest {
-                        subject_id,
-                        payload,
-                    }),
-                    signature: request_signature,
-                    timestamp: if timestamp.is_none() {
-                        Utc::now().timestamp_millis()
-                    } else {
-                        timestamp.unwrap()
-                    },
-                    approvals,
-                },
-                approved,
-            ))
+        if let EventRequestType::Create(data) = &request.request {
+             // Check if data correspond to a new governance
+             if data.governance_id.digest.is_empty() {
+                // It can only by a governance
+                if data.schema_id != "governance" {
+                    return Err(ResponseError::CantCreateGovernance);
+                }
+            } else if data.schema_id == "governance" {
+                return Err(ResponseError::CantCreateGovernance);
+            }
+        };
+        let response = self.sender
+            .ask(Commands::CreateEventMessage(request, approved))
             .await
             .map_err(|_| ResponseError::ComunnicationClosed)?;
         let CommandManagerResponses::CreateEventResponse(data) = response else {
@@ -408,84 +375,121 @@ impl CommandManagerInterface for CommandAPI {
             CreateEventResponse::Error(error) => Err(error),
         }
     }
-    async fn create_subject(
-        &self,
-        governance_id: DigestIdentifier,
-        schema_id: String,
-        namespace: String,
-        payload: RequestPayload,
-        request_signature: Signature,
-        approvals: HashSet<ApprovalResponse>,
-        timestamp: Option<i64>,
-    ) -> Result<Event, ResponseError> {
-        let response = self
-            .sender
-            .ask(Commands::CreateEventMessage(
-                EventRequest {
-                    request: EventRequestType::Create(CreateRequest {
-                        governance_id,
-                        schema_id,
-                        namespace,
-                        payload,
-                    }),
-                    signature: request_signature,
-                    timestamp: if timestamp.is_none() {
-                        Utc::now().timestamp_millis()
-                    } else {
-                        timestamp.unwrap()
-                    },
-                    approvals,
-                },
-                true, // TODO: For now we always approve subject creation events
-            ))
-            .await
-            .map_err(|_| ResponseError::ComunnicationClosed)?;
-        let CommandManagerResponses::CreateEventResponse(data) = response else {
-            return Err(ResponseError::UnexpectedCommandResponse);
-        };
-        match data {
-            CreateEventResponse::Event(event) => Ok(event),
-            CreateEventResponse::Error(error) => Err(error),
-        }
-    }
-    async fn create_governance(
-        &self,
-        namespace: String,
-        payload: RequestPayload,
-        request_signature: Signature,
-        approvals: HashSet<ApprovalResponse>,
-        timestamp: Option<i64>,
-    ) -> Result<Event, ResponseError> {
-        let response = self
-            .sender
-            .ask(Commands::CreateEventMessage(
-                EventRequest {
-                    request: EventRequestType::Create(CreateRequest {
-                        governance_id: DigestIdentifier::default(),
-                        schema_id: String::from("governance"),
-                        namespace,
-                        payload,
-                    }),
-                    signature: request_signature,
-                    timestamp: if timestamp.is_none() {
-                        Utc::now().timestamp_millis()
-                    } else {
-                        timestamp.unwrap()
-                    },
-                    approvals,
-                },
-                true, // TODO: For now we always approve subject creation events
-            ))
-            .await
-            .map_err(|_| ResponseError::ComunnicationClosed)?;
-        let CommandManagerResponses::CreateEventResponse(data) = response else {
-            return Err(ResponseError::UnexpectedCommandResponse);
-        };
-        match data {
-            CreateEventResponse::Event(event) => Ok(event),
-            CreateEventResponse::Error(error) => Err(error),
-        }
-    }
+    // async fn create_event(
+    //     &self,
+    //     subject_id: DigestIdentifier,
+    //     payload: RequestPayload,
+    //     request_signature: Signature,
+    //     approvals: HashSet<ApprovalResponse>,
+    //     timestamp: Option<i64>,
+    //     approved: bool,
+    // ) -> Result<Event, ResponseError> {
+    //     let response = self
+    //         .sender
+    //         .ask(Commands::CreateEventMessage(
+    //             EventRequest {
+    //                 request: EventRequestType::State(StateRequest {
+    //                     subject_id,
+    //                     payload,
+    //                 }),
+    //                 signature: request_signature,
+    //                 timestamp: if timestamp.is_none() {
+    //                     Utc::now().timestamp_millis()
+    //                 } else {
+    //                     timestamp.unwrap()
+    //                 },
+    //                 approvals,
+    //             },
+    //             approved,
+    //         ))
+    //         .await
+    //         .map_err(|_| ResponseError::ComunnicationClosed)?;
+    //     let CommandManagerResponses::CreateEventResponse(data) = response else {
+    //         return Err(ResponseError::UnexpectedCommandResponse);
+    //     };
+    //     match data {
+    //         CreateEventResponse::Event(event) => Ok(event),
+    //         CreateEventResponse::Error(error) => Err(error),
+    //     }
+    // }
+    // async fn create_subject(
+    //     &self,
+    //     governance_id: DigestIdentifier,
+    //     schema_id: String,
+    //     namespace: String,
+    //     payload: RequestPayload,
+    //     request_signature: Signature,
+    //     approvals: HashSet<ApprovalResponse>,
+    //     timestamp: Option<i64>,
+    // ) -> Result<Event, ResponseError> {
+    //     let response = self
+    //         .sender
+    //         .ask(Commands::CreateEventMessage(
+    //             EventRequest {
+    //                 request: EventRequestType::Create(CreateRequest {
+    //                     governance_id,
+    //                     schema_id,
+    //                     namespace,
+    //                     payload,
+    //                 }),
+    //                 signature: request_signature,
+    //                 timestamp: if timestamp.is_none() {
+    //                     Utc::now().timestamp_millis()
+    //                 } else {
+    //                     timestamp.unwrap()
+    //                 },
+    //                 approvals,
+    //             },
+    //             true, // TODO: For now we always approve subject creation events
+    //         ))
+    //         .await
+    //         .map_err(|_| ResponseError::ComunnicationClosed)?;
+    //     let CommandManagerResponses::CreateEventResponse(data) = response else {
+    //         return Err(ResponseError::UnexpectedCommandResponse);
+    //     };
+    //     match data {
+    //         CreateEventResponse::Event(event) => Ok(event),
+    //         CreateEventResponse::Error(error) => Err(error),
+    //     }
+    // }
+    // async fn create_governance(
+    //     &self,
+    //     namespace: String,
+    //     payload: RequestPayload,
+    //     request_signature: Signature,
+    //     approvals: HashSet<ApprovalResponse>,
+    //     timestamp: Option<i64>,
+    // ) -> Result<Event, ResponseError> {
+    //     let response = self
+    //         .sender
+    //         .ask(Commands::CreateEventMessage(
+    //             EventRequest {
+    //                 request: EventRequestType::Create(CreateRequest {
+    //                     governance_id: DigestIdentifier::default(),
+    //                     schema_id: String::from("governance"),
+    //                     namespace,
+    //                     payload,
+    //                 }),
+    //                 signature: request_signature,
+    //                 timestamp: if timestamp.is_none() {
+    //                     Utc::now().timestamp_millis()
+    //                 } else {
+    //                     timestamp.unwrap()
+    //                 },
+    //                 approvals,
+    //             },
+    //             true, // TODO: For now we always approve subject creation events
+    //         ))
+    //         .await
+    //         .map_err(|_| ResponseError::ComunnicationClosed)?;
+    //     let CommandManagerResponses::CreateEventResponse(data) = response else {
+    //         return Err(ResponseError::UnexpectedCommandResponse);
+    //     };
+    //     match data {
+    //         CreateEventResponse::Event(event) => Ok(event),
+    //         CreateEventResponse::Error(error) => Err(error),
+    //     }
+    // }
 }
 
 struct CommandNotifier {

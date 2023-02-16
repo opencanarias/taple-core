@@ -53,8 +53,11 @@ pub enum EventCreationError {
     NoOwnerOfSubject,
     #[error("Event creation not possible")]
     EventCreationNotAvailable,
-    #[error("Event creation failed")]
-    EventCreationFailed,
+    #[error("Event creation failed. {}", source)]
+    EventCreationFailed {
+        #[from]
+        source: LedgerManagerError
+    },
     #[error("Subject not available for new events")]
     SubjectNotAvailable,
 }
@@ -65,6 +68,11 @@ pub enum ResponseError {
     SubjectNotFound,
     #[error("Event not found")]
     EventNotFound,
+    #[error("Governance Error: {}", source)]
+    GovernanceError {
+        #[from]
+        source: RequestError,
+    },
     #[error("EventCreationError")]
     EventCreationError {
         #[from]
@@ -87,30 +95,36 @@ pub enum ResponseError {
     SimulationFailed,
     #[error("Approval is not needed")]
     ApprovalNotNeeded,
+    #[error("The event to be voted on has already been included in the chain")]
+    EventAlreadyOnChain,
     #[error("Subject not synchronized")]
     NoSynchronizedSubject,
-    #[error("Invalid caller of event request")]
+    #[error("Invalid invokation caller of event request")]
     InvalidCaller,
-    #[error("Subject already being approvald")]
+    #[error("Subject already being approved")]
     SubjectNotAvailable,
+    #[error("The subject is being validated")]
+    SubjectBeingValidated,
     #[error("SN not expected")]
     UnexpectedSN,
     #[error("Invalid Hash in ApprovalResponse")]
     InvalidHash,
-    #[error("Can't process approval. Not controller of subejct being approval")]
+    #[error("Can't process approval. The subject is not controlled by current node")]
     NotOwnerOfSubject,
-    #[error("Vote Not Needed")]
+    #[error("Voting is not required for the specified request")]
     VoteNotNeeded,
     #[error("Request not found")]
     RequestNotFound,
-    #[error("Request already Know")]
+    #[error("Request already known")]
     RequestAlreadyKnown,
     #[error("Request Type not supported")]
     RequestTypeError,
     #[error("Event request verification against schema failed")]
     EventRequestVerificationFailed,
-    #[error("Schema not found")]
-    SchemaNotFound,
+    #[error("Schema {0} not found")]
+    SchemaNotFound(String),
+    #[error("Governance subjects cannot refer to other governance and their schema_id must be \"governance\".")]
+    CantCreateGovernance
 }
 
 #[derive(Error, Debug, Clone)]

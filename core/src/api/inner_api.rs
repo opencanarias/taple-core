@@ -4,9 +4,7 @@ use commons::{
     bd::{db::DB, TapleDB},
     config::TapleSettings,
     crypto::KeyPair,
-    identifier::{
-        derive::KeyDerivator, DigestIdentifier, KeyIdentifier, SignatureIdentifier,
-    },
+    identifier::{derive::KeyDerivator, DigestIdentifier, KeyIdentifier, SignatureIdentifier},
     models::{
         approval_signature::Acceptance,
         event_content::{EventContent, Metadata},
@@ -15,20 +13,22 @@ use commons::{
         state::SubjectData,
     },
 };
+use governance::error::RequestError;
+use ledger::errors::LedgerManagerError;
 use protocol::{
     command_head_manager::{
         manager::CommandAPI,
         manager::CommandManagerInterface,
         self_signature_manager::{SelfSignatureInterface, SelfSignatureManager},
     },
-    errors::ResponseError,
+    errors::{ResponseError, EventCreationError},
     request_manager::manager::{RequestManagerAPI, RequestManagerInterface},
 };
 use std::{collections::HashSet, str::FromStr};
 
 use super::{
-    error::ApiError, APIResponses, CreateEvent, GetAllSubjects,
-    GetEventsOfSubject, GetSignatures, GetSingleSubject as GetSingleSubjectAPI,
+    error::ApiError, APIResponses, CreateEvent, GetAllSubjects, GetEventsOfSubject, GetSignatures,
+    GetSingleSubject as GetSingleSubjectAPI,
 };
 
 pub(crate) struct InnerAPI {
@@ -60,7 +60,7 @@ impl InnerAPI {
         let request = match data {
             ApiCreateRequest::Create(data) => {
                 let Ok(id) = DigestIdentifier::from_str(&data.governance_id) else {
-                    return APIResponses::CreateRequest(Err(ApiError::InvalidParameters));
+                    return APIResponses::CreateRequest(Err(ApiError::InvalidParameters(format!("GovernanceID {}", data.governance_id))));
                 };
                 EventRequestType::Create(CreateRequest {
                     governance_id: id,
@@ -71,7 +71,7 @@ impl InnerAPI {
             }
             ApiCreateRequest::State(data) => {
                 let Ok(id) = DigestIdentifier::from_str(&data.subject_id) else {
-                    return APIResponses::CreateRequest(Err(ApiError::InvalidParameters));
+                    return APIResponses::CreateRequest(Err(ApiError::InvalidParameters(format!("SubjectID {}", data.subject_id))));
                 };
                 EventRequestType::State(StateRequest {
                     subject_id: id,
@@ -93,8 +93,34 @@ impl InnerAPI {
         match result {
             Ok(result) => APIResponses::CreateRequest(Ok(result)),
             Err(ResponseError::EventCreationError { source }) => {
-                APIResponses::CreateRequest(Err(source.into()))
+                match &source {
+                    EventCreationError::EventCreationFailed { source: ledger_error } => {
+                        match &ledger_error {
+                            LedgerManagerError::GovernanceError(RequestError::GovernanceNotFound(governance_id)) => {
+                                APIResponses::CreateRequest(Err(
+                                    ApiError::NotFound(format!("Governance {}", governance_id))
+                                ))
+                            },
+                            LedgerManagerError::GovernanceError(RequestError::SchemaNotFound(schema_id)) => {
+                                APIResponses::CreateRequest(Err(
+                                    ApiError::NotFound(format!("Schema {}", schema_id))
+                                ))
+                            },
+                            _ => APIResponses::CreateRequest(Err(source.into()))
+                        }
+                    },
+                    _ => APIResponses::CreateRequest(Err(source.into()))
+                }
             }
+            Err(ResponseError::SubjectNotFound) => {
+                APIResponses::CreateRequest(Err(ApiError::NotFound(format!("Subject"))))
+            }
+            Err(ResponseError::SchemaNotFound(schema_id)) => APIResponses::CreateRequest(Err(
+                ApiError::NotFound(format!("Schema {}", schema_id)),
+            )),
+            Err(ResponseError::NotOwnerOfSubject) => APIResponses::CreateRequest(Err(
+                ApiError::NotEnoughPermissions(format!("{}", result.unwrap_err())),
+            )),
             Err(error) => APIResponses::CreateRequest(Err(error.into())),
         }
     }
@@ -106,7 +132,9 @@ impl InnerAPI {
                 subject_id: match DigestIdentifier::from_str(&event_request.request.subject_id) {
                     Ok(subject_id) => subject_id,
                     Err(_) => {
-                        return APIResponses::ExternalRequest(Err(ApiError::InvalidParameters))
+                        return APIResponses::ExternalRequest(Err(ApiError::InvalidParameters(
+                            format!("SubjectID {}", event_request.request.subject_id),
+                        )))
                     }
                 },
                 payload: event_request.request.payload.into(),
@@ -117,7 +145,12 @@ impl InnerAPI {
                     signer: match KeyIdentifier::from_str(&event_request.signature.content.signer) {
                         Ok(signer) => signer,
                         Err(_) => {
-                            return APIResponses::ExternalRequest(Err(ApiError::InvalidParameters))
+                            return APIResponses::ExternalRequest(Err(ApiError::InvalidParameters(
+                                format!(
+                                    "Signature signer {}",
+                                    event_request.signature.content.signer
+                                ),
+                            )))
                         }
                     },
                     event_content_hash: match DigestIdentifier::from_str(
@@ -125,7 +158,12 @@ impl InnerAPI {
                     ) {
                         Ok(subject_id) => subject_id,
                         Err(_) => {
-                            return APIResponses::ExternalRequest(Err(ApiError::InvalidParameters))
+                            return APIResponses::ExternalRequest(Err(ApiError::InvalidParameters(
+                                format!(
+                                    "Signature event content hash {}",
+                                    event_request.signature.content.event_content_hash
+                                ),
+                            )))
                         }
                     },
                     timestamp: event_request.signature.content.timestamp,
@@ -133,7 +171,9 @@ impl InnerAPI {
                 signature: match SignatureIdentifier::from_str(&event_request.signature.signature) {
                     Ok(signature_id) => signature_id,
                     Err(_) => {
-                        return APIResponses::ExternalRequest(Err(ApiError::InvalidParameters))
+                        return APIResponses::ExternalRequest(Err(ApiError::InvalidParameters(
+                            format!("Signature {}", event_request.signature.signature),
+                        )))
                     }
                 },
             },
@@ -182,15 +222,15 @@ impl InnerAPI {
 
     pub async fn get_single_subject(&self, data: GetSingleSubjectAPI) -> APIResponses {
         let Ok(id) = DigestIdentifier::from_str(&data.subject_id) else {
-            return APIResponses::GetSingleSubject(Err(ApiError::InvalidParameters));
+            return APIResponses::GetSingleSubject(Err(ApiError::InvalidParameters(format!("SubjectID {}", data.subject_id))));
         };
         let Some(subject) = self.db.get_subject(&id) else {
-            return APIResponses::GetSingleSubject(Err(ApiError::NotFound("Subject not found".into())))
+            return APIResponses::GetSingleSubject(Err(ApiError::NotFound(format!("Subject {}", data.subject_id))))
         };
         if subject.subject_data.is_some() {
             APIResponses::GetSingleSubject(Ok(subject.subject_data.unwrap()))
         } else {
-            APIResponses::GetSingleSubject(Err(ApiError::NotFound("Subject not found".into())))
+            APIResponses::GetSingleSubject(Err(ApiError::NotFound("Inner subject data".into())))
         }
     }
 
@@ -206,7 +246,7 @@ impl InnerAPI {
             (data.quantity.unwrap() as isize).min(MAX_QUANTITY)
         };
         let Ok(id) = DigestIdentifier::from_str(&data.subject_id) else {
-            return APIResponses::GetEventsOfSubject(Err(ApiError::InvalidParameters));
+            return APIResponses::GetEventsOfSubject(Err(ApiError::InvalidParameters(format!("SubjectID {}", data.subject_id))));
         };
         let events = self.db.get_events_by_range(&id, from, quantity);
         APIResponses::GetEventsOfSubject(Ok(events))
@@ -214,13 +254,13 @@ impl InnerAPI {
 
     pub async fn get_signatures(&self, data: GetSignatures) -> APIResponses {
         let Ok(id) = DigestIdentifier::from_str(&data.subject_id) else {
-            return APIResponses::GetSignatures(Err(ApiError::InvalidParameters));
+            return APIResponses::GetSignatures(Err(ApiError::InvalidParameters(format!("SubjectID {}", data.subject_id))));
         };
         let Some(signatures) = self.db.get_signatures(
             &id,
             data.sn,
         ) else {
-            return APIResponses::GetSignatures(Err(ApiError::NotFound("Subject not found".into())));
+            return APIResponses::GetSignatures(Err(ApiError::NotFound(format!("Subject {} SN {}", data.subject_id, data.sn))));
         };
         let signatures = Vec::from_iter(signatures);
         let (init, end) = get_init_and_end(data.from, data.quantity, &signatures);
@@ -230,7 +270,7 @@ impl InnerAPI {
 
     pub async fn simulate_event(&self, data: CreateEvent) -> APIResponses {
         let Ok(id) = DigestIdentifier::from_str(&data.subject_id) else {
-            return APIResponses::SimulateEvent(Err(ApiError::InvalidParameters));
+            return APIResponses::SimulateEvent(Err(ApiError::InvalidParameters(format!("SubjectID {}", data.subject_id))));
         };
         let request = EventRequestType::State(StateRequest {
             subject_id: id.clone(),
@@ -240,10 +280,10 @@ impl InnerAPI {
             return APIResponses::SimulateEvent(Err(ApiError::SignError));
         };
         let Some(subject) = self.db.get_subject(&id) else {
-            return APIResponses::SimulateEvent(Err(ApiError::NotFound(String::from("Subject not found"))));
+            return APIResponses::SimulateEvent(Err(ApiError::NotFound(format!("Subject {}", data.subject_id))));
         };
         let Some(subject_data) = subject.subject_data.clone() else {
-            return APIResponses::SimulateEvent(Err(ApiError::NotFound(String::from("Subject not found"))));
+            return APIResponses::SimulateEvent(Err(ApiError::NotFound(format!("Subject data of {}", data.subject_id))));
         };
         let event_request = EventRequest {
             request,
@@ -289,24 +329,26 @@ impl InnerAPI {
     }
 
     pub async fn approval_acceptance(&self, acceptance: Acceptance, id: String) -> APIResponses {
-        let Ok(id) = DigestIdentifier::from_str(&id) else {
-            return APIResponses::VoteResolve(Err(ApiError::InvalidParameters));
+        let Ok(id_digest) = DigestIdentifier::from_str(&id) else {
+            return APIResponses::VoteResolve(Err(ApiError::InvalidParameters(format!("Request ID {}", id))));
         };
-        match self.request_api.approval_resolve(acceptance, id).await {
+        match self
+            .request_api
+            .approval_resolve(acceptance, id_digest)
+            .await
+        {
             Ok(_) => {
                 return APIResponses::VoteResolve(Ok(()));
             }
             Err(error) => match error {
                 ResponseError::RequestNotFound => {
-                    return APIResponses::VoteResolve(Err(ApiError::NotFound(
-                        "Request not found".into(),
-                    )));
+                    return APIResponses::VoteResolve(Err(ApiError::NotFound(format!(
+                        "Request {}",
+                        id
+                    ))));
                 }
                 ResponseError::VoteNotNeeded => {
-                    return APIResponses::VoteResolve(Err(ApiError::VoteNotNeeded(
-                        "It's not possible to approval the request. The node is not a valid approval."
-                            .into(),
-                    )));
+                    return APIResponses::VoteResolve(Err(ApiError::VoteNotNeeded(id)));
                 }
                 _ => {
                     return APIResponses::VoteResolve(Err(error.into()));
@@ -323,14 +365,15 @@ impl InnerAPI {
     }
 
     pub async fn get_single_request(&self, id: String) -> APIResponses {
-        let Ok(id) = DigestIdentifier::from_str(&id) else {
-            return APIResponses::GetSingleRequest(Err(ApiError::InvalidParameters));
+        let Ok(id_digest) = DigestIdentifier::from_str(&id) else {
+            return APIResponses::GetSingleRequest(Err(ApiError::InvalidParameters(format!("Request ID {}", id))));
         };
-        match self.request_api.get_single_pending_request(id).await {
+        match self.request_api.get_single_pending_request(id_digest).await {
             Ok(data) => return APIResponses::GetSingleRequest(Ok(data)),
             Err(ResponseError::RequestNotFound) => {
-                return APIResponses::GetSingleRequest(Err(ApiError::NotFound(String::from(
-                    "Request not found",
+                return APIResponses::GetSingleRequest(Err(ApiError::NotFound(format!(
+                    "Request {}",
+                    id
                 ))))
             }
             Err(error) => return APIResponses::GetSingleRequest(Err(error.into())),

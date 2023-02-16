@@ -42,7 +42,7 @@ impl InnerGovernance {
         }
         let governance = self.repo_access.get_subject(&governance_id);
         if governance.is_none() {
-            return Ok(Err(RequestError::GovernanceNotFound));
+            return Ok(Err(RequestError::GovernanceNotFound(governance_id.to_str())));
         }
         let governance = governance.unwrap();
         let properties: Value = serde_json::from_str(&governance.subject_data.unwrap().properties)
@@ -57,7 +57,7 @@ impl InnerGovernance {
             }
         }
         if selected_schema.is_none() {
-            return Ok(Err(RequestError::SchemaNotFound));
+            return Ok(Err(RequestError::SchemaNotFound(schema_id)));
         } else {
             return Ok(Ok(selected_schema
                 .unwrap()
@@ -131,7 +131,7 @@ impl InnerGovernance {
             };
             Ok(Ok(all_approvers))
         } else {
-            Ok(Err(RequestError::GovernanceNotFound))
+            Ok(Err(RequestError::GovernanceNotFound(governance_id.to_str())))
         }
     }
 
@@ -155,13 +155,13 @@ impl InnerGovernance {
                     };
                     Ok(Ok(all_validators))
                 } else {
-                    Ok(Err(RequestError::GovernanceNotFound))
+                    Ok(Err(RequestError::UnexpectedPayloadType))
                 }
             } else {
-                Ok(Err(RequestError::GovernanceNotFound))
+                Ok(Err(RequestError::InvalidRequestType))
             }
         } else {
-            Ok(Err(RequestError::GovernanceNotFound))
+            Ok(Err(RequestError::InvalidRequestType))
         }
     }
 
@@ -178,9 +178,15 @@ impl InnerGovernance {
         }
         let governance = self.repo_access.get_subject(&governance_id);
         if governance.is_some() {
-            Ok(Ok(governance.unwrap().subject_data.unwrap().sn))
+            // Check if the subject obtained is really a governance
+            let governance = governance.unwrap();
+            let subject_data = governance.subject_data.unwrap();
+            if !subject_data.governance_id.digest.is_empty() {
+                return Ok(Err(RequestError::InvalidGovernanceID));
+            }
+            Ok(Ok(subject_data.sn))
         } else {
-            Ok(Err(RequestError::GovernanceNotFound))
+            Ok(Err(RequestError::GovernanceNotFound(governance_id.to_str())))
         }
     }
 
@@ -265,13 +271,13 @@ impl InnerGovernance {
                         remaining_signatures,
                     )));
                 } else {
-                    Ok(Err(RequestError::GovernanceNotFound))
+                    Ok(Err(RequestError::UnexpectedPayloadType))
                 }
             } else {
-                Ok(Err(RequestError::GovernanceNotFound))
+                Ok(Err(RequestError::InvalidRequestType))
             }
         } else {
-            Ok(Err(RequestError::GovernanceNotFound))
+            Ok(Err(RequestError::InvalidRequestType))
         }
     }
 
@@ -296,7 +302,7 @@ impl InnerGovernance {
         };
         let governance = self.repo_access.get_subject(&governance_id);
         if governance.is_none() || governance.clone().unwrap().subject_data.is_none() {
-            return Ok(Err(RequestError::GovernanceNotFound));
+            return Ok(Err(RequestError::GovernanceNotFound(governance_id.to_str())));
         };
         let governance = governance.unwrap();
         let properties: Value = serde_json::from_str(&governance.subject_data.unwrap().properties)
@@ -406,7 +412,7 @@ impl InnerGovernance {
                 let governance_id = metadata.governance_id;
                 let governance = self.repo_access.get_subject(&governance_id);
                 if governance.is_none() || governance.clone().unwrap().subject_data.is_none() {
-                    return Ok(Err(RequestError::GovernanceNotFound));
+                    return Ok(Err(RequestError::GovernanceNotFound(governance_id.to_str())));
                 };
                 let governance = governance.unwrap();
                 let properties: Value = serde_json::from_str(&governance.subject_data.unwrap().properties)
@@ -426,7 +432,7 @@ impl InnerGovernance {
         };
         let governance = self.repo_access.get_subject(&governance_id);
         if governance.is_none() || governance.clone().unwrap().subject_data.is_none() {
-            return Ok(Err(RequestError::GovernanceNotFound));
+            return Ok(Err(RequestError::GovernanceNotFound(governance_id.to_str())));
         };
         let governance = governance.unwrap();
         let properties: Value = serde_json::from_str(&governance.subject_data.unwrap().properties)
