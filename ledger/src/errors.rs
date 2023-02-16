@@ -41,9 +41,9 @@ pub enum LedgerManagerError {
     InvalidValidator,
     #[error("Signatures not needed")]
     SignaturesNotNeeded,
-    #[error("Error in subject Subject")]
+    #[error("The error \"{0}\" has been generated during subject manipulation")]
     SubjectError(SubjectError),
-    #[error("Error with Governance")]
+    #[error("Error \"{0}\" detected with governance")]
     GovernanceError(RequestError),
 }
 

@@ -779,10 +779,10 @@ impl<
                         );
                         (tasks, super::CreateEventResponse::Event(event))
                     }
-                    Err(_error) => (
+                    Err(error) => (
                         vec![],
                         super::CreateEventResponse::Error(
-                            EventCreationError::EventCreationFailed.into(),
+                            EventCreationError::EventCreationFailed{ source: error }.into(),
                         ),
                     ),
                 }
@@ -814,10 +814,10 @@ impl<
                             );
                             (tasks, super::CreateEventResponse::Event(event))
                         }
-                        Err(_error) => (
+                        Err(error) => (
                             vec![],
                             super::CreateEventResponse::Error(
-                                EventCreationError::EventCreationFailed.into(),
+                                EventCreationError::EventCreationFailed { source: error }.into(),
                             ),
                         ),
                     }

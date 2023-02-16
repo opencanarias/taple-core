@@ -254,7 +254,14 @@ impl<
                     )
                     .await;
                 if let Err(request_error) = invokation_permissions {
-                    return Err(RequestManagerError::RequestError(request_error));
+                    return Ok((
+                        RequestManagerResponse::CreateRequest(Err(
+                            ResponseError::GovernanceError {
+                                source: request_error,
+                            },
+                        )),
+                        None,
+                    ));
                 }
                 let invokation_permissions = invokation_permissions.unwrap();
                 if !invokation_permissions.0 {
@@ -289,14 +296,23 @@ impl<
                         None,
                     ));
                 };
+                // Check if the subject is being validating
+                if subject.ledger_state.negociating_next {
+                    return Ok((
+                        RequestManagerResponse::CreateRequest(Err(
+                            ResponseError::SubjectBeingValidated,
+                        )),
+                        None
+                    ))
+                }
                 let schema_id = subject_data.schema_id.clone();
-                let Ok(schema ) = self
+                let Ok(schema) = self
                     .governance_api
                     .get_schema(&subject_data.governance_id, &schema_id)
                     .await else {
                         return Ok((
                             RequestManagerResponse::CreateRequest(Err(
-                                ResponseError::SchemaNotFound,
+                                ResponseError::SchemaNotFound(schema_id),
                             )),
                             None
                         ))
@@ -382,17 +398,8 @@ impl<
                 } else {
                     // Does not have to wait for approval
                     let id = request.signature.content.event_content_hash.clone();
-                    let result = self
-                        .command_api
-                        .create_event(
-                            data.subject_id.clone(),
-                            data.payload.clone(),
-                            request.signature,
-                            request.approvals,
-                            Some(request.timestamp),
-                            true,
-                        )
-                        .await;
+                    let timestamp = request.timestamp.clone();
+                    let result = self.command_api.create_event(request.clone(), true).await;
                     if result.is_err() {
                         return Ok((
                             RequestManagerResponse::CreateRequest(Err(result.unwrap_err())),
@@ -407,13 +414,13 @@ impl<
                             request_id: id.to_str(),
                             subject_id: Some(event.event_content.subject_id.to_str()),
                             sn: Some(sn),
-                            timestamp: request.timestamp,
+                            timestamp,
                         })),
                         None,
                     ));
                 }
             }
-            EventRequestType::Create(data) => {
+            EventRequestType::Create(_) => {
                 // TODO: It is necessary to respond to the API with the messages it expects.
                 // TODO: It may also be possible to modify the latter. Note that the following must be taken into account
                 // CommandManager messages. It would be possible to relegate the responsibility to the commandManager,
@@ -421,29 +428,8 @@ impl<
                 // oneshot. Pending, in turn, determine the performance of this channel at this level, since it is only
                 // present in the Manager
                 let id = request.signature.content.event_content_hash.clone();
-                let result = if data.governance_id.digest.is_empty() {
-                    self.command_api
-                        .create_governance(
-                            data.namespace.clone(),
-                            data.payload.clone(),
-                            request.signature,
-                            request.approvals,
-                            Some(request.timestamp),
-                        )
-                        .await
-                } else {
-                    self.command_api
-                        .create_subject(
-                            data.governance_id.clone(),
-                            data.schema_id.clone(),
-                            data.namespace.clone(),
-                            data.payload.clone(),
-                            request.signature,
-                            request.approvals,
-                            Some(request.timestamp),
-                        )
-                        .await
-                };
+                // TODO: For now, we always accept subject creation events
+                let result = self.command_api.create_event(request.clone(), true).await;
                 if result.is_err() {
                     return Ok((
                         RequestManagerResponse::CreateRequest(Err(result.unwrap_err())),
@@ -547,11 +533,7 @@ impl<
                 let result = self
                     .command_api
                     .create_event(
-                        data.subject_id,
-                        data.payload,
-                        request.signature,
-                        request.approvals,
-                        Some(request.timestamp),
+                        request,
                         true,
                     )
                     .await;
@@ -578,11 +560,7 @@ impl<
                 let result = self
                     .command_api
                     .create_event(
-                        data.subject_id,
-                        data.payload,
-                        request.signature,
-                        request.approvals,
-                        Some(request.timestamp),
+                        request,
                         false,
                     )
                     .await;
@@ -719,10 +697,17 @@ impl<
                     subject_data.subject_id,
                     (approval_request.request, approval_request.expected_sn),
                 );
-            } else {
+            } else if approval_request.expected_sn > subject_data.sn + 1 {
                 return Ok((
                     RequestManagerResponse::ApprovalRequest(Err(
                         ResponseError::NoSynchronizedSubject,
+                    )),
+                    None,
+                ));
+            } else {
+                return Ok((
+                    RequestManagerResponse::ApprovalRequest(Err(
+                        ResponseError::EventAlreadyOnChain,
                     )),
                     None,
                 ));
@@ -771,7 +756,7 @@ impl<
             let None = self.db.get_event(subject_id, *expected_sn) else {
                 self.to_approval_request.remove(&subject_id);
                 self.request_table.remove(id);
-                return Ok((RequestManagerResponse::VoteResolve(Err(ResponseError::VoteNotNeeded)), None));
+                return Ok((RequestManagerResponse::VoteResolve(Err(ResponseError::EventAlreadyOnChain)), None));
             };
             let signature = self
                 .signature_manager

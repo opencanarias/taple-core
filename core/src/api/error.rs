@@ -1,6 +1,7 @@
 //! Errors that may occur when interacting with a TAPLE node through its API
 
-use protocol::errors::{EventCreationError, ResponseError};
+use protocol::errors::{ResponseError};
+pub use protocol::errors::EventCreationError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -18,30 +19,32 @@ pub(crate) enum APIInternalError {
 #[derive(Error, Debug, Clone)]
 pub enum ApiError {
     /// An item of the protocol has not been found, for example, a subject
-    #[error("Not Found: {0} ")]
+    #[error("{0} not found")]
     NotFound(String),
     /// An unexpected error has occurred
     #[error("Unexpected Response")]
     UnexpectedError,
     /// An error has occurred in the process of creating an event.
-    #[error("Event Request could not be completed")]
+    #[error("{}", source)]
     EventCreationError {
         #[from]
         source: EventCreationError,
     },
     /// An internal error has occurred
-    #[error("Internal Error")]
+    #[error("An error has ocurred during request execution. {}", source)]
     InternalError {
         #[from]
         source: ResponseError,
     },
     /// Invalid parameters have been entered, usually identifiers.
-    #[error("Invalid parameters")]
-    InvalidParameters,
+    #[error("Invalid parameters: {0}")]
+    InvalidParameters(String),
     /// An error occurred during a signature process
     #[error("Sign Process Failed")]
     SignError,
     /// No permissions required or possessed to vote on an event request.
-    #[error("Vote not Needed {0}")]
+    #[error("Vote not needed for request {0}")]
     VoteNotNeeded(String),
+    #[error("Not enough permissions. {0}")]
+    NotEnoughPermissions(String)
 }

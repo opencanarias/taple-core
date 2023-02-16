@@ -163,7 +163,7 @@ pub enum SubjectError {
     SchemaDoesNotCompile,
     #[error("Error in criptography")]
     CryptoError(CryptoErrorEvent),
-    #[error("InvalidPayload")]
+    #[error("InvalidPayload {0}")]
     InvalidPayload(String),
     #[error("Error parsing json string")]
     ErrorParsingJsonString,
@@ -177,6 +177,8 @@ pub enum SubjectError {
     InvalidPoliciesId,
     #[error("Invalid Member in Policies")]
     InvalidMemberInPolicies,
+    #[error("Invalid member identifier {0}")]
+    InvalidMemberIdentifier(String),
     #[error("JSON-PATCH on Create Event not allowed")]
     InvalidUseOfJSONPATCH,
     #[error("Approvers is not subset of validators")]
