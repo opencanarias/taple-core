@@ -86,7 +86,8 @@ impl TapleDB for DB {
                 WrapperLevelDBErrors::EntryNotFoundError => None,
                 _ => {
                     println!("ERRORR: {:?}", error);
-                    panic!("Not recoverable error get event")},
+                    panic!("Not recoverable error get event")
+                }
             },
         }
     }
@@ -110,7 +111,7 @@ impl TapleDB for DB {
             }
         };
         events_by_subject
-            .get_range(&cursor, quantity)
+            .get_range(&cursor, quantity, None::<fn(&Event) -> bool>)
             .into_iter()
             .map(|x| x.1)
             .collect()
@@ -226,12 +227,57 @@ impl TapleDB for DB {
         Ok(())
     }
 
+    fn get_subjects(&self, from: Option<String>, quantity: isize) -> Vec<Subject> {
+        let cursor = match from {
+            Some(value) => CursorIndex::FromKey(value),
+            None => {
+                if quantity < 0 {
+                    CursorIndex::FromEnding
+                } else {
+                    CursorIndex::FromBeginning
+                }
+            }
+        };
+        self.subject_db
+            .get_range(&cursor, quantity, None::<fn(&Subject) -> bool>)
+            .into_iter()
+            .map(|x| x.1)
+            .collect()
+    }
+
     fn get_all_subjects(&self) -> Vec<Subject> {
         let mut result = Vec::new();
         for (_, subject) in self.subject_db.get_all().iter() {
             result.push(subject.to_owned());
         }
         result
+    }
+
+    fn get_governances(&self, from: Option<String>, quantity: isize) -> Vec<Subject> {
+        let cursor = match from {
+            Some(value) => CursorIndex::FromKey(value),
+            None => {
+                if quantity < 0 {
+                    CursorIndex::FromEnding
+                } else {
+                    CursorIndex::FromBeginning
+                }
+            }
+        };
+        self.subject_db
+            .get_range(
+                &cursor,
+                quantity,
+                Some(|data: &Subject| {
+                    let Some(subject_data) = &data.subject_data else {
+                        return false;
+                    };
+                    return subject_data.governance_id.digest.is_empty();
+                }),
+            )
+            .into_iter()
+            .map(|x| x.1)
+            .collect()
     }
 
     fn get_all_request(&self) -> Vec<EventRequest> {
@@ -346,7 +392,8 @@ mod tests {
         let db2 = DB::new(pre_db.clone());
         let _db3 = DB::new(pre_db.clone());
         let _db4 = DB::new(pre_db.clone());
-        let subject_id = DigestIdentifier::from_str("Ju536BiUXBqbuNdJsOBwYWnbzrKjsYtVEauI6IsMh3tM").unwrap();
+        let subject_id =
+            DigestIdentifier::from_str("Ju536BiUXBqbuNdJsOBwYWnbzrKjsYtVEauI6IsMh3tM").unwrap();
         let event = Event::default();
         db1.set_event(&subject_id, event.clone());
         assert_eq!(db2.get_event(&subject_id, 1).unwrap(), event);

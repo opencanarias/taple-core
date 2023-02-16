@@ -92,7 +92,12 @@ pub trait ApiModuleInterface {
     /// It allows to obtain all the subjects that model existing governance in the node.
     /// # Possible errors
     /// • [ApiError::InternalError] if an internal error occurred during the execution of the operation.
-    async fn get_all_governances(&self) -> Result<Vec<SubjectData>, ApiError>;
+    async fn get_all_governances(
+        &self,
+        namespace: String,
+        from: Option<usize>,
+        quantity: Option<usize>,
+    ) -> Result<Vec<SubjectData>, ApiError>;
     /// Allows to obtain events from a specific subject previously existing in the node.
     /// Paging can be performed by means of the optional arguments `from` and `quantity`.
     /// Regarding the former, it should be noted that negative values are allowed, in which case
@@ -312,10 +317,19 @@ impl ApiModuleInterface for NodeAPI {
             unreachable!()
         }
     }
-    async fn get_all_governances(&self) -> Result<Vec<SubjectData>, ApiError> {
+    async fn get_all_governances(
+        &self,
+        namespace: String,
+        from: Option<usize>,
+        quantity: Option<usize>,
+    ) -> Result<Vec<SubjectData>, ApiError> {
         let response = self
             .sender
-            .ask(APICommands::GetAllGovernances)
+            .ask(APICommands::GetAllGovernances(super::GetAllSubjects {
+                namespace,
+                from,
+                quantity,
+            }))
             .await
             .unwrap();
         if let APIResponses::GetAllGovernances(data) = response {
@@ -541,7 +555,7 @@ impl API {
                         return Ok(Some(sx));
                     }
                     APICommands::GetAllSubjects(data) => self.inner_api.get_all_subjects(data),
-                    APICommands::GetAllGovernances => self.inner_api.get_all_governances().await,
+                    APICommands::GetAllGovernances(data) => self.inner_api.get_all_governances(data).await,
                     APICommands::GetEventsOfSubject(data) => {
                         self.inner_api.get_events_of_subject(data).await
                     }

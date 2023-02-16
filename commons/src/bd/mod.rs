@@ -45,7 +45,21 @@ pub trait TapleDB: Sized {
 
     fn get_all_heads(&self) -> HashMap<DigestIdentifier, LedgerState>;
 
-    fn get_all_subjects(&self) -> Vec<Subject>;
+    fn get_all_subjects(
+        &self
+    ) -> Vec<Subject>;
+
+    fn get_subjects(
+        &self,
+        from: Option<String>,
+        quantity: isize,
+    ) -> Vec<Subject>;
+
+    fn get_governances(
+        &self,
+        from: Option<String>,
+        quantity: isize,
+    ) -> Vec<Subject>;
 
     fn get_all_request(&self) -> Vec<EventRequest>;
     fn get_request(

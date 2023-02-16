@@ -1,4 +1,5 @@
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
+use std::rc::Rc;
 
 use leveldb::database::Database as LevelDataBase;
 use std::sync::Arc as core_Arc;
@@ -269,15 +270,21 @@ where
         .collect()
     }
 
-    pub fn get_range(&self, cursor: &CursorIndex, quantity: isize) -> Vec<(StringKey, V)> {
+    pub fn get_range<F: Fn(&V) -> bool>(
+        &self,
+        cursor: &CursorIndex,
+        quantity: isize,
+        filter: Option<F>,
+    ) -> Vec<(StringKey, V)> {
         let iter = self.db.iter(self.get_read_options());
         let table_name = self.get_table_name();
-        let mut count = 0usize;
+        let count = Rc::new(RefCell::new(0usize));
+        let other_count = count.clone();
         let closure = |value: (StringKey, Vec<u8>)| {
             // Stop when it returns None
             let (key, bytes) = value;
             let quantity = quantity.abs() as usize;
-            if key.0.starts_with(&table_name) && (quantity == 0 || count < quantity) {
+            if key.0.starts_with(&table_name) && (quantity == 0 || *count.borrow() < quantity) {
                 let key = {
                     let StringKey(value) = key;
                     // Remove the table name from the key
@@ -285,7 +292,7 @@ where
                 };
                 // Perform deserialization to obtain the stored structure from bytes
                 let value = WrapperLevelDB::<StringKey, V>::deserialize(bytes).unwrap();
-                count += 1;
+                count.replace_with(|&mut old| old + 1);
                 return Some((key, value));
             } else {
                 None
@@ -303,7 +310,28 @@ where
             if cursor == &CursorIndex::FromEnding {
                 iter.advance();
             }
-            iter.map_while(closure).collect()
+            if filter.is_some() {
+                let filter = filter.unwrap();
+                iter.map_while(closure)
+                    .filter(|(_, data)| {
+                        let result = filter(data);
+                        if !result {
+                            other_count.replace_with(
+                                |&mut old| {
+                                    if old > 0 {
+                                        old - 1
+                                    } else {
+                                        old
+                                    }
+                                },
+                            );
+                        }
+                        result
+                    })
+                    .collect()
+            } else {
+                iter.map_while(closure).collect()
+            }
         } else {
             if cursor == &CursorIndex::FromEnding {
                 let temp_iter = self.db.iter(self.get_read_options()).reverse();
@@ -311,7 +339,28 @@ where
                 key = temp_iter.skip(1).next().unwrap().0; // Modify the marker for the real one.
             }
             iter.seek(&key);
-            iter.map_while(closure).collect()
+            if filter.is_some() {
+                let filter = filter.unwrap();
+                iter.map_while(closure)
+                    .filter(|(_, data)| {
+                        let result = filter(data);
+                        if !result {
+                            count.replace_with(
+                                |&mut old| {
+                                    if old > 0 {
+                                        old - 1
+                                    } else {
+                                        old
+                                    }
+                                },
+                            );
+                        }
+                        result
+                    })
+                    .collect()
+            } else {
+                iter.map_while(closure).collect()
+            }
         }
     }
 
@@ -608,15 +657,27 @@ mod tests {
                         (StringKey("a".to_string()), 11),
                         (StringKey("b".to_string()), 10)
                     ],
-                    wrapper1.get_range(&CursorIndex::FromKey("0a".into()), 6)
+                    wrapper1.get_range(
+                        &CursorIndex::FromKey("0a".into()),
+                        6,
+                        None::<fn(&u64) -> bool>
+                    )
                 );
                 assert_eq!(
                     vec![] as Vec<(StringKey, u64)>,
-                    wrapper1.get_range(&CursorIndex::FromKey("a".into()), 0)
+                    wrapper1.get_range(
+                        &CursorIndex::FromKey("a".into()),
+                        0,
+                        None::<fn(&u64) -> bool>
+                    )
                 );
                 assert_eq!(
                     vec![(StringKey("a".to_string()), 11),],
-                    wrapper1.get_range(&CursorIndex::FromKey("a".into()), 1)
+                    wrapper1.get_range(
+                        &CursorIndex::FromKey("a".into()),
+                        1,
+                        None::<fn(&u64) -> bool>
+                    )
                 );
             }
         });
@@ -677,15 +738,27 @@ mod tests {
                         (StringKey("00".to_string()), 13),
                         (StringKey("0".to_string()), 12)
                     ],
-                    wrapper1.get_range(&CursorIndex::FromKey("a".into()), -6)
+                    wrapper1.get_range(
+                        &CursorIndex::FromKey("a".into()),
+                        -6,
+                        None::<fn(&u64) -> bool>
+                    )
                 );
                 assert_eq!(
                     vec![] as Vec<(StringKey, u64)>,
-                    wrapper1.get_range(&CursorIndex::FromKey("a".into()), 0)
+                    wrapper1.get_range(
+                        &CursorIndex::FromKey("a".into()),
+                        0,
+                        None::<fn(&u64) -> bool>
+                    )
                 );
                 assert_eq!(
                     vec![(StringKey("a".to_string()), 11)],
-                    wrapper1.get_range(&CursorIndex::FromKey("a".into()), -1)
+                    wrapper1.get_range(
+                        &CursorIndex::FromKey("a".into()),
+                        -1,
+                        None::<fn(&u64) -> bool>
+                    )
                 );
             }
         });
@@ -746,15 +819,15 @@ mod tests {
                         (StringKey("0a".to_string()), 14),
                         (StringKey("a".to_string()), 11),
                     ],
-                    wrapper1.get_range(&CursorIndex::FromBeginning, 4)
+                    wrapper1.get_range(&CursorIndex::FromBeginning, 4, None::<fn(&u64) -> bool>)
                 );
                 assert_eq!(
                     vec![] as Vec<(StringKey, u64)>,
-                    wrapper1.get_range(&CursorIndex::FromBeginning, 0)
+                    wrapper1.get_range(&CursorIndex::FromBeginning, 0, None::<fn(&u64) -> bool>)
                 );
                 assert_eq!(
                     vec![(StringKey("0".to_string()), 12)],
-                    wrapper1.get_range(&CursorIndex::FromBeginning, -1)
+                    wrapper1.get_range(&CursorIndex::FromBeginning, -1, None::<fn(&u64) -> bool>)
                 );
             }
         });
@@ -816,22 +889,22 @@ mod tests {
                         (StringKey("00".to_string()), 13),
                         (StringKey("0".to_string()), 12)
                     ],
-                    wrapper1.get_range(&CursorIndex::FromEnding, -5)
+                    wrapper1.get_range(&CursorIndex::FromEnding, -5, None::<fn(&u64) -> bool>)
                 );
                 assert_eq!(
                     vec![(StringKey("b".to_string()), 10),],
-                    wrapper1.get_range(&CursorIndex::FromEnding, 1)
+                    wrapper1.get_range(&CursorIndex::FromEnding, 1, None::<fn(&u64) -> bool>)
                 );
                 assert_eq!(
                     vec![] as Vec<(StringKey, u64)>,
-                    wrapper1.get_range(&CursorIndex::FromEnding, 0)
+                    wrapper1.get_range(&CursorIndex::FromEnding, 0, None::<fn(&u64) -> bool>)
                 );
                 assert_eq!(
                     vec![
                         (StringKey("b".to_string()), 10),
                         (StringKey("a".to_string()), 11),
                     ],
-                    wrapper1.get_range(&CursorIndex::FromEnding, -2)
+                    wrapper1.get_range(&CursorIndex::FromEnding, -2, None::<fn(&u64) -> bool>)
                 );
             }
         });
@@ -1020,14 +1093,15 @@ mod tests {
                     ],
                     wrapper0.get_range(
                         &CursorIndex::FromKey("SUB1\u{10ffff}ASUB1\u{10ffff}0".into()),
-                        2
+                        2,
+                        None::<fn(&u64) -> bool>
                     )
                 );
 
                 assert_eq!(
                     // The "SUB" partition has not inserted anything
                     vec![] as Vec<(StringKey, u64)>,
-                    wrapper_mal.get_range(&CursorIndex::FromBeginning, 3)
+                    wrapper_mal.get_range(&CursorIndex::FromBeginning, 3, None::<fn(&u64) -> bool>)
                 );
 
                 assert_eq!(
@@ -1042,7 +1116,7 @@ mod tests {
                         (StringKey("ASUB1\u{10ffff}0".to_string()), 12),
                         (StringKey("0".to_string()), 3)
                     ],
-                    wrapper00.get_range(&CursorIndex::FromEnding, -300)
+                    wrapper00.get_range(&CursorIndex::FromEnding, -300, None::<fn(&u64) -> bool>)
                 );
 
                 assert_eq!(
@@ -1053,7 +1127,11 @@ mod tests {
                         (StringKey("00".to_string()), 13),
                         (StringKey("0".to_string()), 12)
                     ],
-                    wrapper001.get_range(&CursorIndex::FromKey("a".into()), -200)
+                    wrapper001.get_range(
+                        &CursorIndex::FromKey("a".into()),
+                        -200,
+                        None::<fn(&u64) -> bool>
+                    )
                 );
 
                 assert_eq!(
@@ -1063,7 +1141,7 @@ mod tests {
                         (StringKey("a".to_string()), 22),
                         (StringKey("b".to_string()), 20)
                     ],
-                    wrapper01.get_range(&CursorIndex::FromBeginning, 3)
+                    wrapper01.get_range(&CursorIndex::FromBeginning, 3, None::<fn(&u64) -> bool>)
                 );
 
                 assert_eq!(
