@@ -21,7 +21,7 @@ use protocol::{
         manager::CommandManagerInterface,
         self_signature_manager::{SelfSignatureInterface, SelfSignatureManager},
     },
-    errors::{ResponseError, EventCreationError},
+    errors::{EventCreationError, ResponseError},
     request_manager::manager::{RequestManagerAPI, RequestManagerInterface},
 };
 use std::{collections::HashSet, str::FromStr};
@@ -92,26 +92,26 @@ impl InnerAPI {
         let result = self.request_api.event_request(event_request).await;
         match result {
             Ok(result) => APIResponses::CreateRequest(Ok(result)),
-            Err(ResponseError::EventCreationError { source }) => {
-                match &source {
-                    EventCreationError::EventCreationFailed { source: ledger_error } => {
-                        match &ledger_error {
-                            LedgerManagerError::GovernanceError(RequestError::GovernanceNotFound(governance_id)) => {
-                                APIResponses::CreateRequest(Err(
-                                    ApiError::NotFound(format!("Governance {}", governance_id))
-                                ))
-                            },
-                            LedgerManagerError::GovernanceError(RequestError::SchemaNotFound(schema_id)) => {
-                                APIResponses::CreateRequest(Err(
-                                    ApiError::NotFound(format!("Schema {}", schema_id))
-                                ))
-                            },
-                            _ => APIResponses::CreateRequest(Err(source.into()))
-                        }
-                    },
-                    _ => APIResponses::CreateRequest(Err(source.into()))
-                }
-            }
+            Err(ResponseError::EventCreationError { source }) => match &source {
+                EventCreationError::EventCreationFailed {
+                    source: ledger_error,
+                } => match &ledger_error {
+                    LedgerManagerError::GovernanceError(RequestError::GovernanceNotFound(
+                        governance_id,
+                    )) => APIResponses::CreateRequest(Err(ApiError::NotFound(format!(
+                        "Governance {}",
+                        governance_id
+                    )))),
+                    LedgerManagerError::GovernanceError(RequestError::SchemaNotFound(
+                        schema_id,
+                    )) => APIResponses::CreateRequest(Err(ApiError::NotFound(format!(
+                        "Schema {}",
+                        schema_id
+                    )))),
+                    _ => APIResponses::CreateRequest(Err(source.into())),
+                },
+                _ => APIResponses::CreateRequest(Err(source.into())),
+            },
             Err(ResponseError::SubjectNotFound) => {
                 APIResponses::CreateRequest(Err(ApiError::NotFound(format!("Subject"))))
             }
@@ -190,31 +190,40 @@ impl InnerAPI {
     }
 
     pub fn get_all_subjects(&self, data: GetAllSubjects) -> APIResponses {
-        let subjects = self.db.get_all_subjects();
-        let (init, end) = get_init_and_end(data.from, data.quantity, &subjects);
-        let result = subjects[init..end].to_owned();
-        let result = result
+        let from = if data.from.is_none() {
+            None
+        } else {
+            Some(format!("{}", data.from.unwrap()))
+        };
+        let quantity = if data.quantity.is_none() {
+            MAX_QUANTITY
+        } else {
+            (data.quantity.unwrap() as isize).min(MAX_QUANTITY)
+        };
+        let result = self
+            .db
+            .get_subjects(from, quantity)
             .into_iter()
-            .filter(|subject| subject.subject_data.is_some())
             .map(|subject| subject.subject_data.unwrap())
             .collect::<Vec<SubjectData>>();
         APIResponses::GetAllSubjects(Ok(result))
     }
 
-    pub async fn get_all_governances(&self) -> APIResponses {
-        let subjects = self.db.get_all_subjects();
-        let result = subjects
+    pub async fn get_all_governances(&self, data: GetAllSubjects) -> APIResponses {
+        let from = if data.from.is_none() {
+            None
+        } else {
+            Some(format!("{}", data.from.unwrap()))
+        };
+        let quantity = if data.quantity.is_none() {
+            MAX_QUANTITY
+        } else {
+            (data.quantity.unwrap() as isize).min(MAX_QUANTITY)
+        };
+        let result = self
+            .db
+            .get_governances(from, quantity)
             .into_iter()
-            .filter(|subject| {
-                subject.subject_data.is_some()
-                    && subject
-                        .subject_data
-                        .as_ref()
-                        .unwrap()
-                        .governance_id
-                        .digest
-                        .is_empty()
-            })
             .map(|subject| subject.subject_data.unwrap())
             .collect::<Vec<SubjectData>>();
         APIResponses::GetAllGovernances(Ok(result))

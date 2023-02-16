@@ -17,7 +17,7 @@ pub use error::ApiError;
 #[derive(Debug, Clone)]
 pub enum APICommands {
     GetAllSubjects(GetAllSubjects),
-    GetAllGovernances,
+    GetAllGovernances(GetAllSubjects),
     GetSingleSubject(GetSingleSubject),
     GetEventsOfSubject(GetEventsOfSubject),
     GetSignatures(GetSignatures),
