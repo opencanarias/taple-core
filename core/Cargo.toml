@@ -1,7 +1,16 @@
 [package]
 name = "core"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
+authors = ["Open Canarias S.L.<taple@opencanarias.com>"]
+description = "TAPLE Protocol reference implementation"
+# Remove when crates.io is published
+documentation = "https://www.taple.es" 
+readme = "../README.md"
+homepage = "https://www.taple.es"
+repository = "https://github.com/opencanarias/taple-core"
+license = "AGPL-3.0-only"
+keywords = ["blockchain", "distributed-ledger", "taple", "sustainability"]
 
 [dependencies]
 tokio = { workspace = true, features = ["default", "time", "rt", "rt-multi-thread", "sync", "macros"] }
