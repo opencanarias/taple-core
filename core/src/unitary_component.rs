@@ -306,8 +306,9 @@ impl Taple {
             tokio::sync::watch::Receiver<TapleSettings>,
         ) = tokio::sync::watch::channel(self.settings.clone());
         // Creation BBDD
-        let tempdir = TempDir::new("store").unwrap();
+        let tempdir;
         let path = if self.settings.database.path.is_empty() {
+            tempdir = TempDir::new("store").unwrap();
             tempdir.path().clone()
         } else {
             std::path::Path::new(&self.settings.database.path)
