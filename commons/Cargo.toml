@@ -26,47 +26,51 @@ bls12381 = ["bbs", "pairing-plus", "hkdf", "generic-array"]
 x25519 = ["x25519-dalek", "curve25519-dalek"]
 
 [dependencies]
-serde = { version = "1.0"}
-serde_json = "1.0"
-serde_cbor = "0.11.2"
-rmp-serde = "1"
-thiserror = "1.0" # For eficient errors creation
-async-trait = "0.1.56" # Rust's own suggested alternative for implementing traits with asynchronous methods
-tokio = { version = "1", features = [
-    "sync","rt","rt-multi-thread","time"] } 
-getrandom = "0.2"
-borsh = "0.9.3"
-config = { version = "0.13.2" }
-utoipa = "2"
-json-patch = "0.2"
-rand = {version = "^0.7"}
-rand_core = "^0.5"
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_cbor = { workspace = true }
+rmp-serde = { workspace = true }
+thiserror = { workspace = true } # For eficient errors creation
+async-trait = { workspace = true } # Rust's own suggested alternative for implementing traits with asynchronous methods
+tokio = { workspace = true, features = [
+    "sync",
+    "rt",
+    "rt-multi-thread",
+    "time",
+] }
+getrandom = { workspace = true }
+borsh = { workspace = true }
+config = { workspace = true }
+utoipa = { workspace = true }
+json-patch = { workspace = true }
+rand = { workspace = true }
+rand_core = { workspace = true }
 
-base64 = "0.13"
-ed25519-dalek = { version = "1", features = ["serde"] }
-libsecp256k1 = { version = "0.7", optional = true }
-x25519-dalek = { version = "1.1.0", optional = true }
-curve25519-dalek = { version = "3.0.0", optional = true }
-bbs = { version = "0.4.1", default-features = false, optional = true }
-pairing-plus = { version = "0.19", optional = true }
-hkdf = { version = "0.12", optional = true }
+base64 = { workspace = true }
+ed25519-dalek = { workspace = true, features = ["serde"] }
+libsecp256k1 = { workspace = true, optional = true }
+x25519-dalek = { workspace = true, optional = true }
+curve25519-dalek = { workspace = true, optional = true }
+bbs = { workspace = true, default-features = false, optional = true }
+pairing-plus = { workspace = true, optional = true }
+hkdf = { workspace = true, optional = true }
 # remove after bbs version is updated with latest blake2 and generic-array >= 14
-generic-array = { version = "0.12.4", optional = true }
-blake2 = { version = "0.9", optional = true }
-blake3 = "1.0"
-sha2 = { version = "0.10", optional = true }
-sha3 = { version = "0.10", optional = true }
-chrono={ version = "0.4", features = ["clock"]}
+generic-array = { workspace = true, optional = true }
+blake2 = { workspace = true, optional = true }
+blake3 = { workspace = true }
+sha2 = { workspace = true, optional = true }
+sha3 = { workspace = true, optional = true }
+chrono = { workspace = true, features = ["clock"] }
 
 # oc_schema = {path = "../oc_schema"}
 # libsds = {path = "../libsds"}
 
 #LevelDB
-leveldb = "0.8"
-db-key = "0.0.5" #Usar esta versión. Necesario para implementar custom keys para leveldb::Database
-bincode = "1.0" #Serializador necesario por serde para implementar la serialización y deserialización
-jsonschema = "0.16"
-url = "2.3.1"
+leveldb = { workspace = true }
+db-key = { workspace = true }     #Usar esta versión. Necesario para implementar custom keys para leveldb::Database
+bincode = { workspace = true }    #Serializador necesario por serde para implementar la serialización y deserialización
+jsonschema = { workspace = true }
+url = { workspace = true }
 #merge = {version =  "0.1.0", features = ["derive", "num", "std"]} #Necesario para implementar patron Merge. Util para mergear Settings por defecto frente a las introducidas por usuario.
 [dev-dependencies]
 tempdir = "0.3"

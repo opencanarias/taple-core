@@ -16,18 +16,18 @@ keywords = ["blockchain", "distributed-ledger", "taple", "sustainability"]
 
 [dependencies]
 tokio = { workspace = true, features = ["sync", "rt", "time"] }
-async-trait = "0.1.56"
-thiserror = "1.0"
-serde = { version = "1.0", features = ["derive"] }
-base64 = "0.13"
-serde_json = "1.0"
-log = "0.4"
-jsonschema = "0.16"
-chrono={ version = "0.4", features = ["clock"]}
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+base64 = { workspace = true }
+serde_json = { workspace = true }
+log = { workspace = true }
+jsonschema = { workspace = true }
+chrono = { workspace = true, features = ["clock"] }
 
 commons = { path = "../commons" }
 governance = { path = "../governance" }
 
 [dev-dependencies]
-leveldb = "0.8"
-tempdir = "0.3"
+leveldb = "^0.8"
+tempdir = "^0.3"
