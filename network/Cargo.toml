@@ -15,15 +15,15 @@ keywords = ["blockchain", "distributed-ledger", "taple", "sustainability"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-env_logger = "0.9"
-log = "0.4"
-instant = "0.1.11"
-futures= "0.3"
-unsigned-varint = "0.7"
-tokio-stream = "0.1"
-clap = { version = "3.2.7", features = ["derive"] }
-async-std = { version = "1.6.2", features = ["attributes"] }
-bincode = "1.3.3"
+env_logger = { workspace = true }
+log = { workspace = true }
+instant = { workspace = true }
+futures = { workspace = true }
+unsigned-varint = { workspace = true }
+tokio-stream = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+async-std = { workspace = true, features = ["attributes"] }
+bincode = { workspace = true }
 
 ledger = { path = "../ledger" }
 message = { path = "../message" }
@@ -32,29 +32,14 @@ commons = { path = "../commons" }
 governance = { path = "../governance" }
 
 [dependencies.libp2p]
-version = "0.44"
-features = [
-	"identify",
-	"kad",
-	"mplex",
-	"noise",
-	"ping",
-	"serde",
-	"tcp-tokio",
-]
+workspace = true
+features = ["identify", "kad", "mplex", "noise", "ping", "serde", "tcp-tokio"]
 
 [dependencies.tokio]
 workspace = true
-features = [
-	"macros",
-	"net",
-	"rt",
-	"rt-multi-thread",
-	"sync",
-	"time",
-]
+features = ["macros", "net", "rt", "rt-multi-thread", "sync", "time"]
 
 [dev-dependencies]
-bs58 = "0.4.0"
-rand = "0.8.5"
-tempdir = "0.3"
+bs58 = "^0.4.0"
+rand = "^0.8.5"
+tempdir = "^0.3"
