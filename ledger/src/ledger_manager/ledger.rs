@@ -588,7 +588,6 @@ impl Ledger {
                 if let Some(ev) = self.repo_access.get_event(&subject_id, sn) {
                     // Check that it engages with the prev
                     if prev_hash != ev.event_content.previous_hash {
-                        println!("FALLA 1");
                         return Err(LedgerManagerError::CryptoError(CryptoError::Conflict));
                     }
                     // Check subject state and schema
@@ -655,7 +654,6 @@ impl Ledger {
             .get_event(&event.event_content.subject_id, event.event_content.sn - 1)
             .expect("Tiene que haber evento anterior");
         if prev_event.signature.content.event_content_hash != event.event_content.previous_hash {
-            println!("FALLA 2");
             return Err(LedgerManagerError::CryptoError(CryptoError::Conflict));
         }
         // Check if the future state of the subject matches
@@ -802,7 +800,6 @@ impl Ledger {
             }
             // Check cryptographic validity of signatures
             if signature.content.event_content_hash != event.signature.content.event_content_hash {
-                println!("FALLA 3");
                 return Err(LedgerManagerError::CryptoError(CryptoError::InvalidHash));
             }
         }
@@ -856,7 +853,6 @@ impl Ledger {
         approved: bool,
     ) -> Result<CommandManagerResponse, LedgerManagerError> {
         if let Err(e) = event_request.check_signatures() {
-            println!("FALLA 4");
             return Err(LedgerManagerError::CryptoError(CryptoError::Event(e)));
         }
         //TODO: Check that the invoker has permission to launch request/create subject (in my case)
