@@ -36,6 +36,7 @@ use tokio::sync::mpsc;
 use libp2p::kad::{record::Key, QueryId, Quorum, Record};
 
 const LOG_TARGET: &str = "TAPLE_NETWORT::Network";
+const RETRY_TIMEOUT: u64 = 30000;
 
 type TapleSwarmEvent = SwarmEvent<
     NetworkComposedEvent,
@@ -123,6 +124,8 @@ pub struct NetworkProcessor {
     active_get_querys: HashSet<PeerId>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
     bootstrap_nodes: Vec<(PeerId, Multiaddr)>,
+    pending_bootstrap_nodes: HashMap<PeerId, Multiaddr>,
+    bootstrap_retries_steam: futures::stream::futures_unordered::FuturesUnordered<tokio::time::Sleep>,
 }
 
 impl NetworkProcessor {
@@ -138,7 +141,6 @@ impl NetworkProcessor {
                 .expect("we always pass 32 bytes");
             Keypair::Ed25519(sk.into())
         };
-
         // Create a keypair for authenticated encryption of the transport.
         let noise_key = noise::Keypair::<noise::X25519Spec>::new()
             .into_authentic(&local_key)
@@ -223,6 +225,8 @@ impl NetworkProcessor {
             active_get_querys,
             shutdown_receiver,
             bootstrap_nodes,
+            pending_bootstrap_nodes: HashMap::new(),
+            bootstrap_retries_steam: futures::stream::futures_unordered::FuturesUnordered::new(),
         })
     }
 
@@ -252,12 +256,23 @@ impl NetworkProcessor {
                     // event loop.
                     None =>  {return;},
                 },
+                Some(_) = self.bootstrap_retries_steam.next() => self.connect_to_pending_bootstraps(),
                 _ = self.shutdown_receiver.recv() => {
                     break;
                 }
             }
         }
     }
+
+    fn connect_to_pending_bootstraps(&mut self) {
+        let keys: Vec<PeerId> = self.pending_bootstrap_nodes.keys().cloned().collect();
+        for peer in keys {
+            let addr = self.pending_bootstrap_nodes.remove(&peer).unwrap();
+            let Ok(()) = self.swarm.dial(addr.to_owned()) else {
+                panic!("Conection with bootstrap failed");
+            };
+        }
+    } 
 
     async fn handle_event(&mut self, event: TapleSwarmEvent) {
         match event {
@@ -321,6 +336,18 @@ impl NetworkProcessor {
                 if let Some(peer_id) = peer_id {
                     // Delete cache peer id and address for that controller
                     self.swarm.behaviour_mut().tell.remove_route(&peer_id);
+                    // Check if the peerID was a bootstrap node
+                    if let Some((id, multiaddr)) =
+                        self.bootstrap_nodes.iter().find(|(id, _)| *id == peer_id)
+                    {
+                        self.pending_bootstrap_nodes
+                            .insert(*id, multiaddr.to_owned());
+                        // Insert new timer if there was not any before
+                        if self.bootstrap_retries_steam.len() == 0 {
+                            self.bootstrap_retries_steam
+                                .push(tokio::time::sleep(Duration::from_millis(RETRY_TIMEOUT)));
+                        }
+                    }
                     // match self.peer_to_controller.remove(&peer_id) {
                     //     Some(controller) => {
                     //         self.controller_to_peer.remove(&controller);
