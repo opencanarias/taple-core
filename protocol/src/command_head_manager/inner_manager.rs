@@ -422,7 +422,6 @@ impl<
     > {
         // We check if we are validators of the event.
         let event_content = data.event_content.clone();
-
         let targets = {
             if event_content.metadata.governance_id.digest.is_empty() {
                 None
