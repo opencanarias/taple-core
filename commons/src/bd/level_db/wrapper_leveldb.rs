@@ -664,7 +664,7 @@ mod tests {
                     )
                 );
                 assert_eq!(
-                    vec![] as Vec<(StringKey, u64)>,
+                    vec![(StringKey("a".into()), 11u64), (StringKey("b".into()), 10u64)] as Vec<(StringKey, u64)>,
                     wrapper1.get_range(
                         &CursorIndex::FromKey("a".into()),
                         0,
@@ -745,7 +745,7 @@ mod tests {
                     )
                 );
                 assert_eq!(
-                    vec![] as Vec<(StringKey, u64)>,
+                    vec![(StringKey("a".into()), 11u64), (StringKey("b".into()), 10u64)] as Vec<(StringKey, u64)>,
                     wrapper1.get_range(
                         &CursorIndex::FromKey("a".into()),
                         0,
@@ -822,7 +822,13 @@ mod tests {
                     wrapper1.get_range(&CursorIndex::FromBeginning, 4, None::<fn(&u64) -> bool>)
                 );
                 assert_eq!(
-                    vec![] as Vec<(StringKey, u64)>,
+                    vec![
+                        (StringKey("0".into()), 12u64),
+                        (StringKey("00".into()), 13u64), 
+                        (StringKey("0a".into()), 14u64),
+                        (StringKey("a".into()), 11u64),
+                        (StringKey("b".into()), 10u64)
+                    ] as Vec<(StringKey, u64)>,
                     wrapper1.get_range(&CursorIndex::FromBeginning, 0, None::<fn(&u64) -> bool>)
                 );
                 assert_eq!(
