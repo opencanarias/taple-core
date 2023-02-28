@@ -9,8 +9,10 @@ use core::{
     event_request::RequestPayload,
 };
 use futures::FutureExt;
+use serial_test::serial;
 
 #[test]
+#[serial]
 fn init_node() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
@@ -32,6 +34,7 @@ fn init_node() {
 }
 
 #[test]
+#[serial]
 fn database_persistence() {
     let _ = std::fs::remove_dir_all(std::path::Path::new("/tmp/data"));
     let rt = tokio::runtime::Runtime::new().unwrap();
@@ -78,6 +81,7 @@ fn database_persistence() {
 }
 
 #[test]
+#[serial]
 fn not_database_conflict() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
@@ -122,6 +126,7 @@ fn not_database_conflict() {
 }
 
 #[test]
+#[serial]
 fn event_creation_json_patch() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
@@ -173,6 +178,7 @@ fn event_creation_json_patch() {
 }
 
 #[test]
+#[serial]
 fn governance_transmission() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
@@ -229,6 +235,7 @@ fn governance_transmission() {
 }
 
 #[test]
+#[serial]
 fn get_pending_request() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
@@ -324,6 +331,7 @@ fn get_pending_request() {
 }
 
 #[test]
+#[serial]
 fn governance_creation_failed() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
@@ -371,6 +379,7 @@ fn governance_creation_failed() {
 }
 
 #[test]
+#[serial]
 fn subject_creation_failed() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
@@ -432,6 +441,7 @@ fn subject_creation_failed() {
 }
 
 #[test]
+#[serial]
 fn subject_creation() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
@@ -498,6 +508,7 @@ fn subject_creation() {
 }
 
 #[test]
+#[serial]
 fn event_creation() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
@@ -602,6 +613,7 @@ fn event_creation() {
 }
 
 #[test]
+#[serial]
 fn event_creation_case_100_quorum_and_not_self_validation() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
@@ -682,6 +694,7 @@ fn event_creation_case_100_quorum_and_not_self_validation() {
 
 
 #[test]
+#[serial]
 fn event_creation_not_allowed() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
@@ -753,6 +766,7 @@ fn event_creation_not_allowed() {
 }
 
 #[test]
+#[serial]
 fn event_creation_failed() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
@@ -809,6 +823,7 @@ fn event_creation_failed() {
 }
 
 #[test]
+#[serial]
 fn add_new_member_to_governance() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
@@ -872,6 +887,7 @@ fn add_new_member_to_governance() {
 }
 
 #[test]
+#[serial]
 fn add_new_member_to_governance_all_acceptance_true() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
@@ -998,6 +1014,7 @@ fn add_new_member_to_governance_all_acceptance_true() {
 // }
 
 #[test]
+#[serial]
 fn add_new_member_to_governance_approval_failed() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
@@ -1063,6 +1080,7 @@ fn add_new_member_to_governance_approval_failed() {
 }
 
 #[test]
+#[serial]
 fn add_new_member_to_governance_two_at_the_start() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
@@ -1145,6 +1163,7 @@ fn add_new_member_to_governance_two_at_the_start() {
 }
 
 #[test]
+#[serial]
 fn add_new_schema_to_governance() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
@@ -1330,6 +1349,7 @@ fn add_new_schema_to_governance() {
 }
 
 #[test]
+#[serial]
 fn synchronization_after_added_to_governance() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
@@ -1457,6 +1477,7 @@ fn synchronization_after_added_to_governance() {
 }
 
 #[test]
+#[serial]
 fn test_approval_pass_with_accept() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
@@ -1520,6 +1541,7 @@ fn test_approval_pass_with_accept() {
 }
 
 #[test]
+#[serial]
 fn test_approval_pass_with_reject() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
@@ -1582,6 +1604,7 @@ fn test_approval_pass_with_reject() {
 }
 
 #[test]
+#[serial]
 fn test_get_rejected_event() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
@@ -1688,6 +1711,7 @@ fn test_get_rejected_event() {
 }
 
 #[test]
+#[serial]
 fn test_create_governance_request() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
@@ -1722,6 +1746,7 @@ fn test_create_governance_request() {
 }
 
 #[test]
+#[serial]
 fn test_create_subject_request() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
@@ -1775,6 +1800,7 @@ fn test_create_subject_request() {
 }
 
 #[test]
+#[serial]
 fn test_update_subject_request() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {

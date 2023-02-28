@@ -3,8 +3,10 @@ use std::time::Duration;
 
 use common::*;
 use core::{ApiModuleInterface, event_request::RequestPayload};
+use serial_test::serial;
 
 #[test]
+#[serial]
 fn notification_test() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {

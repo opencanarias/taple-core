@@ -6,8 +6,10 @@ use core::{
 };
 use futures::FutureExt;
 use std::time::Duration;
+use serial_test::serial;
 
 #[test]
+#[serial]
 fn invalid_schema_in_policies() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
@@ -37,6 +39,7 @@ fn invalid_schema_in_policies() {
 }
 
 #[test]
+#[serial]
 fn invalid_member_in_policies() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
