@@ -1,8 +1,10 @@
+use std::str::FromStr;
+
 use serde_json::{json, Value};
 
 use jsonschema::JSONSchema;
 
-use crate::errors::Error;
+use crate::{errors::Error, identifier::KeyIdentifier};
 
 #[derive(Debug)]
 pub struct Schema {
@@ -11,7 +13,10 @@ pub struct Schema {
 
 impl Schema {
     pub fn compile(schema: &Value) -> Result<Self, Error> {
-        match JSONSchema::compile(&schema) {
+        match JSONSchema::options()
+            .with_format("keyidentifier", validate_gov_keyidentifiers)
+            .compile(&schema)
+        {
             Ok(json_schema) => Ok(Schema { json_schema }),
             Err(_) => Err(Error::SchemaCreationError),
         }
@@ -22,6 +27,13 @@ impl Schema {
             Ok(_) => true,
             Err(_) => false,
         }
+    }
+}
+
+fn validate_gov_keyidentifiers(key: &str) -> bool {
+    match KeyIdentifier::from_str(key) {
+        Ok(_) => true,
+        Err(_) => false,
     }
 }
 
@@ -64,7 +76,8 @@ pub fn get_governance_schema() -> Value {
                 "type": "string"
               },
               "key": {
-                "type": "string"
+                "type": "string",
+                "format": "keyidentifier"
               }
             },
             "required": [
