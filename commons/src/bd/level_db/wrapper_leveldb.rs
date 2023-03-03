@@ -270,21 +270,20 @@ where
         .collect()
     }
 
-    pub fn get_range<F: Fn(&V) -> bool>(
+    fn get_range_aux<I: Iterator<Item = (StringKey, Vec<u8>)>, F: Fn(&V) -> bool>(
         &self,
-        cursor: &CursorIndex,
+        iter: I,
         quantity: isize,
         filter: Option<F>,
     ) -> Vec<(StringKey, V)> {
-        let iter = self.db.iter(self.get_read_options());
-        let table_name = self.get_table_name();
         let count = Rc::new(RefCell::new(0usize));
-        let other_count = count.clone();
+        let table_name = self.get_table_name();
         let closure = |value: (StringKey, Vec<u8>)| {
             // Stop when it returns None
             let (key, bytes) = value;
-            let quantity = quantity.abs() as usize;
-            if key.0.starts_with(&table_name) && (quantity == 0 || *count.borrow() < quantity) {
+            if key.0.starts_with(&table_name)
+                && (quantity == 0 || *count.borrow() < quantity as usize)
+            {
                 let key = {
                     let StringKey(value) = key;
                     // Remove the table name from the key
@@ -298,70 +297,60 @@ where
                 None
             }
         };
-
-        let mut key = match cursor {
-            CursorIndex::FromBeginning => StringKey(table_name.clone()),
-            CursorIndex::FromEnding => StringKey(self.create_last_key()),
-            CursorIndex::FromKey(key) => self.build_key(&key),
-        };
-        if quantity < 0 {
-            let mut iter = iter.reverse();
-            iter.seek(&key);
-            if cursor == &CursorIndex::FromEnding {
-                iter.advance();
-            }
-            if filter.is_some() {
-                let filter = filter.unwrap();
-                iter.map_while(closure)
-                    .filter(|(_, data)| {
-                        let result = filter(data);
-                        if !result {
-                            other_count.replace_with(
-                                |&mut old| {
-                                    if old > 0 {
-                                        old - 1
-                                    } else {
-                                        old
-                                    }
-                                },
-                            );
-                        }
-                        result
-                    })
-                    .collect()
-            } else {
-                iter.map_while(closure).collect()
-            }
+        if filter.is_some() {
+            let filter = filter.unwrap();
+            iter.map_while(closure)
+                .filter(|(_, data)| {
+                    let result = filter(data);
+                    if !result {
+                        count.replace_with(|&mut old| if old > 0 { old - 1 } else { old });
+                    }
+                    result
+                })
+                .collect()
         } else {
-            if cursor == &CursorIndex::FromEnding {
-                let temp_iter = self.db.iter(self.get_read_options()).reverse();
-                temp_iter.seek(&key);
-                key = temp_iter.skip(1).next().unwrap().0; // Modify the marker for the real one.
-            }
-            iter.seek(&key);
-            if filter.is_some() {
-                let filter = filter.unwrap();
-                iter.map_while(closure)
-                    .filter(|(_, data)| {
-                        let result = filter(data);
-                        if !result {
-                            count.replace_with(
-                                |&mut old| {
-                                    if old > 0 {
-                                        old - 1
-                                    } else {
-                                        old
-                                    }
-                                },
-                            );
-                        }
-                        result
-                    })
-                    .collect()
-            } else {
-                iter.map_while(closure).collect()
-            }
+            iter.map_while(closure).collect()
         }
+    }
+
+    pub fn get_range<F: Fn(&V) -> bool>(
+        &self,
+        cursor: &CursorIndex,
+        quantity: isize,
+        filter: Option<F>,
+    ) -> Vec<(StringKey, V)> {
+        let iter = self.db.iter(self.get_read_options());
+        let table_name = self.get_table_name();
+
+        match cursor {
+            CursorIndex::FromBeginning => {
+                if quantity < 0 {
+                    return vec![];
+                }
+                iter.seek(&StringKey(table_name.clone()));
+                return self.get_range_aux(iter, quantity, filter);
+            }
+            CursorIndex::FromEnding => {
+                if quantity < 0 {
+                    return vec![];
+                }
+                let mut iter = iter.reverse();
+                iter.advance();
+                iter.seek(&StringKey(self.create_last_key()));
+                return self.get_range_aux(iter, quantity, filter);
+            }
+            CursorIndex::FromKey(key) => {
+                let key = self.build_key(&key);
+                if quantity < 0 {
+                    let iter = iter.reverse();
+                    iter.seek(&key);
+                    return self.get_range_aux(iter, quantity.abs(), filter);
+                } else {
+                    iter.seek(&key);
+                    return self.get_range_aux(iter, quantity, filter);
+                }
+            }
+        };
     }
 
     pub fn get_count(&self) -> usize {
@@ -664,7 +653,10 @@ mod tests {
                     )
                 );
                 assert_eq!(
-                    vec![(StringKey("a".into()), 11u64), (StringKey("b".into()), 10u64)] as Vec<(StringKey, u64)>,
+                    vec![
+                        (StringKey("a".into()), 11u64),
+                        (StringKey("b".into()), 10u64)
+                    ] as Vec<(StringKey, u64)>,
                     wrapper1.get_range(
                         &CursorIndex::FromKey("a".into()),
                         0,
@@ -745,7 +737,10 @@ mod tests {
                     )
                 );
                 assert_eq!(
-                    vec![(StringKey("a".into()), 11u64), (StringKey("b".into()), 10u64)] as Vec<(StringKey, u64)>,
+                    vec![
+                        (StringKey("a".into()), 11u64),
+                        (StringKey("b".into()), 10u64)
+                    ] as Vec<(StringKey, u64)>,
                     wrapper1.get_range(
                         &CursorIndex::FromKey("a".into()),
                         0,
@@ -824,7 +819,7 @@ mod tests {
                 assert_eq!(
                     vec![
                         (StringKey("0".into()), 12u64),
-                        (StringKey("00".into()), 13u64), 
+                        (StringKey("00".into()), 13u64),
                         (StringKey("0a".into()), 14u64),
                         (StringKey("a".into()), 11u64),
                         (StringKey("b".into()), 10u64)
@@ -832,7 +827,7 @@ mod tests {
                     wrapper1.get_range(&CursorIndex::FromBeginning, 0, None::<fn(&u64) -> bool>)
                 );
                 assert_eq!(
-                    vec![(StringKey("0".to_string()), 12)],
+                    vec![] as Vec<(StringKey, u64)>,
                     wrapper1.get_range(&CursorIndex::FromBeginning, -1, None::<fn(&u64) -> bool>)
                 );
             }
@@ -895,21 +890,24 @@ mod tests {
                         (StringKey("00".to_string()), 13),
                         (StringKey("0".to_string()), 12)
                     ],
-                    wrapper1.get_range(&CursorIndex::FromEnding, -5, None::<fn(&u64) -> bool>)
+                    wrapper1.get_range(&CursorIndex::FromEnding, 5, None::<fn(&u64) -> bool>)
                 );
                 assert_eq!(
                     vec![(StringKey("b".to_string()), 10),],
                     wrapper1.get_range(&CursorIndex::FromEnding, 1, None::<fn(&u64) -> bool>)
                 );
                 assert_eq!(
-                    vec![] as Vec<(StringKey, u64)>,
-                    wrapper1.get_range(&CursorIndex::FromEnding, 0, None::<fn(&u64) -> bool>)
-                );
-                assert_eq!(
                     vec![
                         (StringKey("b".to_string()), 10),
                         (StringKey("a".to_string()), 11),
+                        (StringKey("0a".to_string()), 14),
+                        (StringKey("00".to_string()), 13),
+                        (StringKey("0".to_string()), 12)
                     ],
+                    wrapper1.get_range(&CursorIndex::FromEnding, 0, None::<fn(&u64) -> bool>)
+                );
+                assert_eq!(
+                    vec![] as Vec<(StringKey, u64)>,
                     wrapper1.get_range(&CursorIndex::FromEnding, -2, None::<fn(&u64) -> bool>)
                 );
             }
@@ -1122,7 +1120,7 @@ mod tests {
                         (StringKey("ASUB1\u{10ffff}0".to_string()), 12),
                         (StringKey("0".to_string()), 3)
                     ],
-                    wrapper00.get_range(&CursorIndex::FromEnding, -300, None::<fn(&u64) -> bool>)
+                    wrapper00.get_range(&CursorIndex::FromEnding, 300, None::<fn(&u64) -> bool>)
                 );
 
                 assert_eq!(
