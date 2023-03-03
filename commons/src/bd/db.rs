@@ -100,13 +100,13 @@ impl TapleDB for DB {
     ) -> Vec<Event> {
         let id = subject_id.to_str();
         let events_by_subject = self.event_db.partition(&id);
-        let cursor = match from {
-            Some(value) => CursorIndex::FromKey(value),
+        let (cursor, quantity) = match from {
+            Some(value) => (CursorIndex::FromKey(value), quantity),
             None => {
                 if quantity < 0 {
-                    CursorIndex::FromEnding
+                    (CursorIndex::FromEnding, quantity.abs())
                 } else {
-                    CursorIndex::FromBeginning
+                    (CursorIndex::FromBeginning, quantity)
                 }
             }
         };
@@ -228,13 +228,13 @@ impl TapleDB for DB {
     }
 
     fn get_subjects(&self, from: Option<String>, quantity: isize) -> Vec<Subject> {
-        let cursor = match from {
-            Some(value) => CursorIndex::FromKey(value),
+        let (cursor, quantity) = match from {
+            Some(value) => (CursorIndex::FromKey(value), quantity),
             None => {
                 if quantity < 0 {
-                    CursorIndex::FromEnding
+                    (CursorIndex::FromEnding, quantity.abs())
                 } else {
-                    CursorIndex::FromBeginning
+                    (CursorIndex::FromBeginning, quantity)
                 }
             }
         };
@@ -254,13 +254,13 @@ impl TapleDB for DB {
     }
 
     fn get_governances(&self, from: Option<String>, quantity: isize) -> Vec<Subject> {
-        let cursor = match from {
-            Some(value) => CursorIndex::FromKey(value),
+        let (cursor, quantity) = match from {
+            Some(value) => (CursorIndex::FromKey(value), quantity),
             None => {
                 if quantity < 0 {
-                    CursorIndex::FromEnding
+                    (CursorIndex::FromEnding, quantity.abs())
                 } else {
-                    CursorIndex::FromBeginning
+                    (CursorIndex::FromBeginning, quantity)
                 }
             }
         };
