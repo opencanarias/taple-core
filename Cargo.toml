@@ -1,14 +1,27 @@
 [workspace]
 
 members = [
-    "commons",
-    "governance",
-    "protocol",
-    "message",
-    "network",
-    "ledger",
+    # "commons",
+    # "governance",
+    # "protocol",
+    # "message",
+    # "network",
+    # "ledger",
     "core",
 ]
+
+[workspace.package]
+version = "0.2.0-dev"
+edition = "2021"
+authors = ["Open Canarias S.L.<taple@opencanarias.com>"]
+description = "TAPLE Protocol reference implementation"
+# Remove when crates.io is published
+documentation = "https://www.taple.es" 
+readme = "../README.md"
+homepage = "https://www.taple.es"
+repository = "https://github.com/opencanarias/taple-core"
+license = "AGPL-3.0-only"
+keywords = ["blockchain", "distributed-ledger", "taple", "sustainability"]
 
 [workspace.dependencies]
 # Post version 1

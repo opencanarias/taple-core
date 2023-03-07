@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use commons::models::{signature::Signature, state::SubjectData};
+use core::{signature::Signature, SubjectData};
 use core::{ApiModuleInterface, NodeAPI};
 use futures::{future, FutureExt};
 

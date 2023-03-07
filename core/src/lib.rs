@@ -1,3 +1,4 @@
+#![recursion_limit = "256"]
 //! TAPLE is a DLT focused on traceability characterized by its level of scalability,
 //! its flexibility to be employed in different devices and use cases and its reduced resource consumption,
 //! including power consumption.
@@ -76,6 +77,12 @@
 //! ```
 //!
 pub(crate) mod api;
+pub(crate) mod governance;
+pub(crate) mod ledger;
+pub(crate) mod message;
+pub(crate) mod network;
+pub(crate) mod protocol;
+pub(crate) mod commons;
 pub mod error;
 mod unitary_component;
 pub use api::{
@@ -84,7 +91,7 @@ pub use api::{
     StateRequestBodyUpper, StateType,
 };
 pub use commons::identifier;
-pub use commons::models::{event::Event, state::SubjectData};
+pub use commons::models::{event::Event, state::SubjectData, approval_signature::Acceptance};
 pub use commons::models::{event_content, event_request, signature};
 pub use commons::{
     config::{DatabaseSettings, NetworkSettings, NodeSettings, TapleSettings},

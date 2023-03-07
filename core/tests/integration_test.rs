@@ -3,10 +3,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use common::*;
-use commons::models::approval_signature::Acceptance;
 use core::{
-    {ApiModuleInterface, CreateType, StateType},
-    event_request::RequestPayload,
+    {ApiModuleInterface, CreateType, StateType, Acceptance},
+    event_request::RequestPayload, 
 };
 use futures::FutureExt;
 use serial_test::serial;
