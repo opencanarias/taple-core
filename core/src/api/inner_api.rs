@@ -1,5 +1,5 @@
 use super::{CreateRequest as ApiCreateRequest, ExternalEventRequest};
-use chrono::Utc;
+use time::OffsetDateTime;
 use commons::{
     bd::{db::DB, TapleDB},
     config::TapleSettings,
@@ -79,7 +79,7 @@ impl InnerAPI {
                 })
             }
         };
-        let timestamp = Utc::now().timestamp_millis();
+        let timestamp = OffsetDateTime::now_utc().unix_timestamp();
         let Ok(signature) = self.signature_manager.sign(&(&request, timestamp)) else {
             return APIResponses::CreateRequest(Err(ApiError::SignError));
         };
@@ -297,7 +297,7 @@ impl InnerAPI {
         let event_request = EventRequest {
             request,
             signature,
-            timestamp: Utc::now().timestamp_millis(),
+            timestamp: OffsetDateTime::now_utc().unix_timestamp(),
             approvals: HashSet::new(),
         };
         let schema = match self

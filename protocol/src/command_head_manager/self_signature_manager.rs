@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use crate::errors::ProtocolErrors;
 use borsh::BorshSerialize;
-use chrono::Utc;
+use time::OffsetDateTime;
 use commons::{
     config::TapleSettings,
     crypto::{KeyMaterial, KeyPair, Payload, DSA},
@@ -56,7 +56,7 @@ impl SelfSignatureInterface for SelfSignatureManager {
             content: SignatureContent {
                 signer: self.identifier.clone(),
                 event_content_hash: hash,
-                timestamp: Utc::now().timestamp_millis(),
+                timestamp: OffsetDateTime::now_utc().unix_timestamp(),
             },
             signature: SignatureIdentifier::new(
                 self.identifier.to_signature_derivator(),

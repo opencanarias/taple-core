@@ -1,6 +1,8 @@
 // Composed Behaviour for routing with kademlia and identify
 use instant::Duration;
-use libp2p::identify::{Identify, IdentifyConfig, IdentifyEvent};
+use libp2p::identify::Behaviour as Identify;
+use libp2p::identify::Config as IdentifyConfig;
+use libp2p::identify::Event as IdentifyEvent;
 use libp2p::identity::Keypair;
 use libp2p::kad::record::store::MemoryStore;
 use libp2p::kad::{

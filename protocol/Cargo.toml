@@ -35,7 +35,7 @@ futures = { workspace = true }
 rand = { workspace = true, features = ["small_rng"] }
 thiserror = { workspace = true }
 jsonschema = { workspace = true }
-chrono = { workspace = true, features = ["clock"] }
+time = { workspace = true, features = ["std"] }
 
 commons = { path = "../commons" }
 message = { path = "../message" }
