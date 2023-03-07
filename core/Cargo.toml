@@ -24,14 +24,14 @@ tokio = { workspace = true, features = [
 config = { workspace = true, features = ["toml"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
-tempdir = { workspace = true }
+tempfile = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
 env_logger = { workspace = true }
 log = { workspace = true }
 hex = { workspace = true }
 
-chrono = { workspace = true, features = ["clock"] }
+time = { workspace = true, features = ["std"] }
 
 # API
 commons = { path = "../commons" }
@@ -45,7 +45,6 @@ utoipa = { workspace = true }
 
 [dependencies.libp2p]
 workspace = true
-features = ["identify", "kad", "mplex", "noise", "ping", "serde", "tcp-tokio"]
 
 [dev-dependencies]
 serial_test = "1.0.0"

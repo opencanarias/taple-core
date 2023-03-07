@@ -351,7 +351,7 @@ mod tests {
 
     use std::str::FromStr;
 
-    use tempdir::TempDir;
+    use tempfile::tempdir;
     use tokio::runtime::Runtime;
 
     use crate::{bd::TapleDB, identifier::DigestIdentifier, models::event::Event};
@@ -363,7 +363,7 @@ mod tests {
         let rt = Runtime::new().unwrap();
         rt.block_on(async {
             // Generated a temporary directory for this test...
-            let temp_dir = TempDir::new("test_simple_insert").unwrap();
+            let temp_dir = tempdir().unwrap();
             let subject_id = DigestIdentifier::default();
             let event = Event::default();
             {
@@ -386,7 +386,7 @@ mod tests {
     #[test]
     fn test_open_db() {
         // Generated a temporary directory for this test...
-        let temp_dir = TempDir::new("test_simple_insert").unwrap();
+        let temp_dir = tempdir().unwrap();
         let pre_db = open_db(temp_dir.path());
         let db1 = DB::new(pre_db.clone());
         let db2 = DB::new(pre_db.clone());

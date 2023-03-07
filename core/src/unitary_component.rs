@@ -27,7 +27,7 @@ use protocol::protocol_message_manager::manager::ProtocolMessageManager;
 use protocol::protocol_message_manager::ProtocolManagerMessages;
 use protocol::request_manager::manager::RequestManager;
 use protocol::request_manager::{RequestManagerMessage, RequestManagerResponse};
-use tempdir::TempDir;
+use tempfile::tempdir as tempdirf;
 use tokio::sync::broadcast::error::{RecvError, TryRecvError};
 
 use crate::api::{APICommands, APIResponses, NodeAPI, API};
@@ -308,7 +308,7 @@ impl Taple {
         // Creation BBDD
         let tempdir;
         let path = if self.settings.database.path.is_empty() {
-            tempdir = TempDir::new("store").unwrap();
+            tempdir = tempdirf().unwrap();
             tempdir.path().clone()
         } else {
             std::path::Path::new(&self.settings.database.path)

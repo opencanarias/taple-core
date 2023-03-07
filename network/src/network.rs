@@ -24,7 +24,7 @@ use libp2p::{
     multiaddr::Protocol,
     noise,
     swarm::{ConnectionHandlerUpgrErr, NetworkBehaviour, SwarmBuilder, SwarmEvent},
-    tcp::TokioTcpConfig,
+    tcp::{GenTcpConfig, TokioTcpTransport},
     yamux, Multiaddr, NetworkBehaviour, PeerId, Swarm, Transport,
 };
 use log::{debug, info};
@@ -125,7 +125,8 @@ pub struct NetworkProcessor {
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
     bootstrap_nodes: Vec<(PeerId, Multiaddr)>,
     pending_bootstrap_nodes: HashMap<PeerId, Multiaddr>,
-    bootstrap_retries_steam: futures::stream::futures_unordered::FuturesUnordered<tokio::time::Sleep>,
+    bootstrap_retries_steam:
+        futures::stream::futures_unordered::FuturesUnordered<tokio::time::Sleep>,
 }
 
 impl NetworkProcessor {
@@ -156,8 +157,7 @@ impl NetworkProcessor {
             for protocol in addr.clone().iter() {
                 if let Protocol::Ip4(_) | Protocol::Ip6(_) = protocol {
                     transport = Some(
-                        TokioTcpConfig::new()
-                            .nodelay(true)
+                        TokioTcpTransport::new(GenTcpConfig::new().nodelay(true))
                             .upgrade(upgrade::Version::V1)
                             .authenticate(
                                 noise::NoiseConfig::xx(noise_key.clone()).into_authenticated(),
@@ -175,7 +175,7 @@ impl NetworkProcessor {
                     break;
                 } else if let Protocol::Memory(_) = protocol {
                     transport = Some(
-                        MemoryTransport
+                        MemoryTransport::default()
                             .upgrade(upgrade::Version::V1)
                             .authenticate(
                                 noise::NoiseConfig::xx(noise_key.clone()).into_authenticated(),
@@ -272,7 +272,7 @@ impl NetworkProcessor {
                 panic!("Conection with bootstrap failed");
             };
         }
-    } 
+    }
 
     async fn handle_event(&mut self, event: TapleSwarmEvent) {
         match event {

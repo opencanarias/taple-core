@@ -378,7 +378,7 @@ mod tests {
     use crate::bd::level_db::wrapper_leveldb::{open_db, CursorIndex};
     use leveldb::options::Options;
     use serde::{Deserialize, Serialize};
-    use tempdir::TempDir;
+    use tempfile::tempdir;
 
     use super::{StringKey, WrapperLevelDB};
 
@@ -395,7 +395,7 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
 
         rt.block_on(async {
-            let temp_dir = TempDir::new("test_insert_update_remove").unwrap();
+            let temp_dir = tempdir().unwrap();
             let path = temp_dir.path();
             println!("DB_PATH = {:#?}", path.as_os_str());
 
@@ -453,7 +453,7 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
 
         rt.block_on(async {
-            let temp_dir = TempDir::new("test_two_tables").unwrap();
+            let temp_dir = tempdir().unwrap();
             let path = temp_dir.path();
             println!("DB_PATH = {:#?}", path.as_os_str());
 
@@ -522,7 +522,7 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
 
         rt.block_on(async {
-            let temp_dir = TempDir::new("test_get_all").unwrap();
+            let temp_dir = tempdir().unwrap();
             {
                 let mut db_options = LevelDBOptions::new();
                 db_options.create_if_missing = true;
@@ -597,7 +597,7 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
 
         rt.block_on(async {
-            let temp_dir = TempDir::new("test_get_range_positive").unwrap();
+            let temp_dir = tempdir().unwrap();
             {
                 let mut db_options = LevelDBOptions::new();
                 db_options.create_if_missing = true;
@@ -680,7 +680,7 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
 
         rt.block_on(async {
-            let temp_dir = TempDir::new("test_get_range_negative").unwrap();
+            let temp_dir = tempdir().unwrap();
             {
                 let mut db_options = LevelDBOptions::new();
                 db_options.create_if_missing = true;
@@ -764,7 +764,7 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
 
         rt.block_on(async {
-            let temp_dir = TempDir::new("test_get_range_from_first").unwrap();
+            let temp_dir = tempdir().unwrap();
             {
                 let mut db_options = LevelDBOptions::new();
                 db_options.create_if_missing = true;
@@ -839,7 +839,7 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
 
         rt.block_on(async {
-            let temp_dir = TempDir::new("test_get_range_from_first").unwrap();
+            let temp_dir = tempdir().unwrap();
             {
                 let mut db_options = LevelDBOptions::new();
                 db_options.create_if_missing = true;
@@ -920,7 +920,7 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
 
         rt.block_on(async {
-            let temp_dir = TempDir::new("test_simple_new_subtable").unwrap();
+            let temp_dir = tempdir().unwrap();
             {
                 let mut db_options = LevelDBOptions::new();
                 db_options.create_if_missing = true;
@@ -1045,7 +1045,7 @@ mod tests {
         let rt = tokio::runtime::Runtime::new().unwrap();
 
         rt.block_on(async {
-            let temp_dir = TempDir::new("test_simple_new_subtable").unwrap();
+            let temp_dir = tempdir().unwrap();
             {
                 let mut db_options = LevelDBOptions::new();
                 db_options.create_if_missing = true;

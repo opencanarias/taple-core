@@ -2,8 +2,6 @@
 //! cryptographic operations.
 //!
 
-#[cfg(feature = "bls12381")]
-pub(crate) mod bls12381;
 pub(crate) mod ed25519;
 pub(crate) mod error;
 #[cfg(feature = "secp256k1")]
@@ -14,8 +12,6 @@ pub(crate) mod x25519;
 use identifier::error::Error;
 
 use base64::encode_config;
-#[cfg(feature = "bls12381")]
-pub use bls12381::Bls12381KeyPair;
 pub use ed25519::Ed25519KeyPair;
 #[cfg(feature = "secp256k1")]
 pub use secp256k1::Secp256k1KeyPair;
@@ -31,10 +27,6 @@ pub enum KeyPair {
     Ed25519(Ed25519KeyPair),
     #[cfg(feature = "secp256k1")]
     Secp256k1(Secp256k1KeyPair),
-    // #[cfg(feature = "bls12381")]
-    // Bls12381(Bls12381KeyPair),
-    // #[cfg(feature = "x25519")]
-    // X25519(X25519KeyPair),
 }
 
 impl KeyPair {
@@ -128,9 +120,6 @@ pub trait DHKE {
 impl Clone for KeyPair {
     fn clone(&self) -> Self {
         match self {
-            // KeyPair::Bls12381(kp) => KeyPair::Bls12381(
-            //     Bls12381KeyPair::from_secret_key(&kp.secret_key_bytes()),
-            // ),
             KeyPair::Ed25519(kp) => {
                 KeyPair::Ed25519(Ed25519KeyPair::from_secret_key(&kp.secret_key_bytes()))
             }
@@ -150,8 +139,6 @@ impl KeyMaterial for KeyPair {
             KeyPair::Ed25519(x) => x.public_key_bytes(),
             #[cfg(feature = "secp256k1")]
             KeyPair::Secp256k1(x) => x.public_key_bytes(),
-            // #[cfg(feature = "bls12381")]
-            // KeyPair::Bls12381(x) => x.public_key_bytes(),
             // #[cfg(feature = "x25519")]
             // KeyPair::X25519(x) => x.public_key_bytes(),
         }
@@ -162,8 +149,6 @@ impl KeyMaterial for KeyPair {
             KeyPair::Ed25519(x) => x.secret_key_bytes(),
             #[cfg(feature = "secp256k1")]
             KeyPair::Secp256k1(x) => x.secret_key_bytes(),
-            // #[cfg(feature = "bls12381")]
-            // KeyPair::Bls12381(x) => x.secret_key_bytes(),
             // #[cfg(feature = "x25519")]
             // KeyPair::X25519(x) => x.secret_key_bytes(),
         }
@@ -174,8 +159,6 @@ impl KeyMaterial for KeyPair {
             KeyPair::Ed25519(x) => x.to_bytes(),
             #[cfg(feature = "secp256k1")]
             KeyPair::Secp256k1(x) => x.to_bytes(),
-            // #[cfg(feature = "bls12381")]
-            // KeyPair::Bls12381(x) => x.to_bytes(),
             // #[cfg(feature = "x25519")]
             // KeyPair::X25519(x) => x.to_bytes(),
         }
@@ -188,8 +171,6 @@ impl DSA for KeyPair {
             KeyPair::Ed25519(x) => x.sign(payload),
             #[cfg(feature = "secp256k1")]
             KeyPair::Secp256k1(x) => x.sign(payload),
-            // #[cfg(feature = "bls12381")]
-            // KeyPair::Bls12381(x) => x.sign(payload),
             // _ => Err(Error::KeyPairError(
             //     "DSA is not supported for this key type".to_owned(),
             // )),
@@ -201,8 +182,6 @@ impl DSA for KeyPair {
             KeyPair::Ed25519(x) => x.verify(payload, signature),
             #[cfg(feature = "secp256k1")]
             KeyPair::Secp256k1(x) => x.verify(payload, signature),
-            // #[cfg(feature = "bls12381")]
-            // KeyPair::Bls12381(x) => x.verify(payload, signature),
             // #[cfg(feature = "x25519")]
             // KeyPair::X25519(_) => Err(Error::KeyPairError(
             //     "DSA is not supported for this key type".to_owned(),

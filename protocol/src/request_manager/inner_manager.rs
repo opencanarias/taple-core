@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use chrono::Utc;
+use time::OffsetDateTime;
 use commons::{
     bd::TapleDB,
     identifier::{Derivable, DigestIdentifier, KeyIdentifier},
@@ -767,7 +767,7 @@ impl<
                 event_request_hash: request.signature.content.event_content_hash.clone(),
                 approval_type: acceptance,
                 expected_sn: *expected_sn,
-                timestamp: Utc::now().timestamp_millis(),
+                timestamp: OffsetDateTime::now_utc().unix_timestamp(),
             };
             let target = self
                 .db

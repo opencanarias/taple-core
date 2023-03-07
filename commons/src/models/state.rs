@@ -8,7 +8,7 @@ use crate::{
     },
     schema_handler::{get_governance_schema, Schema},
 };
-use chrono::Utc;
+use time::OffsetDateTime;
 use json_patch::patch;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -365,7 +365,7 @@ impl Subject {
                     content: SignatureContent {
                         signer: signer.clone(),
                         event_content_hash,
-                        timestamp: Utc::now().timestamp_millis(),
+                        timestamp: OffsetDateTime::now_utc().unix_timestamp(),
                     },
                     signature: signature,
                 };

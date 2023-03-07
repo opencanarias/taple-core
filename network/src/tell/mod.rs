@@ -431,7 +431,7 @@ mod test {
             .into_authentic(&keypair)
             .unwrap();
 
-        let transport = MemoryTransport
+        let transport = MemoryTransport::default()
             .upgrade(upgrade::Version::V1)
             .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
             .multiplex(yamux::YamuxConfig::default())

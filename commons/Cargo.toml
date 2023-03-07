@@ -20,9 +20,8 @@ path = "src/lib.rs"
 bench = false
 
 [features]
-default = ["secp256k1", "bls12381", "x25519", "sha2", "sha3", "blake2"]
+default = ["secp256k1", "x25519", "sha2", "sha3", "blake2"]
 secp256k1 = ["libsecp256k1"]
-bls12381 = ["bbs", "pairing-plus", "hkdf", "generic-array"]
 x25519 = ["x25519-dalek", "curve25519-dalek"]
 
 [dependencies]
@@ -51,16 +50,11 @@ ed25519-dalek = { workspace = true, features = ["serde"] }
 libsecp256k1 = { workspace = true, optional = true }
 x25519-dalek = { workspace = true, optional = true }
 curve25519-dalek = { workspace = true, optional = true }
-bbs = { workspace = true, default-features = false, optional = true }
-pairing-plus = { workspace = true, optional = true }
-hkdf = { workspace = true, optional = true }
-# remove after bbs version is updated with latest blake2 and generic-array >= 14
-generic-array = { workspace = true, optional = true }
 blake2 = { workspace = true, optional = true }
 blake3 = { workspace = true }
 sha2 = { workspace = true, optional = true }
 sha3 = { workspace = true, optional = true }
-chrono = { workspace = true, features = ["clock"] }
+time = { workspace = true, features = ["std"] }
 
 # oc_schema = {path = "../oc_schema"}
 # libsds = {path = "../libsds"}
@@ -73,4 +67,4 @@ jsonschema = { workspace = true }
 url = { workspace = true }
 #merge = {version =  "0.1.0", features = ["derive", "num", "std"]} #Necesario para implementar patron Merge. Util para mergear Settings por defecto frente a las introducidas por usuario.
 [dev-dependencies]
-tempdir = "0.3"
+tempfile = { workspace = true }
