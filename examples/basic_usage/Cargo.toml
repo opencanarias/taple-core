@@ -24,7 +24,7 @@ core = { path = "../../core" }
 commons = { path = "../../commons" }
 
 [dependencies.libp2p]
-version = "0.44"
+version = "0.45.1"
 features = [
 	"identify",
 	"kad",
