@@ -5,21 +5,21 @@ use super::{
 };
 use super::{CreateRequest, CreateType, ExternalEventRequest, GetEventsOfSubject};
 use async_trait::async_trait;
-use commons::bd::db::DB;
-use commons::models::approval_signature::Acceptance;
-use commons::models::event::Event;
-use commons::models::event_request::{EventRequest, RequestData, RequestPayload};
-use commons::models::signature::Signature;
-use commons::models::state::SubjectData;
-use commons::{
+use crate::commons::bd::db::DB;
+use crate::commons::models::approval_signature::Acceptance;
+use crate::commons::models::event::Event;
+use crate::commons::models::event_request::{EventRequest, RequestData, RequestPayload};
+use crate::commons::models::signature::Signature;
+use crate::commons::models::state::SubjectData;
+use crate::commons::{
     channel::{ChannelData, MpscChannel, SenderEnd},
     config::TapleSettings,
     crypto::KeyPair,
 };
-use protocol::command_head_manager::manager::CommandAPI;
-use protocol::command_head_manager::{CommandManagerResponses, Commands};
-use protocol::request_manager::manager::RequestManagerAPI;
-use protocol::request_manager::{RequestManagerMessage, RequestManagerResponse};
+use crate::protocol::command_head_manager::manager::CommandAPI;
+use crate::protocol::command_head_manager::{CommandManagerResponses, Commands};
+use crate::protocol::request_manager::manager::RequestManagerAPI;
+use crate::protocol::request_manager::{RequestManagerMessage, RequestManagerResponse};
 use tokio::sync::watch::Sender;
 
 /// Trait that allows implementing the interface of a TAPLE node.

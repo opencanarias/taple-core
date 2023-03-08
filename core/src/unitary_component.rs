@@ -1,11 +1,11 @@
-use commons::channel::MpscChannel;
-use commons::config::{DatabaseSettings, NodeSettings, TapleSettings};
-use commons::crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair, Secp256k1KeyPair};
-use commons::identifier::derive::KeyDerivator;
-use commons::identifier::{Derivable, KeyIdentifier};
-use commons::models::event_request::RequestPayload;
-use commons::models::notification::Notification;
-use commons::{
+use crate::commons::channel::MpscChannel;
+use crate::commons::config::{DatabaseSettings, NodeSettings, TapleSettings};
+use crate::commons::crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair, Secp256k1KeyPair};
+use crate::commons::identifier::derive::KeyDerivator;
+use crate::commons::identifier::{Derivable, KeyIdentifier};
+use crate::commons::models::event_request::RequestPayload;
+use crate::commons::models::notification::Notification;
+use crate::commons::{
     bd::{
         db::{open_db, DB},
         TapleDB,
@@ -14,19 +14,19 @@ use commons::{
 };
 use futures::future::BoxFuture;
 use futures::FutureExt;
-use governance::{governance::Governance, GovernanceMessage, GovernanceResponse};
-use ledger::errors::LedgerManagerError;
-use ledger::ledger_manager::{CommandManagerMessage, CommandManagerResponse, LedgerManager};
+use crate::governance::{governance::Governance, GovernanceMessage, GovernanceResponse};
+use crate::ledger::errors::LedgerManagerError;
+use crate::ledger::ledger_manager::{CommandManagerMessage, CommandManagerResponse, LedgerManager};
 use libp2p::{Multiaddr, PeerId};
-use message::{
+use crate::message::{
     Message, MessageReceiver, MessageSender, MessageTaskCommand, MessageTaskManager, NetworkEvent,
 };
-use network::network::NetworkProcessor;
-use protocol::command_head_manager::{manager::CommandManager, CommandManagerResponses, Commands};
-use protocol::protocol_message_manager::manager::ProtocolMessageManager;
-use protocol::protocol_message_manager::ProtocolManagerMessages;
-use protocol::request_manager::manager::RequestManager;
-use protocol::request_manager::{RequestManagerMessage, RequestManagerResponse};
+use crate::network::network::NetworkProcessor;
+use crate::protocol::command_head_manager::{manager::CommandManager, CommandManagerResponses, Commands};
+use crate::protocol::protocol_message_manager::manager::ProtocolMessageManager;
+use crate::protocol::protocol_message_manager::ProtocolManagerMessages;
+use crate::protocol::request_manager::manager::RequestManager;
+use crate::protocol::request_manager::{RequestManagerMessage, RequestManagerResponse};
 use tempfile::tempdir as tempdirf;
 use tokio::sync::broadcast::error::{RecvError, TryRecvError};
 
@@ -195,7 +195,7 @@ impl Taple {
                 key_derivator: KeyDerivator::Ed25519,
                 secret_key: Option::<String>::None,
                 seed: None,
-                digest_derivator: commons::identifier::derive::digest::DigestDerivator::Blake3_256,
+                digest_derivator: crate::commons::identifier::derive::digest::DigestDerivator::Blake3_256,
                 replication_factor: 0.25f64,
                 timeout: 3000u32,
                 passvotation: 0,
@@ -468,10 +468,10 @@ impl Taple {
         } else if counter == 1 {
             match derivator {
                 KeyDerivator::Ed25519 => Ok(KeyPair::Ed25519(
-                    commons::crypto::Ed25519KeyPair::from_seed(seed.unwrap().as_bytes()),
+                    crate::commons::crypto::Ed25519KeyPair::from_seed(seed.unwrap().as_bytes()),
                 )),
                 KeyDerivator::Secp256k1 => Ok(KeyPair::Secp256k1(
-                    commons::crypto::Secp256k1KeyPair::from_seed(seed.unwrap().as_bytes()),
+                    crate::commons::crypto::Secp256k1KeyPair::from_seed(seed.unwrap().as_bytes()),
                 )),
             }
         } else if counter == 3 {

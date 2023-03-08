@@ -1,14 +1,21 @@
 [workspace]
 
 members = [
-    "commons",
-    "governance",
-    "protocol",
-    "message",
-    "network",
-    "ledger",
     "core",
 ]
+
+[workspace.package]
+version = "0.2.0-dev"
+edition = "2021"
+authors = ["Open Canarias S.L.<taple@opencanarias.com>"]
+description = "TAPLE Protocol reference implementation"
+# Remove when crates.io is published
+documentation = "https://www.taple.es" 
+readme = "../README.md"
+homepage = "https://www.taple.es"
+repository = "https://github.com/opencanarias/taple-core"
+license = "AGPL-3.0-only"
+keywords = ["blockchain", "distributed-ledger", "taple", "sustainability"]
 
 [workspace.dependencies]
 # Post version 1
@@ -55,7 +62,7 @@ db-key = "^0.0.5" #Usar esta versión. Necesario para implementar custom keys pa
 jsonschema = "~0.16"
 tempfile = "^3.4"
 tempdir = "~0.3"
-libp2p = { version = "~0.49", features = [] }
+libp2p = { version = "~0.45", features = [], default-features = false }
 
 [profile.release]
 lto = true

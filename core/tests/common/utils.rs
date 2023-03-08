@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use commons::models::{signature::Signature, state::SubjectData};
+use core::{signature::Signature, SubjectData};
 use core::{ApiModuleInterface, NodeAPI};
 use futures::{future, FutureExt};
 
@@ -32,6 +32,33 @@ pub async fn get_subject_with_timeout(
         ms,
     )
     .await
+}
+
+pub async fn get_signatures_with_timeout_2(
+    taple: Arc<std::sync::RwLock<NodeAPI>>,
+    subject_id: String,
+    sn: u64,
+    expected_signatures: usize,
+    ms: u64, 
+) -> Result<Vec<Signature>, ()> {
+    let node = taple.read().unwrap();
+    let mut counter = 0;
+    loop {
+        if counter == ms {
+            break Err(());
+        }
+        let signatures = node
+            .get_signatures(subject_id.clone(), sn, None, None)
+            .await;
+        if signatures.is_ok() {
+            let tmp = signatures.unwrap();
+            if tmp.len() == expected_signatures {
+                return Ok(tmp);
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        counter += 200;
+    }
 }
 
 #[allow(dead_code)]

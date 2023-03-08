@@ -1,7 +1,7 @@
 //! Errors that may occur when interacting with a TAPLE node through its API
 
-use protocol::errors::{ResponseError};
-pub use protocol::errors::EventCreationError;
+use crate::protocol::errors::{ResponseError};
+pub use crate::protocol::errors::EventCreationError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -9,7 +9,7 @@ pub(crate) enum APIInternalError {
     #[error("Channel unavailable")]
     ChannelError {
         #[from]
-        source: commons::errors::ChannelErrors,
+        source: crate::commons::errors::ChannelErrors,
     },
     #[error("Oneshot channel not available")]
     OneshotUnavailable,
