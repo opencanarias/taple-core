@@ -77,13 +77,13 @@
 //! ```
 //!
 pub(crate) mod api;
+pub(crate) mod commons;
+pub mod error;
 pub(crate) mod governance;
 pub(crate) mod ledger;
 pub(crate) mod message;
 pub(crate) mod network;
 pub(crate) mod protocol;
-pub(crate) mod commons;
-pub mod error;
 mod unitary_component;
 pub use api::{
     ApiError, ApiModuleInterface, CreateRequest, CreateType, ExternalEventRequest,
@@ -91,7 +91,11 @@ pub use api::{
     StateRequestBodyUpper, StateType,
 };
 pub use commons::identifier;
-pub use commons::models::{event::Event, state::SubjectData, approval_signature::Acceptance};
+pub use commons::models::{
+    approval_signature::{Acceptance, ApprovalResponse, ApprovalResponseContent},
+    event::Event,
+    state::SubjectData,
+};
 pub use commons::models::{event_content, event_request, signature};
 pub use commons::{
     config::{DatabaseSettings, NetworkSettings, NodeSettings, TapleSettings},

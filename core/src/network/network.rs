@@ -24,7 +24,7 @@ use libp2p::{
     multiaddr::Protocol,
     noise,
     swarm::{ConnectionHandlerUpgrErr, NetworkBehaviour, SwarmBuilder, SwarmEvent},
-    tcp::{GenTcpConfig, TokioTcpTransport},
+    tcp::TokioTcpConfig,
     yamux, Multiaddr, NetworkBehaviour, PeerId, Swarm, Transport,
 };
 use log::{debug, info};
@@ -159,7 +159,8 @@ impl NetworkProcessor {
             for protocol in addr.clone().iter() {
                 if let Protocol::Ip4(_) | Protocol::Ip6(_) = protocol {
                     transport = Some(
-                        TokioTcpTransport::new(GenTcpConfig::new().nodelay(true))
+                        TokioTcpConfig::new()
+                            .nodelay(true)
                             .upgrade(upgrade::Version::V1)
                             .authenticate(
                                 noise::NoiseConfig::xx(noise_key.clone()).into_authenticated(),
@@ -170,14 +171,14 @@ impl NetworkProcessor {
                     // DNS
                     transport = Some(
                         dns::GenDnsConfig::system(transport.unwrap())
-                            .await
+                            // .await
                             .expect("DNS wont fail")
                             .boxed(),
                     );
                     break;
                 } else if let Protocol::Memory(_) = protocol {
                     transport = Some(
-                        MemoryTransport::default()
+                        MemoryTransport
                             .upgrade(upgrade::Version::V1)
                             .authenticate(
                                 noise::NoiseConfig::xx(noise_key.clone()).into_authenticated(),
@@ -195,7 +196,7 @@ impl NetworkProcessor {
         let peer_id = local_key.public().to_peer_id();
 
         // DNS
-        let transport = dns::GenDnsConfig::system(transport).await?.boxed();
+        let transport = dns::GenDnsConfig::system(transport)?.boxed();
 
         // Swarm creation
         let swarm = SwarmBuilder::new(
@@ -240,9 +241,11 @@ impl NetworkProcessor {
     /// Run network processor.
     pub async fn run(mut self) {
         debug!("Running network");
-        self.swarm
-            .listen_on(self.addr.clone())
-            .expect("Port not occupied");
+        let a = self.swarm
+            .listen_on(self.addr.clone());
+        if a.is_err() {
+            println!("Error: {:?}", a.unwrap_err());
+        }
         for (_peer_id, addr) in self.bootstrap_nodes.iter() {
             let Ok(()) = self.swarm.dial(addr.to_owned()) else {
                     panic!("Conection with bootstrap failed");
@@ -260,6 +263,7 @@ impl NetworkProcessor {
                 },
                 Some(_) = self.bootstrap_retries_steam.next() => self.connect_to_pending_bootstraps(),
                 _ = self.shutdown_receiver.recv() => {
+                    println!("SHUTDOWN");
                     break;
                 }
             }

@@ -1,5 +1,5 @@
 mod common;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use common::*;
@@ -27,7 +27,6 @@ fn init_node() {
         tokio::time::sleep(Duration::from_secs(1)).await;
         let node = node.get_api();
         let result = do_task_with_timeout(node.shutdown().boxed(), 1000).await;
-        tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(result.is_ok());
     });
 }
@@ -76,6 +75,7 @@ fn database_persistence() {
         assert!(result.is_ok());
         let result = node.shutdown().await;
         assert!(result.is_ok());
+        tokio::time::sleep(Duration::from_secs(1)).await;
     });
 }
 
@@ -121,8 +121,10 @@ fn not_database_conflict() {
         assert!(result.is_ok());
         let result = node_two.shutdown().await;
         assert!(result.is_ok());
+        tokio::time::sleep(Duration::from_secs(1)).await;
     });
 }
+
 
 #[test]
 #[serial]
@@ -173,6 +175,7 @@ fn event_creation_json_patch() {
         assert_eq!(result.sn, 1);
         let result = node.shutdown().await;
         assert!(result.is_ok());
+        tokio::time::sleep(Duration::from_secs(1)).await;
     });
 }
 
@@ -212,24 +215,27 @@ fn governance_transmission() {
             .await;
         assert!(result.is_ok());
         let governance_id = result.unwrap().subject_id.unwrap();
+        tokio::time::sleep(Duration::from_secs(1)).await;
         let result = node.get_subject(governance_id.clone()).await;
         assert!(result.is_ok());
         let node = Arc::new(node);
         let node_two = Arc::new(node_two);
         let result = get_subject_with_timeout(node_two.clone(), governance_id.clone(), 5000).await;
         assert!(result.is_ok());
+
         let result =
-            get_signatures_with_timeout(node.clone(), governance_id.clone(), 0, 2, 5000).await;
+        get_signatures_with_timeout(node.clone(), governance_id.clone(), 0, 2, 5000).await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap().len(), 2);
         let result =
-            get_signatures_with_timeout(node_two.clone(), governance_id.clone(), 0, 2, 5000).await;
+        get_signatures_with_timeout(node_two.clone(), governance_id.clone(), 0, 2, 5000).await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap().len(), 2);
         let result = Arc::try_unwrap(node).unwrap().shutdown().await;
         assert!(result.is_ok());
         let result = Arc::try_unwrap(node_two).unwrap().shutdown().await;
         assert!(result.is_ok());
+        tokio::time::sleep(Duration::from_secs(1)).await;
     });
 }
 

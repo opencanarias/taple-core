@@ -79,7 +79,8 @@ url = { workspace = true }
 
 [dependencies.libp2p]
 workspace = true
-features = ["dns", "identify", "kad", "mplex", "noise", "ping", "serde", "tcp-tokio", "yamux", "async-std"]
+features = ["identify", "kad", "mplex", "noise", "serde", "tcp-tokio", "yamux", "dns-tokio"]
+default-features = false
 
 [dev-dependencies]
 tempfile = { workspace = true }

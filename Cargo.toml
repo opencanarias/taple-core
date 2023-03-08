@@ -1,12 +1,6 @@
 [workspace]
 
 members = [
-    # "commons",
-    # "governance",
-    # "protocol",
-    # "message",
-    # "network",
-    # "ledger",
     "core",
 ]
 
@@ -68,7 +62,7 @@ db-key = "^0.0.5" #Usar esta versión. Necesario para implementar custom keys pa
 jsonschema = "~0.16"
 tempfile = "^3.4"
 tempdir = "~0.3"
-libp2p = { version = "~0.49", features = [] }
+libp2p = { version = "~0.45", features = [], default-features = false }
 
 [profile.release]
 lto = true
