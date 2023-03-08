@@ -2,7 +2,7 @@ mod common;
 use std::time::Duration;
 
 use common::*;
-use core::{ApiModuleInterface, event_request::RequestPayload};
+use taple_core::{ApiModuleInterface, event_request::RequestPayload};
 use serial_test::serial;
 
 #[test]

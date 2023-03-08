@@ -1,6 +1,6 @@
 mod common;
 use common::*;
-use core::{
+use taple_core::{
     {ApiModuleInterface, CreateType},
     event_request::RequestPayload,
 };
@@ -23,7 +23,7 @@ fn invalid_schema_in_policies() {
         tokio::time::sleep(Duration::from_secs(1)).await;
         let node = node.get_api();
         let result = node
-            .create_request(core::CreateRequest::Create(CreateType {
+            .create_request(taple_core::CreateRequest::Create(CreateType {
                 governance_id: "".into(),
                 schema_id: "governance".into(),
                 namespace: "".into(),
@@ -53,7 +53,7 @@ fn invalid_member_in_policies() {
         tokio::time::sleep(Duration::from_secs(1)).await;
         let node = node.get_api();
         let result = node
-            .create_request(core::CreateRequest::Create(CreateType {
+            .create_request(taple_core::CreateRequest::Create(CreateType {
                 governance_id: "".into(),
                 schema_id: "governance".into(),
                 namespace: "".into(),

@@ -1,9 +1,9 @@
-use core::{
+use taple_core::{
     DatabaseSettings, NetworkSettings, NodeSettings, TapleSettings,
     identifier::derive::{digest::DigestDerivator, KeyDerivator},
 };
 
-use core::Taple;
+use taple_core::Taple;
 
 pub struct NodeBuilder {
     timeout: Option<u32>,

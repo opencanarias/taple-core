@@ -1,9 +1,9 @@
 mod common;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc};
 use std::time::Duration;
 
 use common::*;
-use core::{
+use taple_core::{
     {ApiModuleInterface, CreateType, StateType, Acceptance},
     event_request::RequestPayload, 
 };
@@ -49,7 +49,7 @@ fn database_persistence() {
         tokio::time::sleep(Duration::from_secs(1)).await;
         let node = node.get_api();
         let result = node
-            .create_request(core::CreateRequest::Create(CreateType {
+            .create_request(taple_core::CreateRequest::Create(CreateType {
                 governance_id: "".into(),
                 schema_id: "governance".into(),
                 namespace: "".into(),
@@ -103,7 +103,7 @@ fn not_database_conflict() {
         tokio::time::sleep(Duration::from_secs(1)).await;
         let node_two = node_two.get_api();
         let result = node
-            .create_request(core::CreateRequest::Create(CreateType {
+            .create_request(taple_core::CreateRequest::Create(CreateType {
                 governance_id: "".into(),
                 schema_id: "governance".into(),
                 namespace: "".into(),
@@ -206,7 +206,7 @@ fn governance_transmission() {
         let node_two = node_two.get_api();
         tokio::time::sleep(Duration::from_secs(1)).await;
         let result = node
-            .create_request(core::CreateRequest::Create(CreateType {
+            .create_request(taple_core::CreateRequest::Create(CreateType {
                 governance_id: "".into(),
                 schema_id: "governance".into(),
                 namespace: "".into(),
@@ -266,7 +266,7 @@ fn get_pending_request() {
         let node_two = node_two.get_api();
         tokio::time::sleep(Duration::from_secs(1)).await;
         let result = node
-            .create_request(core::CreateRequest::Create(CreateType {
+            .create_request(taple_core::CreateRequest::Create(CreateType {
                 governance_id: "".into(),
                 schema_id: "governance".into(),
                 namespace: "".into(),
@@ -276,7 +276,7 @@ fn get_pending_request() {
         assert!(result.is_ok());
         let gov_one = result.unwrap().subject_id.unwrap();
         let result = node
-            .create_request(core::CreateRequest::Create(CreateType {
+            .create_request(taple_core::CreateRequest::Create(CreateType {
                 governance_id: "".into(),
                 schema_id: "governance".into(),
                 namespace: "".into(),
@@ -286,7 +286,7 @@ fn get_pending_request() {
         assert!(result.is_ok());
         let gov_two = result.unwrap().subject_id.unwrap();
         let result = node
-            .create_request(core::CreateRequest::Create(CreateType {
+            .create_request(taple_core::CreateRequest::Create(CreateType {
                 governance_id: "".into(),
                 schema_id: "governance".into(),
                 namespace: "".into(),
@@ -304,21 +304,21 @@ fn get_pending_request() {
         let result = get_subject_with_timeout(node_two.clone(), gov_three.clone(), 5000).await;
         assert!(result.is_ok());
         let result = node
-            .create_request(core::CreateRequest::State(StateType {
+            .create_request(taple_core::CreateRequest::State(StateType {
                 subject_id: gov_one,
                 payload: RequestPayload::Json(serde_json::to_string(&governance_two()).unwrap()),
             }))
             .await;
         assert!(result.is_ok());
         let result = node
-            .create_request(core::CreateRequest::State(StateType {
+            .create_request(taple_core::CreateRequest::State(StateType {
                 subject_id: gov_two,
                 payload: RequestPayload::Json(serde_json::to_string(&governance_two()).unwrap()),
             }))
             .await;
         assert!(result.is_ok());
         let result = node
-            .create_request(core::CreateRequest::State(StateType {
+            .create_request(taple_core::CreateRequest::State(StateType {
                 subject_id: gov_three,
                 payload: RequestPayload::Json(serde_json::to_string(&governance_two()).unwrap()),
             }))
@@ -1730,7 +1730,7 @@ fn test_create_governance_request() {
         let node = node.get_api();
         tokio::time::sleep(Duration::from_secs(1)).await;
         let result = node
-            .create_request(core::CreateRequest::Create(CreateType {
+            .create_request(taple_core::CreateRequest::Create(CreateType {
                 governance_id: "".into(),
                 schema_id: "governance".into(),
                 namespace: "".into(),
@@ -1765,7 +1765,7 @@ fn test_create_subject_request() {
         let node = node.get_api();
         tokio::time::sleep(Duration::from_secs(1)).await;
         let result = node
-            .create_request(core::CreateRequest::Create(CreateType {
+            .create_request(taple_core::CreateRequest::Create(CreateType {
                 governance_id: "".into(),
                 schema_id: "governance".into(),
                 namespace: "".into(),
@@ -1779,7 +1779,7 @@ fn test_create_subject_request() {
         let governance_id = result.subject_id.unwrap();
 
         let result = node
-            .create_request(core::CreateRequest::Create(CreateType {
+            .create_request(taple_core::CreateRequest::Create(CreateType {
                 governance_id: governance_id,
                 schema_id: "prueba".into(),
                 namespace: "".into(),
@@ -1821,7 +1821,7 @@ fn test_update_subject_request() {
         let node = node.get_api();
         tokio::time::sleep(Duration::from_secs(1)).await;
         let result = node
-            .create_request(core::CreateRequest::Create(CreateType {
+            .create_request(taple_core::CreateRequest::Create(CreateType {
                 governance_id: "".into(),
                 schema_id: "governance".into(),
                 namespace: "".into(),
@@ -1835,7 +1835,7 @@ fn test_update_subject_request() {
         let governance_id = result.subject_id.unwrap();
 
         let result = node
-            .create_request(core::CreateRequest::Create(CreateType {
+            .create_request(taple_core::CreateRequest::Create(CreateType {
                 governance_id: governance_id,
                 schema_id: "prueba".into(),
                 namespace: "".into(),
@@ -1852,7 +1852,7 @@ fn test_update_subject_request() {
         let subject_id = result.subject_id.unwrap();
 
         let result = node
-            .create_request(core::CreateRequest::State(StateType {
+            .create_request(taple_core::CreateRequest::State(StateType {
                 subject_id: subject_id.clone(),
                 payload: RequestPayload::Json(
                     serde_json::to_string(&serde_json::json!({
