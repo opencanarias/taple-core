@@ -1,19 +1,24 @@
+use libc::{c_char, c_void, size_t};
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
+use leveldb::comparator::{Comparator, OrdComparator};
 use leveldb::database::Database as LevelDataBase;
 use std::sync::Arc as core_Arc;
 
 type LevelDBShared<K> = core_Arc<LevelDataBase<K>>;
-pub fn open_db<K: db_key::Key>(
+pub fn open_db<K: db_key::Key + Ord>(
     path: &std::path::Path,
     db_options: options::Options,
 ) -> Result<LevelDataBase<K>, leveldb::database::error::Error> {
-    Ok(leveldb::database::Database::<K>::open(path, db_options)?)
+    let comparator = OrdComparator::<K>::new("taple_comparator".into());
+    Ok(leveldb::database::Database::<K>::open_with_comparator(
+        path, db_options, comparator,
+    )?)
 }
 
 use db_key;
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct StringKey(pub String);
 impl db_key::Key for StringKey {
     fn from_u8(key: &[u8]) -> Self {
@@ -23,6 +28,30 @@ impl db_key::Key for StringKey {
     fn as_slice<T, F: Fn(&[u8]) -> T>(&self, f: F) -> T {
         let dst = self.0.as_bytes();
         f(&dst)
+    }
+}
+
+impl PartialOrd for StringKey {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        if self.0.len() > other.0.len() {
+            Some(std::cmp::Ordering::Less)
+        } else if self.0.len() > other.0.len() {
+            Some(std::cmp::Ordering::Greater)
+        } else {
+            self.0.partial_cmp(&other.0)
+        }
+    }
+}
+
+impl Ord for StringKey {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        if self.0.len() > other.0.len() {
+            std::cmp::Ordering::Less
+        } else if self.0.len() > other.0.len() {
+            std::cmp::Ordering::Greater
+        } else {
+            self.0.cmp(&other.0)
+        }
     }
 }
 
