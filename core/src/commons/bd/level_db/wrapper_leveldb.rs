@@ -163,7 +163,9 @@ where
     fn create_last_key(&self) -> String {
         let mut last_key = self.selected_table.clone();
         last_key.push(self.separator);
-        last_key.push(self.separator);
+        for _ in 0..70 {
+            last_key.push(self.separator);
+        }
         last_key
     }
 
@@ -201,8 +203,7 @@ where
         let table_name = self.selected_table.clone();
         let mut key_builder = String::with_capacity(table_name.len() + key.len() + 1);
         key_builder.push_str(&table_name);
-        let last_char: String = self.separator.into();
-        key_builder.push_str(&last_char);
+        key_builder.push(self.separator);
         key_builder.push_str(&key);
 
         StringKey(key_builder)
