@@ -1,5 +1,6 @@
 use libc::{c_char, c_void, size_t};
 use std::cell::{Cell, RefCell};
+use std::cmp::Ordering;
 use std::rc::Rc;
 
 use leveldb::comparator::{Comparator, OrdComparator};
@@ -31,27 +32,73 @@ impl db_key::Key for StringKey {
     }
 }
 
+fn ord_by_len(a: &Vec<&str>, b: &Vec<&str>) -> std::cmp::Ordering {
+    if a.len() > b.len() {
+        std::cmp::Ordering::Greater
+    } else if a.len() < b.len() {
+        std::cmp::Ordering::Less
+    } else {
+        std::cmp::Ordering::Equal
+    }
+}
+
 impl PartialOrd for StringKey {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        if self.0.len() > other.0.len() {
-            Some(std::cmp::Ordering::Less)
-        } else if self.0.len() > other.0.len() {
-            Some(std::cmp::Ordering::Greater)
+        let splited_self: Vec<&str> = self.0.split(char::MAX).collect();
+        let splited_other: Vec<&str> = other.0.split(char::MAX).collect();
+        let len = splited_self.len();
+        let odr_by_len = ord_by_len(&splited_self, &splited_other);
+        if odr_by_len != std::cmp::Ordering::Equal {
+            Some(odr_by_len)
         } else {
-            self.0.partial_cmp(&other.0)
+            for i in 0..len {
+                let pcmp = check_partial_cmp(splited_self[i], splited_other[i]);
+                if pcmp != Some(std::cmp::Ordering::Equal) {
+                    return pcmp;
+                }
+            }
+            Some(Ordering::Equal)
         }
+    }
+}
+
+fn check_partial_cmp(a: &str, b: &str) -> Option<std::cmp::Ordering> {
+    if a.len() > b.len() {
+        Some(std::cmp::Ordering::Greater)
+    } else if a.len() < b.len() {
+        Some(std::cmp::Ordering::Less)
+    } else {
+        a.partial_cmp(b)
     }
 }
 
 impl Ord for StringKey {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        if self.0.len() > other.0.len() {
-            std::cmp::Ordering::Less
-        } else if self.0.len() > other.0.len() {
-            std::cmp::Ordering::Greater
+        let splited_self: Vec<&str> = self.0.split(char::MAX).collect();
+        let splited_other: Vec<&str> = other.0.split(char::MAX).collect();
+        let len = splited_self.len();
+        let odr_by_len = ord_by_len(&splited_self, &splited_other);
+        if odr_by_len != std::cmp::Ordering::Equal {
+            odr_by_len
         } else {
-            self.0.cmp(&other.0)
+            for i in 0..len {
+                let pcmp = check_cmp(splited_self[i], splited_other[i]);
+                if pcmp != std::cmp::Ordering::Equal {
+                    return pcmp;
+                }
+            }
+            Ordering::Equal
         }
+    }
+}
+
+fn check_cmp(a: &str, b: &str) -> std::cmp::Ordering {
+    if a.len() > b.len() {
+        std::cmp::Ordering::Greater
+    } else if a.len() < b.len() {
+        std::cmp::Ordering::Less
+    } else {
+        a.cmp(&b)
     }
 }
 
@@ -162,10 +209,9 @@ where
 
     fn create_last_key(&self) -> String {
         let mut last_key = self.selected_table.clone();
+        // Se hace dos veces porque con uno indicaría que es el primero (porque va nada a continuación, sin embargo 2 significa que es el último (primero de la siguiente))
         last_key.push(self.separator);
-        for _ in 0..70 {
-            last_key.push(self.separator);
-        }
+        last_key.push(self.separator);
         last_key
     }
 
