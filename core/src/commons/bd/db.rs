@@ -336,13 +336,17 @@ impl TapleDB for DB {
 use leveldb::options::Options as LevelDBOptions;
 
 pub fn open_db(path: &Path) -> std::sync::Arc<leveldb::database::Database<StringKey>> {
-    let mut db_options = LevelDBOptions::new();
-    db_options.create_if_missing = true;
+    let db_options = LevelDBOptions::new();
+    // db_options.create_if_missing = true;
 
     if let Ok(db) = crate::commons::bd::level_db::wrapper_leveldb::open_db(path, db_options) {
         std::sync::Arc::new(db)
     } else {
-        panic!("Could not open LevelDB connection")
+        let mut db_options = LevelDBOptions::new();
+        db_options.create_if_missing = true;
+        let db = crate::commons::bd::level_db::wrapper_leveldb::open_db(path, db_options)
+            .expect("Error Creating DB");
+        std::sync::Arc::new(db)
     }
 }
 
