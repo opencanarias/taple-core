@@ -2,7 +2,7 @@ use std::cell::{Cell, RefCell};
 use std::cmp::Ordering;
 use std::rc::Rc;
 
-use leveldb::comparator::{OrdComparator};
+use leveldb::comparator::OrdComparator;
 use leveldb::database::Database as LevelDataBase;
 use std::sync::Arc as core_Arc;
 
@@ -65,6 +65,7 @@ impl PartialOrd for StringKey {
                 }
             }
             Some(Ordering::Equal)
+            // check_partial_cmp(splited_self[len - 1], splited_other[len -1])
         }
     }
 }
@@ -95,6 +96,7 @@ impl Ord for StringKey {
                 }
             }
             Ordering::Equal
+            // check_cmp(splited_self[len - 1], splited_other[len -1])
         }
     }
 }
@@ -1255,36 +1257,50 @@ mod tests {
 
         rt.block_on(async {
             let temp_dir = tempdir().unwrap();
-            let comparator = OrdComparator::<StringKey>::new("taple_comparator".into());
-            let mut db_options = LevelDBOptions::new();
-            db_options.create_if_missing = true;
-            let db =
-                Arc::new(
+            {
+                let comparator = OrdComparator::<StringKey>::new("taple_comparator".into());
+                let mut db_options = LevelDBOptions::new();
+                db_options.create_if_missing = true;
+                let db = Arc::new(
                     crate::commons::bd::level_db::wrapper_leveldb::open_db_with_comparator::<
                         StringKey,
                     >(temp_dir.path(), db_options, comparator)
                     .unwrap(),
                 );
 
-            let _wrapper0 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), "EJEMPLO_TABLE1");
-            let wrapper1 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), "EJEMPLO_TABLE2");
-            let _wrapper2 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), "EJEMPLO_TABL3");
+                let _wrapper0 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), "EJEMPLO_TABLE1");
+                let wrapper1 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), "EJEMPLO_TABLE2");
+                let _wrapper2 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), "EJEMPLO_TABL3");
+            }
+            {
+                // Reopen the connection to confirm persistence...
+                let mut db_options = LevelDBOptions::new();
+                db_options.create_if_missing = false;
+                let comparator = OrdComparator::<StringKey>::new("taple_comparator".into());
+                let db = Arc::new(
+                    crate::commons::bd::level_db::wrapper_leveldb::open_db_with_comparator::<
+                        StringKey,
+                    >(temp_dir.path(), db_options, comparator)
+                    .unwrap(),
+                );
+                let wrapper1 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), "EJEMPLO_TABLE2");
+                wrapper1.put("b", 10).unwrap();
+                wrapper1.put("a", 11).unwrap();
+                wrapper1.put("0", 12).unwrap();
+                wrapper1.put("00", 13).unwrap();
+                wrapper1.put("0a", 14).unwrap();
+                assert_eq!(
+                    vec![
+                        (StringKey("0".to_string()), 12),
+                        (StringKey("a".to_string()), 11),
+                        (StringKey("b".to_string()), 10),
+                        (StringKey("00".to_string()), 13),
+                        (StringKey("0a".to_string()), 14),
+                    ],
+                    wrapper1.get_all()
+                );
+            }
 
-            wrapper1.put("b", 10).unwrap();
-            wrapper1.put("a", 11).unwrap();
-            wrapper1.put("0", 12).unwrap();
-            wrapper1.put("00", 13).unwrap();
-            wrapper1.put("0a", 14).unwrap();
-            assert_eq!(
-                vec![
-                    (StringKey("0".to_string()), 12),
-                    (StringKey("a".to_string()), 11),
-                    (StringKey("b".to_string()), 10),
-                    (StringKey("00".to_string()), 13),
-                    (StringKey("0a".to_string()), 14),
-                ],
-                wrapper1.get_all()
-            );
         });
     }
 }
