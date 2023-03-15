@@ -24,7 +24,6 @@ tokio = { workspace = true, features = [
 	"sync",
 	"macros",
 ] }
-libc = { workspace = true }
 config = { workspace = true, features = ["toml"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

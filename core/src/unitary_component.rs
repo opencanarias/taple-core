@@ -1,3 +1,4 @@
+use crate::commons::bd::db::open_db_with_comparator;
 use crate::commons::channel::MpscChannel;
 use crate::commons::config::{DatabaseSettings, NodeSettings, TapleSettings};
 use crate::commons::crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair, Secp256k1KeyPair};
@@ -313,7 +314,7 @@ impl Taple {
         } else {
             std::path::Path::new(&self.settings.database.path)
         };
-        let db = open_db(path);
+        let db = open_db_with_comparator(path);
         let db_access = DB::new(db.clone());
         // Creation of cryptographic material
         let stored_public_key = db_access.get_controller_id();

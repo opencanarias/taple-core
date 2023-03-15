@@ -1,18 +1,25 @@
-use libc::{c_char, c_void, size_t};
 use std::cell::{Cell, RefCell};
 use std::cmp::Ordering;
 use std::rc::Rc;
 
-use leveldb::comparator::{Comparator, OrdComparator};
+use leveldb::comparator::{OrdComparator};
 use leveldb::database::Database as LevelDataBase;
 use std::sync::Arc as core_Arc;
 
 type LevelDBShared<K> = core_Arc<LevelDataBase<K>>;
-pub fn open_db<K: db_key::Key + Ord>(
+
+pub fn open_db<K: db_key::Key>(
     path: &std::path::Path,
     db_options: options::Options,
 ) -> Result<LevelDataBase<K>, leveldb::database::error::Error> {
-    let comparator = OrdComparator::<K>::new("taple_comparator".into());
+    Ok(leveldb::database::Database::<K>::open(path, db_options)?)
+}
+
+pub fn open_db_with_comparator<K: db_key::Key + Ord>(
+    path: &std::path::Path,
+    db_options: options::Options,
+    comparator: OrdComparator<K>,
+) -> Result<LevelDataBase<K>, leveldb::database::error::Error> {
     Ok(leveldb::database::Database::<K>::open_with_comparator(
         path, db_options, comparator,
     )?)
@@ -137,6 +144,7 @@ unsafe impl<T> Sync for SyncCell<T> {}
 
 use serde::{de::DeserializeOwned, Serialize};
 use std::marker::PhantomData;
+
 pub struct WrapperLevelDB<K: db_key::Key, V: Serialize + DeserializeOwned> {
     db: LevelDBShared<K>,
     selected_table: String,
@@ -457,7 +465,7 @@ mod tests {
     use std::sync::Arc;
 
     use crate::commons::bd::level_db::wrapper_leveldb::{open_db, CursorIndex};
-    use leveldb::options::Options;
+    use leveldb::{comparator::OrdComparator, options::Options};
     use serde::{Deserialize, Serialize};
     use tempfile::tempdir;
 
@@ -625,7 +633,7 @@ mod tests {
             {
                 // Reopen the connection to confirm persistence...
                 let mut db_options = LevelDBOptions::new();
-                db_options.create_if_missing = false;
+                db_options.create_if_missing = true;
                 let db = Arc::new(
                     crate::commons::bd::level_db::wrapper_leveldb::open_db::<StringKey>(
                         temp_dir.path(),
@@ -700,7 +708,7 @@ mod tests {
             {
                 // Reopen the connection to confirm persistence...
                 let mut db_options = LevelDBOptions::new();
-                db_options.create_if_missing = false;
+                db_options.create_if_missing = true;
                 let db = Arc::new(
                     crate::commons::bd::level_db::wrapper_leveldb::open_db::<StringKey>(
                         temp_dir.path(),
@@ -1238,6 +1246,45 @@ mod tests {
                     wrapper1.get_all()
                 )
             }
+        });
+    }
+
+    #[test]
+    fn test_db_with_custom_comparator() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+
+        rt.block_on(async {
+            let temp_dir = tempdir().unwrap();
+            let comparator = OrdComparator::<StringKey>::new("taple_comparator".into());
+            let mut db_options = LevelDBOptions::new();
+            db_options.create_if_missing = true;
+            let db =
+                Arc::new(
+                    crate::commons::bd::level_db::wrapper_leveldb::open_db_with_comparator::<
+                        StringKey,
+                    >(temp_dir.path(), db_options, comparator)
+                    .unwrap(),
+                );
+
+            let _wrapper0 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), "EJEMPLO_TABLE1");
+            let wrapper1 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), "EJEMPLO_TABLE2");
+            let _wrapper2 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), "EJEMPLO_TABL3");
+
+            wrapper1.put("b", 10).unwrap();
+            wrapper1.put("a", 11).unwrap();
+            wrapper1.put("0", 12).unwrap();
+            wrapper1.put("00", 13).unwrap();
+            wrapper1.put("0a", 14).unwrap();
+            assert_eq!(
+                vec![
+                    (StringKey("0".to_string()), 12),
+                    (StringKey("a".to_string()), 11),
+                    (StringKey("b".to_string()), 10),
+                    (StringKey("00".to_string()), 13),
+                    (StringKey("0a".to_string()), 14),
+                ],
+                wrapper1.get_all()
+            );
         });
     }
 }
