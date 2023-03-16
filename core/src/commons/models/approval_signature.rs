@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
 use utoipa::ToSchema;
 
+use super::timestamp::TimeStamp;
+
 #[derive(
     Debug,
     Clone,
@@ -76,7 +78,7 @@ pub struct ApprovalResponseContent {
     pub event_request_hash: DigestIdentifier,
     pub approval_type: Acceptance,
     pub expected_sn: u64,
-    pub timestamp: i64,
+    pub timestamp: TimeStamp,
 }
 
 impl PartialEq for ApprovalResponseContent {

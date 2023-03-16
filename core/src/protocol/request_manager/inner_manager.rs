@@ -7,7 +7,7 @@ use crate::commons::{
     models::{
         approval_signature::{ApprovalResponse, ApprovalResponseContent},
         event_request::{EventRequest, EventRequestType, RequestData},
-        notification::Notification,
+        notification::Notification, timestamp::TimeStamp,
     },
 };
 use crate::governance::GovernanceInterface;
@@ -386,7 +386,7 @@ impl<
                             request_id: id.to_str(),
                             subject_id: Some(subject_id.to_str()),
                             sn: None,
-                            timestamp: request.timestamp,
+                            timestamp: request.timestamp.clone(),
                         })),
                         Some(Self::send_approval_request(
                             Vec::from_iter(targets),
@@ -767,7 +767,7 @@ impl<
                 event_request_hash: request.signature.content.event_content_hash.clone(),
                 approval_type: acceptance,
                 expected_sn: *expected_sn,
-                timestamp: OffsetDateTime::now_utc().unix_timestamp(),
+                timestamp: TimeStamp::now(),
             };
             let target = self
                 .db

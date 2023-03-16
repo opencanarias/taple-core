@@ -3,15 +3,15 @@ use serde::{Deserialize, Deserializer, Serialize};
 use time::OffsetDateTime;
 use utoipa::ToSchema;
 
-#[derive(Debug, Clone, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema)]
+#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, BorshSerialize, BorshDeserialize, ToSchema)]
 pub struct TimeStamp {
-    pub time: i128,
+    pub time: i64,
 }
 
 impl TimeStamp {
     pub fn now() -> Self {
         Self {
-            time: OffsetDateTime::now_utc().unix_timestamp_nanos(),
+            time: OffsetDateTime::now_utc().unix_timestamp_nanos() as i64,
         }
     }
 }
@@ -22,7 +22,7 @@ impl Serialize for TimeStamp {
     where
         S: serde::Serializer,
     {
-        serializer.serialize_i128(self.time)
+        serializer.serialize_i64(self.time)
     }
 }
 
@@ -31,7 +31,7 @@ impl<'de> Deserialize<'de> for TimeStamp {
     where
         D: Deserializer<'de>,
     {
-        let time = <i128 as Deserialize>::deserialize(deserializer)?;
+        let time = <i64 as Deserialize>::deserialize(deserializer)?;
         Ok(TimeStamp { time })
     }
 }

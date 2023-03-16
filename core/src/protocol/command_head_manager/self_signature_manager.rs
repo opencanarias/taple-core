@@ -10,7 +10,7 @@ use crate::commons::{
         derive::digest::DigestDerivator, Derivable, DigestIdentifier, KeyIdentifier,
         SignatureIdentifier,
     },
-    models::signature::{Signature, SignatureContent},
+    models::{signature::{Signature, SignatureContent}, timestamp::TimeStamp},
 };
 
 pub trait SelfSignatureInterface {
@@ -56,7 +56,7 @@ impl SelfSignatureInterface for SelfSignatureManager {
             content: SignatureContent {
                 signer: self.identifier.clone(),
                 event_content_hash: hash,
-                timestamp: OffsetDateTime::now_utc().unix_timestamp(),
+                timestamp: TimeStamp::now(),
             },
             signature: SignatureIdentifier::new(
                 self.identifier.to_signature_derivator(),
