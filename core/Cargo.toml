@@ -49,7 +49,7 @@ rand = { workspace = true, features = ["small_rng"] }
 
 # Network
 instant = { workspace = true }
-unsigned-varint = { workspace = true, features = ["futures"]}
+unsigned-varint = { workspace = true, features = ["futures"] }
 async-std = { workspace = true, features = ["attributes"] }
 bincode = { workspace = true }
 
@@ -74,12 +74,21 @@ sha3 = { workspace = true, optional = true }
 
 #LevelDB
 leveldb = { workspace = true }
-db-key = { workspace = true }     #Usar esta versión. Necesario para implementar custom keys para leveldb::Database
+db-key = { workspace = true }  #Usar esta versión. Necesario para implementar custom keys para leveldb::Database
 url = { workspace = true }
 
 [dependencies.libp2p]
 workspace = true
-features = ["identify", "kad", "mplex", "noise", "serde", "tcp-tokio", "yamux", "dns-tokio"]
+features = [
+	"identify",
+	"kad",
+	"mplex",
+	"noise",
+	"serde",
+	"tcp-tokio",
+	"yamux",
+	"dns-tokio",
+]
 default-features = false
 
 [dev-dependencies]

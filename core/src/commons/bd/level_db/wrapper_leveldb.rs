@@ -1,10 +1,13 @@
 use std::cell::{Cell, RefCell};
+use std::cmp::Ordering;
 use std::rc::Rc;
 
+use leveldb::comparator::OrdComparator;
 use leveldb::database::Database as LevelDataBase;
 use std::sync::Arc as core_Arc;
 
 type LevelDBShared<K> = core_Arc<LevelDataBase<K>>;
+
 pub fn open_db<K: db_key::Key>(
     path: &std::path::Path,
     db_options: options::Options,
@@ -12,8 +15,18 @@ pub fn open_db<K: db_key::Key>(
     Ok(leveldb::database::Database::<K>::open(path, db_options)?)
 }
 
+pub fn open_db_with_comparator<K: db_key::Key + Ord>(
+    path: &std::path::Path,
+    db_options: options::Options,
+    comparator: OrdComparator<K>,
+) -> Result<LevelDataBase<K>, leveldb::database::error::Error> {
+    Ok(leveldb::database::Database::<K>::open_with_comparator(
+        path, db_options, comparator,
+    )?)
+}
+
 use db_key;
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct StringKey(pub String);
 impl db_key::Key for StringKey {
     fn from_u8(key: &[u8]) -> Self {
@@ -23,6 +36,104 @@ impl db_key::Key for StringKey {
     fn as_slice<T, F: Fn(&[u8]) -> T>(&self, f: F) -> T {
         let dst = self.0.as_bytes();
         f(&dst)
+    }
+}
+
+fn last_index_of(sttr: &str, c: char) -> Option<usize> {
+    sttr.rfind(c)
+}
+
+fn ord_by_len(a: &Vec<&str>, b: &Vec<&str>) -> std::cmp::Ordering {
+    if a.len() > b.len() {
+        std::cmp::Ordering::Greater
+    } else if a.len() < b.len() {
+        std::cmp::Ordering::Less
+    } else {
+        std::cmp::Ordering::Equal
+    }
+}
+
+impl PartialOrd for StringKey {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        // let last_separator_index_self = last_index_of(&self.0, char::MAX).expect("Has Separator");
+        // let last_separator_index_other = last_index_of(&other.0, char::MAX).expect("Has Separator");
+        // let self_prefix = &self.0[..last_separator_index_self];
+        // let other_prefix = &other.0[..last_separator_index_other];
+        // match self_prefix.partial_cmp(other_prefix) {
+        //     Some(result) => match result {
+        //         Ordering::Less => Some(Ordering::Less),
+        //         Ordering::Greater => Some(Ordering::Greater),
+        //         Ordering::Equal => self.0[last_separator_index_self..]
+        //         .partial_cmp(&other.0[last_separator_index_other..]),
+        //     },
+        //     None => None,
+        // }
+        let splited_self: Vec<&str> = self.0.split(char::MAX).collect();
+        let splited_other: Vec<&str> = other.0.split(char::MAX).collect();
+        let len = splited_self.len();
+        let odr_by_len = ord_by_len(&splited_self, &splited_other);
+        if odr_by_len != std::cmp::Ordering::Equal {
+            Some(odr_by_len)
+        } else {
+            for i in 0..len {
+                let pcmp = check_partial_cmp(splited_self[i], splited_other[i]);
+                if pcmp != Some(std::cmp::Ordering::Equal) {
+                    return pcmp;
+                }
+            }
+            Some(Ordering::Equal)
+        }
+    }
+}
+
+fn check_partial_cmp(a: &str, b: &str) -> Option<std::cmp::Ordering> {
+    if a.len() > b.len() {
+        Some(std::cmp::Ordering::Greater)
+    } else if a.len() < b.len() {
+        Some(std::cmp::Ordering::Less)
+    } else {
+        a.partial_cmp(b)
+    }
+}
+
+impl Ord for StringKey {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // let last_separator_index_self = last_index_of(&self.0, char::MAX).expect("Has Separator");
+        // let last_separator_index_other = last_index_of(&other.0, char::MAX).expect("Has Separator");
+        // let self_prefix = &self.0[..last_separator_index_self];
+        // let other_prefix = &other.0[..last_separator_index_other];
+        // match self_prefix.cmp(other_prefix) {
+        //     Ordering::Less => Ordering::Less,
+        //     Ordering::Greater => Ordering::Greater,
+        //     Ordering::Equal => {
+        //         self.0[last_separator_index_self..].cmp(&other.0[last_separator_index_other..])
+        //     }
+        // }
+        let splited_self: Vec<&str> = self.0.split(char::MAX).collect();
+        let splited_other: Vec<&str> = other.0.split(char::MAX).collect();
+        let len = splited_self.len();
+        let odr_by_len = ord_by_len(&splited_self, &splited_other);
+        if odr_by_len != std::cmp::Ordering::Equal {
+            odr_by_len
+        } else {
+            for i in 0..len {
+                let pcmp = check_cmp(splited_self[i], splited_other[i]);
+                if pcmp != std::cmp::Ordering::Equal {
+                    return pcmp;
+                }
+            }
+            Ordering::Equal
+        }
+    }
+}
+
+fn check_cmp(a: &str, b: &str) -> std::cmp::Ordering {
+    if a.len() > b.len() {
+        std::cmp::Ordering::Greater
+    } else if a.len() < b.len() {
+        std::cmp::Ordering::Less
+    } else {
+        a.cmp(&b)
     }
 }
 
@@ -61,6 +172,7 @@ unsafe impl<T> Sync for SyncCell<T> {}
 
 use serde::{de::DeserializeOwned, Serialize};
 use std::marker::PhantomData;
+
 pub struct WrapperLevelDB<K: db_key::Key, V: Serialize + DeserializeOwned> {
     db: LevelDBShared<K>,
     selected_table: String,
@@ -133,6 +245,7 @@ where
 
     fn create_last_key(&self) -> String {
         let mut last_key = self.selected_table.clone();
+        // Se hace dos veces porque con uno indicaría que es el primero (porque va nada a continuación, sin embargo 2 significa que es el último (primero de la siguiente))
         last_key.push(self.separator);
         last_key.push(self.separator);
         last_key
@@ -172,8 +285,7 @@ where
         let table_name = self.selected_table.clone();
         let mut key_builder = String::with_capacity(table_name.len() + key.len() + 1);
         key_builder.push_str(&table_name);
-        let last_char: String = self.separator.into();
-        key_builder.push_str(&last_char);
+        key_builder.push(self.separator);
         key_builder.push_str(&key);
 
         StringKey(key_builder)
@@ -381,7 +493,7 @@ mod tests {
     use std::sync::Arc;
 
     use crate::commons::bd::level_db::wrapper_leveldb::{open_db, CursorIndex};
-    use leveldb::options::Options;
+    use leveldb::{comparator::OrdComparator, options::Options};
     use serde::{Deserialize, Serialize};
     use tempfile::tempdir;
 
@@ -549,7 +661,7 @@ mod tests {
             {
                 // Reopen the connection to confirm persistence...
                 let mut db_options = LevelDBOptions::new();
-                db_options.create_if_missing = false;
+                db_options.create_if_missing = true;
                 let db = Arc::new(
                     crate::commons::bd::level_db::wrapper_leveldb::open_db::<StringKey>(
                         temp_dir.path(),
@@ -624,7 +736,7 @@ mod tests {
             {
                 // Reopen the connection to confirm persistence...
                 let mut db_options = LevelDBOptions::new();
-                db_options.create_if_missing = false;
+                db_options.create_if_missing = true;
                 let db = Arc::new(
                     crate::commons::bd::level_db::wrapper_leveldb::open_db::<StringKey>(
                         temp_dir.path(),
@@ -1161,6 +1273,58 @@ mod tests {
                     ],
                     wrapper1.get_all()
                 )
+            }
+        });
+    }
+
+    #[test]
+    fn test_db_with_custom_comparator() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+
+        rt.block_on(async {
+            let temp_dir = tempdir().unwrap();
+            {
+                let comparator = OrdComparator::<StringKey>::new("taple_comparator".into());
+                let mut db_options = LevelDBOptions::new();
+                db_options.create_if_missing = true;
+                let db = Arc::new(
+                    crate::commons::bd::level_db::wrapper_leveldb::open_db_with_comparator::<
+                        StringKey,
+                    >(temp_dir.path(), db_options, comparator)
+                    .unwrap(),
+                );
+
+                let _wrapper0 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), "EJEMPLO_TABLE1");
+                let wrapper1 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), "EJEMPLO_TABLE2");
+                let _wrapper2 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), "EJEMPLO_TABL3");
+            }
+            {
+                // Reopen the connection to confirm persistence...
+                let mut db_options = LevelDBOptions::new();
+                db_options.create_if_missing = false;
+                let comparator = OrdComparator::<StringKey>::new("taple_comparator".into());
+                let db = Arc::new(
+                    crate::commons::bd::level_db::wrapper_leveldb::open_db_with_comparator::<
+                        StringKey,
+                    >(temp_dir.path(), db_options, comparator)
+                    .unwrap(),
+                );
+                let wrapper1 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), "EJEMPLO_TABLE2");
+                wrapper1.put("b", 10).unwrap();
+                wrapper1.put("a", 11).unwrap();
+                wrapper1.put("0", 12).unwrap();
+                wrapper1.put("00", 13).unwrap();
+                wrapper1.put("0a", 14).unwrap();
+                assert_eq!(
+                    vec![
+                        (StringKey("0".to_string()), 12),
+                        (StringKey("a".to_string()), 11),
+                        (StringKey("b".to_string()), 10),
+                        (StringKey("00".to_string()), 13),
+                        (StringKey("0a".to_string()), 14),
+                    ],
+                    wrapper1.get_all()
+                );
             }
         });
     }
