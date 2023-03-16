@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
 use utoipa::ToSchema;
 
+use super::timestamp::TimeStamp;
+
 /// Defines the data used to generate the signature, as well as the signer's identifier.
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, BorshSerialize, BorshDeserialize, ToSchema)]
 pub struct SignatureContent {
@@ -12,7 +14,7 @@ pub struct SignatureContent {
     pub signer: KeyIdentifier,
     #[schema(value_type = String)]
     pub event_content_hash: DigestIdentifier,
-    pub timestamp: i64,
+    pub timestamp: TimeStamp,
 }
 
 impl PartialEq for SignatureContent {

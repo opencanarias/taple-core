@@ -33,7 +33,7 @@ pub enum APICommands {
 #[derive(Debug, Clone)]
 pub struct GetAllSubjects {
     pub namespace: String,
-    pub from: Option<usize>,
+    pub from: Option<String>,
     pub quantity: Option<usize>,
 }
 

@@ -17,7 +17,7 @@ use crate::commons::{
 use super::{
     event_content::{EventContent, Metadata},
     event_request::{EventRequest, EventRequestType, RequestPayload, StateRequest},
-    signature::{Signature, SignatureContent},
+    signature::{Signature, SignatureContent}, timestamp::TimeStamp,
 };
 
 /// Event associated to a subject.
@@ -152,12 +152,12 @@ impl Default for Event {
                         subject_id: DigestIdentifier::from_str("Ju536BiUXBqbuNdJsOBwYWnbzrKjsYtVEauI6IsMh3tM").unwrap(),
                         payload: RequestPayload::Json("{\"localizacion\":\"Argentina\",\"temperatura\":-2}".to_owned()),
                     }), 
-                    timestamp: 1673869997367, 
+                    timestamp: TimeStamp::now(), 
                     signature: Signature { 
                         content: SignatureContent {
                         signer: KeyIdentifier::from_str("ED8MpwKh3OjPEw_hQdqJixrXlKzpVzdvHf2DqrPvdz7Y").unwrap(),
                         event_content_hash: DigestIdentifier::from_str("Jnb4JtdYKZVyX1tFCCVXJ71X-badXlPnxYJ9xe5wzrCs").unwrap(),
-                        timestamp: 1673869997367,
+                        timestamp: TimeStamp::now(),
                         }, 
                         signature: SignatureIdentifier::from_str("SErazBOSVMRgEc89jp5Xr3IT2T5D3Y_BhiyBV-Wq8HIujTjWDPPkHL6xoLYDWQu0MWnzVZ24O_dXmOEf9AxwxeDw").unwrap()
                     }, 
@@ -176,7 +176,7 @@ impl Default for Event {
                 content: SignatureContent {
                     signer: KeyIdentifier::from_str("E3jPA10tf8YGtyQJ5l0COJA-woXyBmlfGE-AbFVmZvr4").unwrap(),
                     event_content_hash: DigestIdentifier::from_str("JvWXIptlBC_3Ybx0cTY3X-mL922Q0Ot8Jnl3inmHmsAA").unwrap(),
-                    timestamp: 1673869997373,
+                    timestamp: TimeStamp::now(),
                 },
                 signature: SignatureIdentifier::from_str("SEtLpVCrClCzaRZNTJ98dEOkvYi6azvBKMBgwHbkqZkDW7CSVNWjpJFg2jCROTrrJEXXrxVhqmZeBdsYEXuXkPAA").unwrap(),
             },

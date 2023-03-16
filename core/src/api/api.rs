@@ -86,7 +86,7 @@ pub trait ApiModuleInterface {
     async fn get_all_subjects(
         &self,
         namespace: String,
-        from: Option<usize>,
+        from: Option<String>,
         quantity: Option<usize>,
     ) -> Result<Vec<SubjectData>, ApiError>;
     /// It allows to obtain all the subjects that model existing governance in the node.
@@ -95,7 +95,7 @@ pub trait ApiModuleInterface {
     async fn get_all_governances(
         &self,
         namespace: String,
-        from: Option<usize>,
+        from: Option<String>,
         quantity: Option<usize>,
     ) -> Result<Vec<SubjectData>, ApiError>;
     /// Allows to obtain events from a specific subject previously existing in the node.
@@ -299,7 +299,7 @@ impl ApiModuleInterface for NodeAPI {
     async fn get_all_subjects(
         &self,
         namespace: String,
-        from: Option<usize>,
+        from: Option<String>,
         quantity: Option<usize>,
     ) -> Result<Vec<SubjectData>, ApiError> {
         let response = self
@@ -320,7 +320,7 @@ impl ApiModuleInterface for NodeAPI {
     async fn get_all_governances(
         &self,
         namespace: String,
-        from: Option<usize>,
+        from: Option<String>,
         quantity: Option<usize>,
     ) -> Result<Vec<SubjectData>, ApiError> {
         let response = self
