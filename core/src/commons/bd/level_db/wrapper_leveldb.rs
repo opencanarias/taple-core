@@ -39,6 +39,10 @@ impl db_key::Key for StringKey {
     }
 }
 
+fn last_index_of(sttr: &str, c: char) -> Option<usize> {
+    sttr.rfind(c)
+}
+
 fn ord_by_len(a: &Vec<&str>, b: &Vec<&str>) -> std::cmp::Ordering {
     if a.len() > b.len() {
         std::cmp::Ordering::Greater
@@ -51,6 +55,19 @@ fn ord_by_len(a: &Vec<&str>, b: &Vec<&str>) -> std::cmp::Ordering {
 
 impl PartialOrd for StringKey {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        // let last_separator_index_self = last_index_of(&self.0, char::MAX).expect("Has Separator");
+        // let last_separator_index_other = last_index_of(&other.0, char::MAX).expect("Has Separator");
+        // let self_prefix = &self.0[..last_separator_index_self];
+        // let other_prefix = &other.0[..last_separator_index_other];
+        // match self_prefix.partial_cmp(other_prefix) {
+        //     Some(result) => match result {
+        //         Ordering::Less => Some(Ordering::Less),
+        //         Ordering::Greater => Some(Ordering::Greater),
+        //         Ordering::Equal => self.0[last_separator_index_self..]
+        //         .partial_cmp(&other.0[last_separator_index_other..]),
+        //     },
+        //     None => None,
+        // }
         let splited_self: Vec<&str> = self.0.split(char::MAX).collect();
         let splited_other: Vec<&str> = other.0.split(char::MAX).collect();
         let len = splited_self.len();
@@ -65,7 +82,6 @@ impl PartialOrd for StringKey {
                 }
             }
             Some(Ordering::Equal)
-            // check_partial_cmp(splited_self[len - 1], splited_other[len -1])
         }
     }
 }
@@ -82,6 +98,17 @@ fn check_partial_cmp(a: &str, b: &str) -> Option<std::cmp::Ordering> {
 
 impl Ord for StringKey {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // let last_separator_index_self = last_index_of(&self.0, char::MAX).expect("Has Separator");
+        // let last_separator_index_other = last_index_of(&other.0, char::MAX).expect("Has Separator");
+        // let self_prefix = &self.0[..last_separator_index_self];
+        // let other_prefix = &other.0[..last_separator_index_other];
+        // match self_prefix.cmp(other_prefix) {
+        //     Ordering::Less => Ordering::Less,
+        //     Ordering::Greater => Ordering::Greater,
+        //     Ordering::Equal => {
+        //         self.0[last_separator_index_self..].cmp(&other.0[last_separator_index_other..])
+        //     }
+        // }
         let splited_self: Vec<&str> = self.0.split(char::MAX).collect();
         let splited_other: Vec<&str> = other.0.split(char::MAX).collect();
         let len = splited_self.len();
@@ -96,7 +123,6 @@ impl Ord for StringKey {
                 }
             }
             Ordering::Equal
-            // check_cmp(splited_self[len - 1], splited_other[len -1])
         }
     }
 }
@@ -1300,7 +1326,6 @@ mod tests {
                     wrapper1.get_all()
                 );
             }
-
         });
     }
 }
