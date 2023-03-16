@@ -320,7 +320,7 @@ impl ApiModuleInterface for NodeAPI {
     async fn get_all_governances(
         &self,
         namespace: String,
-        from: Option<usize>,
+        from: Option<String>,
         quantity: Option<usize>,
     ) -> Result<Vec<SubjectData>, ApiError> {
         let response = self
