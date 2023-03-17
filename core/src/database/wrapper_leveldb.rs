@@ -178,7 +178,7 @@ pub struct WrapperLevelDB<K: db_key::Key, V: Serialize + DeserializeOwned> {
     pub(crate) selected_table: String,
     read_options: SyncCell<Option<ReadOptions>>,
     write_options: SyncCell<Option<options::WriteOptions>>,
-    separator: char,
+    pub(crate) separator: char,
     phantom: PhantomData<V>,
 }
 
@@ -220,19 +220,36 @@ where
     V: Serialize + DeserializeOwned,
 {
     pub fn new(db: LevelDBShared<StringKey>, table_name: &str) -> WrapperLevelDB<StringKey, V> {
-        WrapperLevelDB {
+        let result = WrapperLevelDB {
             db: db.clone(),
             selected_table: String::from(table_name),
             read_options: SyncCell(Cell::new(None)),
             write_options: SyncCell(Cell::new(None)),
             separator: char::MAX,
             phantom: PhantomData::default(),
-        }
+        };
+        db.put(
+            result.get_write_options(),
+            StringKey(result.create_last_key()),
+            vec![].as_slice(),
+        )
+        .expect("Can't insert end data at wrapper creation");
+        result
     }
 
     pub fn partition(&self, subtable_name: &str) -> Self {
         // Create the concatenation
         let table_name = self.build_key(subtable_name);
+        self.db
+            .put(
+                self.get_write_options(),
+                StringKey(format!(
+                    "{}{}{}",
+                    table_name.0, self.separator, self.separator
+                )),
+                vec![].as_slice(),
+            )
+            .expect("Can't insert end data at wrapper creation");
         WrapperLevelDB {
             db: self.db.clone(),
             selected_table: table_name.0,
@@ -302,6 +319,12 @@ where
 
     pub fn put(&self, key: &str, value: V) -> Result<(), error::WrapperLevelDBErrors> {
         let key = self.build_key(key);
+        if key
+            .0
+            .ends_with(&format!("{}{}", self.separator, self.separator))
+        {
+            return Err(error::WrapperLevelDBErrors::InvalidKey);
+        }
         let value = WrapperLevelDB::<StringKey, V>::serialize(value)?;
 
         Ok({
@@ -316,6 +339,12 @@ where
         key: &str,
     ) -> Result<leveldb::database::bytes::Bytes, error::WrapperLevelDBErrors> {
         let key = self.build_key(key);
+        if key
+            .0
+            .ends_with(&format!("{}{}", self.separator, self.separator))
+        {
+            return Err(error::WrapperLevelDBErrors::InvalidKey);
+        }
         let result = { self.db.get_bytes(self.get_read_options(), key)? };
         if let Some(bytes) = result {
             return Ok(bytes);
@@ -325,7 +354,14 @@ where
     }
 
     pub fn get(&self, key: &str) -> Result<V, error::WrapperLevelDBErrors> {
+        // Check if key is end key
         let key = self.build_key(key);
+        if key
+            .0
+            .ends_with(&format!("{}{}", self.separator, self.separator))
+        {
+            return Err(error::WrapperLevelDBErrors::InvalidKey);
+        }
         let result = { self.db.get(self.get_read_options(), key)? };
         if let Some(bytes) = result {
             return Ok(WrapperLevelDB::<StringKey, V>::deserialize(bytes)?);
@@ -340,6 +376,12 @@ where
         let old_value = self.get(key)?;
         // If it exists, we modify it
         let key = self.build_key(key);
+        if key
+            .0
+            .ends_with(&format!("{}{}", self.separator, self.separator))
+        {
+            return Err(error::WrapperLevelDBErrors::InvalidKey);
+        }
         let value = if let Ok(bytes) = bincode::serialize(&value) {
             bytes
         } else {
@@ -358,6 +400,12 @@ where
             None
         };
         let key = self.build_key(key);
+        if key
+            .0
+            .ends_with(&format!("{}{}", self.separator, self.separator))
+        {
+            return Err(error::WrapperLevelDBErrors::InvalidKey);
+        }
         let write_opts = self.get_write_options();
         self.db.delete(write_opts, key)?;
         Ok(old_value)
@@ -368,22 +416,25 @@ where
         let table_name = self.get_table_name();
 
         iter.seek(&StringKey(self.selected_table.clone()));
-        iter.map_while(|(key, bytes)| {
-            // Stop when it returns None
-            if key.0.starts_with(&table_name) {
-                let key = {
-                    let StringKey(value) = key;
-                    // Remove the table name from the key
-                    StringKey(value.replace(&table_name, ""))
-                };
-                // Perform deserialization to obtain the stored structure from bytes
-                let value = WrapperLevelDB::<StringKey, V>::deserialize(bytes).unwrap();
-                Some((key, value))
-            } else {
-                None
-            }
-        })
-        .collect()
+        let end_pattern = format!("{}{}", self.separator, self.separator);
+        iter.filter(|(key, _)| !key.0.ends_with(&end_pattern))
+            .map_while(|(key, bytes)| {
+                // Stop when it returns None
+                println!("KEY {:?}", key);
+                if key.0.starts_with(&table_name) {
+                    let key = {
+                        let StringKey(value) = key;
+                        // Remove the table name from the key
+                        StringKey(value.replace(&table_name, ""))
+                    };
+                    // Perform deserialization to obtain the stored structure from bytes
+                    let value = WrapperLevelDB::<StringKey, V>::deserialize(bytes).unwrap();
+                    Some((key, value))
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     fn get_range_aux<I: Iterator<Item = (StringKey, Vec<u8>)>, F: Fn(&V) -> bool>(
@@ -413,9 +464,11 @@ where
                 None
             }
         };
+        let end_pattern = format!("{}{}", self.separator, self.separator);
         if filter.is_some() {
             let filter = filter.unwrap();
-            iter.map_while(closure)
+            iter.filter(|(key, _)| !key.0.ends_with(&end_pattern))
+                .map_while(closure)
                 .filter(|(_, data)| {
                     let result = filter(data);
                     if !result {
@@ -425,7 +478,9 @@ where
                 })
                 .collect()
         } else {
-            iter.map_while(closure).collect()
+            iter.filter(|(key, _)| !key.0.ends_with(&end_pattern))
+                .map_while(closure)
+                .collect()
         }
     }
 
@@ -437,7 +492,6 @@ where
     ) -> Vec<(StringKey, V)> {
         let iter = self.db.iter(self.get_read_options());
         let table_name = self.get_table_name();
-
         match cursor {
             CursorIndex::FromBeginning => {
                 if quantity < 0 {
@@ -451,12 +505,18 @@ where
                     return vec![];
                 }
                 let mut iter = iter.reverse();
-                iter.advance();
                 iter.seek(&StringKey(self.create_last_key()));
+                iter.advance();
                 return self.get_range_aux(iter, quantity, filter);
             }
             CursorIndex::FromKey(key) => {
                 let key = self.build_key(&key);
+                if key
+                    .0
+                    .ends_with(&format!("{}{}", self.separator, self.separator))
+                {
+                    return vec![];
+                }
                 if quantity < 0 {
                     let iter = iter.reverse();
                     iter.seek(&key);
@@ -476,14 +536,862 @@ where
         let mut count = 0;
         iter.seek(&first_key);
         // Take the index of the first key of our 'table'....
-        iter.any(|key| {
-            if key.0.starts_with(&first_key.0) {
-                count += 1;
-                false
+        let end_pattern = format!("{}{}", self.separator, self.separator);
+        iter.filter(|key| !key.0.ends_with(&end_pattern))
+            .any(|key| {
+                if key.0.starts_with(&first_key.0) {
+                    count += 1;
+                    false
+                } else {
+                    true
+                }
+            });
+        count
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use crate::{
+        commons::bd::level_db::wrapper_leveldb::open_db, database::wrapper_leveldb::CursorIndex,
+    };
+    use leveldb::{comparator::OrdComparator, options::Options};
+    use serde::{Deserialize, Serialize};
+    use tempfile::tempdir;
+
+    use super::{StringKey, WrapperLevelDB};
+
+    const TABLE_NAME1: &str = "TESTS";
+    const TABLE_NAME2: &str = "PRUEBA";
+
+    #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+    struct Test {
+        id: usize,
+        value: String,
+    }
+    #[test]
+    fn test_insert_update_remove() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+
+        rt.block_on(async {
+            let temp_dir = tempdir().unwrap();
+            let path = temp_dir.path();
+            println!("DB_PATH = {:#?}", path.as_os_str());
+
+            let mut db_options = Options::new();
+            db_options.create_if_missing = true;
+            let db = if let Ok(db) = open_db(path, db_options) {
+                db
             } else {
-                true
+                panic!("Error trying to open database");
+            };
+            let wrapper1: WrapperLevelDB<StringKey, Test> =
+                WrapperLevelDB::<StringKey, Test>::new(Arc::new(db), TABLE_NAME1);
+
+            // Insert
+            let mut test_value = Test {
+                id: 0,
+                value: String::from("hola"),
+            };
+            if let Err(_) = wrapper1.put("key", test_value.clone()) {
+                assert!(false);
+            }
+
+            if let Ok(value) = wrapper1.get("key") {
+                assert_eq!(test_value, value);
+            } else {
+                assert!(false);
+            }
+
+            // Update
+            test_value.id = 1;
+            if let Err(_) = wrapper1.update("key", test_value.clone()) {
+                assert!(false);
+            }
+
+            if let Ok(value) = wrapper1.get("key") {
+                assert_eq!(test_value, value);
+            } else {
+                assert!(false);
+            }
+
+            // Delete
+            if let Err(_) = wrapper1.del("key") {
+                assert!(false);
+            }
+            if let Ok(_) = wrapper1.get("key") {
+                assert!(false);
+            } else {
+                assert!(true);
             }
         });
-        count
+    }
+
+    #[test]
+    fn test_two_tables() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+
+        rt.block_on(async {
+            let temp_dir = tempdir().unwrap();
+            let path = temp_dir.path();
+            println!("DB_PATH = {:#?}", path.as_os_str());
+
+            let mut db_options = Options::new();
+            db_options.create_if_missing = true;
+            let db = if let Ok(db) = open_db(path, db_options) {
+                Arc::new(db)
+            } else {
+                panic!("Error trying to open database");
+            };
+            let wrapper1 = WrapperLevelDB::<StringKey, String>::new(db.clone(), TABLE_NAME1);
+            let wrapper2 = WrapperLevelDB::<StringKey, u32>::new(db, TABLE_NAME2);
+
+            if let Err(_) = wrapper1.put("Clave", String::from("Valor en tabla test")) {
+                assert!(false);
+            }
+
+            if let Err(_) = wrapper2.put("Clave", 5) {
+                assert!(false);
+            }
+
+            let value1 = if let Ok(value) = wrapper1.get("Clave") {
+                value
+            } else {
+                panic!("Error taking back value")
+            };
+
+            assert_eq!(value1, String::from("Valor en tabla test"));
+
+            let value2 = if let Ok(value) = wrapper2.get("Clave") {
+                value
+            } else {
+                panic!("Error taking back value")
+            };
+            assert_eq!(value2, 5);
+        });
+    }
+
+    use leveldb::options::Options as LevelDBOptions;
+    const EJEMPLO_TABLE: &str = "EJEMPLO0";
+    const PRUEBA_TABLE: &str = "PRUEBA1";
+    const TEST_TABLE: &str = "TEST2";
+
+    fn set_up_entries(
+        wrapper0: WrapperLevelDB<StringKey, u64>,
+        wrapper1: WrapperLevelDB<StringKey, u64>,
+        wrapper2: WrapperLevelDB<StringKey, u64>,
+    ) {
+        wrapper0.put("b", 01).unwrap();
+        wrapper0.put("a", 02).unwrap();
+        wrapper0.put("0", 03).unwrap();
+
+        wrapper1.put("b", 10).unwrap();
+        wrapper1.put("a", 11).unwrap();
+        wrapper1.put("0", 12).unwrap();
+        wrapper1.put("00", 13).unwrap();
+        wrapper1.put("0a", 14).unwrap();
+
+        wrapper2.put("b", 20).unwrap();
+        wrapper2.put("0", 21).unwrap();
+        wrapper2.put("a", 22).unwrap();
+    }
+
+    #[test]
+    fn test_get_all() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+
+        rt.block_on(async {
+            let temp_dir = tempdir().unwrap();
+            {
+                let mut db_options = LevelDBOptions::new();
+                db_options.create_if_missing = true;
+                let db = Arc::new(
+                    crate::commons::bd::level_db::wrapper_leveldb::open_db::<StringKey>(
+                        temp_dir.path(),
+                        db_options,
+                    )
+                    .unwrap(),
+                );
+
+                let wrapper0 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), EJEMPLO_TABLE);
+                let wrapper1 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), PRUEBA_TABLE);
+                let wrapper2 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), TEST_TABLE);
+
+                set_up_entries(wrapper0, wrapper1, wrapper2);
+            }
+
+            {
+                // Reopen the connection to confirm persistence...
+                let mut db_options = LevelDBOptions::new();
+                db_options.create_if_missing = true;
+                let db = Arc::new(
+                    crate::commons::bd::level_db::wrapper_leveldb::open_db::<StringKey>(
+                        temp_dir.path(),
+                        db_options,
+                    )
+                    .unwrap(),
+                );
+
+                let wrapper0 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), EJEMPLO_TABLE);
+                let wrapper1 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), PRUEBA_TABLE);
+                let wrapper2 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), TEST_TABLE);
+
+                assert_eq!(
+                    vec![
+                        (StringKey("0".to_string()), 3),
+                        (StringKey("a".to_string()), 2),
+                        (StringKey("b".to_string()), 1)
+                    ],
+                    wrapper0.get_all()
+                );
+                assert_eq!(3, wrapper0.get_count());
+
+                assert_eq!(
+                    vec![
+                        (StringKey("0".to_string()), 12),
+                        (StringKey("00".to_string()), 13),
+                        (StringKey("0a".to_string()), 14),
+                        (StringKey("a".to_string()), 11),
+                        (StringKey("b".to_string()), 10)
+                    ],
+                    wrapper1.get_all()
+                );
+                assert_eq!(5, wrapper1.get_count());
+
+                assert_eq!(
+                    vec![
+                        (StringKey("0".to_string()), 21),
+                        (StringKey("a".to_string()), 22),
+                        (StringKey("b".to_string()), 20)
+                    ],
+                    wrapper2.get_all()
+                );
+                assert_eq!(3, wrapper2.get_count());
+            }
+        });
+    }
+
+    #[test]
+    fn test_get_range_positive() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+
+        rt.block_on(async {
+            let temp_dir = tempdir().unwrap();
+            {
+                let mut db_options = LevelDBOptions::new();
+                db_options.create_if_missing = true;
+                let db = Arc::new(
+                    crate::commons::bd::level_db::wrapper_leveldb::open_db::<StringKey>(
+                        temp_dir.path(),
+                        db_options,
+                    )
+                    .unwrap(),
+                );
+
+                let wrapper0 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), EJEMPLO_TABLE);
+                let wrapper1 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), PRUEBA_TABLE);
+                let wrapper2 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), TEST_TABLE);
+
+                set_up_entries(wrapper0, wrapper1, wrapper2);
+            }
+
+            {
+                // Reopen the connection to confirm persistence...
+                let mut db_options = LevelDBOptions::new();
+                db_options.create_if_missing = true;
+                let db = Arc::new(
+                    crate::commons::bd::level_db::wrapper_leveldb::open_db::<StringKey>(
+                        temp_dir.path(),
+                        db_options,
+                    )
+                    .unwrap(),
+                );
+
+                let wrapper1 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), PRUEBA_TABLE);
+
+                assert_eq!(
+                    vec![
+                        (StringKey("0".to_string()), 12),
+                        (StringKey("00".to_string()), 13),
+                        (StringKey("0a".to_string()), 14),
+                        (StringKey("a".to_string()), 11),
+                        (StringKey("b".to_string()), 10)
+                    ],
+                    wrapper1.get_all()
+                );
+                assert_eq!(
+                    vec![
+                        (StringKey("0a".to_string()), 14),
+                        (StringKey("a".to_string()), 11),
+                        (StringKey("b".to_string()), 10)
+                    ],
+                    wrapper1.get_range(
+                        &CursorIndex::FromKey("0a".into()),
+                        6,
+                        None::<fn(&u64) -> bool>
+                    )
+                );
+                assert_eq!(
+                    vec![
+                        (StringKey("a".into()), 11u64),
+                        (StringKey("b".into()), 10u64)
+                    ] as Vec<(StringKey, u64)>,
+                    wrapper1.get_range(
+                        &CursorIndex::FromKey("a".into()),
+                        0,
+                        None::<fn(&u64) -> bool>
+                    )
+                );
+                assert_eq!(
+                    vec![(StringKey("a".to_string()), 11),],
+                    wrapper1.get_range(
+                        &CursorIndex::FromKey("a".into()),
+                        1,
+                        None::<fn(&u64) -> bool>
+                    )
+                );
+            }
+        });
+    }
+
+    #[test]
+    fn test_get_range_negative() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+
+        rt.block_on(async {
+            let temp_dir = tempdir().unwrap();
+            {
+                let mut db_options = LevelDBOptions::new();
+                db_options.create_if_missing = true;
+                let db = Arc::new(
+                    crate::commons::bd::level_db::wrapper_leveldb::open_db::<StringKey>(
+                        temp_dir.path(),
+                        db_options,
+                    )
+                    .unwrap(),
+                );
+
+                let wrapper0 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), EJEMPLO_TABLE);
+                let wrapper1 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), PRUEBA_TABLE);
+                let wrapper2 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), TEST_TABLE);
+
+                set_up_entries(wrapper0, wrapper1, wrapper2);
+            }
+
+            {
+                // Reopen the connection to confirm persistence...
+                let mut db_options = LevelDBOptions::new();
+                db_options.create_if_missing = false;
+                let db = Arc::new(
+                    crate::commons::bd::level_db::wrapper_leveldb::open_db::<StringKey>(
+                        temp_dir.path(),
+                        db_options,
+                    )
+                    .unwrap(),
+                );
+
+                let wrapper1 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), PRUEBA_TABLE);
+
+                assert_eq!(
+                    vec![
+                        (StringKey("0".to_string()), 12),
+                        (StringKey("00".to_string()), 13),
+                        (StringKey("0a".to_string()), 14),
+                        (StringKey("a".to_string()), 11),
+                        (StringKey("b".to_string()), 10)
+                    ],
+                    wrapper1.get_all()
+                );
+                assert_eq!(
+                    vec![
+                        (StringKey("a".to_string()), 11),
+                        (StringKey("0a".to_string()), 14),
+                        (StringKey("00".to_string()), 13),
+                        (StringKey("0".to_string()), 12)
+                    ],
+                    wrapper1.get_range(
+                        &CursorIndex::FromKey("a".into()),
+                        -6,
+                        None::<fn(&u64) -> bool>
+                    )
+                );
+                assert_eq!(
+                    vec![
+                        (StringKey("a".into()), 11u64),
+                        (StringKey("b".into()), 10u64)
+                    ] as Vec<(StringKey, u64)>,
+                    wrapper1.get_range(
+                        &CursorIndex::FromKey("a".into()),
+                        0,
+                        None::<fn(&u64) -> bool>
+                    )
+                );
+                assert_eq!(
+                    vec![(StringKey("a".to_string()), 11)],
+                    wrapper1.get_range(
+                        &CursorIndex::FromKey("a".into()),
+                        -1,
+                        None::<fn(&u64) -> bool>
+                    )
+                );
+            }
+        });
+    }
+
+    #[test]
+    fn test_get_range_from_first() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+
+        rt.block_on(async {
+            let temp_dir = tempdir().unwrap();
+            {
+                let mut db_options = LevelDBOptions::new();
+                db_options.create_if_missing = true;
+                let db = Arc::new(
+                    crate::commons::bd::level_db::wrapper_leveldb::open_db::<StringKey>(
+                        temp_dir.path(),
+                        db_options,
+                    )
+                    .unwrap(),
+                );
+
+                let wrapper0 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), EJEMPLO_TABLE);
+                let wrapper1 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), PRUEBA_TABLE);
+                let wrapper2 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), TEST_TABLE);
+
+                set_up_entries(wrapper0, wrapper1, wrapper2);
+            }
+
+            {
+                // Reopen the connection to confirm persistence...
+                let mut db_options = LevelDBOptions::new();
+                db_options.create_if_missing = false;
+                let db = Arc::new(
+                    crate::commons::bd::level_db::wrapper_leveldb::open_db::<StringKey>(
+                        temp_dir.path(),
+                        db_options,
+                    )
+                    .unwrap(),
+                );
+
+                let wrapper1 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), PRUEBA_TABLE);
+
+                assert_eq!(
+                    vec![
+                        (StringKey("0".to_string()), 12),
+                        (StringKey("00".to_string()), 13),
+                        (StringKey("0a".to_string()), 14),
+                        (StringKey("a".to_string()), 11),
+                        (StringKey("b".to_string()), 10)
+                    ],
+                    wrapper1.get_all()
+                );
+                assert_eq!(
+                    vec![
+                        (StringKey("0".to_string()), 12),
+                        (StringKey("00".to_string()), 13),
+                        (StringKey("0a".to_string()), 14),
+                        (StringKey("a".to_string()), 11),
+                    ],
+                    wrapper1.get_range(&CursorIndex::FromBeginning, 4, None::<fn(&u64) -> bool>)
+                );
+                assert_eq!(
+                    vec![
+                        (StringKey("0".into()), 12u64),
+                        (StringKey("00".into()), 13u64),
+                        (StringKey("0a".into()), 14u64),
+                        (StringKey("a".into()), 11u64),
+                        (StringKey("b".into()), 10u64)
+                    ] as Vec<(StringKey, u64)>,
+                    wrapper1.get_range(&CursorIndex::FromBeginning, 0, None::<fn(&u64) -> bool>)
+                );
+                assert_eq!(
+                    vec![] as Vec<(StringKey, u64)>,
+                    wrapper1.get_range(&CursorIndex::FromBeginning, -1, None::<fn(&u64) -> bool>)
+                );
+            }
+        });
+    }
+
+    #[test]
+    fn test_get_range_from_last() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+
+        rt.block_on(async {
+            let temp_dir = tempdir().unwrap();
+            {
+                let mut db_options = LevelDBOptions::new();
+                db_options.create_if_missing = true;
+                let db = Arc::new(
+                    crate::commons::bd::level_db::wrapper_leveldb::open_db::<StringKey>(
+                        temp_dir.path(),
+                        db_options,
+                    )
+                    .unwrap(),
+                );
+
+                let wrapper0 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), EJEMPLO_TABLE);
+                let wrapper1 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), PRUEBA_TABLE);
+                let wrapper2 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), TEST_TABLE);
+
+                set_up_entries(wrapper0, wrapper1, wrapper2);
+            }
+
+            {
+                // Reopen the connection to confirm persistence...
+                let mut db_options = LevelDBOptions::new();
+                db_options.create_if_missing = false;
+                let db = Arc::new(
+                    crate::commons::bd::level_db::wrapper_leveldb::open_db::<StringKey>(
+                        temp_dir.path(),
+                        db_options,
+                    )
+                    .unwrap(),
+                );
+
+                let wrapper1 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), PRUEBA_TABLE);
+
+                assert_eq!(
+                    vec![
+                        (StringKey("0".to_string()), 12),
+                        (StringKey("00".to_string()), 13),
+                        (StringKey("0a".to_string()), 14),
+                        (StringKey("a".to_string()), 11),
+                        (StringKey("b".to_string()), 10)
+                    ],
+                    wrapper1.get_all()
+                );
+                assert_eq!(
+                    vec![
+                        (StringKey("b".to_string()), 10),
+                        (StringKey("a".to_string()), 11),
+                        (StringKey("0a".to_string()), 14),
+                        (StringKey("00".to_string()), 13),
+                        (StringKey("0".to_string()), 12)
+                    ],
+                    wrapper1.get_range(&CursorIndex::FromEnding, 5, None::<fn(&u64) -> bool>)
+                );
+                assert_eq!(
+                    vec![(StringKey("b".to_string()), 10),],
+                    wrapper1.get_range(&CursorIndex::FromEnding, 1, None::<fn(&u64) -> bool>)
+                );
+                assert_eq!(
+                    vec![
+                        (StringKey("b".to_string()), 10),
+                        (StringKey("a".to_string()), 11),
+                        (StringKey("0a".to_string()), 14),
+                        (StringKey("00".to_string()), 13),
+                        (StringKey("0".to_string()), 12)
+                    ],
+                    wrapper1.get_range(&CursorIndex::FromEnding, 0, None::<fn(&u64) -> bool>)
+                );
+                assert_eq!(
+                    vec![] as Vec<(StringKey, u64)>,
+                    wrapper1.get_range(&CursorIndex::FromEnding, -2, None::<fn(&u64) -> bool>)
+                );
+            }
+        });
+    }
+
+    // TODO: Unit test for new_subtable
+    #[test]
+    fn test_simple_new_subtable() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+
+        rt.block_on(async {
+            let temp_dir = tempdir().unwrap();
+            {
+                let mut db_options = LevelDBOptions::new();
+                db_options.create_if_missing = true;
+                let db = Arc::new(
+                    crate::commons::bd::level_db::wrapper_leveldb::open_db::<StringKey>(
+                        temp_dir.path(),
+                        db_options,
+                    )
+                    .unwrap(),
+                );
+
+                let wrapper0 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), EJEMPLO_TABLE);
+                let wrapper00 = wrapper0.partition("SUB1");
+                let wrapper001 = wrapper00.partition("ASUB1");
+                let wrapper01 = wrapper0.partition("SUB2");
+                let wrapper1 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), PRUEBA_TABLE);
+
+                set_up_entries(wrapper00, wrapper001, wrapper01);
+
+                wrapper1.put("b", 30).unwrap();
+                wrapper1.put("0", 31).unwrap();
+                wrapper1.put("a", 32).unwrap();
+            }
+
+            {
+                // Reopen the connection to confirm persistence...
+                let mut db_options = LevelDBOptions::new();
+                db_options.create_if_missing = false;
+                let db = Arc::new(
+                    crate::commons::bd::level_db::wrapper_leveldb::open_db::<StringKey>(
+                        temp_dir.path(),
+                        db_options,
+                    )
+                    .unwrap(),
+                );
+
+                let wrapper0 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), EJEMPLO_TABLE);
+                let wrapper_mal = wrapper0.partition("SUB");
+                let wrapper00 = wrapper0.partition("SUB1");
+                let wrapper001 = wrapper00.partition("ASUB1");
+                let wrapper01 = wrapper0.partition("SUB2");
+                let wrapper1 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), PRUEBA_TABLE);
+
+                assert_eq!(
+                    // Has all partition values inserted "SUB1", "ASUB1" y "SUB2"
+                    vec![
+                        (StringKey("SUB1\u{10ffff}0".to_string()), 3),
+                        (StringKey("SUB1\u{10ffff}ASUB1\u{10ffff}0".to_string()), 12),
+                        (StringKey("SUB1\u{10ffff}ASUB1\u{10ffff}00".to_string()), 13),
+                        (StringKey("SUB1\u{10ffff}ASUB1\u{10ffff}0a".to_string()), 14),
+                        (StringKey("SUB1\u{10ffff}ASUB1\u{10ffff}a".to_string()), 11),
+                        (StringKey("SUB1\u{10ffff}ASUB1\u{10ffff}b".to_string()), 10),
+                        (StringKey("SUB1\u{10ffff}a".to_string()), 2),
+                        (StringKey("SUB1\u{10ffff}b".to_string()), 1),
+                        (StringKey("SUB2\u{10ffff}0".to_string()), 21),
+                        (StringKey("SUB2\u{10ffff}a".to_string()), 22),
+                        (StringKey("SUB2\u{10ffff}b".to_string()), 20)
+                    ],
+                    wrapper0.get_all()
+                );
+
+                assert_eq!(11, wrapper0.get_count());
+
+                assert_eq!(
+                    // The "SUB" partition has nothing inserted
+                    vec![] as Vec<(StringKey, u64)>,
+                    wrapper_mal.get_all()
+                );
+
+                assert_eq!(
+                    // Has all the values inserted in itself and in the partition "ASUB1"
+                    vec![
+                        (StringKey("0".to_string()), 3),
+                        (StringKey("ASUB1\u{10ffff}0".to_string()), 12),
+                        (StringKey("ASUB1\u{10ffff}00".to_string()), 13),
+                        (StringKey("ASUB1\u{10ffff}0a".to_string()), 14),
+                        (StringKey("ASUB1\u{10ffff}a".to_string()), 11),
+                        (StringKey("ASUB1\u{10ffff}b".to_string()), 10),
+                        (StringKey("a".to_string()), 2),
+                        (StringKey("b".to_string()), 1)
+                    ],
+                    wrapper00.get_all()
+                );
+                assert_eq!(8, wrapper00.get_count());
+
+                assert_eq!(
+                    // Has only the values inserted in itself ignoring the rest of the values inserted in its parent
+                    vec![
+                        (StringKey("0".to_string()), 12),
+                        (StringKey("00".to_string()), 13),
+                        (StringKey("0a".to_string()), 14),
+                        (StringKey("a".to_string()), 11),
+                        (StringKey("b".to_string()), 10)
+                    ],
+                    wrapper001.get_all()
+                );
+
+                assert_eq!(
+                    // Has only the values inserted in itself ignoring the rest of the values inserted in its siblings
+                    vec![
+                        (StringKey("0".to_string()), 21),
+                        (StringKey("a".to_string()), 22),
+                        (StringKey("b".to_string()), 20)
+                    ],
+                    wrapper01.get_all()
+                );
+
+                assert_eq!(
+                    vec![
+                        (StringKey("0".to_string()), 31),
+                        (StringKey("a".to_string()), 32),
+                        (StringKey("b".to_string()), 30)
+                    ],
+                    wrapper1.get_all()
+                )
+            }
+        });
+    }
+
+    #[test]
+    fn test_complex_new_subtable() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+
+        rt.block_on(async {
+            let temp_dir = tempdir().unwrap();
+            {
+                let mut db_options = LevelDBOptions::new();
+                db_options.create_if_missing = true;
+                let db = Arc::new(
+                    crate::commons::bd::level_db::wrapper_leveldb::open_db::<StringKey>(
+                        temp_dir.path(),
+                        db_options,
+                    )
+                    .unwrap(),
+                );
+
+                let wrapper0 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), EJEMPLO_TABLE);
+                let wrapper00 = wrapper0.partition("SUB1");
+                let wrapper001 = wrapper00.partition("ASUB1");
+                let wrapper01 = wrapper0.partition("SUB2");
+                let wrapper1 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), PRUEBA_TABLE);
+
+                set_up_entries(wrapper00, wrapper001, wrapper01);
+
+                wrapper1.put("b", 30).unwrap();
+                wrapper1.put("0", 31).unwrap();
+                wrapper1.put("a", 32).unwrap();
+            }
+
+            {
+                // Reopen the connection to confirm persistence...
+                let mut db_options = LevelDBOptions::new();
+                db_options.create_if_missing = false;
+                let db = Arc::new(
+                    crate::commons::bd::level_db::wrapper_leveldb::open_db::<StringKey>(
+                        temp_dir.path(),
+                        db_options,
+                    )
+                    .unwrap(),
+                );
+
+                let wrapper0 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), EJEMPLO_TABLE);
+                let wrapper_mal = wrapper0.partition("SUB");
+                let wrapper00 = wrapper0.partition("SUB1");
+                let wrapper001 = wrapper00.partition("ASUB1");
+                let wrapper01 = wrapper0.partition("SUB2");
+                let wrapper1 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), PRUEBA_TABLE);
+
+                assert_eq!(
+                    // Has all partition values inserted "SUB1", "ASUB1" y "SUB2"
+                    vec![
+                        (StringKey("SUB1\u{10ffff}ASUB1\u{10ffff}0".to_string()), 12),
+                        (StringKey("SUB1\u{10ffff}ASUB1\u{10ffff}00".to_string()), 13),
+                    ],
+                    wrapper0.get_range(
+                        &CursorIndex::FromKey("SUB1\u{10ffff}ASUB1\u{10ffff}0".into()),
+                        2,
+                        None::<fn(&u64) -> bool>
+                    )
+                );
+
+                assert_eq!(
+                    // The "SUB" partition has not inserted anything
+                    vec![] as Vec<(StringKey, u64)>,
+                    wrapper_mal.get_range(&CursorIndex::FromBeginning, 3, None::<fn(&u64) -> bool>)
+                );
+
+                assert_eq!(
+                    // Has all the values inserted in itself and in the partition "ASUB1"
+                    vec![
+                        (StringKey("b".to_string()), 1),
+                        (StringKey("a".to_string()), 2),
+                        (StringKey("ASUB1\u{10ffff}b".to_string()), 10),
+                        (StringKey("ASUB1\u{10ffff}a".to_string()), 11),
+                        (StringKey("ASUB1\u{10ffff}0a".to_string()), 14),
+                        (StringKey("ASUB1\u{10ffff}00".to_string()), 13),
+                        (StringKey("ASUB1\u{10ffff}0".to_string()), 12),
+                        (StringKey("0".to_string()), 3)
+                    ],
+                    wrapper00.get_range(&CursorIndex::FromEnding, 300, None::<fn(&u64) -> bool>)
+                );
+
+                assert_eq!(
+                    // Has only the values inserted in itself ignoring the rest of the values inserted in its parent
+                    vec![
+                        (StringKey("a".to_string()), 11),
+                        (StringKey("0a".to_string()), 14),
+                        (StringKey("00".to_string()), 13),
+                        (StringKey("0".to_string()), 12)
+                    ],
+                    wrapper001.get_range(
+                        &CursorIndex::FromKey("a".into()),
+                        -200,
+                        None::<fn(&u64) -> bool>
+                    )
+                );
+
+                assert_eq!(
+                    // Has only the values inserted in itself ignoring the rest of the values inserted in its siblings
+                    vec![
+                        (StringKey("0".to_string()), 21),
+                        (StringKey("a".to_string()), 22),
+                        (StringKey("b".to_string()), 20)
+                    ],
+                    wrapper01.get_range(&CursorIndex::FromBeginning, 3, None::<fn(&u64) -> bool>)
+                );
+
+                assert_eq!(
+                    vec![
+                        (StringKey("0".to_string()), 31),
+                        (StringKey("a".to_string()), 32),
+                        (StringKey("b".to_string()), 30)
+                    ],
+                    wrapper1.get_all()
+                )
+            }
+        });
+    }
+
+    #[test]
+    fn test_db_with_custom_comparator() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+
+        rt.block_on(async {
+            let temp_dir = tempdir().unwrap();
+            {
+                let comparator = OrdComparator::<StringKey>::new("taple_comparator".into());
+                let mut db_options = LevelDBOptions::new();
+                db_options.create_if_missing = true;
+                let db = Arc::new(
+                    crate::commons::bd::level_db::wrapper_leveldb::open_db_with_comparator::<
+                        StringKey,
+                    >(temp_dir.path(), db_options, comparator)
+                    .unwrap(),
+                );
+
+                // let _wrapper0 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), "EJEMPLO_TABLE1");
+                // let wrapper1 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), "EJEMPLO_TABLE2");
+                // let _wrapper2 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), "EJEMPLO_TABL3");
+            }
+            {
+                // Reopen the connection to confirm persistence...
+                let mut db_options = LevelDBOptions::new();
+                db_options.create_if_missing = false;
+                let comparator = OrdComparator::<StringKey>::new("taple_comparator".into());
+                let db = Arc::new(
+                    crate::commons::bd::level_db::wrapper_leveldb::open_db_with_comparator::<
+                        StringKey,
+                    >(temp_dir.path(), db_options, comparator)
+                    .unwrap(),
+                );
+
+                // let wrapper1 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), "EJEMPLO_TABLE2");
+                // wrapper1.put("b", 10).unwrap();
+                // wrapper1.put("a", 11).unwrap();
+                // wrapper1.put("0", 12).unwrap();
+                // wrapper1.put("00", 13).unwrap();
+                // wrapper1.put("0a", 14).unwrap();
+                // assert_eq!(
+                //     vec![
+                //         (StringKey("0".to_string()), 12),
+                //         (StringKey("a".to_string()), 11),
+                //         (StringKey("b".to_string()), 10),
+                //         (StringKey("00".to_string()), 13),
+                //         (StringKey("0a".to_string()), 14),
+                //     ],
+                //     wrapper1.get_all()
+                // );
+
+            }
+        });
     }
 }

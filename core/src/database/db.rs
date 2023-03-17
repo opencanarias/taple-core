@@ -20,12 +20,6 @@ const EVENT_TABLE: &str = "event";
 const REQUEST_TABLE: &str = "request";
 const ID_TABLE: &str = "controller-id";
 
-enum CursorIndex {
-    FromBeginning,
-    FromEnding,
-    FromKey(String),
-}
-
 pub struct DB<M: DatabaseManager> {
     manager: M,
     signature_db: Box<dyn DatabaseCollection<InnerDataType = HashSet<Signature>>>,

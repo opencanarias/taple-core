@@ -74,23 +74,21 @@ impl<V: Serialize + DeserializeOwned> DatabaseCollection
 
     fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = (String, Self::InnerDataType)> + 'a> {
         let iter = self.db.iter(self.get_read_options());
-        let table_name = self.get_table_name();
         Box::new(DbIterator::new(
             iter,
-            table_name,
-            self.selected_table.clone(),
+            self.get_table_name(),
+            self.create_last_key(),
+            self.separator
         ))
     }
 
     fn rev_iter<'a>(&'a self) -> Box<dyn Iterator<Item = (String, Self::InnerDataType)> + 'a> {
-        let mut iter = self.db.iter(self.get_read_options());
-        let mut iter = iter.reverse();
-        iter.advance();
+        let mut iter = self.db.iter(self.get_read_options()).reverse();
         iter.seek(&StringKey(self.create_last_key()));
-        let table_name = self.get_table_name();
+        iter.advance();
         Box::new(RevDbIterator::new(
             iter,
-            table_name,
+            self.get_table_name(),
             self.selected_table.clone(),
         ))
     }
@@ -106,6 +104,8 @@ impl<V: Serialize + DeserializeOwned> DatabaseCollection
 pub struct DbIterator<'a, V: Serialize + DeserializeOwned> {
     _tmp: PhantomData<V>,
     table_name: String,
+    separator: char,
+    end_name: String,
     iter: LevelIterator<'a, StringKey>,
 }
 
@@ -113,13 +113,16 @@ impl<'a, V: Serialize + DeserializeOwned> DbIterator<'a, V> {
     pub fn new(
         iter: LevelIterator<'a, StringKey>,
         table_name: String,
-        selected_table: String,
+        end_name: String,
+        separator: char,
     ) -> Self {
         iter.seek(&StringKey(table_name.clone()));
         Self {
             _tmp: PhantomData::default(),
             table_name,
             iter,
+            end_name,
+            separator
         }
     }
 }
@@ -127,11 +130,21 @@ impl<'a, V: Serialize + DeserializeOwned> DbIterator<'a, V> {
 impl<'a, V: Serialize + DeserializeOwned> Iterator for DbIterator<'a, V> {
     type Item = (String, V);
     fn next(&mut self) -> Option<Self::Item> {
+        let end_pattern = format!("{}{}", self.separator, self.separator);
+        let item = 'item: {
+            let item = self.iter.next();
+            let Some(item) = item else {
+                break 'item None;
+            };
+            None
+        };
         let item = self.iter.next();
+        println!("ITEM {:?}", item);
         let Some(item) = item else {
             return None;
         };
-        if item.0 .0.starts_with(&self.table_name) {
+        
+        if item.0 .0.starts_with(&self.table_name) && item.0.0 != self.end_name {
             let value =
                 wrapper_leveldb::WrapperLevelDB::<StringKey, V>::deserialize(item.1).unwrap();
             let key = {
@@ -149,6 +162,7 @@ impl<'a, V: Serialize + DeserializeOwned> Iterator for DbIterator<'a, V> {
 pub struct RevDbIterator<'a, V: Serialize + DeserializeOwned + 'a> {
     _tmp: PhantomData<V>,
     table_name: String,
+    separator: char, // Con advance no debería de ser necesario
     iter: RevIterator<'a, StringKey>,
 }
 
@@ -156,12 +170,13 @@ impl<'a, V: Serialize + DeserializeOwned> RevDbIterator<'a, V> {
     pub fn new(
         iter: RevIterator<'a, StringKey>,
         table_name: String,
-        selected_table: String,
+        separator: char,
     ) -> Self {
         // iter.seek(&StringKey(table_name.clone()));
         Self {
             _tmp: PhantomData::default(),
             table_name,
+            separator,
             iter,
         }
     }
@@ -427,6 +442,9 @@ mod test {
         let db = LevelDB::new(open_db_with_comparator(temp_dir.path()));
         let first_collection: Box<dyn DatabaseCollection<InnerDataType = Data>> =
             db.create_collection("first");
+        // let tmp: Box<dyn DatabaseCollection<InnerDataType = Data>> =
+        //     db.create_collection("second");
+        // tmp.put("f", Data { id: 6, value: "F".into() });
         build_state(&first_collection);
         // ITER TEST
         let mut iter = first_collection.iter();

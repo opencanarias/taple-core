@@ -31,4 +31,6 @@ pub enum WrapperLevelDBErrors {
     DeserializeError,
     #[error("There was an attempt to update an unexistent entry in DB")]
     EntryNotFoundError,
+    #[error("Invalid Key")]
+    InvalidKey,
 }

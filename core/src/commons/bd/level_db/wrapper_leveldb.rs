@@ -1296,6 +1296,7 @@ mod tests {
                 let _wrapper0 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), "EJEMPLO_TABLE1");
                 let wrapper1 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), "EJEMPLO_TABLE2");
                 let _wrapper2 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), "EJEMPLO_TABL3");
+                wrapper1.put("b", 10).unwrap();
             }
             {
                 // Reopen the connection to confirm persistence...
@@ -1309,7 +1310,7 @@ mod tests {
                     .unwrap(),
                 );
                 let wrapper1 = WrapperLevelDB::<StringKey, u64>::new(db.clone(), "EJEMPLO_TABLE2");
-                wrapper1.put("b", 10).unwrap();
+                //wrapper1.put("b", 10).unwrap();
                 wrapper1.put("a", 11).unwrap();
                 wrapper1.put("0", 12).unwrap();
                 wrapper1.put("00", 13).unwrap();
