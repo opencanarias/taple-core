@@ -366,7 +366,6 @@ where
     pub fn get_all(&self) -> Vec<(StringKey, V)> {
         let iter = self.db.iter(self.get_read_options());
         let table_name = self.get_table_name();
-
         iter.seek(&StringKey(self.selected_table.clone()));
         iter.map_while(|(key, bytes)| {
             // Stop when it returns None
