@@ -119,7 +119,7 @@ pub enum APIResponses {
 #[derive(Debug, Clone, ToSchema, Serialize, Deserialize)]
 pub struct ExternalEventRequest {
     pub request: StateType,
-    pub timestamp: i64,
+    pub timestamp: u64,
     pub signature: SignatureRequest,
 }
 
@@ -135,7 +135,7 @@ pub struct SignatureRequest {
 pub struct SignatureRequestContent {
     pub signer: String,             // KeyIdentifier,
     pub event_content_hash: String, // DigestIdentifier,
-    pub timestamp: i64,
+    pub timestamp: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Eq, Deserialize, ToSchema)]
@@ -172,7 +172,7 @@ impl Into<RequestPayload> for Payload {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ExternalEventRequestBody {
     pub request: StateRequestBodyUpper,
-    pub timestamp: i64,
+    pub timestamp: u64,
     pub signature: SignatureRequest,
 }
 
