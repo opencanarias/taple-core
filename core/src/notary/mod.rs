@@ -3,6 +3,8 @@ use crate::{
     signature::Signature,
 };
 
+use self::errors::NotaryError;
+
 pub mod errors;
 pub mod manager;
 pub mod notary;
@@ -14,7 +16,7 @@ pub enum NotaryCommand {
 
 #[derive(Debug, Clone)]
 pub enum NotaryResponse {
-    NotaryEventResponse(NotaryEventResponse),
+    NotaryEventResponse(Result<NotaryEventResponse, NotaryError>),
 }
 
 #[derive(Debug, Clone)]
