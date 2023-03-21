@@ -83,7 +83,8 @@ pub(crate) mod governance;
 pub(crate) mod ledger;
 pub(crate) mod message;
 pub(crate) mod network;
-pub(crate) mod protocol;
+pub(crate) mod notary;
+pub mod protocol;
 mod unitary_component;
 pub use api::{
     ApiError, ApiModuleInterface, CreateRequest, CreateType, ExternalEventRequest,

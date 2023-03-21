@@ -3,7 +3,7 @@ use crate::ledger::errors::LedgerManagerError;
 use std::convert::Infallible;
 use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum ProtocolErrors {
     #[error("Errors that can never happen")]
     InfalibleError {
