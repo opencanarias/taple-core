@@ -76,7 +76,11 @@ impl NotaryManager {
                 (None, data)
             }
         };
-        let response = { match data {} };
+        let response = {
+            match data {
+                NotaryCommand::NotaryEvent(notary_event) => todo!(),
+            }
+        };
         if sender.is_some() {
             sender.unwrap().send(response).expect("Sender Dropped");
         }

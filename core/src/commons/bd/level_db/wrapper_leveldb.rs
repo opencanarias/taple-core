@@ -173,7 +173,6 @@ unsafe impl<T> Sync for SyncCell<T> {}
 use serde::{de::DeserializeOwned, Serialize};
 use std::marker::PhantomData;
 
-#[derive(Debug, Clone)]
 pub struct WrapperLevelDB<K: db_key::Key, V: Serialize + DeserializeOwned> {
     db: LevelDBShared<K>,
     selected_table: String,

@@ -4,16 +4,19 @@ use std::{
     str::FromStr,
 };
 
-use crate::commons::{
-    errors::SubjectError,
-    identifier::{Derivable, DigestIdentifier},
-    models::{
-        event::Event,
-        event_content::EventContent,
-        event_request::EventRequest,
-        signature::Signature,
-        state::{LedgerState, Subject},
+use crate::{
+    commons::{
+        errors::SubjectError,
+        identifier::{Derivable, DigestIdentifier},
+        models::{
+            event::Event,
+            event_content::EventContent,
+            event_request::EventRequest,
+            signature::Signature,
+            state::{LedgerState, Subject},
+        },
     },
+    identifier::KeyIdentifier,
 };
 
 use super::{
@@ -29,6 +32,7 @@ const SUBJECT_TABLE: &str = "subject";
 const EVENT_TABLE: &str = "event";
 const REQUEST_TABLE: &str = "request";
 const ID_TABLE: &str = "controller-id";
+const NOTARY_TABLE: &str = "notary";
 
 pub struct DB {
     signature_db: WrapperLevelDB<StringKey, HashSet<Signature>>,
@@ -36,6 +40,7 @@ pub struct DB {
     event_db: WrapperLevelDB<StringKey, Event>,
     request_db: WrapperLevelDB<StringKey, EventRequest>,
     id_db: WrapperLevelDB<StringKey, String>,
+    notary_db: WrapperLevelDB<StringKey, (DigestIdentifier, u64)>,
 }
 
 impl DB {
@@ -49,6 +54,10 @@ impl DB {
             event_db: WrapperLevelDB::<StringKey, Event>::new(db.clone(), EVENT_TABLE),
             request_db: WrapperLevelDB::<StringKey, EventRequest>::new(db.clone(), REQUEST_TABLE),
             id_db: WrapperLevelDB::<StringKey, String>::new(db.clone(), ID_TABLE),
+            notary_db: WrapperLevelDB::<StringKey, (DigestIdentifier, u64)>::new(
+                db.clone(),
+                NOTARY_TABLE,
+            ),
         }
     }
 }
@@ -329,6 +338,42 @@ impl TapleDB for DB {
                 "Error while inserting request id:{} on subject_id:[{}]. Error --> {}",
                 req_id, id, error
             );
+        }
+    }
+
+    // Notary
+    fn set_notary_register(
+        &self,
+        owner: &KeyIdentifier,
+        subject_id: &DigestIdentifier,
+        event_hash: DigestIdentifier,
+        sn: u64,
+    ) {
+        let owner_id = owner.to_str();
+        let subject_id = subject_id.to_str();
+        let notary_partition = self.notary_db.partition(&owner_id);
+        if let Err(error) = notary_partition.put(&subject_id, (event_hash, sn)) {
+            panic!(
+                "Error while inserting notary register: on owner:[{}],on subject_id:[{}]. Error --> {}",
+                owner_id, subject_id, error
+            );
+        }
+    }
+
+    fn get_notary_register(
+        &self,
+        owner: &KeyIdentifier,
+        subject_id: &DigestIdentifier,
+    ) -> Option<(DigestIdentifier, u64)> {
+        let owner_id = owner.to_str();
+        let subject_id = subject_id.to_str();
+        let notary_partition = self.notary_db.partition(&owner_id);
+        match notary_partition.get(&subject_id) {
+            Ok(notary_register) => Some(notary_register),
+            Err(error) => match error {
+                WrapperLevelDBErrors::EntryNotFoundError => None,
+                _ => panic!("Not recoverable error get request"),
+            },
         }
     }
 }

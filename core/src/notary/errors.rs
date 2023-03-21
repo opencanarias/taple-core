@@ -8,4 +8,10 @@ pub enum NotaryError {
     ChannelError(#[from] ChannelErrors),
     #[error("Input Channel Error")]
     InputChannelError,
+    #[error("Owner Not Known")]
+    OwnerNotKnown,
+    #[error("Governance Id Not Found")]
+    GovernanceNotFound,
+    #[error("Governance API unexpected response")]
+    GovApiUnexpectedResponse,
 }
