@@ -1,4 +1,10 @@
-use crate::commons::channel::{ChannelData, MpscChannel, SenderEnd};
+use crate::{
+    commons::{
+        bd::db::DB,
+        channel::{ChannelData, MpscChannel, SenderEnd},
+    },
+    governance::GovernanceAPI,
+};
 
 use super::{errors::NotaryError, notary::Notary, NotaryCommand, NotaryResponse};
 
@@ -13,18 +19,22 @@ impl NotaryAPI {
     }
 }
 
-pub struct PaymentManager {
+pub struct NotaryManager {
     /// Communication channel for incoming petitions
     input_channel: MpscChannel<NotaryCommand, NotaryResponse>,
     /// Notarization functions
     inner_notary: Notary,
 }
 
-impl PaymentManager {
-    pub fn new(input_channel: MpscChannel<NotaryCommand, NotaryResponse>) -> Self {
+impl NotaryManager {
+    pub fn new(
+        input_channel: MpscChannel<NotaryCommand, NotaryResponse>,
+        gov_api: GovernanceAPI,
+        database: DB,
+    ) -> Self {
         Self {
             input_channel,
-            inner_notary: Notary::new(),
+            inner_notary: Notary::new(gov_api, database),
         }
     }
 
