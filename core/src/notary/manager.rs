@@ -3,7 +3,7 @@ use crate::{
         bd::db::DB,
         channel::{ChannelData, MpscChannel, SenderEnd},
     },
-    governance::GovernanceAPI,
+    governance::GovernanceAPI, protocol::command_head_manager::self_signature_manager::SelfSignatureManager,
 };
 
 use super::{errors::NotaryError, notary::Notary, NotaryCommand, NotaryResponse};
@@ -31,10 +31,11 @@ impl NotaryManager {
         input_channel: MpscChannel<NotaryCommand, NotaryResponse>,
         gov_api: GovernanceAPI,
         database: DB,
+        signature_manager: SelfSignatureManager,
     ) -> Self {
         Self {
             input_channel,
-            inner_notary: Notary::new(gov_api, database),
+            inner_notary: Notary::new(gov_api, database, signature_manager),
         }
     }
 
