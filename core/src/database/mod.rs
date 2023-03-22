@@ -1,14 +1,11 @@
 mod db;
 mod error;
-mod leveldb;
-mod wrapper_leveldb;
 mod memory;
 
 use serde::{de::DeserializeOwned, Serialize};
 
 pub use error::Error;
 pub use db::DB;
-pub use self::leveldb::LevelDB;
 pub use self::memory::MemoryManager;
 
 pub trait DatabaseManager: Sync + Send {
