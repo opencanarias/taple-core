@@ -14,13 +14,6 @@ impl ContractExecutor {
         }
     }
 
-    // pub fn add_contract<S: Into<String>>(&mut self, file: impl AsRef<Path>, name: S) {
-    //     // AOT COMPILATION
-    //     let file = fs::read(&file).unwrap();
-    //     let module = self.engine.precompile_module(&file).unwrap();
-    //     self.modules.insert(name.into(), module);
-    // }
-
     pub fn execute_contract(
         &self,
         state: String,

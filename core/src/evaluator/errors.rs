@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+use crate::governance::error::RequestError;
+
 #[derive(Error, Debug)]
 pub enum EvaluatorError {
     #[error("A database error has ocurred at main component {0}")]
@@ -34,4 +36,32 @@ pub enum ExecutorErrorResponses {
     StateJSONDeserializationFailed,
     #[error("Deserialization of JSON PATCH failed")]
     JSONPATCHDeserializationFailed
+}
+
+#[derive(Error, Debug)]
+pub enum CompilerError {
+    #[error("A database error has ocurred at main component {0}")]
+    DatabaseError(String),
+    #[error("Channel not available")]
+    ChannelNotAvailable,
+    #[error("Internal Error")]
+    InternalError(#[from] CompilerErrorResponses)
+}
+
+#[derive(Error, Debug, Clone)]
+pub enum CompilerErrorResponses {
+    #[error("A database error has ocurred at main component {0}")]
+    DatabaseError(String),
+    #[error("BorshSerialize Contract Error")]
+    BorshSerializeContractError,
+    #[error("Write File Error")]
+    WriteFileError,
+    #[error("Cargo Exec Error")]
+    CargoExecError,
+    #[error("Garbage Collector Error")]
+    GarbageCollectorFail,
+    #[error("Contract Addition Error")]
+    AddContractFail,
+    #[error("Governance Error")]
+    GovernanceError(#[from] RequestError),
 }

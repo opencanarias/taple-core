@@ -31,7 +31,7 @@ pub struct DB<M: DatabaseManager> {
     request_db: Box<dyn DatabaseCollection<InnerDataType = EventRequest>>,
     id_db: Box<dyn DatabaseCollection<InnerDataType = String>>,
     notary_db: Box<dyn DatabaseCollection<InnerDataType = (DigestIdentifier, u64)>>,
-    contract_db: Box<dyn DatabaseCollection<InnerDataType = (Vec<u8>, Vec<u8>)>>,
+    contract_db: Box<dyn DatabaseCollection<InnerDataType = (Vec<u8>, DigestIdentifier)>>,
 }
 
 impl<M: DatabaseManager> DB<M> {
@@ -311,7 +311,7 @@ impl<M: DatabaseManager> DB<M> {
         &self,
         governance_id: &DigestIdentifier,
         schema_id: &str,
-    ) -> Result<(Vec<u8>, Vec<u8>), Error> {
+    ) -> Result<(Vec<u8>, DigestIdentifier), Error> {
         let id = governance_id.to_str();
         let schemas_by_governances = self.contract_db.partition(&id);
         schemas_by_governances.get(schema_id)
@@ -322,7 +322,7 @@ impl<M: DatabaseManager> DB<M> {
         governance_id: &DigestIdentifier,
         schema_id: &str,
         contract: Vec<u8>,
-        hash: Vec<u8>,
+        hash: DigestIdentifier,
     ) -> Result<(), Error> {
         let id = governance_id.to_str();
         let schemas_by_governances = self.contract_db.partition(&id);

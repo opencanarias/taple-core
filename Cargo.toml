@@ -52,7 +52,7 @@ libsecp256k1 = { version = "~0.7" }
 blake2 = { version = "~0.9" }
 sha2 = { version = "~0.10" }
 sha3 = { version = "~0.10" }
-
+wasm-gc-api = { version = "~0.1.11" }
 futures = "~0.3.24"
 env_logger = "^0.10"
 log = "~0.4"

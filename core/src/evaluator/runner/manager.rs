@@ -112,7 +112,7 @@ impl<D: DatabaseManager> TapleRunner<D> {
             }
         };
         let Ok(_) = sender.unwrap().send(response) else {
-          return Err(EvaluatorError::ChannelNotAvailable)
+            return Err(EvaluatorError::ChannelNotAvailable)
         };
         Ok(ExecutorCodes::Ok)
     }

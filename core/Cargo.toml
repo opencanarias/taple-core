@@ -34,7 +34,7 @@ log = { workspace = true }
 hex = { workspace = true }
 jsonschema = { workspace = true }
 time = { workspace = true, features = ["std"] }
-
+wasm-gc-api = { workspace = true }
 # API
 thiserror = { workspace = true }
 utoipa = { workspace = true }
