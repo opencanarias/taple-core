@@ -21,6 +21,7 @@ const EVENT_TABLE: &str = "event";
 const REQUEST_TABLE: &str = "request";
 const ID_TABLE: &str = "controller-id";
 const NOTARY_TABLE: &str = "notary";
+const CONTRACT_TABLE: &str = "contract";
 
 pub struct DB<M: DatabaseManager> {
     _manager: Arc<M>,
@@ -30,6 +31,7 @@ pub struct DB<M: DatabaseManager> {
     request_db: Box<dyn DatabaseCollection<InnerDataType = EventRequest>>,
     id_db: Box<dyn DatabaseCollection<InnerDataType = String>>,
     notary_db: Box<dyn DatabaseCollection<InnerDataType = (DigestIdentifier, u64)>>,
+    contract_db: Box<dyn DatabaseCollection<InnerDataType = (Vec<u8>, Vec<u8>)>>,
 }
 
 impl<M: DatabaseManager> DB<M> {
@@ -40,6 +42,7 @@ impl<M: DatabaseManager> DB<M> {
         let request_db = manager.create_collection(REQUEST_TABLE);
         let id_db = manager.create_collection(ID_TABLE);
         let notary_db = manager.create_collection(NOTARY_TABLE);
+        let contract_db = manager.create_collection(CONTRACT_TABLE);
         Self {
             _manager: manager,
             signature_db,
@@ -48,6 +51,7 @@ impl<M: DatabaseManager> DB<M> {
             request_db,
             id_db,
             notary_db,
+            contract_db,
         }
     }
 
@@ -300,5 +304,28 @@ impl<M: DatabaseManager> DB<M> {
         let subject_id = subject_id.to_str();
         let notary_partition = self.notary_db.partition(&owner_id);
         notary_partition.get(&subject_id)
+    }
+
+    // Contracts Section
+    pub fn get_contract(
+        &self,
+        governance_id: &DigestIdentifier,
+        schema_id: &str,
+    ) -> Result<(Vec<u8>, Vec<u8>), Error> {
+        let id = governance_id.to_str();
+        let schemas_by_governances = self.contract_db.partition(&id);
+        schemas_by_governances.get(schema_id)
+    }
+
+    pub fn put_contract(
+        &self,
+        governance_id: &DigestIdentifier,
+        schema_id: &str,
+        contract: Vec<u8>,
+        hash: Vec<u8>,
+    ) -> Result<(), Error> {
+        let id = governance_id.to_str();
+        let schemas_by_governances = self.contract_db.partition(&id);
+        schemas_by_governances.put(schema_id, (contract, hash))
     }
 }

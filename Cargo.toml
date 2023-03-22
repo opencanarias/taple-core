@@ -30,7 +30,7 @@ async-std = "~1.12.0"
 blake3 = "~1.0"
 x25519-dalek = { version = "~1.1.0" }
 curve25519-dalek = { version = "~3.0.0" }
-bincode = "~1.0"                                         #Serializador necesario por serde para implementar la serialización y deserialización
+bincode = "~1.3"                                         #Serializador necesario por serde para implementar la serialización y deserialización
 ed25519-dalek = { version = "^1", features = ["serde"] }
 url = "~2.3.1"
 # Pre version 1
@@ -60,6 +60,9 @@ hex = "~0.4.3"
 db-key = "^0.0.5" #Usar esta versión. Necesario para implementar custom keys para leveldb::Database // Eso puso Javier
 jsonschema = "~0.16"
 libp2p = { version = "~0.45", features = [], default-features = false }
+
+## Evaluator
+wasmtime = { version = "^5.0.0", features = ["cache"] }
 
 [profile.release]
 lto = true
