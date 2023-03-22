@@ -20,10 +20,11 @@ pub trait SelfSignatureInterface {
     fn check_if_signature_present(&self, signers: &HashSet<KeyIdentifier>) -> bool;
 }
 
+#[derive(Clone, Debug)]
 pub struct SelfSignatureManager {
-    keys: KeyPair,
-    identifier: KeyIdentifier,
-    digest_derivator: DigestDerivator,
+    pub keys: KeyPair,
+    pub identifier: KeyIdentifier,
+    pub digest_derivator: DigestDerivator,
 }
 
 impl SelfSignatureManager {
