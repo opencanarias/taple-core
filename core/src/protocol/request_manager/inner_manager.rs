@@ -1,8 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use time::OffsetDateTime;
 use crate::commons::{
-    bd::TapleDB,
     identifier::{Derivable, DigestIdentifier, KeyIdentifier},
     models::{
         approval_signature::{ApprovalResponse, ApprovalResponseContent},
@@ -10,8 +8,14 @@ use crate::commons::{
         notification::Notification, timestamp::TimeStamp,
     },
 };
+
+use crate::database::Error as DbError;
 use crate::governance::GovernanceInterface;
 use crate::message::{MessageConfig, MessageTaskCommand};
+use crate::{
+    database::DB,
+    DatabaseManager,
+};
 
 use super::super::{
     command_head_manager::{
@@ -78,13 +82,13 @@ const ONE_MINUTE: u32 = 1000 * 60;
 
 pub struct InnerManager<Database, N, C, G, S>
 where
-    Database: TapleDB,
+    Database: DatabaseManager,
     N: NotifierInterface,
     C: CommandManagerInterface,
     G: GovernanceInterface,
     S: SelfSignatureInterface,
 {
-    db: Database,
+    db: DB<Database>,
     notifier: N,
     command_api: C,
     governance_api: G,
@@ -96,7 +100,7 @@ where
 }
 
 impl<
-        Database: TapleDB,
+        Database: DatabaseManager,
         N: NotifierInterface,
         C: CommandManagerInterface,
         G: GovernanceInterface,
@@ -104,7 +108,7 @@ impl<
     > InnerManager<Database, N, C, G, S>
 {
     pub fn new(
-        db: Database,
+        db: DB<Database>,
         notifier: N,
         command_api: C,
         governance_api: G,
@@ -152,12 +156,12 @@ impl<
                         .await
                         .map_err(|e| RequestManagerError::RequestError(e))?;
                     if !invokation_permissions.0 || !invokation_permissions.1 {
-                        self.db.del_request(&subject_id, &request_id);
+                        self.db.del_request(&subject_id, &request_id).map_err(|e| RequestManagerError::DatabaseError(e.to_string()))?;
                     }
                     subject_id
                 }
             };
-            let Some(subject) = self.db.get_subject(&subject_id) else {
+            let Ok(subject) = self.db.get_subject(&subject_id) else {
                 return Err(RequestManagerError::DatabaseCorrupted(
                     "Subject of request stored not found".into(),
                 ));
@@ -272,13 +276,19 @@ impl<
                     ));
                 }
                 // Check if subject is present
-                let Some(subject) = self.db.get_subject(&data.subject_id) else {
-                    return Ok((
-                        RequestManagerResponse::CreateRequest(Err(
-                            ResponseError::SubjectNotFound,
-                        )),
-                        None,
-                    ));
+                let subject = match self.db.get_subject(&data.subject_id) {
+                    Ok(subject) => subject,
+                    Err(DbError::EntryNotFound) => {
+                        return Ok((
+                            RequestManagerResponse::CreateRequest(Err(
+                                ResponseError::SubjectNotFound,
+                            )),
+                            None,
+                        ))
+                    }
+                    Err(error) => {
+                        return Err(RequestManagerError::DatabaseError(error.to_string()))
+                    }
                 };
                 let Some(_) = &subject.keys else {
                     return Ok((
@@ -302,8 +312,8 @@ impl<
                         RequestManagerResponse::CreateRequest(Err(
                             ResponseError::SubjectBeingValidated,
                         )),
-                        None
-                    ))
+                        None,
+                    ));
                 }
                 let schema_id = subject_data.schema_id.clone();
                 let Ok(schema) = self
@@ -336,7 +346,9 @@ impl<
                         ));
                     }
                     // TODO: It should be managed in memory also the votes. Ask whether to implement it in this version
-                    self.db.set_request(&data.subject_id, request.clone());
+                    self.db
+                        .set_request(&data.subject_id, request.clone())
+                        .map_err(|e| RequestManagerError::DatabaseError(e.to_string()))?;
                     let (_, mut targets) = self
                         .governance_api
                         .check_quorum_request(request.clone(), HashSet::new())
@@ -530,16 +542,12 @@ impl<
                 self.notifier
                     .quorum_reached(&request_id.to_str(), &data.subject_id.to_str());
                 // TODO: What to do if CommandManager fails
-                let result = self
-                    .command_api
-                    .create_event(
-                        request,
-                        true,
-                    )
-                    .await;
+                let result = self.command_api.create_event(request, true).await;
                 if result.is_ok() {
                     // It is now safe to delete the Request from the database, as the event has been created.
-                    self.db.del_request(&subject_id, &request_id);
+                    self.db
+                        .del_request(&subject_id, &request_id)
+                        .map_err(|e| RequestManagerError::DatabaseError(e.to_string()))?;
                 }
                 match result {
                     Err(ResponseError::ComunnicationClosed) => {
@@ -554,19 +562,17 @@ impl<
             crate::governance::RequestQuorum::Rejected => {
                 self.request_stack.remove(&data.subject_id);
                 self.request_table.remove(&request_id);
-                self.db.del_request(&subject_id, &request_id);
+                self.db
+                    .del_request(&subject_id, &request_id)
+                    .map_err(|e| RequestManagerError::DatabaseError(e.to_string()))?;
                 self.notifier
                     .negative_quorum_reached(&request_id.to_str(), &data.subject_id.to_str());
-                let result = self
-                    .command_api
-                    .create_event(
-                        request,
-                        false,
-                    )
-                    .await;
+                let result = self.command_api.create_event(request, false).await;
                 if result.is_ok() {
                     // It is now safe to delete the Request from the database, as the event has been created.
-                    self.db.del_request(&subject_id, &request_id);
+                    self.db
+                        .del_request(&subject_id, &request_id)
+                        .map_err(|e| RequestManagerError::DatabaseError(e.to_string()))?;
                 }
                 match result {
                     Err(ResponseError::ComunnicationClosed) => {
@@ -664,8 +670,15 @@ impl<
             // TODO: It is possible that the vote has already been generated and we can respond.
             return Ok((RequestManagerResponse::ApprovalRequest(Err(ResponseError::RequestAlreadyKnown)), None));
         };
-        let Some(subject) = self.db.get_subject(&data.subject_id) else {
-            return Ok((RequestManagerResponse::ApprovalRequest(Err(ResponseError::SubjectNotFound)), None));
+        let subject = match self.db.get_subject(&data.subject_id) {
+            Ok(subject) => subject,
+            Err(DbError::EntryNotFound) => {
+                return Ok((
+                    RequestManagerResponse::ApprovalRequest(Err(ResponseError::SubjectNotFound)),
+                    None,
+                ))
+            }
+            Err(error) => return Err(RequestManagerError::DatabaseError(error.to_string())),
         };
         let Some(subject_data) = subject.subject_data else {
             return Ok((RequestManagerResponse::ApprovalRequest(Err(ResponseError::SubjectNotFound)), None));
@@ -753,7 +766,7 @@ impl<
             let Some((request, expected_sn)) = self.to_approval_request.get(&subject_id) else {
                 return Ok((RequestManagerResponse::VoteResolve(Err(ResponseError::VoteNotNeeded)), None));
             };
-            let None = self.db.get_event(subject_id, *expected_sn) else {
+            let Err(_) = self.db.get_event(subject_id, *expected_sn) else {
                 self.to_approval_request.remove(&subject_id);
                 self.request_table.remove(id);
                 return Ok((RequestManagerResponse::VoteResolve(Err(ResponseError::EventAlreadyOnChain)), None));

@@ -5,7 +5,7 @@ use super::{
 };
 use super::{CreateRequest, CreateType, ExternalEventRequest, GetEventsOfSubject};
 use async_trait::async_trait;
-use crate::commons::bd::db::DB;
+use crate::{DB, DatabaseManager};
 use crate::commons::models::approval_signature::Acceptance;
 use crate::commons::models::event::Event;
 use crate::commons::models::event_request::{EventRequest, RequestData, RequestPayload};
@@ -466,15 +466,15 @@ impl ApiModuleInterface for NodeAPI {
     }
 }
 
-pub struct API {
+pub struct API<D: DatabaseManager> {
     input: MpscChannel<APICommands, APIResponses>,
     _settings_sender: Sender<TapleSettings>,
-    inner_api: InnerAPI,
+    inner_api: InnerAPI<D>,
     shutdown_sender: Option<tokio::sync::broadcast::Sender<()>>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
 }
 
-impl API {
+impl<D: DatabaseManager> API<D> {
     pub fn new(
         input: MpscChannel<APICommands, APIResponses>,
         command_output: SenderEnd<Commands, CommandManagerResponses>,
@@ -484,7 +484,7 @@ impl API {
         keys: KeyPair,
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
-        db: DB,
+        db: DB<D>,
     ) -> Self {
         Self {
             input,

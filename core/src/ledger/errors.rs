@@ -11,6 +11,8 @@ pub enum LedgerManagerError {
     ChannelClosed,
     #[error("Subject Not Found")]
     SubjectNotFound,
+    #[error("Signatures not found")]
+    SignaturesNotFound,
     #[error("Event Not Found")]
     EventNotFound(LedgerState),
     #[error("Event Not Needed")]
@@ -35,6 +37,8 @@ pub enum LedgerManagerError {
     SubjectError(SubjectError),
     #[error("Error \"{0}\" detected with governance")]
     GovernanceError(RequestError),
+    #[error("A database error has ocurred at LedgerManager: \"{0}\"")]
+    DatabaseError(String)
 }
 
 #[derive(Debug, PartialEq, Clone)]

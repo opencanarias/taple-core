@@ -1,34 +1,33 @@
-use crate::commons::bd::db::open_db_with_comparator;
+use std::sync::Arc;
+
 use crate::commons::channel::MpscChannel;
+use crate::commons::config::NetworkSettings;
 use crate::commons::config::{DatabaseSettings, NodeSettings, TapleSettings};
-use crate::commons::crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair, Secp256k1KeyPair};
+use crate::commons::crypto::{
+    Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair, Secp256k1KeyPair,
+};
 use crate::commons::identifier::derive::KeyDerivator;
 use crate::commons::identifier::{Derivable, KeyIdentifier};
 use crate::commons::models::event_request::RequestPayload;
 use crate::commons::models::notification::Notification;
-use crate::commons::{
-    bd::{
-        db::{open_db, DB},
-        TapleDB,
-    },
-    config::NetworkSettings,
-};
-use futures::future::BoxFuture;
-use futures::FutureExt;
+use crate::database::{DatabaseManager, DB};
 use crate::governance::{governance::Governance, GovernanceMessage, GovernanceResponse};
 use crate::ledger::errors::LedgerManagerError;
 use crate::ledger::ledger_manager::{CommandManagerMessage, CommandManagerResponse, LedgerManager};
-use libp2p::{Multiaddr, PeerId};
 use crate::message::{
     Message, MessageReceiver, MessageSender, MessageTaskCommand, MessageTaskManager, NetworkEvent,
 };
 use crate::network::network::NetworkProcessor;
-use crate::protocol::command_head_manager::{manager::CommandManager, CommandManagerResponses, Commands};
+use crate::protocol::command_head_manager::{
+    manager::CommandManager, CommandManagerResponses, Commands,
+};
 use crate::protocol::protocol_message_manager::manager::ProtocolMessageManager;
 use crate::protocol::protocol_message_manager::ProtocolManagerMessages;
 use crate::protocol::request_manager::manager::RequestManager;
 use crate::protocol::request_manager::{RequestManagerMessage, RequestManagerResponse};
-use tempfile::tempdir as tempdirf;
+use futures::future::BoxFuture;
+use futures::FutureExt;
+use libp2p::{Multiaddr, PeerId};
 use tokio::sync::broadcast::error::{RecvError, TryRecvError};
 
 use crate::api::{APICommands, APIResponses, NodeAPI, API};
@@ -98,7 +97,7 @@ impl NotificationHandler {
 /// of [configuration](Settings) parameters in order to be properly initialized.
 ///
 #[derive(Debug)]
-pub struct Taple {
+pub struct Taple<D: DatabaseManager> {
     api: NodeAPI,
     peer_id: Option<PeerId>,
     controller_id: Option<String>,
@@ -106,9 +105,10 @@ pub struct Taple {
     api_input: Option<MpscChannel<APICommands, APIResponses>>,
     notification_sender: tokio::sync::broadcast::Sender<Notification>,
     settings: TapleSettings,
+    database: Option<D>,
 }
 
-impl Taple {
+impl<D: DatabaseManager + 'static> Taple<D> {
     /// Returns the [PeerId] of the node is available.
     /// This ID is the identifier of the node at the network level.
     /// **None** can only be get if the node has not been started yet.
@@ -149,7 +149,7 @@ impl Taple {
     /// This method allows the creation of cryptographic material through a
     /// given public key.
     fn generate_mc(&mut self, stored_public_key: Option<String>) -> Result<KeyPair, Error> {
-        let kp = Taple::create_key_pair(
+        let kp = Self::create_key_pair(
             &self.settings.node.key_derivator,
             self.settings.node.seed.clone(),
             self.settings.node.secret_key.clone(),
@@ -168,7 +168,7 @@ impl Taple {
     }
 
     /// Main and unique method to create an instance of a TAPLE node.
-    pub fn new(settings: TapleSettings) -> Self {
+    pub fn new(settings: TapleSettings, database: D) -> Self {
         check_dev_settings(&settings);
         let (api_input, api_sender) = MpscChannel::new(BUFFER_SIZE);
         let (sender, _) = tokio::sync::broadcast::channel(BUFFER_SIZE);
@@ -181,6 +181,7 @@ impl Taple {
             api_input: Some(api_input),
             notification_sender: sender,
             settings,
+            database: Some(database),
         }
     }
 
@@ -196,15 +197,14 @@ impl Taple {
                 key_derivator: KeyDerivator::Ed25519,
                 secret_key: Option::<String>::None,
                 seed: None,
-                digest_derivator: crate::commons::identifier::derive::digest::DigestDerivator::Blake3_256,
+                digest_derivator:
+                    crate::commons::identifier::derive::digest::DigestDerivator::Blake3_256,
                 replication_factor: 0.25f64,
                 timeout: 3000u32,
                 passvotation: 0,
                 dev_mode: false,
             },
-            database: DatabaseSettings {
-                path: "".into(),
-            },
+            database: DatabaseSettings { path: "".into() },
         }
     }
 
@@ -307,20 +307,24 @@ impl Taple {
             tokio::sync::watch::Receiver<TapleSettings>,
         ) = tokio::sync::watch::channel(self.settings.clone());
         // Creation BBDD
-        let tempdir;
-        let path = if self.settings.database.path.is_empty() {
-            tempdir = tempdirf().unwrap();
-            tempdir.path().clone()
-        } else {
-            std::path::Path::new(&self.settings.database.path)
-        };
-        let db = open_db_with_comparator(path);
+        // let tempdir;
+        // let path = if self.settings.database.path.is_empty() {
+        //     tempdir = tempdirf().unwrap();
+        //     tempdir.path().clone()
+        // } else {
+        //     std::path::Path::new(&self.settings.database.path)
+        // };
+        let db = self.database.take().unwrap();
+        let db = Arc::new(db);
+
         let db_access = DB::new(db.clone());
         // Creation of cryptographic material
-        let stored_public_key = db_access.get_controller_id();
+        let stored_public_key = db_access.get_controller_id().ok();
         let kp = self.generate_mc(stored_public_key)?;
         // Store controller_id in database
-        db_access.set_controller_id(self.controller_id().unwrap());
+        db_access
+            .set_controller_id(self.controller_id().unwrap())
+            .map_err(|e| Error::DatabaseError(e.to_string()))?;
         let public_key = kp.public_key_bytes();
         let key_identifier = KeyIdentifier::new(kp.get_key_derivator(), &public_key);
         // Creation Network
@@ -408,7 +412,7 @@ impl Taple {
             command_sender,
             self.notification_sender.clone(),
             governance_sender,
-            DB::new(db),
+            DB::new(db.clone()),
             kp,
             &self.settings,
         );

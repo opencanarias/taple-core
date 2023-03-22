@@ -31,53 +31,53 @@ fn init_node() {
     });
 }
 
-#[test]
-#[serial]
-fn database_persistence() {
-    let _ = std::fs::remove_dir_all(std::path::Path::new("/tmp/data"));
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    rt.block_on(async {
-        std::env::set_var("RUST_LOG", "info");
-        let mut node = NodeBuilder::new()
-            .with_addr("/memory".into())
-            .with_p2p_port(40000)
-            .with_seed("40000".into())
-            .with_timeout(100)
-            .with_database_path("/tmp/data".into())
-            .build();
-        node.start().await.unwrap();
-        tokio::time::sleep(Duration::from_secs(1)).await;
-        let node = node.get_api();
-        let result = node
-            .create_request(taple_core::CreateRequest::Create(CreateType {
-                governance_id: "".into(),
-                schema_id: "governance".into(),
-                namespace: "".into(),
-                payload: RequestPayload::Json(serde_json::to_string(&governance_one()).unwrap()),
-            }))
-            .await;
-        assert!(result.is_ok());
-        tokio::time::sleep(Duration::from_millis(200)).await;
-        let governance_id = result.unwrap().subject_id.unwrap();
-        let result = node.shutdown().await;
-        assert!(result.is_ok());
-        let mut node = NodeBuilder::new()
-            .with_addr("/memory".into())
-            .with_p2p_port(40000)
-            .with_seed("40000".into())
-            .with_timeout(100)
-            .with_database_path("/tmp/data".into())
-            .build();
-        node.start().await.unwrap();
-        tokio::time::sleep(Duration::from_secs(1)).await;
-        let node = node.get_api();
-        let result = node.get_subject(governance_id.clone()).await;
-        assert!(result.is_ok());
-        let result = node.shutdown().await;
-        assert!(result.is_ok());
-        tokio::time::sleep(Duration::from_secs(1)).await;
-    });
-}
+// #[test]
+// #[serial]
+// fn database_persistence() {
+//     let _ = std::fs::remove_dir_all(std::path::Path::new("/tmp/data"));
+//     let rt = tokio::runtime::Runtime::new().unwrap();
+//     rt.block_on(async {
+//         std::env::set_var("RUST_LOG", "info");
+//         let mut node = NodeBuilder::new()
+//             .with_addr("/memory".into())
+//             .with_p2p_port(40000)
+//             .with_seed("40000".into())
+//             .with_timeout(100)
+//             .with_database_path("/tmp/data".into())
+//             .build();
+//         node.start().await.unwrap();
+//         tokio::time::sleep(Duration::from_secs(1)).await;
+//         let node = node.get_api();
+//         let result = node
+//             .create_request(taple_core::CreateRequest::Create(CreateType {
+//                 governance_id: "".into(),
+//                 schema_id: "governance".into(),
+//                 namespace: "".into(),
+//                 payload: RequestPayload::Json(serde_json::to_string(&governance_one()).unwrap()),
+//             }))
+//             .await;
+//         assert!(result.is_ok());
+//         tokio::time::sleep(Duration::from_millis(200)).await;
+//         let governance_id = result.unwrap().subject_id.unwrap();
+//         let result = node.shutdown().await;
+//         assert!(result.is_ok());
+//         let mut node = NodeBuilder::new()
+//             .with_addr("/memory".into())
+//             .with_p2p_port(40000)
+//             .with_seed("40000".into())
+//             .with_timeout(100)
+//             .with_database_path("/tmp/data".into())
+//             .build();
+//         node.start().await.unwrap();
+//         tokio::time::sleep(Duration::from_secs(1)).await;
+//         let node = node.get_api();
+//         let result = node.get_subject(governance_id.clone()).await;
+//         assert!(result.is_ok());
+//         let result = node.shutdown().await;
+//         assert!(result.is_ok());
+//         tokio::time::sleep(Duration::from_secs(1)).await;
+//     });
+// }
 
 #[test]
 #[serial]

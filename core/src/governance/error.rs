@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+use crate::database::Error as DbError;
+
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum RequestError {
     #[error("Governance requested not found")]
@@ -39,4 +41,9 @@ pub enum InternalError {
     DeserializationError,
     #[error("Invalid KeyIdentifier")]
     InvalidGovernancePayload,
+    #[error("Database error: {}", source)]
+    DatabaseError {
+        #[from]
+        source: DbError
+    }
 }

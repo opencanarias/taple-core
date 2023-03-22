@@ -1,34 +1,37 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::commons::{
-    bd::{db::DB, TapleDB},
-    errors::SubjectError,
-    identifier::{DigestIdentifier, KeyIdentifier},
-    models::{
-        event::Event,
-        event_content::EventContent,
-        event_request::{EventRequest, EventRequestType},
-        signature::Signature,
-        state::{LedgerState, Subject, SubjectData},
-    },
-};
 use crate::governance::{GovernanceAPI, GovernanceInterface};
+use crate::{
+    commons::{
+        errors::SubjectError,
+        identifier::{DigestIdentifier, KeyIdentifier},
+        models::{
+            event::Event,
+            event_content::EventContent,
+            event_request::{EventRequest, EventRequestType},
+            signature::Signature,
+            state::{LedgerState, Subject, SubjectData},
+        },
+    },
+    database::Error as DbError,
+    DatabaseManager, DB,
+};
 use serde_json::Value;
 
 use super::super::errors::{CryptoError, LedgerManagerError};
 
 use super::{CommandManagerResponse, EventSN};
 
-pub struct Ledger {
+pub struct Ledger<D: DatabaseManager> {
     ledger_state: HashMap<DigestIdentifier, LedgerState>,
     candidate_cache: HashMap<DigestIdentifier, HashMap<u64, Event>>,
-    repo_access: DB,
+    repo_access: DB<D>,
     id: KeyIdentifier,
     governance_api: GovernanceAPI,
 }
 
-impl Ledger {
-    pub fn new(repo_access: DB, id: KeyIdentifier, governance_api: GovernanceAPI) -> Self {
+impl<D: DatabaseManager> Ledger<D> {
+    pub fn new(repo_access: DB<D>, id: KeyIdentifier, governance_api: GovernanceAPI) -> Self {
         Self {
             ledger_state: HashMap::new(),
             candidate_cache: HashMap::new(),
@@ -38,8 +41,15 @@ impl Ledger {
         }
     }
 
-    pub fn get_subject(&self, subject_id: &DigestIdentifier) -> Option<Subject> {
-        self.repo_access.get_subject(subject_id)
+    pub fn get_subject(
+        &self,
+        subject_id: &DigestIdentifier,
+    ) -> Result<Subject, LedgerManagerError> {
+        match self.repo_access.get_subject(subject_id) {
+            Ok(subject) => Ok(subject),
+            Err(DbError::EntryNotFound) => Err(LedgerManagerError::SubjectNotFound),
+            Err(error) => Err(LedgerManagerError::DatabaseError(error.to_string())),
+        }
     }
 
     pub fn get_all_subjects(&self) -> Vec<Subject> {
@@ -89,9 +99,11 @@ impl Ledger {
         }
         let (subject, event) = res.unwrap();
         let subject_id = event.event_content.subject_id.clone();
-        self.repo_access.set_event(&subject_id, event.clone());
+        self.repo_access
+            .set_event(&subject_id, event.clone())
+            .unwrap();
         let ledger_state = subject.ledger_state.clone();
-        self.repo_access.set_subject(&subject_id, subject);
+        self.repo_access.set_subject(&subject_id, subject).unwrap();
         self.ledger_state.insert(subject_id, ledger_state.clone());
         Ok(CommandManagerResponse::CreateEventResponse(
             event,
@@ -121,8 +133,8 @@ impl Ledger {
             .repo_access
             .get_event(&subject_id, subject.subject_data.as_ref().unwrap().sn)
         {
-            Some(event) => event.signature.content.event_content_hash,
-            None => return Err(SubjectError::EventAlreadyAppliedNotFound),
+            Ok(event) => event.signature.content.event_content_hash,
+            Err(_) => return Err(SubjectError::EventAlreadyAppliedNotFound),
         };
         let event = event_request.get_event_from_state_request(
             &subject,
@@ -131,8 +143,12 @@ impl Ledger {
             subject_schema,
             approved,
         )?;
-        self.repo_access.set_event(&subject_id, event.clone());
-        self.repo_access.set_negociating_true(&subject_id)?;
+        self.repo_access
+            .set_event(&subject_id, event.clone())
+            .unwrap();
+        self.repo_access
+            .set_negociating_true(&subject_id)
+            .map_err(|_| SubjectError::EventAlreadyAppliedNotFound)?;
         subject.ledger_state.negociating_next = true;
         self.set_negociating_true(&subject_id)?;
         Ok(CommandManagerResponse::CreateEventResponse(
@@ -159,12 +175,12 @@ impl Ledger {
         let mut prev_hash = event.signature.content.event_content_hash.clone();
         let event_sourcing = self.repo_access.apply_event_sourcing(event.event_content);
         if let Err(e) = event_sourcing {
-            return Err(LedgerManagerError::SubjectError(e));
+            return Err(LedgerManagerError::DatabaseError(e.to_string()));
         }
         if ledger_state.head_candidate_sn.is_some() {
             for sn in (ev_sn + 1)..=(ledger_state.head_candidate_sn.unwrap()) {
                 // Check for next event (if there is no more we stop and modify head)
-                if let Some(ev) = self.repo_access.get_event(&subject_id, sn) {
+                if let Ok(ev) = self.repo_access.get_event(&subject_id, sn) {
                     // Check that it engages with the preloader
                     if prev_hash != ev.event_content.previous_hash {
                         return Err(LedgerManagerError::CryptoError(CryptoError::Conflict));
@@ -179,7 +195,7 @@ impl Ledger {
                     prev_hash = ev.signature.content.event_content_hash.clone();
                     let event_sourcing = self.repo_access.apply_event_sourcing(ev.event_content);
                     if let Err(e) = event_sourcing {
-                        return Err(LedgerManagerError::SubjectError(e));
+                        return Err(LedgerManagerError::DatabaseError(e.to_string()));
                     }
                 } else {
                     // There are no more events and the end is not reached
@@ -221,7 +237,9 @@ impl Ledger {
                 && ledger_state.unwrap().head_sn.unwrap() == sn)
         {
             // Case: signatures for candidate or for head (same protocol)
-            self.repo_access.set_signatures(&subject_id, sn, signatures);
+            self.repo_access
+                .set_signatures(&subject_id, sn, signatures)
+                .map_err(|e| LedgerManagerError::DatabaseError(e.to_string()))?;
             Ok(self.get_ledger_state(&subject_id).unwrap().to_owned())
         } else if ledger_state.is_some()
             && ledger_state.unwrap().head_sn.is_some()
@@ -255,7 +273,9 @@ impl Ledger {
             None => return Err(LedgerManagerError::SubjectNotFound),
             Some(candidate_list) => {
                 if let Some(ev) = candidate_list.get(&sn) {
-                    self.repo_access.set_signatures(&subject_id, sn, signatures);
+                    self.repo_access
+                        .set_signatures(&subject_id, sn, signatures)
+                        .map_err(|e| LedgerManagerError::DatabaseError(e.to_string()))?;
                     if quorum {
                         match self.get_ledger_state(&subject_id) {
                             None => {
@@ -267,8 +287,14 @@ impl Ledger {
                                 };
                                 // Update ledger state, add event and add subject in database
                                 let subject = Subject::new_empty(new_ledger_state.clone());
-                                self.repo_access.set_subject(&subject_id, subject);
-                                self.repo_access.set_event(&subject_id, ev.clone());
+                                self.repo_access.set_subject(&subject_id, subject).map_err(
+                                    |e| LedgerManagerError::DatabaseError(e.to_string()),
+                                )?;
+                                self.repo_access
+                                    .set_event(&subject_id, ev.clone())
+                                    .map_err(|e| {
+                                        LedgerManagerError::DatabaseError(e.to_string())
+                                    })?;
                                 self.ledger_state
                                     .insert(subject_id, new_ledger_state.clone());
                                 Ok(new_ledger_state)
@@ -277,7 +303,11 @@ impl Ledger {
                                 // If there is a previous subject (it is an older candidate or a new one)
                                 let mut ledger_state = ledger_state.to_owned();
                                 ledger_state.head_candidate_sn = Some(sn);
-                                self.repo_access.set_event(&subject_id, ev.clone());
+                                self.repo_access
+                                    .set_event(&subject_id, ev.clone())
+                                    .map_err(|e| {
+                                        LedgerManagerError::DatabaseError(e.to_string())
+                                    })?;
                                 self.ledger_state.insert(subject_id, ledger_state.clone());
                                 Ok(ledger_state)
                             }
@@ -305,19 +335,16 @@ impl Ledger {
     ) -> Result<LedgerState, LedgerManagerError> {
         let ledger_state = self.get_ledger_state(&subject_id).unwrap().to_owned();
         self.repo_access
-            .set_signatures(&subject_id, sn, signatures.clone());
+            .set_signatures(&subject_id, sn, signatures.clone())
+            .map_err(|e| LedgerManagerError::DatabaseError(e.to_string()))?;
         if quorum {
             // Change ledger_state and event sourcing
             let event = self
                 .get_event_from_db(&subject_id, sn)
                 .expect("Tiene que haber evento");
             match self.apply_event_sourcing(event, subject_schema) {
-                Ok(ledger_state) => {
-                    Ok(ledger_state)
-                },
-                Err(e) => {
-                    Err(e)
-                },
+                Ok(ledger_state) => Ok(ledger_state),
+                Err(e) => Err(e),
             }
         } else {
             Ok(ledger_state)
@@ -349,7 +376,10 @@ impl Ledger {
     }
 
     pub fn init(&mut self) -> Result<CommandManagerResponse, LedgerManagerError> {
-        let head_and_candidates = self.repo_access.get_all_heads();
+        let head_and_candidates = self
+            .repo_access
+            .get_all_heads()
+            .map_err(|e| LedgerManagerError::DatabaseError(e.to_string()))?;
         let mut cache: HashMap<DigestIdentifier, LedgerState> = HashMap::new();
         for (subject_id, ledger_state) in head_and_candidates.into_iter() {
             cache.insert(subject_id, ledger_state);
@@ -370,16 +400,31 @@ impl Ledger {
         }
     }
 
+    // pub fn get_event_from_db(
+    //     &self,
+    //     subject_id: &DigestIdentifier,
+    //     sn: u64,
+    // ) -> Result<Event, LedgerManagerError> {
+    //     match self.repo_access.get_event(subject_id, sn) {
+    //         Ok(event) => Ok(event),
+    //         Err(error) => Err(LedgerManagerError::DatabaseError(error.to_string())),
+    //     }
+    // }
+
     pub fn get_event_from_db(&self, subject_id: &DigestIdentifier, sn: u64) -> Option<Event> {
-        self.repo_access.get_event(subject_id, sn)
+        self.repo_access.get_event(subject_id, sn).ok()
     }
 
     pub fn get_signatures_from_db(
         &self,
         subject_id: &DigestIdentifier,
         sn: u64,
-    ) -> Option<HashSet<Signature>> {
-        self.repo_access.get_signatures(subject_id, sn)
+    ) -> Result<HashSet<Signature>, LedgerManagerError> {
+        match self.repo_access.get_signatures(subject_id, sn) {
+            Ok(sig) => Ok(sig),
+            Err(DbError::EntryNotFound) => Err(LedgerManagerError::SignaturesNotFound),
+            Err(error) => Err(LedgerManagerError::DatabaseError(error.to_string())),
+        }
     }
 
     pub fn get_event(
@@ -451,8 +496,8 @@ impl Ledger {
                         if num <= head_sn {
                             Ok(CommandManagerResponse::GetSignaturesResponse {
                                 signatures: match self.repo_access.get_signatures(subject_id, num) {
-                                    Some(signatures) => signatures,
-                                    None => HashSet::new(),
+                                    Ok(signatures) => signatures,
+                                    Err(_) => HashSet::new(),
                                 },
                                 ledger_state: self.get_ledger_state(subject_id).unwrap().to_owned(),
                             })
@@ -462,8 +507,8 @@ impl Ledger {
                             // Case head + 1
                             Ok(CommandManagerResponse::GetSignaturesResponse {
                                 signatures: match self.repo_access.get_signatures(subject_id, num) {
-                                    Some(signatures) => signatures,
-                                    None => HashSet::new(),
+                                    Ok(signatures) => signatures,
+                                    Err(_) => HashSet::new(),
                                 },
                                 ledger_state: self.get_ledger_state(subject_id).unwrap().to_owned(),
                             })
@@ -481,8 +526,8 @@ impl Ledger {
                         {
                             Ok(CommandManagerResponse::GetSignaturesResponse {
                                 signatures: match self.repo_access.get_signatures(subject_id, num) {
-                                    Some(signatures) => signatures,
-                                    None => HashSet::new(),
+                                    Ok(signatures) => signatures,
+                                    Err(_) => HashSet::new(),
                                 },
                                 ledger_state: self.get_ledger_state(subject_id).unwrap().to_owned(),
                             })
@@ -494,8 +539,8 @@ impl Ledger {
                     }
                     EventSN::HEAD => Ok(CommandManagerResponse::GetSignaturesResponse {
                         signatures: match self.repo_access.get_signatures(subject_id, head_sn) {
-                            Some(signatures) => signatures,
-                            None => HashSet::new(),
+                            Ok(signatures) => signatures,
+                            Err(_) => HashSet::new(),
                         },
                         ledger_state: self.get_ledger_state(subject_id).unwrap().to_owned(),
                     }),
@@ -519,11 +564,11 @@ impl Ledger {
                 EventSN::SN(num) => {
                     let signers: HashSet<KeyIdentifier> =
                         match self.repo_access.get_signatures(subject_id, num) {
-                            Some(signatures) => signatures
+                            Ok(signatures) => signatures
                                 .iter()
                                 .map(|signature| signature.content.signer.clone())
                                 .collect(),
-                            None => HashSet::new(),
+                            Err(_) => HashSet::new(),
                         };
                     Ok(CommandManagerResponse::GetSignersResponse {
                         signers,
@@ -535,11 +580,11 @@ impl Ledger {
                     Some(head_sn) => {
                         let signers: HashSet<KeyIdentifier> =
                             match self.repo_access.get_signatures(subject_id, head_sn) {
-                                Some(signatures) => signatures
+                                Ok(signatures) => signatures
                                     .iter()
                                     .map(|signature| signature.content.signer.clone())
                                     .collect(),
-                                None => HashSet::new(),
+                                Err(_) => HashSet::new(),
                             };
                         Ok(CommandManagerResponse::GetSignersResponse {
                             signers,
@@ -566,9 +611,11 @@ impl Ledger {
             Err(e) => return Err(LedgerManagerError::SubjectError(e)),
         };
         self.repo_access
-            .set_event(&event.event_content.subject_id, event.clone());
+            .set_event(&event.event_content.subject_id, event.clone())
+            .map_err(|e| LedgerManagerError::DatabaseError(e.to_string()))?;
         self.repo_access
-            .set_subject(&event.event_content.subject_id, subject);
+            .set_subject(&event.event_content.subject_id, subject)
+            .map_err(|e| LedgerManagerError::DatabaseError(e.to_string()))?;
         let mut ledger_state = LedgerState {
             head_sn: Some(0),
             head_candidate_sn: if let Some(ledger_s) =
@@ -585,7 +632,7 @@ impl Ledger {
         if ledger_state.head_candidate_sn.is_some() {
             for sn in 1..=(ledger_state.head_candidate_sn.unwrap()) {
                 // Check for next event (if there is no more we stop and modify head)
-                if let Some(ev) = self.repo_access.get_event(&subject_id, sn) {
+                if let Ok(ev) = self.repo_access.get_event(&subject_id, sn) {
                     // Check that it engages with the prev
                     if prev_hash != ev.event_content.previous_hash {
                         return Err(LedgerManagerError::CryptoError(CryptoError::Conflict));
@@ -600,7 +647,7 @@ impl Ledger {
                     prev_hash = ev.signature.content.event_content_hash.clone();
                     let event_sourcing = self.repo_access.apply_event_sourcing(ev.event_content);
                     if let Err(e) = event_sourcing {
-                        return Err(LedgerManagerError::SubjectError(e));
+                        return Err(LedgerManagerError::DatabaseError(e.to_string()));
                     }
                 } else {
                     // No more events and no end is reached
@@ -663,7 +710,8 @@ impl Ledger {
         }
         // Add event
         self.repo_access
-            .set_event(&event.event_content.subject_id, event.clone());
+            .set_event(&event.event_content.subject_id, event.clone())
+            .map_err(|e| LedgerManagerError::DatabaseError(e.to_string()))?;
         // Check if there is a candidate and if it is reached
         let mut ledger_state = self
             .ledger_state
@@ -680,7 +728,7 @@ impl Ledger {
         } else {
             match self.repo_access.set_negociating_true(&subject_id) {
                 Ok(_) => (),
-                Err(e) => return Err(LedgerManagerError::SubjectError(e)),
+                Err(e) => return Err(LedgerManagerError::DatabaseError(e.to_string())),
             };
             ledger_state.negociating_next = true;
             Ok(CommandManagerResponse::PutEventResponse {
@@ -808,11 +856,11 @@ impl Ledger {
             match self
                 .get_signatures_from_db(&event.event_content.subject_id, event.event_content.sn)
             {
-                Some(prev_signatures) => signatures
+                Ok(prev_signatures) => signatures
                     .union(&prev_signatures)
                     .map(|x| x.content.signer.clone())
                     .collect(),
-                None => signatures
+                Err(_) => signatures
                     .iter()
                     .map(|x| x.content.signer.clone())
                     .collect(),
@@ -886,7 +934,7 @@ impl Ledger {
             }
             EventRequestType::State(state_request) => {
                 let subject = self.get_subject(&state_request.subject_id);
-                if subject.is_some() && subject.clone().unwrap().subject_data.is_some() {
+                if subject.is_ok() && subject.as_ref().clone().unwrap().subject_data.is_some() {
                     let subject = subject.unwrap();
                     let subject_data = subject.subject_data.clone().unwrap();
                     let governance_version = match self
@@ -929,11 +977,11 @@ impl Ledger {
         subject_id: DigestIdentifier,
     ) -> Result<CommandManagerResponse, LedgerManagerError> {
         match self.get_subject(&subject_id) {
-            Some(subject) => match subject.subject_data {
+            Ok(subject) => match subject.subject_data {
                 Some(sd) => Ok(CommandManagerResponse::GetSubjectResponse { subject: sd }),
                 None => Err(LedgerManagerError::SubjectNotFound),
             },
-            None => Err(LedgerManagerError::SubjectNotFound),
+            Err(_) => Err(LedgerManagerError::SubjectNotFound),
         }
     }
 

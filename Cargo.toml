@@ -57,11 +57,8 @@ futures = "~0.3.24"
 env_logger = "^0.10"
 log = "~0.4"
 hex = "~0.4.3"
-leveldb = "^0.8"
 db-key = "^0.0.5" #Usar esta versión. Necesario para implementar custom keys para leveldb::Database // Eso puso Javier
 jsonschema = "~0.16"
-tempfile = "^3.4"
-tempdir = "~0.3"
 libp2p = { version = "~0.45", features = [], default-features = false }
 
 [profile.release]

@@ -1,9 +1,8 @@
-use std::collections::HashSet;
+use std::{collections::HashSet};
 
 use async_trait::async_trait;
 
-use crate::commons::{
-    bd::db::DB,
+use crate::{commons::{
     channel::{ChannelData, MpscChannel, SenderEnd},
     identifier::{DigestIdentifier, KeyIdentifier},
     models::{
@@ -11,7 +10,7 @@ use crate::commons::{
         event_request::EventRequest,
     },
     schema_handler::get_governance_schema,
-};
+}, DatabaseManager, DB};
 
 use super::{
     error::{InternalError, RequestError},
@@ -19,19 +18,19 @@ use super::{
     GovernanceMessage, GovernanceResponse, RequestQuorum,
 };
 
-pub struct Governance {
+pub struct Governance<D: DatabaseManager> {
     input: MpscChannel<GovernanceMessage, GovernanceResponse>,
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
-    inner_governance: InnerGovernance,
+    inner_governance: InnerGovernance<D>,
 }
 
-impl Governance {
+impl<D: DatabaseManager> Governance<D> {
     pub fn new(
         input: MpscChannel<GovernanceMessage, GovernanceResponse>,
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
-        repo_access: DB,
+        repo_access: DB<D>,
     ) -> Self {
         Self {
             input,
@@ -47,6 +46,7 @@ impl Governance {
                 msg = self.input.receive() => {
                     let result = self.process_input(msg).await;
                     if result.is_err() {
+                        log::error!("Error at governance module {}", result.unwrap_err());
                         self.shutdown_sender.send(()).expect("Channel Closed");
                     }
                 },

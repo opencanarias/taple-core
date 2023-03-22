@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use crate::{
     commons::{
-        bd::{db::DB, TapleDB},
         errors::ChannelErrors,
     },
     governance::{GovernanceAPI, GovernanceInterface},
@@ -12,19 +11,20 @@ use crate::{
     },
 };
 
+use crate::database::{DB, DatabaseManager};
 use super::{errors::NotaryError, NotaryEvent, NotaryEventResponse};
 
-pub struct Notary {
+pub struct Notary<D: DatabaseManager> {
     gov_api: GovernanceAPI,
-    database: DB,
+    database: DB<D>,
     cache_gov_ver: HashMap<DigestIdentifier, u32>,
     signature_manager: SelfSignatureManager,
 }
 
-impl Notary {
+impl<D: DatabaseManager> Notary<D> {
     pub fn new(
         gov_api: GovernanceAPI,
-        database: DB,
+        database: DB<D>,
         signature_manager: SelfSignatureManager,
     ) -> Self {
         Self {
@@ -64,7 +64,7 @@ impl Notary {
             .database
             .get_notary_register(&notary_event.owner, &notary_event.subject_id)
         {
-            Some(notary_register) => {
+            Ok(notary_register) => {
                 if notary_register.1 > notary_event.sn {
                     return Err(NotaryError::EventSnLowerThanLastSigned);
                 } else if notary_register.1 == notary_event.sn
@@ -74,7 +74,7 @@ impl Notary {
                 }
             }
             // None => return Err(NotaryError::OwnerSubjectNotKnown), // TODO: descomentar cuando se haga prueba de trabajo para ralentizar ataques de llenar la base de datos
-            None => {}
+            Err(_) => {}
         };
         // Get in DB, it is important that this goes first to ensure that we dont sign 2 different event_hash for the same event sn and subject
         self.database.set_notary_register(
@@ -106,16 +106,12 @@ impl Notary {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashSet, str::FromStr};
-    use tempfile::tempdir;
+    use std::sync::Arc;
+    use std::{str::FromStr};
     use tokio::runtime::Runtime;
-
+    use crate::database::{DB, MemoryManager};
     use crate::{
         commons::{
-            bd::{
-                db::{open_db, DB},
-                TapleDB,
-            },
             channel::MpscChannel,
             crypto::{generate, Ed25519KeyPair},
             identifier::DigestIdentifier,
@@ -223,10 +219,10 @@ mod tests {
         })
     }
 
-    fn initialize() -> (Governance, Notary) {
-        let temp_dir = tempdir().unwrap();
-        let db_path = open_db(temp_dir.path());
-        let db = DB::new(db_path.clone());
+    fn initialize() -> (Governance<MemoryManager>, Notary<MemoryManager>) {
+        let manager = MemoryManager::new();
+        let manager = Arc::new(manager);
+        let db = DB::new(manager.clone());
         let subject = Subject {
             subject_data: Some(SubjectData {
                 subject_id: DigestIdentifier::from_str(
@@ -251,16 +247,16 @@ mod tests {
             &DigestIdentifier::from_str("Jg2Nuv5bNs4swQGcPQ1CXs9MtcfwMVoeQDR2Ea1YNYJw").unwrap(),
             DigestIdentifier::from_str("Jg2Nuv5bNs4swQGcPQ1CXs9MtcfwMVoeQDR2Ea1YNYJw").unwrap(),
             3,
-        );
+        ).unwrap();
         db.set_subject(
             &DigestIdentifier::from_str("JKXo-EvPxQcL_nhbd4iprzyjdNxT9YYrmeJ7p5N_IVrg").unwrap(),
             subject,
-        );
+        ).unwrap();
         // Shutdown channel
         let (bsx, _brx) = tokio::sync::broadcast::channel::<()>(10);
         let (a, b) = MpscChannel::<GovernanceMessage, GovernanceResponse>::new(100);
         let gov_manager = Governance::new(a, bsx, _brx, db);
-        let db = DB::new(db_path.clone());
+        let db = DB::new(manager);
         let notary = Notary::new(
             GovernanceAPI::new(b),
             db,
