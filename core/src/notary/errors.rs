@@ -2,7 +2,7 @@ use thiserror::Error;
 
 use crate::{commons::errors::ChannelErrors, protocol::errors::ProtocolErrors};
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug, Clone, PartialEq)]
 pub enum NotaryError {
     #[error("ProtocolErrors Error")]
     ProtocolErrors(#[from] ProtocolErrors),
