@@ -2,6 +2,8 @@ use thiserror::Error;
 
 use crate::{commons::errors::ChannelErrors, protocol::errors::ProtocolErrors};
 
+use crate::database::Error as DatabaseError;
+
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum NotaryError {
     #[error("ProtocolErrors Error")]
@@ -24,4 +26,6 @@ pub enum NotaryError {
     DifferentHashForEvent,
     #[error("Serializing Error")]
     SerializingError,
+    #[error("Database Error")]
+    DatabaseError,
 }

@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    commons::{
-        errors::ChannelErrors,
-    },
+    commons::errors::ChannelErrors,
     governance::{GovernanceAPI, GovernanceInterface},
     identifier::DigestIdentifier,
     protocol::command_head_manager::self_signature_manager::{
@@ -11,8 +9,8 @@ use crate::{
     },
 };
 
-use crate::database::{DB, DatabaseManager};
 use super::{errors::NotaryError, NotaryEvent, NotaryEventResponse};
+use crate::database::{DatabaseManager, DB};
 
 pub struct Notary<D: DatabaseManager> {
     gov_api: GovernanceAPI,
@@ -73,8 +71,10 @@ impl<D: DatabaseManager> Notary<D> {
                     return Err(NotaryError::DifferentHashForEvent);
                 }
             }
-            // None => return Err(NotaryError::OwnerSubjectNotKnown), // TODO: descomentar cuando se haga prueba de trabajo para ralentizar ataques de llenar la base de datos
-            Err(_) => {}
+            Err(error) => match error {
+                crate::DbError::EntryNotFound => {}
+                _ => return Err(NotaryError::DatabaseError),
+            },
         };
         // Get in DB, it is important that this goes first to ensure that we dont sign 2 different event_hash for the same event sn and subject
         self.database.set_notary_register(
@@ -82,7 +82,7 @@ impl<D: DatabaseManager> Notary<D> {
             &notary_event.subject_id,
             notary_event.event_hash.clone(),
             notary_event.sn,
-        );
+        ).map_err(|_| NotaryError::DatabaseError)?;
         // Now we sign and send
         let hash = DigestIdentifier::from_serializable_borsh((
             notary_event.gov_id,
@@ -106,10 +106,7 @@ impl<D: DatabaseManager> Notary<D> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-    use std::{str::FromStr};
-    use tokio::runtime::Runtime;
-    use crate::database::{DB, MemoryManager};
+    use crate::database::{MemoryManager, DB};
     use crate::{
         commons::{
             channel::MpscChannel,
@@ -129,6 +126,9 @@ mod tests {
         signature::{Signature, SignatureContent},
         DigestDerivator, SubjectData,
     };
+    use std::str::FromStr;
+    use std::sync::Arc;
+    use tokio::runtime::Runtime;
 
     use super::Notary;
 
@@ -194,7 +194,7 @@ mod tests {
             not_ev.subject_id =
                 DigestIdentifier::from_str("Jg2Nuv5bNs4swQGcPQ1CXs9MtcfwMVoeQDR2Ea1YNYJw").unwrap();
             not_ev.event_hash =
-            DigestIdentifier::from_str("JKXo-EvPxQcL_nhbd4iprzyjdNxT9YYrmeJ7p5N_IVrg").unwrap();
+                DigestIdentifier::from_str("JKXo-EvPxQcL_nhbd4iprzyjdNxT9YYrmeJ7p5N_IVrg").unwrap();
             let result = notary.notary_event(not_ev).await;
             assert!(result.is_err());
             let error = result.unwrap_err();
@@ -247,11 +247,13 @@ mod tests {
             &DigestIdentifier::from_str("Jg2Nuv5bNs4swQGcPQ1CXs9MtcfwMVoeQDR2Ea1YNYJw").unwrap(),
             DigestIdentifier::from_str("Jg2Nuv5bNs4swQGcPQ1CXs9MtcfwMVoeQDR2Ea1YNYJw").unwrap(),
             3,
-        ).unwrap();
+        )
+        .unwrap();
         db.set_subject(
             &DigestIdentifier::from_str("JKXo-EvPxQcL_nhbd4iprzyjdNxT9YYrmeJ7p5N_IVrg").unwrap(),
             subject,
-        ).unwrap();
+        )
+        .unwrap();
         // Shutdown channel
         let (bsx, _brx) = tokio::sync::broadcast::channel::<()>(10);
         let (a, b) = MpscChannel::<GovernanceMessage, GovernanceResponse>::new(100);
