@@ -21,6 +21,7 @@ use crate::{
             event_request::{CreateRequest, EventRequest, EventRequestType, StateRequest},
             signature::{Signature, SignatureContent},
             state::SubjectData,
+            timestamp::TimeStamp,
         },
     },
     DatabaseManager, DB,
@@ -83,8 +84,8 @@ impl<D: DatabaseManager> InnerAPI<D> {
                 })
             }
         };
-        let timestamp = OffsetDateTime::now_utc().unix_timestamp();
-        let Ok(signature) = self.signature_manager.sign(&(&request, timestamp)) else {
+        let timestamp = TimeStamp::now();
+        let Ok(signature) = self.signature_manager.sign(&(&request, &timestamp)) else {
             return APIResponses::CreateRequest(Err(ApiError::SignError));
         };
         let event_request = EventRequest {
@@ -143,7 +144,9 @@ impl<D: DatabaseManager> InnerAPI<D> {
                 },
                 payload: event_request.request.payload.into(),
             }),
-            timestamp: event_request.timestamp,
+            timestamp: TimeStamp {
+                time: event_request.timestamp,
+            },
             signature: Signature {
                 content: SignatureContent {
                     signer: match KeyIdentifier::from_str(&event_request.signature.content.signer) {
@@ -170,7 +173,7 @@ impl<D: DatabaseManager> InnerAPI<D> {
                             )))
                         }
                     },
-                    timestamp: event_request.signature.content.timestamp,
+                    timestamp: TimeStamp { time: event_request.signature.content.timestamp },
                 },
                 signature: match SignatureIdentifier::from_str(&event_request.signature.signature) {
                     Ok(signature_id) => signature_id,
@@ -327,7 +330,7 @@ impl<D: DatabaseManager> InnerAPI<D> {
         let event_request = EventRequest {
             request,
             signature,
-            timestamp: OffsetDateTime::now_utc().unix_timestamp(),
+            timestamp: TimeStamp::now(),
             approvals: HashSet::new(),
         };
         let schema = match self

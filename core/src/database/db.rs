@@ -2,13 +2,13 @@ use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use std::sync::Arc;
 
-use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde::Serialize;
 
 use crate::commons::models::state::{LedgerState, Subject};
 use crate::event_content::EventContent;
 use crate::event_request::EventRequest;
-use crate::identifier::{Derivable, DigestIdentifier};
+use crate::identifier::{Derivable, DigestIdentifier, KeyIdentifier};
 use crate::signature::Signature;
 use crate::Event;
 
@@ -20,6 +20,7 @@ const SUBJECT_TABLE: &str = "subject";
 const EVENT_TABLE: &str = "event";
 const REQUEST_TABLE: &str = "request";
 const ID_TABLE: &str = "controller-id";
+const NOTARY_TABLE: &str = "notary";
 
 pub struct DB<M: DatabaseManager> {
     _manager: Arc<M>,
@@ -28,6 +29,7 @@ pub struct DB<M: DatabaseManager> {
     event_db: Box<dyn DatabaseCollection<InnerDataType = Event>>,
     request_db: Box<dyn DatabaseCollection<InnerDataType = EventRequest>>,
     id_db: Box<dyn DatabaseCollection<InnerDataType = String>>,
+    notary_db: Box<dyn DatabaseCollection<InnerDataType = (DigestIdentifier, u64)>>,
 }
 
 impl<M: DatabaseManager> DB<M> {
@@ -37,6 +39,7 @@ impl<M: DatabaseManager> DB<M> {
         let event_db = manager.create_collection(EVENT_TABLE);
         let request_db = manager.create_collection(REQUEST_TABLE);
         let id_db = manager.create_collection(ID_TABLE);
+        let notary_db = manager.create_collection(NOTARY_TABLE);
         Self {
             _manager: manager,
             signature_db,
@@ -44,6 +47,7 @@ impl<M: DatabaseManager> DB<M> {
             event_db,
             request_db,
             id_db,
+            notary_db,
         }
     }
 
@@ -57,7 +61,7 @@ impl<M: DatabaseManager> DB<M> {
         &'a self,
         from: Option<String>,
         quantity: isize,
-        partition: &Box<dyn DatabaseCollection<InnerDataType = V> +'a>
+        partition: &Box<dyn DatabaseCollection<InnerDataType = V> + 'a>,
     ) -> Result<Vec<V>, Error> {
         fn convert<'a, V: Serialize + DeserializeOwned>(
             iter: impl Iterator<Item = (String, V)> + 'a,
@@ -157,7 +161,11 @@ impl<M: DatabaseManager> DB<M> {
         self.subject_db.get(&subject_id.to_str())
     }
 
-    pub fn set_subject(&self, subject_id: &DigestIdentifier, subject: Subject) -> Result<(), Error> {
+    pub fn set_subject(
+        &self,
+        subject_id: &DigestIdentifier,
+        subject: Subject,
+    ) -> Result<(), Error> {
         let id = subject_id.to_str();
         self.subject_db.put(&id, subject)
     }
@@ -173,21 +181,24 @@ impl<M: DatabaseManager> DB<M> {
         // TODO: Consultar sobre si este método debería existir
         let subject_id = event_content.subject_id.clone();
         let mut subject = self.get_subject(&subject_id)?;
-        subject.apply(event_content.clone()).map_err(|_| Error::SubjectApplyFailed)?;
+        subject
+            .apply(event_content.clone())
+            .map_err(|_| Error::SubjectApplyFailed)?;
         // Persist the change
         self.set_subject(&subject_id, subject)?;
         let id = subject_id.to_str();
         let signatures_by_subject = self.signature_db.partition(&id);
         match signatures_by_subject.del(&(event_content.sn - 1).to_string()) {
             Ok(_) | Err(Error::EntryNotFound) => Ok(()),
-            Err(error) => Err(error)
+            Err(error) => Err(error),
         }
     }
 
     pub fn get_all_heads(&self) -> Result<HashMap<DigestIdentifier, LedgerState>, Error> {
         let mut result = HashMap::new();
         for (key, subject) in self.subject_db.iter() {
-            let subject_id = DigestIdentifier::from_str(&key).map_err(|_| Error::NoDigestIdentifier)?;
+            let subject_id =
+                DigestIdentifier::from_str(&key).map_err(|_| Error::NoDigestIdentifier)?;
             result.insert(subject_id, subject.ledger_state);
         }
         Ok(result)
@@ -201,11 +212,19 @@ impl<M: DatabaseManager> DB<M> {
         result
     }
 
-    pub fn get_subjects(&self, from: Option<String>, quantity: isize) -> Result<Vec<Subject>, Error> {
+    pub fn get_subjects(
+        &self,
+        from: Option<String>,
+        quantity: isize,
+    ) -> Result<Vec<Subject>, Error> {
         self.get_by_range(from, quantity, &self.subject_db)
     }
 
-    pub fn get_governances(&self, from: Option<String>, quantity: isize) -> Result<Vec<Subject>, Error> {
+    pub fn get_governances(
+        &self,
+        from: Option<String>,
+        quantity: isize,
+    ) -> Result<Vec<Subject>, Error> {
         // TODO: Confirmar si las gobernanzas van a tener una colección propia
         self.get_by_range(from, quantity, &self.subject_db)
     }
@@ -228,7 +247,11 @@ impl<M: DatabaseManager> DB<M> {
         requests_by_subject.get(&request_id.to_str())
     }
 
-    pub fn set_request(&self, subject_id: &DigestIdentifier, request: EventRequest) -> Result<(), Error> {
+    pub fn set_request(
+        &self,
+        subject_id: &DigestIdentifier,
+        request: EventRequest,
+    ) -> Result<(), Error> {
         let id = subject_id.to_str();
         let requests_by_subject = self.request_db.partition(&id);
         let req_id = request.signature.content.event_content_hash.to_str();
@@ -251,5 +274,31 @@ impl<M: DatabaseManager> DB<M> {
 
     pub fn set_controller_id(&self, controller_id: String) -> Result<(), Error> {
         self.id_db.put("", controller_id)
+    }
+
+    pub fn set_notary_register(
+        &self,
+        owner: &KeyIdentifier,
+        subject_id: &DigestIdentifier,
+        event_hash: DigestIdentifier,
+        sn: u64,
+    ) -> Result<(), Error> {
+        let owner_id = owner.to_str();
+        let subject_id = subject_id.to_str();
+        let notary_partition = self.notary_db.partition(&owner_id);
+        if let Err(error) = notary_partition.put(&subject_id, (event_hash, sn)) {
+            return Err(error);
+        }
+        Ok(())
+    }
+    pub fn get_notary_register(
+        &self,
+        owner: &KeyIdentifier,
+        subject_id: &DigestIdentifier,
+    ) -> Result<(DigestIdentifier, u64), Error> {
+        let owner_id = owner.to_str();
+        let subject_id = subject_id.to_str();
+        let notary_partition = self.notary_db.partition(&owner_id);
+        notary_partition.get(&subject_id)
     }
 }

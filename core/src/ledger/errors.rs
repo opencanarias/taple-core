@@ -5,7 +5,7 @@ use crate::commons::{
 use crate::governance::error::RequestError;
 use thiserror::Error;
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug, Clone, PartialEq)]
 pub enum LedgerManagerError {
     #[error("A channel has been closed")]
     ChannelClosed,

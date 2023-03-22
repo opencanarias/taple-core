@@ -18,7 +18,7 @@ use super::{
     event::Event,
     event_content::EventContent,
     event_request::{EventRequestType, RequestPayload},
-    signature::{Signature, SignatureContent},
+    signature::{Signature, SignatureContent}, timestamp::TimeStamp,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 
@@ -365,7 +365,7 @@ impl Subject {
                     content: SignatureContent {
                         signer: signer.clone(),
                         event_content_hash,
-                        timestamp: OffsetDateTime::now_utc().unix_timestamp(),
+                        timestamp: TimeStamp::now(),
                     },
                     signature: signature,
                 };

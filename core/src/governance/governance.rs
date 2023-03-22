@@ -197,6 +197,7 @@ pub trait GovernanceInterface {
     ) -> Result<(bool, bool), RequestError>;
 }
 
+#[derive(Debug, Clone)]
 pub struct GovernanceAPI {
     sender: SenderEnd<GovernanceMessage, GovernanceResponse>,
 }

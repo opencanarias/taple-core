@@ -10,7 +10,7 @@ use crate::commons::{
         derive::digest::DigestDerivator, Derivable, DigestIdentifier, KeyIdentifier,
         SignatureIdentifier,
     },
-    models::signature::{Signature, SignatureContent},
+    models::{signature::{Signature, SignatureContent}, timestamp::TimeStamp},
 };
 
 pub trait SelfSignatureInterface {
@@ -20,10 +20,11 @@ pub trait SelfSignatureInterface {
     fn check_if_signature_present(&self, signers: &HashSet<KeyIdentifier>) -> bool;
 }
 
+#[derive(Clone, Debug)]
 pub struct SelfSignatureManager {
-    keys: KeyPair,
-    identifier: KeyIdentifier,
-    digest_derivator: DigestDerivator,
+    pub keys: KeyPair,
+    pub identifier: KeyIdentifier,
+    pub digest_derivator: DigestDerivator,
 }
 
 impl SelfSignatureManager {
@@ -56,7 +57,7 @@ impl SelfSignatureInterface for SelfSignatureManager {
             content: SignatureContent {
                 signer: self.identifier.clone(),
                 event_content_hash: hash,
-                timestamp: OffsetDateTime::now_utc().unix_timestamp(),
+                timestamp: TimeStamp::now(),
             },
             signature: SignatureIdentifier::new(
                 self.identifier.to_signature_derivator(),

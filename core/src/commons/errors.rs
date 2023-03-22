@@ -103,7 +103,7 @@ pub enum Error {
     BorshSerializationFailed,
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone, PartialEq)]
 pub enum ChannelErrors {
     #[error("Channel is closed at the other end. Cannot send data")]
     ChannelClosed,

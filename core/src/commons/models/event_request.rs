@@ -20,7 +20,7 @@ use super::{
     event::Event,
     event_content::{EventContent, Metadata},
     signature::Signature,
-    state::Subject,
+    state::Subject, timestamp::TimeStamp,
 };
 
 #[derive(
@@ -66,7 +66,7 @@ pub enum EventRequestType {
 )]
 pub struct EventRequest {
     pub request: EventRequestType,
-    pub timestamp: i64,
+    pub timestamp: TimeStamp,
     pub signature: Signature,
     #[schema(value_type = Vec<ApprovalResponse>)]
     pub approvals: HashSet<ApprovalResponse>,
@@ -78,7 +78,7 @@ pub struct EventRequest {
 pub struct RequestData {
     pub request: EventRequestType,
     pub request_id: String,
-    pub timestamp: i64,
+    pub timestamp: TimeStamp,
     pub subject_id: Option<String>,
     pub sn: Option<u64>,
 }
@@ -129,7 +129,7 @@ impl EventRequest {
 
     pub fn check_signatures(&self) -> Result<(), CryptoErrorEvent> {
         // Checking request signature
-        let Ok(hash) = DigestIdentifier::from_serializable_borsh((self.request.clone(), self.timestamp)) else {
+        let Ok(hash) = DigestIdentifier::from_serializable_borsh((self.request.clone(), self.timestamp.clone())) else {
             return Err(CryptoErrorEvent::EventRequestHashingError);
         };
         // println!("Primero {:?}, segundo {:?}", hash, self.signature.content.event_content_hash);
