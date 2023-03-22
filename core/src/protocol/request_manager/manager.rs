@@ -1,6 +1,5 @@
 use async_trait::async_trait;
-use crate::commons::{
-    bd::db::DB,
+use crate::{commons::{
     channel::{ChannelData, MpscChannel, SenderEnd},
     config::TapleSettings,
     crypto::KeyPair,
@@ -10,9 +9,10 @@ use crate::commons::{
         event_request::{EventRequest, RequestData},
         notification::Notification,
     },
-};
+}, DatabaseManager};
 use crate::governance::{GovernanceAPI, GovernanceMessage, GovernanceResponse};
 use crate::message::MessageTaskCommand;
+use crate::DB;
 
 use super::super::{
     command_head_manager::{
@@ -139,19 +139,17 @@ impl RequestManagerInterface for RequestManagerAPI {
     }
 }
 
-pub struct RequestManager {
+pub struct RequestManager<D: DatabaseManager> {
     input: MpscChannel<RequestManagerMessage, RequestManagerResponse>,
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
     messenger_channel: SenderEnd<MessageTaskCommand<ProtocolManagerMessages>, ()>,
     inner_manager:
-        InnerManager<DB, RequestNotifier, CommandAPI, GovernanceAPI, SelfSignatureManager>,
+        InnerManager<D, RequestNotifier, CommandAPI, GovernanceAPI, SelfSignatureManager>,
 }
 
-impl RequestManager {
+impl<D: DatabaseManager> RequestManager<D> {
     pub fn new(
-        // TODO: Requires access to the database and TaskManager. Ask if it requires the settings channel.
-        // TODO: selfSignatureManager may be required.
         input: MpscChannel<RequestManagerMessage, RequestManagerResponse>,
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
@@ -159,7 +157,7 @@ impl RequestManager {
         command_channel: SenderEnd<Commands, CommandManagerResponses>,
         notification_sender: tokio::sync::broadcast::Sender<Notification>,
         governance_channel: SenderEnd<GovernanceMessage, GovernanceResponse>,
-        db: DB,
+        db: DB<D>,
         keys: KeyPair,
         initial_settings: &TapleSettings,
     ) -> Self {

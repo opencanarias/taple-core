@@ -106,3 +106,5 @@ pub use commons::{
 };
 pub use error::Error;
 pub use unitary_component::{NotificationHandler, Taple};
+pub use database::{DatabaseManager, LevelDB, MemoryManager, Error as DbError, DatabaseCollection};
+pub(crate) use database::DB;

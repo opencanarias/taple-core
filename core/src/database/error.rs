@@ -15,7 +15,7 @@ pub enum Error {
   #[error("Conversion to Digest Identifier failed")]
   NoDigestIdentifier,
   #[error("An error withing the database custom implementation")]
-  CustomError(Box<dyn std::error::Error + Send + Sync + 'static>)
+  CustomError(Box<dyn std::error::Error + 'static>)
 }
 
 #[derive(Error, Debug)]

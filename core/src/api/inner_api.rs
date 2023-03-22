@@ -1,18 +1,4 @@
 use super::{CreateRequest as ApiCreateRequest, ExternalEventRequest};
-use time::OffsetDateTime;
-use crate::commons::{
-    bd::{db::DB, TapleDB},
-    config::TapleSettings,
-    crypto::KeyPair,
-    identifier::{derive::KeyDerivator, DigestIdentifier, KeyIdentifier, SignatureIdentifier},
-    models::{
-        approval_signature::Acceptance,
-        event_content::{EventContent, Metadata},
-        event_request::{CreateRequest, EventRequest, EventRequestType, StateRequest},
-        signature::{Signature, SignatureContent},
-        state::SubjectData,
-    },
-};
 use crate::governance::error::RequestError;
 use crate::ledger::errors::LedgerManagerError;
 use crate::protocol::{
@@ -24,28 +10,46 @@ use crate::protocol::{
     errors::{EventCreationError, ResponseError},
     request_manager::manager::{RequestManagerAPI, RequestManagerInterface},
 };
+use crate::{
+    commons::{
+        config::TapleSettings,
+        crypto::KeyPair,
+        identifier::{derive::KeyDerivator, DigestIdentifier, KeyIdentifier, SignatureIdentifier},
+        models::{
+            approval_signature::Acceptance,
+            event_content::{EventContent, Metadata},
+            event_request::{CreateRequest, EventRequest, EventRequestType, StateRequest},
+            signature::{Signature, SignatureContent},
+            state::SubjectData,
+        },
+    },
+    DatabaseManager, DB,
+};
 use std::{collections::HashSet, str::FromStr};
+use time::OffsetDateTime;
 
 use super::{
     error::ApiError, APIResponses, CreateEvent, GetAllSubjects, GetEventsOfSubject, GetSignatures,
     GetSingleSubject as GetSingleSubjectAPI,
 };
 
-pub(crate) struct InnerAPI {
+use crate::database::Error as DbError;
+
+pub(crate) struct InnerAPI<D: DatabaseManager> {
     signature_manager: SelfSignatureManager,
     command_api: CommandAPI,
     request_api: RequestManagerAPI,
-    db: DB,
+    db: DB<D>,
 }
 
 const MAX_QUANTITY: isize = 100;
 
-impl InnerAPI {
+impl<D: DatabaseManager> InnerAPI<D> {
     pub fn new(
         keys: KeyPair,
         settings: &TapleSettings,
         command_api: CommandAPI,
-        db: DB,
+        db: DB<D>,
         request_api: RequestManagerAPI,
     ) -> Self {
         Self {
@@ -200,9 +204,15 @@ impl InnerAPI {
         } else {
             (data.quantity.unwrap() as isize).min(MAX_QUANTITY)
         };
-        let result = self
-            .db
-            .get_subjects(from, quantity)
+        let result = match self.db.get_subjects(from, quantity) {
+            Ok(subjects) => subjects,
+            Err(error) => {
+                return APIResponses::GetAllSubjects(Err(ApiError::DatabaseError(
+                    error.to_string(),
+                )))
+            }
+        };
+        let result = result
             .into_iter()
             .map(|subject| subject.subject_data.unwrap())
             .collect::<Vec<SubjectData>>();
@@ -220,9 +230,15 @@ impl InnerAPI {
         } else {
             (data.quantity.unwrap() as isize).min(MAX_QUANTITY)
         };
-        let result = self
-            .db
-            .get_governances(from, quantity)
+        let result = match self.db.get_governances(from, quantity) {
+            Ok(subjects) => subjects,
+            Err(error) => {
+                return APIResponses::GetAllGovernances(Err(ApiError::DatabaseError(
+                    error.to_string(),
+                )))
+            }
+        };
+        let result = result
             .into_iter()
             .map(|subject| subject.subject_data.unwrap())
             .collect::<Vec<SubjectData>>();
@@ -233,8 +249,19 @@ impl InnerAPI {
         let Ok(id) = DigestIdentifier::from_str(&data.subject_id) else {
             return APIResponses::GetSingleSubject(Err(ApiError::InvalidParameters(format!("SubjectID {}", data.subject_id))));
         };
-        let Some(subject) = self.db.get_subject(&id) else {
-            return APIResponses::GetSingleSubject(Err(ApiError::NotFound(format!("Subject {}", data.subject_id))))
+        let subject = match self.db.get_subject(&id) {
+            Ok(subject) => subject,
+            Err(DbError::EntryNotFound) => {
+                return APIResponses::GetSingleSubject(Err(ApiError::NotFound(format!(
+                    "Subject {}",
+                    data.subject_id
+                ))))
+            }
+            Err(error) => {
+                return APIResponses::GetSingleSubject(Err(ApiError::DatabaseError(
+                    error.to_string(),
+                )))
+            }
         };
         if subject.subject_data.is_some() {
             APIResponses::GetSingleSubject(Ok(subject.subject_data.unwrap()))
@@ -257,19 +284,20 @@ impl InnerAPI {
         let Ok(id) = DigestIdentifier::from_str(&data.subject_id) else {
             return APIResponses::GetEventsOfSubject(Err(ApiError::InvalidParameters(format!("SubjectID {}", data.subject_id))));
         };
-        let events = self.db.get_events_by_range(&id, from, quantity);
-        APIResponses::GetEventsOfSubject(Ok(events))
+        match self.db.get_events_by_range(&id, from, quantity) {
+            Ok(events) => APIResponses::GetEventsOfSubject(Ok(events)),
+            Err(error) => APIResponses::GetEventsOfSubject(Err(ApiError::DatabaseError(error.to_string())))
+        }
     }
 
     pub async fn get_signatures(&self, data: GetSignatures) -> APIResponses {
         let Ok(id) = DigestIdentifier::from_str(&data.subject_id) else {
             return APIResponses::GetSignatures(Err(ApiError::InvalidParameters(format!("SubjectID {}", data.subject_id))));
         };
-        let Some(signatures) = self.db.get_signatures(
-            &id,
-            data.sn,
-        ) else {
-            return APIResponses::GetSignatures(Err(ApiError::NotFound(format!("Subject {} SN {}", data.subject_id, data.sn))));
+        let signatures = match self.db.get_signatures(&id, data.sn) {
+            Ok(signatures) => signatures,
+            Err(DbError::EntryNotFound) => return APIResponses::GetSignatures(Err(ApiError::NotFound(format!("Subject {} SN {}", data.subject_id, data.sn)))),
+            Err(error) => return APIResponses::GetSignatures(Err(ApiError::DatabaseError(error.to_string())))
         };
         let signatures = Vec::from_iter(signatures);
         let (init, end) = get_init_and_end(data.from, data.quantity, &signatures);
@@ -288,8 +316,10 @@ impl InnerAPI {
         let Ok(signature) = self.signature_manager.sign(&request) else {
             return APIResponses::SimulateEvent(Err(ApiError::SignError));
         };
-        let Some(subject) = self.db.get_subject(&id) else {
-            return APIResponses::SimulateEvent(Err(ApiError::NotFound(format!("Subject {}", data.subject_id))));
+        let subject = match self.db.get_subject(&id) {
+            Ok(subject) => subject,
+            Err(DbError::EntryNotFound) => return APIResponses::SimulateEvent(Err(ApiError::NotFound(format!("Subject {}", data.subject_id)))),
+            Err(error) => return APIResponses::SimulateEvent(Err(ApiError::DatabaseError(error.to_string())))
         };
         let Some(subject_data) = subject.subject_data.clone() else {
             return APIResponses::SimulateEvent(Err(ApiError::NotFound(format!("Subject data of {}", data.subject_id))));

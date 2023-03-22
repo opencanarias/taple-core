@@ -2,29 +2,26 @@ mod db;
 mod error;
 mod leveldb;
 mod wrapper_leveldb;
-
-use std::marker::PhantomData;
+mod memory;
 
 use serde::{de::DeserializeOwned, Serialize};
 
-use error::Error;
+pub use error::Error;
+pub use db::DB;
+pub use self::leveldb::LevelDB;
+pub use self::memory::MemoryManager;
 
-pub trait DatabaseManager {
+pub trait DatabaseManager: Sync + Send {
     fn create_collection<V>(
         &self,
         identifier: &str,
     ) -> Box<dyn DatabaseCollection<InnerDataType = V>>
     where
-        V: Serialize + DeserializeOwned + 'static;
+        V: Serialize + DeserializeOwned + Sync + Send + 'static;
 }
 
-pub struct KeyData<'a> {
-    subject_id: Option<&'a str>,
-    sn: Option<u64>,
-}
-
-pub trait DatabaseCollection {
-    type InnerDataType: Serialize + DeserializeOwned;
+pub trait DatabaseCollection: Sync + Send {
+    type InnerDataType: Serialize + DeserializeOwned + Sync + Send;
 
     fn put(&self, key: &str, data: Self::InnerDataType) -> Result<(), Error>;
     fn get(&self, key: &str) -> Result<Self::InnerDataType, Error>;

@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
+use std::sync::Arc;
 
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -21,7 +22,7 @@ const REQUEST_TABLE: &str = "request";
 const ID_TABLE: &str = "controller-id";
 
 pub struct DB<M: DatabaseManager> {
-    manager: M,
+    _manager: Arc<M>,
     signature_db: Box<dyn DatabaseCollection<InnerDataType = HashSet<Signature>>>,
     subject_db: Box<dyn DatabaseCollection<InnerDataType = Subject>>,
     event_db: Box<dyn DatabaseCollection<InnerDataType = Event>>,
@@ -30,14 +31,14 @@ pub struct DB<M: DatabaseManager> {
 }
 
 impl<M: DatabaseManager> DB<M> {
-    pub fn new(manager: M) -> Self {
+    pub fn new(manager: Arc<M>) -> Self {
         let signature_db = manager.create_collection(SIGNATURE_TABLE);
         let subject_db = manager.create_collection(SUBJECT_TABLE);
         let event_db = manager.create_collection(EVENT_TABLE);
         let request_db = manager.create_collection(REQUEST_TABLE);
         let id_db = manager.create_collection(ID_TABLE);
         Self {
-            manager,
+            _manager: manager,
             signature_db,
             subject_db,
             event_db,
@@ -52,7 +53,7 @@ impl<M: DatabaseManager> DB<M> {
         events_by_subject.get(&sn.to_string())
     }
 
-    fn get_by_range<'a, V: Serialize + DeserializeOwned>(
+    fn get_by_range<'a, V: Serialize + DeserializeOwned + Sync + Send>(
         &'a self,
         from: Option<String>,
         quantity: isize,

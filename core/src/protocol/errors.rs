@@ -134,4 +134,6 @@ pub enum RequestManagerError {
     },
     #[error("Database corrupted {0}")]
     DatabaseCorrupted(String),
+    #[error("A database error has ocurred at request manager")]
+    DatabaseError(String)
 }

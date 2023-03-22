@@ -1,6 +1,6 @@
 use taple_core::{
-    DatabaseSettings, NetworkSettings, NodeSettings, TapleSettings,
     identifier::derive::{digest::DigestDerivator, KeyDerivator},
+    DatabaseSettings, MemoryManager, NetworkSettings, NodeSettings, TapleSettings,
 };
 
 use taple_core::Taple;
@@ -38,7 +38,7 @@ impl NodeBuilder {
         }
     }
 
-    pub fn build(mut self) -> Taple {
+    pub fn build(mut self) -> Taple<MemoryManager> {
         let settings = TapleSettings {
             network: NetworkSettings {
                 p2p_port: self.p2p_port.unwrap_or(40000u32),
@@ -62,7 +62,7 @@ impl NodeBuilder {
                 path: self.database_path.unwrap_or("".into()),
             },
         };
-        Taple::new(settings)
+        Taple::new(settings, MemoryManager::new())
     }
 
     #[allow(dead_code)]

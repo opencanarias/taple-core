@@ -46,5 +46,7 @@ pub enum ApiError {
     #[error("Vote not needed for request {0}")]
     VoteNotNeeded(String),
     #[error("Not enough permissions. {0}")]
-    NotEnoughPermissions(String)
+    NotEnoughPermissions(String),
+    #[error("A database error has ocurred at API module: {0}")]
+    DatabaseError(String),
 }

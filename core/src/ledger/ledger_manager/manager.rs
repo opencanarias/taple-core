@@ -1,6 +1,5 @@
 use async_trait::async_trait;
-use crate::commons::{
-    bd::db::DB,
+use crate::{commons::{
     channel::{AskData, ChannelData, MpscChannel, SenderEnd},
     identifier::{DigestIdentifier, KeyIdentifier},
     models::{
@@ -9,9 +8,9 @@ use crate::commons::{
         signature::Signature,
         state::{LedgerState, Subject, SubjectData},
     },
-};
+}, DatabaseManager, DB};
 use crate::governance::{GovernanceAPI, GovernanceMessage, GovernanceResponse};
-use std::collections::{HashMap, HashSet};
+use std::{collections::{HashMap, HashSet}};
 
 use super::super::errors::LedgerManagerError;
 
@@ -317,21 +316,21 @@ impl LedgerInterface for LedgerAPI {
     }
 }
 
-pub struct LedgerManager {
+pub struct LedgerManager<D: DatabaseManager> {
     command_input:
         MpscChannel<CommandManagerMessage, Result<CommandManagerResponse, LedgerManagerError>>,
-    inner_ledger_manager: Ledger,
+    inner_ledger_manager: Ledger<D>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
 }
 
-impl LedgerManager {
+impl<D: DatabaseManager> LedgerManager<D> {
     pub fn new(
         command_input: MpscChannel<
             CommandManagerMessage,
             Result<CommandManagerResponse, LedgerManagerError>,
         >,
         gobernance_channel: SenderEnd<GovernanceMessage, GovernanceResponse>,
-        repo_access: DB,
+        repo_access: DB<D>,
         id: KeyIdentifier,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
     ) -> Self {
