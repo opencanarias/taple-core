@@ -103,6 +103,7 @@ pub use commons::models::{event_content, event_request, signature};
 pub use commons::{
     config::{DatabaseSettings, NetworkSettings, NodeSettings, TapleSettings},
     identifier::derive::{digest::DigestDerivator, KeyDerivator},
+    models::timestamp::TimeStamp,
     models::notification::Notification,
 };
 pub use error::Error;
