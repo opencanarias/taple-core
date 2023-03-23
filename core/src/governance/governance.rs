@@ -154,7 +154,7 @@ impl<D: DatabaseManager> Governance<D> {
 }
 
 #[async_trait]
-pub trait GovernanceInterface {
+pub trait GovernanceInterface: Sync + Send {
     async fn check_quorum(
         &self,
         event: Event,

@@ -3,7 +3,7 @@ use crate::{commons, identifier::DigestIdentifier};
 use super::errors::CompilerErrorResponses;
 use base64::decode;
 mod compiler;
-mod manager;
+pub(crate) mod manager;
 
 #[derive(Clone, Debug)]
 pub enum CompilerMessages {

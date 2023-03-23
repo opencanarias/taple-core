@@ -1,5 +1,9 @@
+use std::sync::Arc;
+
 use wasmtime::Engine;
 
+use super::compiler::manager::TapleCompiler;
+use super::compiler::{CompilerMessages, CompilerResponses};
 use super::errors::EvaluatorError;
 use super::runner::ExecuteContract;
 use super::{EvaluatorMessage, EvaluatorResponse};
@@ -9,6 +13,7 @@ use crate::evaluator::errors::ExecutorErrorResponses;
 use crate::evaluator::runner::manager::TapleRunner;
 use crate::evaluator::AskForEvaluationResponse;
 use crate::event_request::{EventRequestType, RequestPayload};
+use crate::governance::GovernanceInterface;
 use crate::protocol::command_head_manager::self_signature_manager::SelfSignatureInterface;
 use crate::TapleSettings;
 use crate::{
@@ -28,7 +33,7 @@ impl EvaluatorAPI {
     }
 }
 
-pub struct EvaluatorManager<D: DatabaseManager> {
+pub struct EvaluatorManager<D: DatabaseManager + Send + 'static> {
     /// Communication channel for incoming petitions
     input_channel: MpscChannel<EvaluatorMessage, EvaluatorResponse>,
     /// Contract executioned
@@ -40,19 +45,32 @@ pub struct EvaluatorManager<D: DatabaseManager> {
 }
 
 impl<D: DatabaseManager> EvaluatorManager<D> {
-    pub fn new(
+    pub fn new<G: GovernanceInterface + Send + 'static>(
         input_channel: MpscChannel<EvaluatorMessage, EvaluatorResponse>,
-        gov_api: GovernanceAPI,
-        database: DB<D>,
+        database: Arc<D>,
         settings: &TapleSettings,
+        compiler_channel: MpscChannel<CompilerMessages, CompilerResponses>,
         keys: &KeyPair,
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+        gov_api: G,
+        contracts_path: String,
     ) -> Self {
         let engine = Engine::default();
+        let compiler = TapleCompiler::new(
+            compiler_channel,
+            DB::new(database.clone()),
+            gov_api,
+            contracts_path,
+            engine.clone(),
+            shutdown_sender.subscribe(),
+        );
+        tokio::spawn(async move {
+            compiler.start().await;
+        });
         Self {
             input_channel,
-            runner: TapleRunner::new(database, engine),
+            runner: TapleRunner::new(DB::new(database.clone()), engine),
             signature_manager: SelfSignatureManager::new(keys.clone(), settings),
             shutdown_receiver,
             shutdown_sender,
