@@ -180,7 +180,7 @@ fn extract_data_from_payload(payload: &RequestPayload) -> String {
 
 #[cfg(test)]
 mod test {
-    use std::{collections::HashSet, str::FromStr, sync::Arc, path::PathBuf};
+    use std::{collections::HashSet, path::PathBuf, str::FromStr, sync::Arc};
 
     use async_trait::async_trait;
     use json_patch::diff;
@@ -193,6 +193,7 @@ mod test {
         },
         evaluator::{
             compiler::{CompilerMessages, CompilerResponses, ContractType, NewGovVersion},
+            errors::{EvaluatorErrorResponses, ExecutorErrorResponses, CompilerErrorResponses},
             EvaluatorMessage, EvaluatorResponse,
         },
         event_content::Metadata,
@@ -240,6 +241,27 @@ mod test {
     }
 
     struct GovernanceMockup {}
+
+    fn get_file_wrong() -> String {
+        String::from(
+            r#"
+        #[no_mangle]
+        pub unsafe fn main_function(state_ptr: i32, event_ptr: i32) {
+        }
+      "#,
+        )
+    }
+
+    fn get_file_wrong2() -> String {
+        String::from(
+            r#"
+        #[no_mangle]
+        pub unsafe fn main_function(state_ptr: i32, event_ptr: i32) -> i32 {
+            4
+        }
+      "#,
+        )
+    }
 
     fn get_file() -> String {
         String::from(
@@ -376,9 +398,27 @@ mod test {
         }
         async fn get_contracts(
             &self,
-            _governance_id: DigestIdentifier,
+            governance_id: DigestIdentifier,
         ) -> Result<Vec<(String, ContractType)>, RequestError> {
-            Ok(vec![("test".to_owned(), ContractType::String(get_file()))])
+            if governance_id
+                == DigestIdentifier::from_str("Jg2Nuv5bNs4swQGcPQ1CXs9MtcfwMVoeQDR2Ea1YNYJw")
+                    .unwrap()
+            {
+                Ok(vec![(
+                    "test".to_owned(),
+                    ContractType::String(String::from("test")),
+                )])
+            } else if governance_id
+            == DigestIdentifier::from_str("Jg2Nuc5bNs4swQGcPQ1CXs9MtcfwMVoeQDR2Ea1YNYJw")
+                .unwrap() {
+                    Ok(vec![("test".to_owned(), ContractType::String(get_file_wrong()))])
+                } else if governance_id
+                == DigestIdentifier::from_str("Jg2Nuc5bNs4swQGcPQ2CXs9MtcfwMVoeQDR2Ea2YNYJw")
+                    .unwrap() {
+                        Ok(vec![("test".to_owned(), ContractType::String(get_file_wrong2()))])
+                    } else {
+                Ok(vec![("test".to_owned(), ContractType::String(get_file()))])
+            }
         }
     }
 
@@ -433,10 +473,7 @@ mod test {
         event_request
     }
 
-    fn generate_json_patch(
-        prev_state: &str,
-        new_state: &str,
-    ) -> String {
+    fn generate_json_patch(prev_state: &str, new_state: &str) -> String {
         let prev_state = serde_json::to_value(prev_state).unwrap();
         let new_state = serde_json::to_value(new_state).unwrap();
         let patch = diff(&prev_state, &new_state);
@@ -471,7 +508,8 @@ mod test {
                     .unwrap(),
                     governance_version: 0,
                 }))
-                .await.unwrap();
+                .await
+                .unwrap();
 
             let response = sx_evaluator
                 .ask(EvaluatorMessage::AskForEvaluation(
@@ -499,10 +537,7 @@ mod test {
                 three: 13,
             };
             let new_state_json = &serde_json::to_string(&new_state).unwrap();
-            let hash = DigestIdentifier::from_serializable_borsh(
-                new_state_json,
-            )
-            .unwrap();
+            let hash = DigestIdentifier::from_serializable_borsh(new_state_json).unwrap();
             assert_eq!(hash, result.hash_new_state);
             let patch = generate_json_patch(&initial_state_json, &new_state_json);
             assert_eq!(patch, result.json_patch);
@@ -510,6 +545,336 @@ mod test {
             let own_identifier = signature_manager.get_own_identifier();
             assert_eq!(result.signature.content.signer, own_identifier);
             handler.abort();
+        });
+    }
+
+    #[test]
+    fn contract_execution_fail() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async move {
+            let (evaluator, sx_evaluator, sx_compiler, signature_manager) = build_module();
+            let initial_state = Data {
+                one: 10,
+                two: 11,
+                three: 13,
+            };
+            let initial_state_json = serde_json::to_string(&initial_state).unwrap();
+            let event = String::from("hola");
+
+            let handler = tokio::spawn(async move {
+                evaluator.start().await;
+            });
+
+            sx_compiler
+                .ask(CompilerMessages::NewGovVersion(NewGovVersion {
+                    governance_id: DigestIdentifier::from_str(
+                        "JGSPR6FL-vE7iZxWMd17o09qn7NeTqlcImDVWmijXczw",
+                    )
+                    .unwrap(),
+                    governance_version: 0,
+                }))
+                .await
+                .unwrap();
+
+            let response = sx_evaluator
+                .ask(EvaluatorMessage::AskForEvaluation(
+                    crate::evaluator::AskForEvaluation {
+                        governance_id: DigestIdentifier::from_str(
+                            "JGSPR6FL-vE7iZxWMd17o09qn7NeTqlcImDVWmijXczw",
+                        )
+                        .unwrap(),
+                        schema_id: "test".into(),
+                        state: initial_state_json.clone(),
+                        invokation: create_event_request(
+                            serde_json::to_string(&event).unwrap(),
+                            &signature_manager,
+                        ),
+                    },
+                ))
+                .await
+                .unwrap();
+            let EvaluatorResponse::AskForEvaluation(result) = response;
+            assert!(result.is_err());
+            println!("{:?}", result);
+            let EvaluatorErrorResponses::ContractExecutionError(ExecutorErrorResponses::ContractExecutionFailed) = result.unwrap_err() else {
+                panic!("a");
+            };
+            handler.abort();
+        });
+    }
+
+    #[test]
+    fn contract_execution_fail2() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async move {
+            let (evaluator, sx_evaluator, sx_compiler, signature_manager) = build_module();
+            let initial_state = String::from("hola");
+            let initial_state_json = serde_json::to_string(&initial_state).unwrap();
+            let event = EventType::ModTwo {
+                data: 100,
+                chunk: vec![123, 45, 20],
+            };
+
+            let handler = tokio::spawn(async move {
+                evaluator.start().await;
+            });
+
+            sx_compiler
+                .ask(CompilerMessages::NewGovVersion(NewGovVersion {
+                    governance_id: DigestIdentifier::from_str(
+                        "JGSPR6FL-vE7iZxWMd17o09qn7NeTqlcImDVWmijXczw",
+                    )
+                    .unwrap(),
+                    governance_version: 0,
+                }))
+                .await
+                .unwrap();
+
+            let response = sx_evaluator
+                .ask(EvaluatorMessage::AskForEvaluation(
+                    crate::evaluator::AskForEvaluation {
+                        governance_id: DigestIdentifier::from_str(
+                            "JGSPR6FL-vE7iZxWMd17o09qn7NeTqlcImDVWmijXczw",
+                        )
+                        .unwrap(),
+                        schema_id: "test".into(),
+                        state: initial_state_json.clone(),
+                        invokation: create_event_request(
+                            serde_json::to_string(&event).unwrap(),
+                            &signature_manager,
+                        ),
+                    },
+                ))
+                .await
+                .unwrap();
+            let EvaluatorResponse::AskForEvaluation(result) = response;
+            assert!(result.is_err());
+            println!("{:?}", result);
+            let EvaluatorErrorResponses::ContractExecutionError(ExecutorErrorResponses::ContractExecutionFailed) = result.unwrap_err() else {
+                panic!("a");
+            };
+            handler.abort();
+        });
+    }
+
+    #[test]
+    fn contract_execution_wrong_gov_id() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async move {
+            let (evaluator, sx_evaluator, sx_compiler, signature_manager) = build_module();
+            let initial_state = Data {
+                one: 10,
+                two: 11,
+                three: 13,
+            };
+            let initial_state_json = serde_json::to_string(&initial_state).unwrap();
+            let event = EventType::ModTwo {
+                data: 100,
+                chunk: vec![123, 45, 20],
+            };
+
+            let handler = tokio::spawn(async move {
+                evaluator.start().await;
+            });
+
+            sx_compiler
+                .ask(CompilerMessages::NewGovVersion(NewGovVersion {
+                    governance_id: DigestIdentifier::from_str(
+                        "JGSPR6FL-vE7iZxWMd17o09qn7NeTqlcImDVWmijXczw",
+                    )
+                    .unwrap(),
+                    governance_version: 0,
+                }))
+                .await
+                .unwrap();
+
+            let response = sx_evaluator
+                .ask(EvaluatorMessage::AskForEvaluation(
+                    crate::evaluator::AskForEvaluation {
+                        governance_id: DigestIdentifier::from_str(
+                            "Jg2Nuv5bNs4swQGcPQ1CXs9MtcfwMVoeQDR2Ea1YNYJw",
+                        )
+                        .unwrap(),
+                        schema_id: "teste".into(),
+                        state: initial_state_json.clone(),
+                        invokation: create_event_request(
+                            serde_json::to_string(&event).unwrap(),
+                            &signature_manager,
+                        ),
+                    },
+                ))
+                .await;
+            let result = response.unwrap();
+            let EvaluatorResponse::AskForEvaluation(result) = result else {
+                panic!("a");
+            };
+            assert!(result.is_err());
+            let EvaluatorErrorResponses::ContractExecutionError(ExecutorErrorResponses::ContractNotFound(_,_)) = result.unwrap_err() else {
+                panic!("a");
+            };
+            handler.abort();
+        });
+    }
+
+    #[test]
+    fn contract_execution_wrong_link() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async move {
+            let (evaluator, sx_evaluator, sx_compiler, signature_manager) = build_module();
+            let initial_state = Data {
+                one: 10,
+                two: 11,
+                three: 13,
+            };
+            let initial_state_json = serde_json::to_string(&initial_state).unwrap();
+            let event = EventType::ModTwo {
+                data: 100,
+                chunk: vec![123, 45, 20],
+            };
+
+            let handler = tokio::spawn(async move {
+                evaluator.start().await;
+            });
+
+            let response = sx_compiler
+                .ask(CompilerMessages::NewGovVersion(NewGovVersion {
+                    governance_id: DigestIdentifier::from_str(
+                        "Jg2Nuc5bNs4swQGcPQ2CXs9MtcfwMVoeQDR2Ea2YNYJw",
+                    )
+                    .unwrap(),
+                    governance_version: 0,
+                }))
+                .await
+                .unwrap();
+            println!("{:?}", response);
+            let response = sx_evaluator
+                .ask(EvaluatorMessage::AskForEvaluation(
+                    crate::evaluator::AskForEvaluation {
+                        governance_id: DigestIdentifier::from_str(
+                            "Jg2Nuc5bNs4swQGcPQ2CXs9MtcfwMVoeQDR2Ea2YNYJw",
+                        )
+                        .unwrap(),
+                        schema_id: "test".into(),
+                        state: initial_state_json.clone(),
+                        invokation: create_event_request(
+                            serde_json::to_string(&event).unwrap(),
+                            &signature_manager,
+                        ),
+                    },
+                ))
+                .await;
+            let result = response.unwrap();
+            let EvaluatorResponse::AskForEvaluation(result) = result else {
+                panic!("a");
+            };
+            assert!(result.is_err());
+            println!("{:?}", result);
+            let EvaluatorErrorResponses::ContractExecutionError(ExecutorErrorResponses::FunctionLinkingFailed(_)) = result.unwrap_err() else {
+                panic!("a");
+            };
+            handler.abort();
+        });
+    }
+
+    #[test]
+    fn contract_execution_wrong_entrypoint() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async move {
+            let (evaluator, sx_evaluator, sx_compiler, signature_manager) = build_module();
+            let initial_state = Data {
+                one: 10,
+                two: 11,
+                three: 13,
+            };
+            let initial_state_json = serde_json::to_string(&initial_state).unwrap();
+            let event = EventType::ModTwo {
+                data: 100,
+                chunk: vec![123, 45, 20],
+            };
+
+            let handler = tokio::spawn(async move {
+                evaluator.start().await;
+            });
+
+            let response = sx_compiler
+                .ask(CompilerMessages::NewGovVersion(NewGovVersion {
+                    governance_id: DigestIdentifier::from_str(
+                        "Jg2Nuc5bNs4swQGcPQ1CXs9MtcfwMVoeQDR2Ea1YNYJw",
+                    )
+                    .unwrap(),
+                    governance_version: 0,
+                }))
+                .await
+                .unwrap();
+            println!("{:?}", response);
+            let response = sx_evaluator
+                .ask(EvaluatorMessage::AskForEvaluation(
+                    crate::evaluator::AskForEvaluation {
+                        governance_id: DigestIdentifier::from_str(
+                            "Jg2Nuc5bNs4swQGcPQ1CXs9MtcfwMVoeQDR2Ea1YNYJw",
+                        )
+                        .unwrap(),
+                        schema_id: "test".into(),
+                        state: initial_state_json.clone(),
+                        invokation: create_event_request(
+                            serde_json::to_string(&event).unwrap(),
+                            &signature_manager,
+                        ),
+                    },
+                ))
+                .await;
+            let result = response.unwrap();
+            let EvaluatorResponse::AskForEvaluation(result) = result else {
+                panic!("a");
+            };
+            assert!(result.is_err());
+            println!("{:?}", result);
+            let EvaluatorErrorResponses::ContractExecutionError(ExecutorErrorResponses::ContractEntryPointNotFound) = result.unwrap_err() else {
+                panic!("a");
+            };
+            handler.abort();
+        });
+    }
+
+    #[test]
+    fn compilation_error() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async move {
+            let (evaluator, sx_evaluator, sx_compiler, signature_manager) = build_module();
+            let initial_state = Data {
+                one: 10,
+                two: 11,
+                three: 13,
+            };
+            let initial_state_json = serde_json::to_string(&initial_state).unwrap();
+            let event = EventType::ModTwo {
+                data: 100,
+                chunk: vec![123, 45, 20],
+            };
+
+            let handler = tokio::spawn(async move {
+                evaluator.start().await;
+            });
+
+            let response = sx_compiler
+                .ask(CompilerMessages::NewGovVersion(NewGovVersion {
+                    governance_id: DigestIdentifier::from_str(
+                        "Jg2Nuv5bNs4swQGcPQ1CXs9MtcfwMVoeQDR2Ea1YNYJw",
+                    )
+                    .unwrap(),
+                    governance_version: 10,
+                }))
+                .await
+                .unwrap();
+            println!("{:?}", response);
+            let CompilerResponses::CompileContract(result) = response else {
+                panic!("a");
+            };
+            println!("{:?}", result);
+            assert!(result.is_err());
+            let CompilerErrorResponses::CargoExecError = result.unwrap_err() else {
+                panic!("a");
+            };
         });
     }
 }
