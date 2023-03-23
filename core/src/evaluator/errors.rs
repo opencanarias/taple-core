@@ -9,13 +9,21 @@ pub enum EvaluatorError {
     #[error("Can't accept TELL messages over MSPC channel")]
     TellNotAvailable,
     #[error("Channel not available")]
-    ChannelNotAvailable
+    ChannelNotAvailable,
+    #[error("Create Request not allowed")]
+    CreateRequestNotAllowed,
+    #[error("JSON Deserialization failed")]
+    JSONDeserializationFailed,
+    #[error("Signature generation failed")]
+    SignatureGenerationFailed,    
 }
 
 #[derive(Error, Debug, Clone)]
 pub enum EvaluatorErrorResponses {
-    #[error("A database error has ocurred at main component {0}")]
-    DatabaseError(String)
+    #[error("Create Request not allowed")]
+    CreateRequestNotAllowed,
+    #[error("Contract execution error: \"{0}\"")]
+    ContractExecutionError(ExecutorErrorResponses)
 }
 
 #[derive(Error, Debug, Clone)]
@@ -35,7 +43,9 @@ pub enum ExecutorErrorResponses {
     #[error("Deserialization of state failed")]
     StateJSONDeserializationFailed,
     #[error("Deserialization of JSON PATCH failed")]
-    JSONPATCHDeserializationFailed
+    JSONPATCHDeserializationFailed,
+    #[error("State hash generation failed")]
+    StateHashGenerationFailed
 }
 
 #[derive(Error, Debug)]

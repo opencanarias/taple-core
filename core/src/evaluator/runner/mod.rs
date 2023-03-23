@@ -4,7 +4,7 @@ use super::errors::ExecutorErrorResponses;
 
 mod context;
 mod executor;
-mod manager;
+pub mod manager;
 
 #[derive(Clone, Debug)]
 pub enum RunnerMessages {
@@ -14,10 +14,10 @@ pub enum RunnerMessages {
 
 #[derive(Clone, Debug)]
 pub struct ExecuteContract {
-    governance_id: DigestIdentifier,
-    schema: String,
-    state: String,
-    event: String,
+    pub(crate) governance_id: DigestIdentifier,
+    pub(crate) schema: String,
+    pub(crate) state: String,
+    pub(crate) event: String,
 }
 
 #[derive(Clone, Debug)]
@@ -28,5 +28,6 @@ pub enum RunnerResponses {
 
 #[derive(Clone, Debug)]
 pub struct ExecuteContractResponse {
-    json_patch: String,
+    pub json_patch: String,
+    pub hash_new_state: DigestIdentifier
 }

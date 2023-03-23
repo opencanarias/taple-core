@@ -8,9 +8,9 @@ pub struct ContractExecutor {
 }
 
 impl ContractExecutor {
-    pub fn new() -> Self {
+    pub fn new(engine: Engine) -> Self {
         Self {
-            engine: Engine::default(),
+            engine,
         }
     }
 

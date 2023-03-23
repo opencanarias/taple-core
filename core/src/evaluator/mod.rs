@@ -27,8 +27,8 @@ pub struct AskForEvaluation {
 
 #[derive(Clone, Debug)]
 pub struct AskForEvaluationResponse {
-    governance_version: u64,
-    hash_new_state: String,
-    json_patch: String,
-    signature: Signature,
+    pub governance_version: u64,
+    pub hash_new_state: DigestIdentifier,
+    pub json_patch: String,
+    pub signature: Signature,
 }
