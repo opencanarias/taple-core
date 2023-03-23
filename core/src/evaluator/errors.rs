@@ -74,4 +74,6 @@ pub enum CompilerErrorResponses {
     AddContractFail,
     #[error("Governance Error")]
     GovernanceError(#[from] RequestError),
+    #[error("Can't create folder at /tmp")]
+    TempFolderCreationFailed
 }

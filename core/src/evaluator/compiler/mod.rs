@@ -61,5 +61,5 @@ impl ContractType {
 #[derive(Clone, Debug)]
 pub struct NewGovVersion {
     pub governance_id: DigestIdentifier,
-    governance_version: u64,
+    pub governance_version: u64,
 }

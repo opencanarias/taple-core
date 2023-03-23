@@ -55,6 +55,7 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send> TapleCompiler<D, G> {
                                         crate::evaluator::errors::CompilerErrorResponses::WriteFileError |
                                         crate::evaluator::errors::CompilerErrorResponses::CargoExecError |
                                         crate::evaluator::errors::CompilerErrorResponses::GarbageCollectorFail |
+                                        crate::evaluator::errors::CompilerErrorResponses::TempFolderCreationFailed |
                                         crate::evaluator::errors::CompilerErrorResponses::AddContractFail => todo!(),
                                         crate::evaluator::errors::CompilerErrorResponses::GovernanceError(_) => return,
                                     },

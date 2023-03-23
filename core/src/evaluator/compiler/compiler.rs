@@ -6,6 +6,7 @@ use crate::{
     DatabaseManager,
 };
 use async_std::fs;
+use std::path::Path;
 use std::process::Command;
 use wasm_gc::garbage_collect_file;
 use wasmtime::Engine;
@@ -113,6 +114,9 @@ impl<D: DatabaseManager, G: GovernanceInterface> Compiler<D, G> {
         governance_id: &str,
         schema_id: &str,
     ) -> Result<(), CompilerErrorResponses> {
+        let a = format!("{}/src/lib.rs", self.contracts_path);
+        let path = Path::new(&a);
+        println!("PATH {}", path.to_str().unwrap());
         fs::write(format!("{}/src/lib.rs", self.contracts_path), contract)
             .await
             .map_err(|_| CompilerErrorResponses::WriteFileError)?;
@@ -129,19 +133,22 @@ impl<D: DatabaseManager, G: GovernanceInterface> Compiler<D, G> {
             // No muestra stdout. Genera proceso hijo y espera
             .map_err(|_| CompilerErrorResponses::CargoExecError)?;
         if !status.status.success() {
+            println!("ENTRA EN IF");
+            println!("{}", status.status);
             return Err(CompilerErrorResponses::CargoExecError);
         }
         // Utilidad para optimizar el Wasm resultante
         // Es una API, así que requiere de Wasm-gc en el sistema
+
+        let a = std::fs::create_dir_all(format!("/tmp/taple_contracts/{}/{}", governance_id, schema_id));
+        println!("{:?}", a);
+
         garbage_collect_file(
             format!(
                 "{}/target/wasm32-unknown-unknown/release/contract.wasm",
                 self.contracts_path
             ),
-            format!(
-                "/tmp/taple_contracts/{}/{}/contrac.wasm",
-                governance_id, schema_id
-            ),
+            format!("/tmp/taple_contracts/{}/{}/contract.wasm", governance_id, schema_id)
         )
         .map_err(|_| CompilerErrorResponses::GarbageCollectorFail)?;
         Ok(())
@@ -154,13 +161,15 @@ impl<D: DatabaseManager, G: GovernanceInterface> Compiler<D, G> {
     ) -> Result<Vec<u8>, CompilerErrorResponses> {
         // AOT COMPILATION
         let file = fs::read(format!(
-            "/tmp/taple_contracts/{}/{}/contrac.wasm",
+            "/tmp/taple_contracts/{}/{}/contract.wasm",
             governance_id, schema_id
         ))
         .await
         .map_err(|_| CompilerErrorResponses::AddContractFail)?;
-        self.engine
+        let a =self.engine
             .precompile_module(&file)
             .map_err(|_| CompilerErrorResponses::AddContractFail)
+        println!("SALE");
+        a
     }
 }
