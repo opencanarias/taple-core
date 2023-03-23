@@ -57,6 +57,7 @@ impl NodeBuilder {
                 timeout: self.timeout.take().unwrap_or(3000u32),
                 passvotation: self.pass_votation.unwrap_or(0) as u8,
                 dev_mode: self.dev_mode.take().unwrap_or(false),
+                smartcontracts_directory: "../../../contracts".into(),
             },
             database: DatabaseSettings {
                 path: self.database_path.unwrap_or("".into()),

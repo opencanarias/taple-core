@@ -30,11 +30,11 @@ impl<D: DatabaseManager> TapleCompiler<D> {
         database: DB<D>,
         gov_api: GovernanceAPI,
         engine: Engine,
-        path_to_lib: String,
+        contracts_path: String,
     ) -> Self {
         Self {
             input_channel,
-            inner_compiler: Compiler::<D>::new(database, gov_api, engine),
+            inner_compiler: Compiler::<D>::new(database, gov_api, engine, contracts_path),
         }
     }
 
@@ -86,8 +86,8 @@ impl<D: DatabaseManager> TapleCompiler<D> {
         };
 
         let response = match data {
-            CompilerMessages::CompileContracts(data) => {
-                CompilerResponses::CompileContract(self.inner_compiler.compile(data).await)
+            CompilerMessages::NewGovVersion(data) => {
+                CompilerResponses::CompileContract(self.inner_compiler.update_contracts(data).await)
             }
         };
         let Ok(_) = sender.unwrap().send(response) else {
