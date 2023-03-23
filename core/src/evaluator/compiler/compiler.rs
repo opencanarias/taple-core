@@ -12,17 +12,17 @@ use wasmtime::Engine;
 
 use super::NewGovVersion;
 
-pub struct Compiler<D: DatabaseManager> {
+pub struct Compiler<D: DatabaseManager, G: GovernanceInterface> {
     database: DB<D>,
-    gov_api: GovernanceAPI,
+    gov_api: G,
     engine: Engine,
     contracts_path: String,
 }
 
-impl<D: DatabaseManager> Compiler<D> {
+impl<D: DatabaseManager, G: GovernanceInterface> Compiler<D, G> {
     pub fn new(
         database: DB<D>,
-        gov_api: GovernanceAPI,
+        gov_api: G,
         engine: Engine,
         contracts_path: String,
     ) -> Self {

@@ -4,7 +4,7 @@ use crate::{
     commons::channel::{ChannelData, MpscChannel},
     database::DB,
     evaluator::errors::{CompilerError, EvaluatorError, ExecutorErrorResponses},
-    governance::GovernanceAPI,
+    governance::{GovernanceAPI, GovernanceInterface},
     identifier::Derivable,
     DatabaseManager,
 };
@@ -13,9 +13,9 @@ use crate::database::Error as DbError;
 
 use super::{compiler::Compiler, CompilerMessages, CompilerResponses};
 
-pub struct TapleCompiler<D: DatabaseManager> {
+pub struct TapleCompiler<D: DatabaseManager, G: GovernanceInterface> {
     input_channel: MpscChannel<CompilerMessages, CompilerResponses>,
-    inner_compiler: Compiler<D>,
+    inner_compiler: Compiler<D, G>,
 }
 
 #[derive(Clone, Debug)]
@@ -24,17 +24,17 @@ enum CompilerCodes {
     Ok,
 }
 
-impl<D: DatabaseManager> TapleCompiler<D> {
+impl<D: DatabaseManager, G: GovernanceInterface> TapleCompiler<D, G> {
     pub fn new(
         input_channel: MpscChannel<CompilerMessages, CompilerResponses>,
         database: DB<D>,
-        gov_api: GovernanceAPI,
+        gov_api: G,
         engine: Engine,
         contracts_path: String,
     ) -> Self {
         Self {
             input_channel,
-            inner_compiler: Compiler::<D>::new(database, gov_api, engine, contracts_path),
+            inner_compiler: Compiler::<D, G>::new(database, gov_api, engine, contracts_path),
         }
     }
 
