@@ -445,10 +445,6 @@ mod test {
 
     #[test]
     fn contract_execution() {
-        // fn get_current_working_dir() -> std::io::Result<PathBuf> {
-        //     std::env::current_dir()
-        // }
-        // println!("{:?}", get_current_working_dir().unwrap());
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async move {
             let (evaluator, sx_evaluator, sx_compiler, signature_manager) = build_module();
@@ -495,7 +491,6 @@ mod test {
                 .await
                 .unwrap();
             let EvaluatorResponse::AskForEvaluation(result) = response;
-            println!("{}", result.as_ref().unwrap_err());
             assert!(result.is_ok());
             let result = result.unwrap();
             let new_state = Data {
@@ -515,7 +510,6 @@ mod test {
             let own_identifier = signature_manager.get_own_identifier();
             assert_eq!(result.signature.content.signer, own_identifier);
             handler.abort();
-            handler.await.unwrap();
         });
     }
 }

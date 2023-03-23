@@ -21,12 +21,7 @@ pub struct Compiler<D: DatabaseManager, G: GovernanceInterface> {
 }
 
 impl<D: DatabaseManager, G: GovernanceInterface> Compiler<D, G> {
-    pub fn new(
-        database: DB<D>,
-        gov_api: G,
-        engine: Engine,
-        contracts_path: String,
-    ) -> Self {
+    pub fn new(database: DB<D>, gov_api: G, engine: Engine, contracts_path: String) -> Self {
         Self {
             database,
             gov_api,
@@ -116,7 +111,6 @@ impl<D: DatabaseManager, G: GovernanceInterface> Compiler<D, G> {
     ) -> Result<(), CompilerErrorResponses> {
         let a = format!("{}/src/lib.rs", self.contracts_path);
         let path = Path::new(&a);
-        println!("PATH {}", path.to_str().unwrap());
         fs::write(format!("{}/src/lib.rs", self.contracts_path), contract)
             .await
             .map_err(|_| CompilerErrorResponses::WriteFileError)?;
@@ -133,22 +127,26 @@ impl<D: DatabaseManager, G: GovernanceInterface> Compiler<D, G> {
             // No muestra stdout. Genera proceso hijo y espera
             .map_err(|_| CompilerErrorResponses::CargoExecError)?;
         if !status.status.success() {
-            println!("ENTRA EN IF");
-            println!("{}", status.status);
             return Err(CompilerErrorResponses::CargoExecError);
         }
         // Utilidad para optimizar el Wasm resultante
         // Es una API, así que requiere de Wasm-gc en el sistema
 
-        let a = std::fs::create_dir_all(format!("/tmp/taple_contracts/{}/{}", governance_id, schema_id));
-        println!("{:?}", a);
+        std::fs::create_dir_all(format!(
+            "/tmp/taple_contracts/{}/{}",
+            governance_id, schema_id
+        ))
+        .map_err(|_| CompilerErrorResponses::TempFolderCreationFailed)?;
 
         garbage_collect_file(
             format!(
                 "{}/target/wasm32-unknown-unknown/release/contract.wasm",
                 self.contracts_path
             ),
-            format!("/tmp/taple_contracts/{}/{}/contract.wasm", governance_id, schema_id)
+            format!(
+                "/tmp/taple_contracts/{}/{}/contract.wasm",
+                governance_id, schema_id
+            ),
         )
         .map_err(|_| CompilerErrorResponses::GarbageCollectorFail)?;
         Ok(())
@@ -166,10 +164,8 @@ impl<D: DatabaseManager, G: GovernanceInterface> Compiler<D, G> {
         ))
         .await
         .map_err(|_| CompilerErrorResponses::AddContractFail)?;
-        let a =self.engine
+        self.engine
             .precompile_module(&file)
             .map_err(|_| CompilerErrorResponses::AddContractFail)
-        println!("SALE");
-        a
     }
 }
