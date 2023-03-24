@@ -7,7 +7,6 @@ use super::compiler::{CompilerMessages, CompilerResponses};
 use super::errors::EvaluatorError;
 use super::runner::ExecuteContract;
 use super::{EvaluatorMessage, EvaluatorResponse};
-use crate::commons::crypto::KeyPair;
 use crate::database::{DatabaseManager, DB};
 use crate::evaluator::errors::ExecutorErrorResponses;
 use crate::evaluator::runner::manager::TapleRunner;
@@ -15,10 +14,8 @@ use crate::evaluator::AskForEvaluationResponse;
 use crate::event_request::{EventRequestType, RequestPayload};
 use crate::governance::GovernanceInterface;
 use crate::protocol::command_head_manager::self_signature_manager::SelfSignatureInterface;
-use crate::TapleSettings;
 use crate::{
     commons::channel::{ChannelData, MpscChannel, SenderEnd},
-    governance::GovernanceAPI,
     protocol::command_head_manager::self_signature_manager::SelfSignatureManager,
 };
 
@@ -36,10 +33,9 @@ impl EvaluatorAPI {
 pub struct EvaluatorManager<D: DatabaseManager + Send + 'static> {
     /// Communication channel for incoming petitions
     input_channel: MpscChannel<EvaluatorMessage, EvaluatorResponse>,
-    /// Contract executioned
+    /// Contract executioner
     runner: TapleRunner<D>,
     signature_manager: SelfSignatureManager,
-    // TODO: Añadir módulo compilación
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
 }
@@ -180,7 +176,7 @@ fn extract_data_from_payload(payload: &RequestPayload) -> String {
 
 #[cfg(test)]
 mod test {
-    use std::{collections::HashSet, path::PathBuf, str::FromStr, sync::Arc};
+    use std::{collections::HashSet, str::FromStr, sync::Arc};
 
     use async_trait::async_trait;
     use json_patch::diff;
@@ -595,9 +591,8 @@ mod test {
                 .unwrap();
             let EvaluatorResponse::AskForEvaluation(result) = response;
             assert!(result.is_err());
-            println!("{:?}", result);
             let EvaluatorErrorResponses::ContractExecutionError(ExecutorErrorResponses::ContractExecutionFailed) = result.unwrap_err() else {
-                panic!("a");
+                panic!("Invalid response received");
             };
             handler.abort();
         });
@@ -651,7 +646,7 @@ mod test {
             assert!(result.is_err());
             println!("{:?}", result);
             let EvaluatorErrorResponses::ContractExecutionError(ExecutorErrorResponses::ContractExecutionFailed) = result.unwrap_err() else {
-                panic!("a");
+                panic!("Invalid response received");
             };
             handler.abort();
         });
@@ -706,18 +701,18 @@ mod test {
                 .await;
             let result = response.unwrap();
             let EvaluatorResponse::AskForEvaluation(result) = result else {
-                panic!("a");
+                panic!("Invalid response received");
             };
             assert!(result.is_err());
             let EvaluatorErrorResponses::ContractExecutionError(ExecutorErrorResponses::ContractNotFound(_,_)) = result.unwrap_err() else {
-                panic!("a");
+                panic!("Invalid response received");
             };
             handler.abort();
         });
     }
 
     #[test]
-    fn contract_execution_wrong_link() {
+    fn contract_compilation_no_sdk() {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async move {
             let (evaluator, sx_evaluator, sx_compiler, signature_manager) = build_module();
@@ -746,33 +741,11 @@ mod test {
                 }))
                 .await
                 .unwrap();
-            println!("{:?}", response);
-            let response = sx_evaluator
-                .ask(EvaluatorMessage::AskForEvaluation(
-                    crate::evaluator::AskForEvaluation {
-                        governance_id: DigestIdentifier::from_str(
-                            "Jg2Nuc5bNs4swQGcPQ2CXs9MtcfwMVoeQDR2Ea2YNYJw",
-                        )
-                        .unwrap(),
-                        schema_id: "test".into(),
-                        state: initial_state_json.clone(),
-                        invokation: create_event_request(
-                            serde_json::to_string(&event).unwrap(),
-                            &signature_manager,
-                        ),
-                    },
-                ))
-                .await;
-            let result = response.unwrap();
-            let EvaluatorResponse::AskForEvaluation(result) = result else {
-                panic!("a");
+            if let CompilerResponses::CompileContract(Err(CompilerErrorResponses::NoSDKFound)) = response {
+                handler.abort();
+            } else {
+                assert!(false)
             };
-            assert!(result.is_err());
-            println!("{:?}", result);
-            let EvaluatorErrorResponses::ContractExecutionError(ExecutorErrorResponses::FunctionLinkingFailed(_)) = result.unwrap_err() else {
-                panic!("a");
-            };
-            handler.abort();
         });
     }
 
@@ -825,12 +798,12 @@ mod test {
                 .await;
             let result = response.unwrap();
             let EvaluatorResponse::AskForEvaluation(result) = result else {
-                panic!("a");
+                panic!("Invalid response received");
             };
             assert!(result.is_err());
             println!("{:?}", result);
             let EvaluatorErrorResponses::ContractExecutionError(ExecutorErrorResponses::ContractEntryPointNotFound) = result.unwrap_err() else {
-                panic!("a");
+                panic!("Invalid response received");
             };
             handler.abort();
         });
@@ -840,21 +813,7 @@ mod test {
     fn compilation_error() {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async move {
-            let (evaluator, sx_evaluator, sx_compiler, signature_manager) = build_module();
-            let initial_state = Data {
-                one: 10,
-                two: 11,
-                three: 13,
-            };
-            let initial_state_json = serde_json::to_string(&initial_state).unwrap();
-            let event = EventType::ModTwo {
-                data: 100,
-                chunk: vec![123, 45, 20],
-            };
-
-            let handler = tokio::spawn(async move {
-                evaluator.start().await;
-            });
+            let (_evaluator, _sx_evaluator, sx_compiler, signature_manager) = build_module();
 
             let response = sx_compiler
                 .ask(CompilerMessages::NewGovVersion(NewGovVersion {
@@ -866,14 +825,12 @@ mod test {
                 }))
                 .await
                 .unwrap();
-            println!("{:?}", response);
             let CompilerResponses::CompileContract(result) = response else {
-                panic!("a");
+                panic!("Invalid response received");
             };
-            println!("{:?}", result);
             assert!(result.is_err());
             let CompilerErrorResponses::CargoExecError = result.unwrap_err() else {
-                panic!("a");
+                panic!("Invalid response received");
             };
         });
     }

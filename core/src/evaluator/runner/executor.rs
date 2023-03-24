@@ -45,7 +45,7 @@ impl ContractExecutor {
             .call(&mut store, (state_ptr, event_ptr))
             .map_err(|_| ExecutorErrorResponses::ContractExecutionFailed)?;
         // Obtención "NEW STATE" almacenado en el contexto
-        Ok(self.get_new_state(&store, result_ptr))
+        Ok(self.get_new_state(&store, result_ptr)?)
     }
 
     fn generate_context(&self, state: String, event: String) -> (MemoryManager, u32, u32) {
@@ -55,9 +55,9 @@ impl ContractExecutor {
         (context, state_ptr as u32, event_ptr as u32)
     }
 
-    fn get_new_state(&self, store: &Store<MemoryManager>, pointer: u32) -> String {
-        let new_state_bytes = store.data().read_data(pointer as usize);
-        String::from_utf8(new_state_bytes.to_vec()).expect("No UTF8")
+    fn get_new_state(&self, store: &Store<MemoryManager>, pointer: u32) -> Result<String, ExecutorErrorResponses> {
+        let new_state_bytes = store.data().read_data(pointer as usize)?;
+        Ok(String::from_utf8(new_state_bytes.to_vec()).expect("No UTF8"))
     }
 
     fn generate_linker(&self, engine: &Engine) -> Result<Linker<MemoryManager>, ExecutorErrorResponses> {

@@ -1,15 +1,16 @@
 use crate::database::Error as DbError;
-use crate::governance::{GovernanceAPI, GovernanceInterface};
+use crate::governance::{GovernanceInterface};
 use crate::identifier::Derivable;
 use crate::{
-    database::DB, evaluator::errors::CompilerErrorResponses, identifier::DigestIdentifier,
+    database::DB, evaluator::errors::CompilerErrorResponses,
     DatabaseManager,
 };
 use async_std::fs;
+use std::collections::HashSet;
 use std::path::Path;
 use std::process::Command;
 use wasm_gc::garbage_collect_file;
-use wasmtime::Engine;
+use wasmtime::{Engine, ExternType};
 
 use super::NewGovVersion;
 
@@ -18,15 +19,18 @@ pub struct Compiler<D: DatabaseManager, G: GovernanceInterface> {
     gov_api: G,
     engine: Engine,
     contracts_path: String,
+    available_imports_set: HashSet<String>
 }
 
 impl<D: DatabaseManager, G: GovernanceInterface> Compiler<D, G> {
     pub fn new(database: DB<D>, gov_api: G, engine: Engine, contracts_path: String) -> Self {
+        let available_imports_set = get_sdk_functions_identifier();
         Self {
             database,
             gov_api,
             engine,
             contracts_path,
+            available_imports_set
         }
     }
 
@@ -164,8 +168,41 @@ impl<D: DatabaseManager, G: GovernanceInterface> Compiler<D, G> {
         ))
         .await
         .map_err(|_| CompilerErrorResponses::AddContractFail)?;
-        self.engine
+        let module_bytes =self.engine
             .precompile_module(&file)
-            .map_err(|_| CompilerErrorResponses::AddContractFail)
+            .map_err(|_| CompilerErrorResponses::AddContractFail)?;
+        let module = unsafe {
+            wasmtime::Module::deserialize(
+                &self.engine,
+                &module_bytes,
+            )
+            .unwrap()
+        };
+        let imports = module.imports();
+        let mut pending_sdk = self.available_imports_set.clone();
+        for import in imports {
+            match import.ty() {
+                ExternType::Func(_) => {
+                    if !self.available_imports_set.contains(import.name()) {
+                        return Err(CompilerErrorResponses::InvalidImportFound);
+                    }
+                    pending_sdk.remove(import.name());
+                }
+                _ => return Err(CompilerErrorResponses::InvalidImportFound)
+            }
+        }
+        if !pending_sdk.is_empty() {
+            return Err(CompilerErrorResponses::NoSDKFound);
+        }
+        Ok(module_bytes)
     }
+}
+
+fn get_sdk_functions_identifier() -> HashSet<String> {
+    HashSet::from_iter(vec![
+        "alloc".to_owned(),
+        "write_byte".to_owned(),
+        "pointer_len".to_owned(),
+        "read_byte".to_owned()
+    ].into_iter())
 }

@@ -45,7 +45,9 @@ pub enum ExecutorErrorResponses {
     #[error("Deserialization of JSON PATCH failed")]
     JSONPATCHDeserializationFailed,
     #[error("State hash generation failed")]
-    StateHashGenerationFailed
+    StateHashGenerationFailed,
+    #[error("Invalid pointer provided by contract")]
+    InvalidPointerPovided
 }
 
 #[derive(Error, Debug)]
@@ -75,5 +77,9 @@ pub enum CompilerErrorResponses {
     #[error("Governance Error")]
     GovernanceError(#[from] RequestError),
     #[error("Can't create folder at /tmp")]
-    TempFolderCreationFailed
+    TempFolderCreationFailed,
+    #[error("Invalid function import found in WAS module")]
+    InvalidImportFound,
+    #[error("No SDK found")]
+    NoSDKFound
 }

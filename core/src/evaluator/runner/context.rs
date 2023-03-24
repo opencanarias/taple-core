@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use crate::evaluator::errors::ExecutorErrorResponses;
+
 #[derive(Debug)]
 pub struct MemoryManager {
     memory: Vec<u8>,
@@ -29,13 +31,19 @@ impl MemoryManager {
         self.memory[ptr]
     }
 
-    pub fn read_data(&self, ptr: usize) -> &[u8] {
-        let len = self.map.get(&ptr).unwrap();
-        &self.memory[ptr..ptr + len]
+    pub fn read_data(&self, ptr: usize) -> Result<&[u8], ExecutorErrorResponses> {
+        let len = self
+            .map
+            .get(&ptr)
+            .ok_or(ExecutorErrorResponses::InvalidPointerPovided)?;
+        Ok(&self.memory[ptr..ptr + len])
     }
 
-    pub fn get_pointer_len(&self, ptr: usize) -> usize {
-        *self.map.get(&ptr).unwrap()
+    pub fn get_pointer_len(&self, ptr: usize) -> isize {
+        let Some(result) = self.map.get(&ptr) else {
+            return -1
+        };
+        *result as isize
     }
 
     pub fn add_date_raw(&mut self, bytes: &[u8]) -> usize {
