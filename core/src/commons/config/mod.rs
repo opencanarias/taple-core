@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use super::identifier::derive::{digest::DigestDerivator, KeyDerivator};
+use async_std::path::Path;
 use config::Value;
 use serde::Deserialize;
 
@@ -55,6 +56,7 @@ pub struct NodeSettings {
     #[doc(hidden)]
     #[serde(rename = "devmode")]
     pub dev_mode: bool,
+    pub smartcontracts_directory: String,
 }
 
 /// Configuration parameters of the database

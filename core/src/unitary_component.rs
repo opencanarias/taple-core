@@ -203,6 +203,7 @@ impl<D: DatabaseManager + 'static> Taple<D> {
                 timeout: 3000u32,
                 passvotation: 0,
                 dev_mode: false,
+                smartcontracts_directory: "../../../contracts".into(),
             },
             database: DatabaseSettings { path: "".into() },
         }

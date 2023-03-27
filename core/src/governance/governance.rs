@@ -10,7 +10,7 @@ use crate::{commons::{
         event_request::EventRequest,
     },
     schema_handler::get_governance_schema,
-}, DatabaseManager, DB};
+}, DatabaseManager, DB, evaluator::compiler::ContractType};
 
 use super::{
     error::{InternalError, RequestError},
@@ -154,7 +154,7 @@ impl<D: DatabaseManager> Governance<D> {
 }
 
 #[async_trait]
-pub trait GovernanceInterface {
+pub trait GovernanceInterface: Sync + Send {
     async fn check_quorum(
         &self,
         event: Event,
@@ -195,6 +195,7 @@ pub trait GovernanceInterface {
         additional_payload: Option<String>,
         metadata: Option<Metadata>,
     ) -> Result<(bool, bool), RequestError>;
+    async fn get_contracts(&self, governance_id: DigestIdentifier) -> Result<Vec<(String, ContractType)> , RequestError>;
 }
 
 #[derive(Debug, Clone)]
@@ -380,5 +381,9 @@ impl GovernanceInterface for GovernanceAPI {
         } else {
             Err(RequestError::UnexpectedResponse)
         }
+    }
+
+    async fn get_contracts(&self, governance_id: DigestIdentifier) -> Result<Vec<(String, ContractType)> , RequestError> {
+        todo!()
     }
 }

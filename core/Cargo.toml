@@ -34,7 +34,7 @@ log = { workspace = true }
 hex = { workspace = true }
 jsonschema = { workspace = true }
 time = { workspace = true, features = ["std"] }
-
+wasm-gc-api = { workspace = true }
 # API
 thiserror = { workspace = true }
 utoipa = { workspace = true }
@@ -71,6 +71,8 @@ blake2 = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
 sha3 = { workspace = true, optional = true }
 
+## Evaluator
+wasmtime = { workspace = true, features = ["cache"] }
 
 db-key = { workspace = true }  #Usar esta versión. Necesario para implementar custom keys para leveldb::Database
 url = { workspace = true }
