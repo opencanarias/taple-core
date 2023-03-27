@@ -1,6 +1,7 @@
 pub mod network;
 pub mod routing;
 pub mod tell;
+pub mod reqres;
 
 #[cfg(test)]
 mod tests {

@@ -1,11 +1,7 @@
 [workspace]
 
-members = [
-    "core",
-]
-exclude = [
-    "contract"
-]
+members = ["core"]
+exclude = ["contract"]
 
 [workspace.package]
 version = "0.2.0-dev"
@@ -13,7 +9,7 @@ edition = "2021"
 authors = ["Open Canarias S.L.<taple@opencanarias.com>"]
 description = "TAPLE Protocol reference implementation"
 # Remove when crates.io is published
-documentation = "https://www.taple.es" 
+documentation = "https://www.taple.es"
 readme = "../README.md"
 homepage = "https://www.taple.es"
 repository = "https://github.com/opencanarias/taple-core"
@@ -62,7 +58,9 @@ log = "~0.4"
 hex = "~0.4.3"
 db-key = "^0.0.5" #Usar esta versión. Necesario para implementar custom keys para leveldb::Database // Eso puso Javier
 jsonschema = "~0.16"
-libp2p = { version = "~0.45", features = [], default-features = false }
+libp2p = { version = "~0.45", features = [
+    "request-response",
+], default-features = false }
 
 ## Evaluator
 wasmtime = { version = "^5.0.0", features = ["cache"] }
