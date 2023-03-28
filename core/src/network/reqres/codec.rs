@@ -8,7 +8,7 @@ use std::io;
 
 #[derive(Clone)]
 pub struct TapleProtocol {
-    version: u32,
+    pub version: u32,
 }
 
 impl ProtocolName for TapleProtocol {
@@ -20,6 +20,7 @@ impl ProtocolName for TapleProtocol {
     }
 }
 
+#[derive(Clone)]
 pub struct TapleCodec {}
 
 #[async_trait]
