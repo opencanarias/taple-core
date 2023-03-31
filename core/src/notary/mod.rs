@@ -1,6 +1,6 @@
 use crate::{
     identifier::{DigestIdentifier, KeyIdentifier},
-    signature::Signature,
+    signature::Signature, commons::models::notary::NotaryEventResponse,
 };
 
 use self::errors::NotaryError;
@@ -28,10 +28,4 @@ pub struct NotaryEvent {
     pub sn: u64,
     pub gov_version: u64,
     pub owner_signature: Signature,
-}
-
-#[derive(Debug, Clone)]
-pub struct NotaryEventResponse {
-    pub notary_signature: Signature,
-    pub gov_version_notary: u64,
 }

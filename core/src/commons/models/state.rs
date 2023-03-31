@@ -251,7 +251,7 @@ impl Subject {
         }
     }
 
-    pub fn apply(&mut self, event_content: EventContent) -> Result<(), SubjectError> {
+    pub fn apply(&mut self, event_content: &EventContent) -> Result<(), SubjectError> {
         match self.ledger_state.head_sn {
             Some(0) => (),
             Some(head_sn) => {
@@ -270,15 +270,15 @@ impl Subject {
                 None => return Err(SubjectError::SubjectHasNoData),
             }
         };
-        subject_data.properties = match event_content.event_request.request {
+        subject_data.properties = match &event_content.event_request.request {
             EventRequestType::Create(_) => {
                 // It should never be create, because it creates the subject, it does not make an event sourcing, in that case it is looked at in the new
                 unreachable!("Haciendo apply en create event");
             }
-            EventRequestType::State(req) => match req.payload {
+            EventRequestType::State(req) => match &req.payload {
                 RequestPayload::Json(props) => {
                     if event_content.approved {
-                        props
+                        props.clone()
                     } else {
                         subject_data.properties
                     }
