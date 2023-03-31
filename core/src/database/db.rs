@@ -5,6 +5,7 @@ use std::sync::Arc;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
+use crate::commons::models::notary::NotaryEventResponse;
 use crate::commons::models::state::{LedgerState, Subject};
 use crate::event_content::EventContent;
 use crate::event_request::EventRequest;
@@ -22,6 +23,7 @@ const REQUEST_TABLE: &str = "request";
 const ID_TABLE: &str = "controller-id";
 const NOTARY_TABLE: &str = "notary";
 const CONTRACT_TABLE: &str = "contract";
+const NOTARY_SIGNATURES: &str = "notary-signatures";
 
 pub struct DB<M: DatabaseManager> {
     _manager: Arc<M>,
@@ -32,6 +34,7 @@ pub struct DB<M: DatabaseManager> {
     id_db: Box<dyn DatabaseCollection<InnerDataType = String>>,
     notary_db: Box<dyn DatabaseCollection<InnerDataType = (DigestIdentifier, u64)>>,
     contract_db: Box<dyn DatabaseCollection<InnerDataType = (Vec<u8>, DigestIdentifier, u64)>>,
+    notary_signatures_db: Box<dyn DatabaseCollection<InnerDataType = (u64, HashSet<NotaryEventResponse>)>>,
 }
 
 impl<M: DatabaseManager> DB<M> {
@@ -43,6 +46,7 @@ impl<M: DatabaseManager> DB<M> {
         let id_db = manager.create_collection(ID_TABLE);
         let notary_db = manager.create_collection(NOTARY_TABLE);
         let contract_db = manager.create_collection(CONTRACT_TABLE);
+        let notary_signatures_db = manager.create_collection(NOTARY_SIGNATURES);
         Self {
             _manager: manager,
             signature_db,
@@ -52,6 +56,7 @@ impl<M: DatabaseManager> DB<M> {
             id_db,
             notary_db,
             contract_db,
+            notary_signatures_db,
         }
     }
 
@@ -141,6 +146,22 @@ impl<M: DatabaseManager> DB<M> {
         events_by_subject.get(&sn.to_string())
     }
 
+    pub fn get_notary_signatures(
+        &self,
+        subject_id: &DigestIdentifier,
+        sn: u64,
+    ) -> Result<(u64, HashSet<NotaryEventResponse>), Error> {
+        let id = subject_id.to_str();
+        self.notary_signatures_db.get(&id)
+    }
+
+    pub fn delete_notary_signatures(
+        &self,
+        subject_id: &DigestIdentifier,
+    ) -> Result<(), Error> {
+        self.notary_signatures_db.del(&subject_id.to_str())
+    }
+
     pub fn set_signatures(
         &self,
         subject_id: &DigestIdentifier,
@@ -159,6 +180,24 @@ impl<M: DatabaseManager> DB<M> {
             }
         };
         signatures_by_subject.put(&sn.to_string(), total_signatures)
+    }
+
+    pub fn set_notary_signatures(
+        &self,
+        subject_id: &DigestIdentifier,
+        sn: u64,
+        signatures: HashSet<NotaryEventResponse>,
+    ) -> Result<(), Error> {
+        let id = subject_id.to_str();
+        let total_signatures = match self.notary_signatures_db.get(&id) {
+            Ok((_, other)) => signatures.union(&other).cloned().collect(),
+            Err(Error::EntryNotFound) => signatures,
+            Err(error) => {
+                // logError!("Error detected in database get_event operation: {}", error);
+                return Err(error);
+            }
+        };
+        self.notary_signatures_db.put(&id, (sn, total_signatures))
     }
 
     pub fn get_subject(&self, subject_id: &DigestIdentifier) -> Result<Subject, Error> {
@@ -181,15 +220,15 @@ impl<M: DatabaseManager> DB<M> {
         self.set_subject(&subject_id, subject)
     }
 
-    pub fn apply_event_sourcing(&self, event_content: EventContent) -> Result<(), Error> {
+    pub fn apply_event_sourcing(&self, event_content: &EventContent) -> Result<(), Error> {
         // TODO: Consultar sobre si este método debería existir
-        let subject_id = event_content.subject_id.clone();
+        let subject_id = &event_content.subject_id;
         let mut subject = self.get_subject(&subject_id)?;
         subject
-            .apply(event_content.clone())
+            .apply(event_content)
             .map_err(|_| Error::SubjectApplyFailed)?;
         // Persist the change
-        self.set_subject(&subject_id, subject)?;
+        self.set_subject(subject_id, subject)?;
         let id = subject_id.to_str();
         let signatures_by_subject = self.signature_db.partition(&id);
         match signatures_by_subject.del(&(event_content.sn - 1).to_string()) {

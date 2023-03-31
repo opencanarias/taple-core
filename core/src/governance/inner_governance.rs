@@ -349,7 +349,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
             != 0
         {
             return Ok(Err(RequestError::InvalidKeyIdentifier(String::from(
-                "One or more Signers are not valid validators",
+                "One or more Signers are not valid approvers",
             ))));
         };
         let acceptance_quorum = (all_approvers.len() as f64 * quorum_percentage).ceil() as usize;

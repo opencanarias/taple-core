@@ -185,7 +185,7 @@ mod test {
     use crate::{
         commons::{
             channel::{MpscChannel, SenderEnd},
-            crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair},
+            crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair}, models::notary::NotaryEventResponse,
         },
         evaluator::{
             compiler::{CompilerMessages, CompilerResponses, ContractType, NewGovVersion},
@@ -199,7 +199,7 @@ mod test {
         protocol::command_head_manager::self_signature_manager::{
             SelfSignatureInterface, SelfSignatureManager,
         },
-        ApprovalResponse, Event, MemoryManager, TimeStamp,
+        ApprovalResponse, Event, MemoryManager, TimeStamp, signature::Signature,
     };
 
     use crate::evaluator::manager::EvaluatorManager;
@@ -381,6 +381,32 @@ mod test {
             &self,
             _subject_id: &DigestIdentifier,
         ) -> Result<bool, RequestError> {
+            unimplemented!()
+        }
+        async fn check_if_witness(
+            &self,
+            governance_id: DigestIdentifier,
+            namespace: String,
+            schema_id: String,
+        ) -> Result<bool, RequestError> {
+            unimplemented!()
+        }
+        async fn check_notary_signatures(
+            &self,
+            signatures: HashSet<NotaryEventResponse>,
+            data_hash: DigestIdentifier,
+            governance_id: DigestIdentifier,
+            namespace: String,
+        ) -> Result<(), RequestError> {
+            unimplemented!()
+        }
+        async fn check_evaluator_signatures(
+            &self,
+            signatures: HashSet<Signature>,
+            governance_id: DigestIdentifier,
+            governance_version: u64,
+            namespace: String,
+        ) -> Result<(), RequestError> {
             unimplemented!()
         }
         async fn check_invokation_permission(

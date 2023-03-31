@@ -44,7 +44,7 @@ impl Event {
         DigestIdentifier::from_serializable_borsh(self.event_content.clone())
     }
 
-    fn check_signatures(&self) -> Result<(), CryptoErrorEvent> {
+    pub fn check_signatures(&self) -> Result<(), CryptoErrorEvent> {
         self.event_content.event_request.check_signatures()?;
         match DigestIdentifier::from_serializable_borsh(self.event_content.clone()) {
             Ok(hash) => {
