@@ -658,14 +658,21 @@ impl NetworkProcessor {
                 if let Some(requests) = self.open_requests.get_mut(&peer_id) {
                     while let Some(channel) = requests.pop_front() {
                         if channel.is_open() {
-                            debug!("{}: Sending Message as Response to {:?}", LOG_TARGET, peer_id);
+                            debug!(
+                                "{}: Sending Message as Response to {:?}",
+                                LOG_TARGET, peer_id
+                            );
                             if let Err(error) = self
                                 .swarm
                                 .behaviour_mut()
                                 .req_res
                                 .send_response(channel, message.clone())
                             {
-                                log::error!("Error sending response: {:?}, to {:?}", error, peer_id);
+                                log::error!(
+                                    "Error sending response: {:?}, to {:?}",
+                                    error,
+                                    peer_id
+                                );
                             } else {
                                 return;
                             }
@@ -678,10 +685,21 @@ impl NetworkProcessor {
                 if !addresses_of_peer.is_empty() {
                     debug!("MANDANDO MENSAJE, TENGO DIRECCIÓN");
                     // If we have an address, send the message
-                    self.swarm
-                        .behaviour_mut()
-                        .tell
-                        .send_message(&peer_id, &message);
+                    match self.send_mode {
+                        SendMode::RequestResponse => {
+                            let _req_id = self
+                                .swarm
+                                .behaviour_mut()
+                                .req_res
+                                .send_request(&peer_id, message);
+                        }
+                        SendMode::Tell => {
+                            self.swarm
+                                .behaviour_mut()
+                                .tell
+                                .send_message(&peer_id, &message);
+                        }
+                    }
                     return;
                 }
 
@@ -722,17 +740,26 @@ impl NetworkProcessor {
 
     /// Send all the pending messages to the specified controller
     fn send_pendings(&mut self, peer_id: &PeerId) {
-        let pending_messages = self.pendings.get_mut(peer_id);
+        let pending_messages = self.pendings.remove(peer_id);
         if let Some(pending_messages) = pending_messages {
-            for message in pending_messages.iter() {
+            for message in pending_messages.into_iter() {
                 debug!("MANDANDO MENSAJE");
-                self.swarm
-                    .behaviour_mut()
-                    .tell
-                    .send_message(peer_id, &message);
+                match self.send_mode {
+                    SendMode::RequestResponse => {
+                        let _req_id = self
+                            .swarm
+                            .behaviour_mut()
+                            .req_res
+                            .send_request(&peer_id, message);
+                    }
+                    SendMode::Tell => {
+                        self.swarm
+                            .behaviour_mut()
+                            .tell
+                            .send_message(&peer_id, &message);
+                    }
+                }
             }
-            // Clear the list
-            pending_messages.clear();
         }
     }
 
