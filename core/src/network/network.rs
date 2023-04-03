@@ -153,7 +153,7 @@ pub struct NetworkProcessor {
     pending_bootstrap_nodes: HashMap<PeerId, Multiaddr>,
     bootstrap_retries_steam:
         futures::stream::futures_unordered::FuturesUnordered<tokio::time::Sleep>,
-    open_requests: HashMap<PeerId, Vec<ResponseChannel<Vec<u8>>>>,
+    open_requests: HashMap<PeerId, VecDeque<ResponseChannel<Vec<u8>>>>,
     send_mode: SendMode,
 }
 
@@ -576,18 +576,53 @@ impl NetworkProcessor {
                     }
                 },
                 NetworkComposedEvent::RequestResponseEvent(req_res_event) => match req_res_event {
-                    RequestResponseEvent::Message { peer, message } => todo!(),
-                    RequestResponseEvent::OutboundFailure {
-                        peer,
-                        request_id,
-                        error,
-                    } => todo!(),
-                    RequestResponseEvent::InboundFailure {
-                        peer,
-                        request_id,
-                        error,
-                    } => todo!(),
-                    RequestResponseEvent::ResponseSent { peer, request_id } => todo!(),
+                    RequestResponseEvent::Message { peer, message } => match message {
+                        libp2p::request_response::RequestResponseMessage::Request {
+                            request,
+                            channel,
+                            ..
+                        } => {
+                            log::debug!("Request received from peer: {:?}", peer);
+                            // Save Response Channel
+                            self.open_requests
+                                .entry(peer)
+                                .or_insert(VecDeque::new())
+                                .push_back(channel);
+                            // Pass message to MessageReceiver
+                            self.event_sender
+                                .send(NetworkEvent::MessageReceived { message: request })
+                                .await
+                                .expect("Event receiver not to be dropped.");
+                        }
+                        libp2p::request_response::RequestResponseMessage::Response {
+                            response,
+                            ..
+                        } => {
+                            log::debug!("Response received from peer: {:?}", peer);
+                            // Pass message to MessageReceiver
+                            self.event_sender
+                                .send(NetworkEvent::MessageReceived { message: response })
+                                .await
+                                .expect("Event receiver not to be dropped.");
+                        }
+                    },
+                    RequestResponseEvent::OutboundFailure { peer, error, .. } => {
+                        log::error!(
+                            "OutboundFailure in request response: {:?} to peer: {:?}",
+                            error,
+                            peer
+                        );
+                    }
+                    RequestResponseEvent::InboundFailure { peer, error, .. } => {
+                        log::error!(
+                            "InboundFailure in request response: {:?} to peer: {:?}",
+                            error,
+                            peer
+                        );
+                    }
+                    RequestResponseEvent::ResponseSent { peer, .. } => {
+                        log::debug!("Response sent to peer: {:?}", peer);
+                    }
                 },
             },
             other => {
@@ -618,6 +653,25 @@ impl NetworkProcessor {
                         return;
                     }
                 };
+
+                // Check if we have request open with peer, so we have to send the message as a response
+                if let Some(requests) = self.open_requests.get_mut(&peer_id) {
+                    while let Some(channel) = requests.pop_front() {
+                        if channel.is_open() {
+                            debug!("{}: Sending Message as Response to {:?}", LOG_TARGET, peer_id);
+                            if let Err(error) = self
+                                .swarm
+                                .behaviour_mut()
+                                .req_res
+                                .send_response(channel, message.clone())
+                            {
+                                log::error!("Error sending response: {:?}, to {:?}", error, peer_id);
+                            } else {
+                                return;
+                            }
+                        }
+                    }
+                }
 
                 // If we have it check if we have the address (falta rellenar con direcciones de la cache)
                 let addresses_of_peer = self.swarm.behaviour_mut().addresses_of_peer(&peer_id);
