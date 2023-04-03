@@ -5,7 +5,7 @@ use libp2p::request_response::{ProtocolSupport, RequestResponse, RequestResponse
 
 use self::codec::{TapleCodec, TapleProtocol};
 
-fn create_request_response_behaviour(
+pub fn create_request_response_behaviour(
     request_timeout: Duration,
     connection_keep_alive: Duration,
 ) -> RequestResponse<TapleCodec> {
@@ -67,7 +67,8 @@ mod test {
                                     assert_eq!(request, payload);
                                     swarm2
                                         .behaviour_mut()
-                                        .send_response(channel, payload2.clone()).expect("va bien");
+                                        .send_response(channel, payload2.clone())
+                                        .expect("va bien");
                                 }
                                 libp2p::request_response::RequestResponseMessage::Response {
                                     request_id,

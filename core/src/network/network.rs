@@ -1,4 +1,5 @@
 use super::{
+    reqres::{codec::TapleCodec, create_request_response_behaviour},
     routing::{RoutingBehaviour, RoutingComposedEvent},
     tell::{TellBehaviour, TellBehaviourEvent},
 };
@@ -23,6 +24,7 @@ use libp2p::{
     mplex,
     multiaddr::Protocol,
     noise,
+    request_response::{RequestResponse, RequestResponseEvent, ResponseChannel},
     swarm::{ConnectionHandlerUpgrErr, NetworkBehaviour, SwarmBuilder, SwarmEvent},
     tcp::TokioTcpConfig,
     yamux, Multiaddr, NetworkBehaviour, PeerId, Swarm, Transport,
@@ -41,22 +43,32 @@ const RETRY_TIMEOUT: u64 = 30000;
 type TapleSwarmEvent = SwarmEvent<
     NetworkComposedEvent,
     EitherError<
-        EitherError<std::io::Error, std::io::Error>,
+        EitherError<
+            EitherError<std::io::Error, std::io::Error>,
+            ConnectionHandlerUpgrErr<std::io::Error>,
+        >,
         ConnectionHandlerUpgrErr<std::io::Error>,
     >,
 >;
+
+pub enum SendMode {
+    RequestResponse,
+    Tell,
+}
 
 #[derive(NetworkBehaviour)]
 #[behaviour(out_event = "NetworkComposedEvent")]
 pub struct TapleNetworkBehavior {
     routing: RoutingBehaviour,
     tell: TellBehaviour,
+    req_res: RequestResponse<TapleCodec>,
 }
 
 #[derive(Debug)]
 pub enum NetworkComposedEvent {
     TellBehaviourEvent(TellBehaviourEvent),
     RoutingEvent(RoutingComposedEvent),
+    RequestResponseEvent(RequestResponseEvent<Vec<u8>, Vec<u8>>),
 }
 
 /// Adapt `IdentifyEvent` to `NetworkComposedEvent`
@@ -73,11 +85,23 @@ impl From<RoutingComposedEvent> for NetworkComposedEvent {
     }
 }
 
+impl From<RequestResponseEvent<Vec<u8>, Vec<u8>>> for NetworkComposedEvent {
+    fn from(event: RequestResponseEvent<Vec<u8>, Vec<u8>>) -> NetworkComposedEvent {
+        NetworkComposedEvent::RequestResponseEvent(event)
+    }
+}
+
 impl TapleNetworkBehavior {
     pub fn new(local_key: Keypair, bootstrap_nodes: Vec<(PeerId, Multiaddr)>) -> Self {
         let routing = RoutingBehaviour::new(local_key, bootstrap_nodes);
         let tell = TellBehaviour::new(10000, Duration::from_secs(10), Duration::from_secs(10));
-        TapleNetworkBehavior { routing, tell }
+        let req_res =
+            create_request_response_behaviour(Duration::from_secs(10), Duration::from_secs(10));
+        TapleNetworkBehavior {
+            routing,
+            tell,
+            req_res,
+        }
     }
 
     #[cfg(test)]
@@ -104,7 +128,7 @@ impl TapleNetworkBehavior {
     ) -> Result<QueryId, libp2p::kad::record::store::Error> {
         self.routing.put_record(record, quorum)
     }
-    
+
     #[allow(dead_code)]
     #[cfg(test)]
     pub fn get_record(&mut self, key: Key, quorum: Quorum) -> QueryId {
@@ -129,6 +153,8 @@ pub struct NetworkProcessor {
     pending_bootstrap_nodes: HashMap<PeerId, Multiaddr>,
     bootstrap_retries_steam:
         futures::stream::futures_unordered::FuturesUnordered<tokio::time::Sleep>,
+    open_requests: HashMap<PeerId, Vec<ResponseChannel<Vec<u8>>>>,
+    send_mode: SendMode,
 }
 
 impl NetworkProcessor {
@@ -138,6 +164,7 @@ impl NetworkProcessor {
         event_sender: mpsc::Sender<NetworkEvent>,
         controller_mc: KeyPair,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+        send_mode: SendMode,
     ) -> Result<Self, Box<dyn Error>> {
         let local_key = {
             let sk = ed25519::SecretKey::from_bytes(controller_mc.secret_key_bytes())
@@ -230,6 +257,8 @@ impl NetworkProcessor {
             bootstrap_nodes,
             pending_bootstrap_nodes: HashMap::new(),
             bootstrap_retries_steam: futures::stream::futures_unordered::FuturesUnordered::new(),
+            open_requests: HashMap::new(),
+            send_mode,
         })
     }
 
@@ -241,8 +270,7 @@ impl NetworkProcessor {
     /// Run network processor.
     pub async fn run(mut self) {
         debug!("Running network");
-        let a = self.swarm
-            .listen_on(self.addr.clone());
+        let a = self.swarm.listen_on(self.addr.clone());
         if a.is_err() {
             println!("Error: {:?}", a.unwrap_err());
         }
@@ -546,6 +574,20 @@ impl NetworkProcessor {
                     _ => {
                         self.swarm.behaviour_mut().routing.handle_event(ev);
                     }
+                },
+                NetworkComposedEvent::RequestResponseEvent(req_res_event) => match req_res_event {
+                    RequestResponseEvent::Message { peer, message } => todo!(),
+                    RequestResponseEvent::OutboundFailure {
+                        peer,
+                        request_id,
+                        error,
+                    } => todo!(),
+                    RequestResponseEvent::InboundFailure {
+                        peer,
+                        request_id,
+                        error,
+                    } => todo!(),
+                    RequestResponseEvent::ResponseSent { peer, request_id } => todo!(),
                 },
             },
             other => {
