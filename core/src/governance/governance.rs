@@ -1,16 +1,20 @@
-use std::{collections::HashSet};
+use std::collections::HashSet;
 
 use async_trait::async_trait;
 
-use crate::{commons::{
-    channel::{ChannelData, MpscChannel, SenderEnd},
-    identifier::{DigestIdentifier, KeyIdentifier},
-    models::{
-        approval_signature::ApprovalResponse, event::Event, event_content::Metadata,
-        event_request::EventRequest,
+use crate::{
+    commons::{
+        channel::{ChannelData, MpscChannel, SenderEnd},
+        identifier::{DigestIdentifier, KeyIdentifier},
+        models::{
+            approval_signature::ApprovalResponse, event::Event, event_content::Metadata,
+            event_request::EventRequest, notary::NotaryEventResponse,
+        },
+        schema_handler::get_governance_schema,
     },
-    schema_handler::get_governance_schema,
-}, DatabaseManager, DB, evaluator::compiler::ContractType};
+    evaluator::compiler::ContractType,
+    DatabaseManager, DB, signature::Signature,
+};
 
 use super::{
     error::{InternalError, RequestError},
@@ -195,7 +199,30 @@ pub trait GovernanceInterface: Sync + Send {
         additional_payload: Option<String>,
         metadata: Option<Metadata>,
     ) -> Result<(bool, bool), RequestError>;
-    async fn get_contracts(&self, governance_id: DigestIdentifier) -> Result<Vec<(String, ContractType)> , RequestError>;
+    async fn get_contracts(
+        &self,
+        governance_id: DigestIdentifier,
+    ) -> Result<Vec<(String, ContractType)>, RequestError>;
+    async fn check_if_witness(
+        &self,
+        governance_id: DigestIdentifier,
+        namespace: String,
+        schema_id: String,
+    ) -> Result<bool, RequestError>;
+    async fn check_notary_signatures(
+        &self,
+        signatures: HashSet<NotaryEventResponse>,
+        data_hash: DigestIdentifier,
+        governance_id: DigestIdentifier,
+        namespace: String,
+    ) -> Result<(), RequestError>;
+    async fn check_evaluator_signatures(
+        &self,
+        signatures: HashSet<Signature>,
+        governance_id: DigestIdentifier,
+        governance_version: u64,
+        namespace: String,
+    )-> Result<(), RequestError>;
 }
 
 #[derive(Debug, Clone)]
@@ -383,7 +410,39 @@ impl GovernanceInterface for GovernanceAPI {
         }
     }
 
-    async fn get_contracts(&self, governance_id: DigestIdentifier) -> Result<Vec<(String, ContractType)> , RequestError> {
+    async fn get_contracts(
+        &self,
+        governance_id: DigestIdentifier,
+    ) -> Result<Vec<(String, ContractType)>, RequestError> {
+        todo!()
+    }
+
+    async fn check_if_witness(
+        &self,
+        governance_id: DigestIdentifier,
+        namespace: String,
+        schema_id: String
+    ) -> Result<bool, RequestError> {
+        todo!()
+    }
+
+    async fn check_notary_signatures(
+        &self,
+        signatures: HashSet<NotaryEventResponse>,
+        data_hash: DigestIdentifier,
+        governance_id: DigestIdentifier,
+        namespace: String,
+    ) -> Result<(), RequestError> {
+        todo!()
+    }
+
+    async fn check_evaluator_signatures(
+        &self,
+        signatures: HashSet<Signature>,
+        governance_id: DigestIdentifier,
+        governance_version: u64,
+        namespace: String,
+    )-> Result<(), RequestError> {
         todo!()
     }
 }

@@ -8,7 +8,7 @@ use utoipa::ToSchema;
 use super::timestamp::TimeStamp;
 
 /// Defines the data used to generate the signature, as well as the signer's identifier.
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, BorshSerialize, BorshDeserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, BorshSerialize, BorshDeserialize, PartialOrd, ToSchema)]
 pub struct SignatureContent {
     #[schema(value_type = String)]
     pub signer: KeyIdentifier,
@@ -44,6 +44,7 @@ impl Hash for SignatureContent {
     BorshSerialize,
     BorshDeserialize,
     ToSchema,
+    PartialOrd
 )]
 pub struct Signature {
     pub content: SignatureContent,

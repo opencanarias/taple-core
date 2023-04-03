@@ -53,6 +53,30 @@ pub enum Notification {
 }
 
 impl Notification {
+    pub(crate) fn subject_synchronized(subject_id: &str) -> Notification {
+        Notification::SubjectSynchronized {
+            subject_id: subject_id.to_owned(),
+            default_message: format!("Subject {} synchronized", subject_id),
+        }
+    }
+
+    pub(crate) fn new_subject(subject_id: &str) -> Notification {
+        Notification::NewSubject {
+            subject_id: subject_id.to_owned(),
+            default_message: format!("Subject {} created", subject_id)
+        }
+    }
+
+    pub(crate) fn new_event(subject_id: &str, sn: u64) -> Notification {
+        Notification::NewEvent {
+            sn,
+            subject_id: subject_id.to_owned(),
+            default_message: format!("Event {} of subject {} created", sn, subject_id)
+        }
+    }
+}
+
+impl Notification {
     pub fn to_message(self) -> String {
         match self {
             Notification::NewSubject {

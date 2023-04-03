@@ -16,7 +16,7 @@ pub use governance::{GovernanceAPI, GovernanceInterface};
 use error::RequestError;
 use serde_json::Value;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum RequestQuorum {
     Accepted,
     Rejected,

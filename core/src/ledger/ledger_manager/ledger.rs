@@ -173,7 +173,7 @@ impl<D: DatabaseManager> Ledger<D> {
         ledger_state.negociating_next = false;
         ledger_state.head_sn = Some(ev_sn);
         let mut prev_hash = event.signature.content.event_content_hash.clone();
-        let event_sourcing = self.repo_access.apply_event_sourcing(event.event_content);
+        let event_sourcing = self.repo_access.apply_event_sourcing(&event.event_content);
         if let Err(e) = event_sourcing {
             return Err(LedgerManagerError::DatabaseError(e.to_string()));
         }
@@ -193,7 +193,7 @@ impl<D: DatabaseManager> Ledger<D> {
                     // Event Sourcing and updating head and prev_hash
                     ledger_state.head_sn = Some(sn);
                     prev_hash = ev.signature.content.event_content_hash.clone();
-                    let event_sourcing = self.repo_access.apply_event_sourcing(ev.event_content);
+                    let event_sourcing = self.repo_access.apply_event_sourcing(&ev.event_content);
                     if let Err(e) = event_sourcing {
                         return Err(LedgerManagerError::DatabaseError(e.to_string()));
                     }
@@ -645,7 +645,7 @@ impl<D: DatabaseManager> Ledger<D> {
                     // Event sourcing and updating head and prev_hash
                     ledger_state.head_sn = Some(sn);
                     prev_hash = ev.signature.content.event_content_hash.clone();
-                    let event_sourcing = self.repo_access.apply_event_sourcing(ev.event_content);
+                    let event_sourcing = self.repo_access.apply_event_sourcing(&ev.event_content);
                     if let Err(e) = event_sourcing {
                         return Err(LedgerManagerError::DatabaseError(e.to_string()));
                     }
