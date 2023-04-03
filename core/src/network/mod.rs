@@ -1,18 +1,19 @@
 pub mod network;
+pub mod reqres;
 pub mod routing;
 pub mod tell;
 
 #[cfg(test)]
 mod tests {
+    use crate::message::Command;
+    pub use crate::message::{MessageReceiver, MessageSender, NetworkEvent};
     use crate::network::{
         network::{NetworkComposedEvent, NetworkProcessor, TapleNetworkBehavior},
         tell::TellBehaviourEvent,
     };
     use log::debug;
-    use crate::message::Command;
-    pub use crate::message::{MessageReceiver, MessageSender, NetworkEvent};
 
-    use super::*;
+    use super::{network::SendMode, *};
 
     use futures::StreamExt;
 
@@ -53,7 +54,8 @@ mod tests {
                 vec![],
                 sender_boot,
                 mc1,
-                bsx.subscribe()
+                bsx.subscribe(),
+                SendMode::Tell,
             )
             .await.unwrap();
             let msg_sender_boot = bootstrap_network.client();
@@ -64,7 +66,8 @@ mod tests {
                 vec![(bt_pid, String::from("/memory/647988").parse().unwrap())],
                 sender1,
                 mc2,
-                brx
+                brx,
+                SendMode::Tell,
             )
             .await.unwrap();
             let msg_sender_1 = node1_network.client();

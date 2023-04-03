@@ -1,4 +1,5 @@
 use super::{
+    reqres::{codec::TapleCodec, create_request_response_behaviour},
     routing::{RoutingBehaviour, RoutingComposedEvent},
     tell::{TellBehaviour, TellBehaviourEvent},
 };
@@ -23,6 +24,7 @@ use libp2p::{
     mplex,
     multiaddr::Protocol,
     noise,
+    request_response::{RequestResponse, RequestResponseEvent, ResponseChannel},
     swarm::{ConnectionHandlerUpgrErr, NetworkBehaviour, SwarmBuilder, SwarmEvent},
     tcp::TokioTcpConfig,
     yamux, Multiaddr, NetworkBehaviour, PeerId, Swarm, Transport,
@@ -41,22 +43,32 @@ const RETRY_TIMEOUT: u64 = 30000;
 type TapleSwarmEvent = SwarmEvent<
     NetworkComposedEvent,
     EitherError<
-        EitherError<std::io::Error, std::io::Error>,
+        EitherError<
+            EitherError<std::io::Error, std::io::Error>,
+            ConnectionHandlerUpgrErr<std::io::Error>,
+        >,
         ConnectionHandlerUpgrErr<std::io::Error>,
     >,
 >;
+
+pub enum SendMode {
+    RequestResponse,
+    Tell,
+}
 
 #[derive(NetworkBehaviour)]
 #[behaviour(out_event = "NetworkComposedEvent")]
 pub struct TapleNetworkBehavior {
     routing: RoutingBehaviour,
     tell: TellBehaviour,
+    req_res: RequestResponse<TapleCodec>,
 }
 
 #[derive(Debug)]
 pub enum NetworkComposedEvent {
     TellBehaviourEvent(TellBehaviourEvent),
     RoutingEvent(RoutingComposedEvent),
+    RequestResponseEvent(RequestResponseEvent<Vec<u8>, Vec<u8>>),
 }
 
 /// Adapt `IdentifyEvent` to `NetworkComposedEvent`
@@ -73,11 +85,23 @@ impl From<RoutingComposedEvent> for NetworkComposedEvent {
     }
 }
 
+impl From<RequestResponseEvent<Vec<u8>, Vec<u8>>> for NetworkComposedEvent {
+    fn from(event: RequestResponseEvent<Vec<u8>, Vec<u8>>) -> NetworkComposedEvent {
+        NetworkComposedEvent::RequestResponseEvent(event)
+    }
+}
+
 impl TapleNetworkBehavior {
     pub fn new(local_key: Keypair, bootstrap_nodes: Vec<(PeerId, Multiaddr)>) -> Self {
         let routing = RoutingBehaviour::new(local_key, bootstrap_nodes);
         let tell = TellBehaviour::new(10000, Duration::from_secs(10), Duration::from_secs(10));
-        TapleNetworkBehavior { routing, tell }
+        let req_res =
+            create_request_response_behaviour(Duration::from_secs(10), Duration::from_secs(10));
+        TapleNetworkBehavior {
+            routing,
+            tell,
+            req_res,
+        }
     }
 
     #[cfg(test)]
@@ -104,7 +128,7 @@ impl TapleNetworkBehavior {
     ) -> Result<QueryId, libp2p::kad::record::store::Error> {
         self.routing.put_record(record, quorum)
     }
-    
+
     #[allow(dead_code)]
     #[cfg(test)]
     pub fn get_record(&mut self, key: Key, quorum: Quorum) -> QueryId {
@@ -129,6 +153,8 @@ pub struct NetworkProcessor {
     pending_bootstrap_nodes: HashMap<PeerId, Multiaddr>,
     bootstrap_retries_steam:
         futures::stream::futures_unordered::FuturesUnordered<tokio::time::Sleep>,
+    open_requests: HashMap<PeerId, VecDeque<ResponseChannel<Vec<u8>>>>,
+    send_mode: SendMode,
 }
 
 impl NetworkProcessor {
@@ -138,6 +164,7 @@ impl NetworkProcessor {
         event_sender: mpsc::Sender<NetworkEvent>,
         controller_mc: KeyPair,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+        send_mode: SendMode,
     ) -> Result<Self, Box<dyn Error>> {
         let local_key = {
             let sk = ed25519::SecretKey::from_bytes(controller_mc.secret_key_bytes())
@@ -230,6 +257,8 @@ impl NetworkProcessor {
             bootstrap_nodes,
             pending_bootstrap_nodes: HashMap::new(),
             bootstrap_retries_steam: futures::stream::futures_unordered::FuturesUnordered::new(),
+            open_requests: HashMap::new(),
+            send_mode,
         })
     }
 
@@ -241,8 +270,7 @@ impl NetworkProcessor {
     /// Run network processor.
     pub async fn run(mut self) {
         debug!("Running network");
-        let a = self.swarm
-            .listen_on(self.addr.clone());
+        let a = self.swarm.listen_on(self.addr.clone());
         if a.is_err() {
             println!("Error: {:?}", a.unwrap_err());
         }
@@ -547,6 +575,55 @@ impl NetworkProcessor {
                         self.swarm.behaviour_mut().routing.handle_event(ev);
                     }
                 },
+                NetworkComposedEvent::RequestResponseEvent(req_res_event) => match req_res_event {
+                    RequestResponseEvent::Message { peer, message } => match message {
+                        libp2p::request_response::RequestResponseMessage::Request {
+                            request,
+                            channel,
+                            ..
+                        } => {
+                            log::debug!("Request received from peer: {:?}", peer);
+                            // Save Response Channel
+                            self.open_requests
+                                .entry(peer)
+                                .or_insert(VecDeque::new())
+                                .push_back(channel);
+                            // Pass message to MessageReceiver
+                            self.event_sender
+                                .send(NetworkEvent::MessageReceived { message: request })
+                                .await
+                                .expect("Event receiver not to be dropped.");
+                        }
+                        libp2p::request_response::RequestResponseMessage::Response {
+                            response,
+                            ..
+                        } => {
+                            log::debug!("Response received from peer: {:?}", peer);
+                            // Pass message to MessageReceiver
+                            self.event_sender
+                                .send(NetworkEvent::MessageReceived { message: response })
+                                .await
+                                .expect("Event receiver not to be dropped.");
+                        }
+                    },
+                    RequestResponseEvent::OutboundFailure { peer, error, .. } => {
+                        log::error!(
+                            "OutboundFailure in request response: {:?} to peer: {:?}",
+                            error,
+                            peer
+                        );
+                    }
+                    RequestResponseEvent::InboundFailure { peer, error, .. } => {
+                        log::error!(
+                            "InboundFailure in request response: {:?} to peer: {:?}",
+                            error,
+                            peer
+                        );
+                    }
+                    RequestResponseEvent::ResponseSent { peer, .. } => {
+                        log::debug!("Response sent to peer: {:?}", peer);
+                    }
+                },
             },
             other => {
                 debug!("{}: Unhandled event {:?}", LOG_TARGET, other);
@@ -577,15 +654,52 @@ impl NetworkProcessor {
                     }
                 };
 
+                // Check if we have request open with peer, so we have to send the message as a response
+                if let Some(requests) = self.open_requests.get_mut(&peer_id) {
+                    while let Some(channel) = requests.pop_front() {
+                        if channel.is_open() {
+                            debug!(
+                                "{}: Sending Message as Response to {:?}",
+                                LOG_TARGET, peer_id
+                            );
+                            if let Err(error) = self
+                                .swarm
+                                .behaviour_mut()
+                                .req_res
+                                .send_response(channel, message.clone())
+                            {
+                                log::error!(
+                                    "Error sending response: {:?}, to {:?}",
+                                    error,
+                                    peer_id
+                                );
+                            } else {
+                                return;
+                            }
+                        }
+                    }
+                }
+
                 // If we have it check if we have the address (falta rellenar con direcciones de la cache)
                 let addresses_of_peer = self.swarm.behaviour_mut().addresses_of_peer(&peer_id);
                 if !addresses_of_peer.is_empty() {
                     debug!("MANDANDO MENSAJE, TENGO DIRECCIÓN");
                     // If we have an address, send the message
-                    self.swarm
-                        .behaviour_mut()
-                        .tell
-                        .send_message(&peer_id, &message);
+                    match self.send_mode {
+                        SendMode::RequestResponse => {
+                            let _req_id = self
+                                .swarm
+                                .behaviour_mut()
+                                .req_res
+                                .send_request(&peer_id, message);
+                        }
+                        SendMode::Tell => {
+                            self.swarm
+                                .behaviour_mut()
+                                .tell
+                                .send_message(&peer_id, &message);
+                        }
+                    }
                     return;
                 }
 
@@ -626,17 +740,26 @@ impl NetworkProcessor {
 
     /// Send all the pending messages to the specified controller
     fn send_pendings(&mut self, peer_id: &PeerId) {
-        let pending_messages = self.pendings.get_mut(peer_id);
+        let pending_messages = self.pendings.remove(peer_id);
         if let Some(pending_messages) = pending_messages {
-            for message in pending_messages.iter() {
+            for message in pending_messages.into_iter() {
                 debug!("MANDANDO MENSAJE");
-                self.swarm
-                    .behaviour_mut()
-                    .tell
-                    .send_message(peer_id, &message);
+                match self.send_mode {
+                    SendMode::RequestResponse => {
+                        let _req_id = self
+                            .swarm
+                            .behaviour_mut()
+                            .req_res
+                            .send_request(&peer_id, message);
+                    }
+                    SendMode::Tell => {
+                        self.swarm
+                            .behaviour_mut()
+                            .tell
+                            .send_message(&peer_id, &message);
+                    }
+                }
             }
-            // Clear the list
-            pending_messages.clear();
         }
     }
 

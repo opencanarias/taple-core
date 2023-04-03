@@ -17,7 +17,7 @@ use crate::ledger::ledger_manager::{CommandManagerMessage, CommandManagerRespons
 use crate::message::{
     Message, MessageReceiver, MessageSender, MessageTaskCommand, MessageTaskManager, NetworkEvent,
 };
-use crate::network::network::NetworkProcessor;
+use crate::network::network::{NetworkProcessor, SendMode};
 use crate::protocol::command_head_manager::{
     manager::CommandManager, CommandManagerResponses, Commands,
 };
@@ -204,6 +204,7 @@ impl<D: DatabaseManager + 'static> Taple<D> {
                 passvotation: 0,
                 dev_mode: false,
                 smartcontracts_directory: "../../../contracts".into(),
+                req_res: false,
             },
             database: DatabaseSettings { path: "".into() },
         }
@@ -339,6 +340,11 @@ impl<D: DatabaseManager + 'static> Taple<D> {
             sender_network,
             kp.clone(),
             bsx.subscribe(),
+            if self.settings.node.req_res {
+                SendMode::RequestResponse
+            } else {
+                SendMode::Tell
+            },
         )
         .await
         .expect("Error en creación de la capa de red");

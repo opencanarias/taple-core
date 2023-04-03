@@ -51,6 +51,8 @@ pub struct NodeSettings {
     pub replication_factor: f64,
     /// Timeout to be used between protocol iterations
     pub timeout: u32,
+    /// Use Request-Response protocol to send messages throught the network
+    pub req_res: bool,
     #[doc(hidden)]
     pub passvotation: u8,
     #[doc(hidden)]

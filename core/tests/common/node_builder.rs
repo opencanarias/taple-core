@@ -18,6 +18,7 @@ pub struct NodeBuilder {
     pass_votation: Option<u32>,
     dev_mode: Option<bool>,
     secret_key: Option<String>,
+    req_res: Option<bool>,
 }
 
 impl NodeBuilder {
@@ -35,6 +36,7 @@ impl NodeBuilder {
             pass_votation: None,
             dev_mode: None,
             secret_key: None,
+            req_res: None,
         }
     }
 
@@ -58,6 +60,7 @@ impl NodeBuilder {
                 passvotation: self.pass_votation.unwrap_or(0) as u8,
                 dev_mode: self.dev_mode.take().unwrap_or(false),
                 smartcontracts_directory: "../../../contracts".into(),
+                req_res: self.req_res.unwrap_or(false),
             },
             database: DatabaseSettings {
                 path: self.database_path.unwrap_or("".into()),
