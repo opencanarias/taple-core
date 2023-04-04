@@ -1,6 +1,6 @@
-use std::str::FromStr;
-use serde_json::{json, Value};
 use jsonschema::JSONSchema;
+use serde_json::{json, Value};
+use std::str::FromStr;
 
 use crate::commons::{errors::Error, identifier::KeyIdentifier};
 
@@ -37,38 +37,84 @@ fn validate_gov_keyidentifiers(key: &str) -> bool {
 
 pub fn get_governance_schema() -> Value {
     json!({
+      "$defs": {
+        "Roles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "Quorum": {
+          "oneOf": [
+            {
+              "const": "Majority"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "Fixed": {
+                  "type": "number",
+                  "minimum": 1,
+                  "multipleOf": 1
+                }
+              },
+              "required": ["Fixed"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "Porcentaje": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              },
+              "required": ["Porcentaje"],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "BFT": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              },
+              "required": ["BFT"],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "Validation": {
+          "type": "object",
+                "additionalProperties": false,
+                "required": ["Roles", "Quorum"],
+                "Roles": {
+                  "$ref": "#/$defs/Roles"
+                },
+                "Quorum": {
+                  "$ref": "#/$defs/Quorum"
+                }
+        }
+      },
       "type": "object",
       "additionalProperties": false,
       "required": [
         "members",
         "schemas",
-        "policies"
+        "policies",
+        "roles"
       ],
       "properties": {
         "members": {
           "type": "array",
-          "minItems": 1/* There must be a minimum of one member*/,
           "items": {
             "type": "object",
             "properties": {
               "id": {
                 "type": "string"
-              },
-              "tags": {
-                "type": "object",
-                "patternProperties": {
-                  "^.*$": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  }
-                },
-                "additionalProperties": false
               },
               "description": {
                 "type": "string"
@@ -80,38 +126,74 @@ pub fn get_governance_schema() -> Value {
             },
             "required": [
               "id",
-              "tags",
               "key"
             ],
             "additionalProperties": false
           }
         },
-        "schemas": {
+        "roles": {
+          "type": "object",
+          "properties": {
+            "Id": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "Id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["Id"],
+                  "additionalProperties": false
+                },
+                {
+                  "const": "Members"
+                },
+                {
+                  "const": "All"
+                },
+                {
+                  "const": "External"
+                }
+              ]
+            },
+            "Namespace": {
+              "type": "string"
+            },
+            "Roles": {
+              "$ref": "#/$defs/Roles"
+            },
+            "Schema": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "Id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["Id"],
+                  "additionalProperties": false
+                },
+                {
+                  "const": "All_Schemas"
+                }
+              ]
+            }
+          },
+          "required": ["Id", "Roles", "Schema"],
+          "additionalProperties": false
+        },
+        "Schemas": {
           "type": "array",
           "minItems": 0,
           "items": {
             "type": "object",
             "properties": {
-              "id": {
+              "Id": {
                 "type": "string"
               },
-              "tags": {
-                "type": "object",
-                "patternProperties": {
-                  "^.*$": {
-                    "anyOf": [
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  }
-                },
-                "additionalProperties": false
-              },
-              "content": {
+              "State-Schema": {
                 "$schema": "http://json-schema.org/draft/2020-12/schema",
                 "$id": "http://json-schema.org/draft/2020-12/schema",
                 "$vocabulary": {
@@ -543,12 +625,42 @@ pub fn get_governance_schema() -> Value {
                     "deprecated": true
                   }
                 }
+              },
+              "Initial-Value": {},
+              "Contract": {
+                "type": "object",
+                "properties": {
+                  "Name": {
+                    "type": "string"
+                  },
+                  "Content": {
+                    "type": "string"
+                  },
+                },
+                "additionalProperties": false,
+                "required": ["Name", "Content"]
+              },
+              "Facts": {
+                "type": "object",
+                "properties": {
+                  "Name": {
+                    "type": "string"
+                  },
+                  "Description": {
+                    "type": "string"
+                  },
+                  "Schema":{}
+                },
+                "additionalProperties": false,
+                "required": ["Name", "Schema"]
               }
             },
             "required": [
-              "id",
-              "tags",
-              "content"
+              "Id",
+              "State-Schema",
+              "Initial-Value",
+              "Contract",
+              "Facts"
             ],
             "additionalProperties": false
           }
@@ -559,138 +671,49 @@ pub fn get_governance_schema() -> Value {
             "type": "object",
             "additionalProperties": false,
             "required": [
-              "validation",
-              "id",
-              "approval",
-              "invokation"
+              "Id", "Approve", "Evaluate", "Validate", "Create", "Witness", "Close", "Invoke"
             ],
             "properties": {
-              "id": {
+              "Id": {
                 "type": "string"
               },
-              "validation": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "quorum",
-                  "validators"
-                ],
-                "properties": {
-                  "quorum": {
-                    "type": "number",
-                    "minimum": 0,
-                    "maximum": 1.0
-                  },
-                  "validators": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  }
-                }
+              "Approve": {
+                "$ref": "#/$defs/Validation"
               },
-              "approval": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "quorum",
-                  "approvers"
-                ],
-                "properties": {
-                  "quorum": {
-                    "type": "number",
-                    "minimum": 0,
-                    "maximum": 1.0
-                  },
-                  "approvers": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  }
-                }
+              "Evaluate": {
+                "$ref": "#/$defs/Validation"
               },
-              "invokation": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "owner",
-                  "set",
-                  "all",
-                  "external"
-                ],
-                "properties": {
-                  "owner": {
-                    "type": "object",
-                    "properties": {
-                      "allowance": {
-                        "type": "boolean"
-                      },
-                      "approvalRequired": {
-                        "type": "boolean"
-                      }
+              "Validate": {
+                "$ref": "#/$defs/Validation"
+              },
+              "Create": {
+                "$ref": "#/$defs/Roles"
+              },
+              "Witness": {
+                "$ref": "#/$defs/Roles"
+              },
+              "Close": {
+                "$ref": "#/$defs/Roles"
+              },
+              "Invoke": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "Fact": {
+                      "type": "string"
                     },
-                    "additionalProperties": false,
-                    "required": [
-                      "allowance",
-                      "approvalRequired"
-                    ]
+                    "ApprovalRequired": {
+                      "type": "boolean"
+                    },
+                    "Roles": {
+                      "$ref": "#/$defs/Roles"
+                    }
                   },
-                  "set": {
-                    "type": "object",
-                    "properties": {
-                      "allowance": {
-                        "type": "boolean"
-                      },
-                      "approvalRequired": {
-                        "type": "boolean"
-                      },
-                      "invokers": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
-                      }
-                    },
-                    "additionalProperties": false,
-                    "required": [
-                      "allowance",
-                      "approvalRequired",
-                      "invokers"
-                    ]
-                  },
-                  "all": {
-                    "type": "object",
-                    "properties": {
-                      "allowance": {
-                        "type": "boolean"
-                      },
-                      "approvalRequired": {
-                        "type": "boolean"
-                      }
-                    },
-                    "additionalProperties": false,
-                    "required": [
-                      "allowance",
-                      "approvalRequired"
-                    ]
-                  },
-                  "external": {
-                    "type": "object",
-                    "properties": {
-                      "allowance": {
-                        "type": "boolean"
-                      },
-                      "approvalRequired": {
-                        "type": "boolean"
-                      }
-                    },
-                    "additionalProperties": false,
-                    "required": [
-                      "allowance",
-                      "approvalRequired"
-                    ]
-                  }
+                  "additionalProperties": false,
+                  "required": [
+                    "Fact", "ApprovalRequired", "Roles"
+                  ]
                 }
               }
             }

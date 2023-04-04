@@ -118,6 +118,86 @@ mod tests {
     const LOG_TARGET: &str = "NETWORK_TEST";
 
     #[test]
+    fn create_network_req_res() {
+        let rt = Runtime::new().unwrap();
+
+        rt.block_on(async {
+            let mc1 = KeyPair::Ed25519(crate::commons::crypto::Ed25519KeyPair::from_seed(
+                format!("pepe").as_bytes(),
+            ));
+            let mc2 = KeyPair::Ed25519(crate::commons::crypto::Ed25519KeyPair::from_seed(
+                format!("paco").as_bytes(),
+            ));
+            let (sender1, receiver1) = mpsc::channel(10000);
+            let (sender_boot, receiver_boot) = mpsc::channel(10000);
+            let (bsx, brx) = tokio::sync::broadcast::channel::<()>(10);
+            let bootstrap_network = NetworkProcessor::new(
+                Some(String::from("/memory/647988")),
+                vec![],
+                sender_boot,
+                mc1,
+                bsx.subscribe(),
+                SendMode::RequestResponse,
+            )
+            .await.unwrap();
+            let msg_sender_boot = bootstrap_network.client();
+            let mut msg_rcv_boot = ReceiverStream::new(receiver_boot);
+            let bt_pid = bootstrap_network.local_peer_id().clone();
+            let node1_network = NetworkProcessor::new(
+                Some(String::from("/memory/647999")),
+                vec![(bt_pid, String::from("/memory/647988").parse().unwrap())],
+                sender1,
+                mc2,
+                brx,
+                SendMode::RequestResponse,
+            )
+            .await.unwrap();
+            let msg_sender_1 = node1_network.client();
+            let mut msg_rcv_1 = ReceiverStream::new(receiver1);
+
+            tokio::spawn(async move {
+                loop {
+                    tokio::select! {
+                        event = msg_rcv_1.next() => match event {
+                            Some(NetworkEvent::MessageReceived { message }) => {
+                                debug!("{}: Recibido el mensaje: {}.", LOG_TARGET, std::str::from_utf8(&message).unwrap());
+                                assert_eq!(std::str::from_utf8(&message).unwrap(), "Hola si");
+                                msg_sender_1.send(Command::SendMessage { receptor: mc_bytes_from_seed(&String::from("pepe")), message: "que tal".as_bytes().to_vec() })
+                                .await.unwrap();
+                            },
+                            None => {}
+                        },
+                    }
+                }
+            });
+
+            tokio::spawn(async move {
+                bootstrap_network.run().await;
+            });
+            tokio::spawn(async move {
+                node1_network.run().await;
+            });
+
+            std::thread::sleep(Duration::from_secs(5));
+            msg_sender_boot.send(Command::SendMessage { receptor: mc_bytes_from_seed(&String::from("paco")), message: "Hola si".as_bytes().to_vec() }).await.unwrap();
+
+            loop {
+                tokio::select! {
+                    event = msg_rcv_boot.next() => match event {
+                        Some(NetworkEvent::MessageReceived { message }) => {
+                            // The message will be a string for now
+                            debug!("{}: Recibido el mensaje: {}.", LOG_TARGET, std::str::from_utf8(&message).unwrap());
+                            assert_eq!(std::str::from_utf8(&message).unwrap(), "que tal");
+                            break;
+                        },
+                        None => {}
+                    },
+                }
+            }
+        })
+    }
+
+    #[test]
     fn test_node_behaviour_works_simple() {
         let rt = Runtime::new().unwrap();
 

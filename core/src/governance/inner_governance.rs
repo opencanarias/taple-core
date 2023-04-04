@@ -1,14 +1,17 @@
 use std::{collections::HashSet, str::FromStr};
 
-use crate::{commons::{
-    identifier::{Derivable, DigestIdentifier, KeyIdentifier},
-    models::{
-        approval_signature::ApprovalResponse,
-        event::Event,
-        event_content::Metadata,
-        event_request::{EventRequest, EventRequestType},
+use crate::{
+    commons::{
+        identifier::{Derivable, DigestIdentifier, KeyIdentifier},
+        models::{
+            approval_signature::ApprovalResponse,
+            event::Event,
+            event_content::Metadata,
+            event_request::{EventRequest, EventRequestType},
+        },
     },
-}, database::Error as DbError};
+    database::Error as DbError,
+};
 use serde_json::Value;
 
 use super::{
@@ -18,7 +21,7 @@ use super::{
 use crate::commons::models::event_request::EventRequestType::State;
 use crate::commons::models::event_request::RequestPayload::Json;
 
-use crate::database::{DB, DatabaseManager};
+use crate::database::{DatabaseManager, DB};
 
 pub struct InnerGovernance<D: DatabaseManager> {
     repo_access: DB<D>,
@@ -44,29 +47,23 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         let governance = self.repo_access.get_subject(&governance_id);
         let governance = match governance {
             Ok(governance) => governance,
-            Err(DbError::EntryNotFound) => return Ok(Err(RequestError::GovernanceNotFound(governance_id.to_str()))),
-            Err(error) => return Err(InternalError::DatabaseError { source: error })
+            Err(DbError::EntryNotFound) => {
+                return Ok(Err(RequestError::GovernanceNotFound(
+                    governance_id.to_str(),
+                )))
+            }
+            Err(error) => return Err(InternalError::DatabaseError { source: error }),
         };
         let properties: Value = serde_json::from_str(&governance.subject_data.unwrap().properties)
             .map_err(|_| InternalError::DeserializationError)?;
         let schemas = get_as_array(&properties, "schemas")?;
-        let mut selected_schema = None;
         for schema in schemas {
             let tmp = get_as_str(schema, "id")?;
             if tmp == &schema_id {
-                selected_schema = Some(schema);
-                break;
+                return Ok(Ok(schema.get("State-Schema").unwrap().to_owned()));
             }
         }
-        if selected_schema.is_none() {
-            return Ok(Err(RequestError::SchemaNotFound(schema_id)));
-        } else {
-            return Ok(Ok(selected_schema
-                .unwrap()
-                .get("content")
-                .unwrap()
-                .to_owned()));
-        }
+        return Ok(Err(RequestError::SchemaNotFound(schema_id)));
     }
 
     pub fn get_validators(
@@ -82,7 +79,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         let governance = match governance {
             Ok(governance) => governance,
             Err(DbError::EntryNotFound) => return Self::parche(event),
-            Err(error) => return Err(InternalError::DatabaseError { source: error })
+            Err(error) => return Err(InternalError::DatabaseError { source: error }),
         };
         if governance.subject_data.is_some() {
             let properties: Value =
@@ -115,7 +112,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         let subject = match self.repo_access.get_subject(&request.subject_id) {
             Ok(subject) => subject,
             Err(DbError::EntryNotFound) => return Ok(Err(RequestError::SubjectNotFound)),
-            Err(error) => return Err(InternalError::DatabaseError { source: error })
+            Err(error) => return Err(InternalError::DatabaseError { source: error }),
         };
         let Some(subject_data) = subject.subject_data else {
             return Ok(Err(RequestError::SubjectNotFound))
@@ -123,8 +120,12 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         let governance_id = subject_data.governance_id.clone();
         let governance = match self.repo_access.get_subject(&governance_id) {
             Ok(governance) => governance,
-            Err(DbError::EntryNotFound) => return Ok(Err(RequestError::GovernanceNotFound(governance_id.to_str()))),
-            Err(error) => return Err(InternalError::DatabaseError { source: error })
+            Err(DbError::EntryNotFound) => {
+                return Ok(Err(RequestError::GovernanceNotFound(
+                    governance_id.to_str(),
+                )))
+            }
+            Err(error) => return Err(InternalError::DatabaseError { source: error }),
         };
         if governance.subject_data.is_some() {
             let properties: Value =
@@ -142,7 +143,9 @@ impl<D: DatabaseManager> InnerGovernance<D> {
             };
             Ok(Ok(all_approvers))
         } else {
-            Ok(Err(RequestError::GovernanceNotFound(governance_id.to_str())))
+            Ok(Err(RequestError::GovernanceNotFound(
+                governance_id.to_str(),
+            )))
         }
     }
 
@@ -189,8 +192,12 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         }
         let governance = match self.repo_access.get_subject(&governance_id) {
             Ok(governance) => governance,
-            Err(DbError::EntryNotFound) => return Ok(Err(RequestError::GovernanceNotFound(governance_id.to_str()))),
-            Err(error) => return Err(InternalError::DatabaseError { source: error })
+            Err(DbError::EntryNotFound) => {
+                return Ok(Err(RequestError::GovernanceNotFound(
+                    governance_id.to_str(),
+                )))
+            }
+            Err(error) => return Err(InternalError::DatabaseError { source: error }),
         };
         let subject_data = governance.subject_data.unwrap();
         if !subject_data.governance_id.digest.is_empty() {
@@ -213,7 +220,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         let governance = match self.repo_access.get_subject(&governance_id) {
             Ok(governance) => governance,
             Err(DbError::EntryNotFound) => return self.parche2(signers, event),
-            Err(error) => return Err(InternalError::DatabaseError { source: error })
+            Err(error) => return Err(InternalError::DatabaseError { source: error }),
         };
         if governance.subject_data.is_none() {
             return self.parche2(signers, event);
@@ -304,7 +311,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         let subject = match self.repo_access.get_subject(&request.subject_id) {
             Ok(subject) => subject,
             Err(DbError::EntryNotFound) => return Ok(Err(RequestError::SubjectNotFound)),
-            Err(error) => return Err(InternalError::DatabaseError { source: error })
+            Err(error) => return Err(InternalError::DatabaseError { source: error }),
         };
         let Some(subject_data) = subject.subject_data else {
             return Ok(Err(RequestError::SubjectNotFound))
@@ -316,11 +323,17 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         };
         let governance = match self.repo_access.get_subject(&governance_id) {
             Ok(governance) => governance,
-            Err(DbError::EntryNotFound) => return Ok(Err(RequestError::GovernanceNotFound(governance_id.to_str()))),
-            Err(error) => return Err(InternalError::DatabaseError { source: error })
+            Err(DbError::EntryNotFound) => {
+                return Ok(Err(RequestError::GovernanceNotFound(
+                    governance_id.to_str(),
+                )))
+            }
+            Err(error) => return Err(InternalError::DatabaseError { source: error }),
         };
         if governance.subject_data.is_none() {
-            return Ok(Err(RequestError::GovernanceNotFound(governance_id.to_str())));
+            return Ok(Err(RequestError::GovernanceNotFound(
+                governance_id.to_str(),
+            )));
         };
         let properties: Value = serde_json::from_str(&governance.subject_data.unwrap().properties)
             .map_err(|_| InternalError::DeserializationError)?;
@@ -360,8 +373,12 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         let mut negative_approvals: usize = 0;
         for approval in approvals.into_iter() {
             match approval.content.approval_type {
-                crate::commons::models::approval_signature::Acceptance::Accept => positive_approvals += 1,
-                crate::commons::models::approval_signature::Acceptance::Reject => negative_approvals += 1,
+                crate::commons::models::approval_signature::Acceptance::Accept => {
+                    positive_approvals += 1
+                }
+                crate::commons::models::approval_signature::Acceptance::Reject => {
+                    negative_approvals += 1
+                }
             }
         }
         let quorum_result = if positive_approvals >= acceptance_quorum {
@@ -381,7 +398,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         let subject = match self.repo_access.get_subject(&subject_id) {
             Ok(subject) => subject,
             Err(DbError::EntryNotFound) => return Ok(Err(RequestError::SubjectNotFound)),
-            Err(error) => return Err(InternalError::DatabaseError { source: error })
+            Err(error) => return Err(InternalError::DatabaseError { source: error }),
         };
         let Some(subject_data) = subject.subject_data else {
             return Ok(Err(RequestError::SubjectNotFound))
@@ -426,27 +443,44 @@ impl<D: DatabaseManager> InnerGovernance<D> {
                     // Governance
                     let payload = additional_payload.unwrap();
                     let properties: Value = serde_json::from_str(&payload)
-                    .map_err(|_| InternalError::DeserializationError)?;
-                    return self.check_invokation(&properties, invokator, Some(metadata.unwrap().owner.to_str()), &"governance".into());
+                        .map_err(|_| InternalError::DeserializationError)?;
+                    return self.check_invokation(
+                        &properties,
+                        invokator,
+                        Some(metadata.unwrap().owner.to_str()),
+                        &"governance".into(),
+                    );
                 } else if metadata.is_some() {
                     let metadata = metadata.unwrap();
                     let governance_id = metadata.governance_id;
                     let governance = match self.repo_access.get_subject(&governance_id) {
                         Ok(governance) => governance,
-                        Err(DbError::EntryNotFound) => return Ok(Err(RequestError::GovernanceNotFound(governance_id.to_str()))),
-                        Err(error) => return Err(InternalError::DatabaseError { source: error })
+                        Err(DbError::EntryNotFound) => {
+                            return Ok(Err(RequestError::GovernanceNotFound(
+                                governance_id.to_str(),
+                            )))
+                        }
+                        Err(error) => return Err(InternalError::DatabaseError { source: error }),
                     };
                     if governance.subject_data.is_none() {
-                        return Ok(Err(RequestError::GovernanceNotFound(governance_id.to_str())));
+                        return Ok(Err(RequestError::GovernanceNotFound(
+                            governance_id.to_str(),
+                        )));
                     };
-                    let properties: Value = serde_json::from_str(&governance.subject_data.unwrap().properties)
-                        .map_err(|_| InternalError::DeserializationError)?;
+                    let properties: Value =
+                        serde_json::from_str(&governance.subject_data.unwrap().properties)
+                            .map_err(|_| InternalError::DeserializationError)?;
                     let owner = metadata.owner.to_str();
-                    return self.check_invokation(&properties, invokator, Some(owner), &metadata.schema_id);
+                    return self.check_invokation(
+                        &properties,
+                        invokator,
+                        Some(owner),
+                        &metadata.schema_id,
+                    );
                 }
                 return Ok(Err(RequestError::SubjectNotFound));
-            },
-            Err(error) => return Err(InternalError::DatabaseError { source: error })
+            }
+            Err(error) => return Err(InternalError::DatabaseError { source: error }),
         };
         let Some(subject_data) = subject.subject_data else {
             return Ok(Err(RequestError::SubjectNotFound));
@@ -458,11 +492,17 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         };
         let governance = match self.repo_access.get_subject(&governance_id) {
             Ok(governance) => governance,
-            Err(DbError::EntryNotFound) => return Ok(Err(RequestError::GovernanceNotFound(governance_id.to_str()))),
-            Err(error) => return Err(InternalError::DatabaseError { source: error })
+            Err(DbError::EntryNotFound) => {
+                return Ok(Err(RequestError::GovernanceNotFound(
+                    governance_id.to_str(),
+                )))
+            }
+            Err(error) => return Err(InternalError::DatabaseError { source: error }),
         };
         if governance.subject_data.is_none() {
-            return Ok(Err(RequestError::GovernanceNotFound(governance_id.to_str())));
+            return Ok(Err(RequestError::GovernanceNotFound(
+                governance_id.to_str(),
+            )));
         };
         let properties: Value = serde_json::from_str(&governance.subject_data.unwrap().properties)
             .map_err(|_| InternalError::DeserializationError)?;
