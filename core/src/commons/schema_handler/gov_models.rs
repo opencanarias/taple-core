@@ -43,3 +43,16 @@ pub struct Invoke {
     pub ApprovalRequired: bool,
     pub Roles: HashSet<String>,
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Contract {
+    Name: String,
+    Content: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Facts {
+    Name: String,
+    Description: Option<String>,
+    Schema: serde_json::Value,
+}

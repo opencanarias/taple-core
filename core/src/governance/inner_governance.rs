@@ -9,7 +9,7 @@ use crate::{
             event_content::Metadata,
             event_request::{EventRequest, EventRequestType},
         },
-        schema_handler::gov_models::{Invoke, Quorum, Role, Schema},
+        schema_handler::gov_models::{Contract, Invoke, Quorum, Role, Schema},
     },
     database::Error as DbError,
 };
@@ -233,6 +233,41 @@ impl<D: DatabaseManager> InnerGovernance<D> {
            // Se puede refactorizar lo de arriba de aquí y meter en una función porque es lo mismo en todos los métodos nuevos
         let invoke = get_invoke_from_policy(schema_policy, fact)?;
         Ok(Ok(invoke))
+    }
+
+    // NEW
+    pub fn get_contracts(
+        &self,
+        governance_id: DigestIdentifier,
+    ) -> Result<Result<Vec<Contract>, RequestError>, InternalError> {
+        let governance = self.repo_access.get_subject(&governance_id);
+        let governance = match governance {
+            Ok(governance) => {
+                if governance.subject_data.is_some() {
+                    governance.subject_data.unwrap()
+                } else {
+                    return Ok(Err(RequestError::GovernanceNotFound(
+                        governance_id.to_str(),
+                    )));
+                }
+            }
+            Err(DbError::EntryNotFound) => {
+                return Ok(Err(RequestError::GovernanceNotFound(
+                    governance_id.to_str(),
+                )))
+            }
+            Err(error) => return Err(InternalError::DatabaseError { source: error }),
+        };
+        let properties: Value = serde_json::from_str(&governance.properties)
+            .map_err(|_| InternalError::DeserializationError)?;
+        let schemas = get_as_array(&properties, "Schemas")?;
+        let result = Vec::new();
+        for schema in schemas {
+            let contract: Contract = serde_json::from_value(schema["Contract"])
+                .map_err(|_| InternalError::InvalidGovernancePayload)?;
+            result.push(contract);
+        }
+        Ok(Ok(result))
     }
 
     // OLD
