@@ -9,7 +9,7 @@ use crate::{
             event_content::Metadata,
             event_request::{EventRequest, EventRequestType},
         },
-        schema_handler::gov_models::Quorum,
+        schema_handler::gov_models::{Quorum, Role, Schema},
     },
     database::Error as DbError,
 };
@@ -105,12 +105,93 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         let Ok(schema_policy) = schema_policy else {
             return Ok(Err(schema_policy.unwrap_err()));
         }; // El return dentro de otro return es una **** que obliga a hacer cosas como esta
-        let signers = get_as_array(&schema_policy.get(stage.to_str()).unwrap(), "Roles")?;
-        let all_signers = get_members_from_set(&signers);
-        let Ok(all_signers) = all_signers else {
-                return Ok(Err(all_signers.unwrap_err()));
-            };
-        Ok(Ok(all_signers))
+        let stage_str = stage.to_str();
+        let signers_roles: Vec<String> =
+            get_as_array(&schema_policy.get(stage_str).unwrap(), "Roles")?
+                .into_iter()
+                .map(|role| {
+                    let a = role
+                        .as_str()
+                        .ok_or(InternalError::InvalidGovernancePayload)
+                        .map(|s| s.to_owned());
+                    a.expect("Invalid Governance Payload")
+                })
+                .collect();
+        let members = get_members_from_governance(&properties)?;
+        let roles_prop = properties["Roles"]
+            .as_array()
+            .expect("Existe Roles")
+            .to_owned();
+        let roles = get_roles(&schema_id, roles_prop)?;
+        let signers = get_signers_from_roles(&members, &signers_roles, roles)?;
+        Ok(Ok(signers))
+    }
+
+    // NEW Devuelve el número de firmas necesarias para que un evento sea válido
+    pub fn get_quorum(
+        &self,
+        metadata: Metadata,
+        stage: ValidationStage,
+    ) -> Result<Result<u32, RequestError>, InternalError> {
+        let mut governance_id = metadata.governance_id;
+        if governance_id.digest.is_empty() {
+            governance_id = metadata.subject_id;
+        }
+        let schema_id = metadata.schema_id;
+        let governance = self.repo_access.get_subject(&governance_id);
+        let governance = match governance {
+            Ok(governance) => {
+                if governance.subject_data.is_some() {
+                    governance.subject_data.unwrap()
+                } else {
+                    return Ok(Err(RequestError::GovernanceNotFound(
+                        governance_id.to_str(),
+                    )));
+                }
+            }
+            Err(DbError::EntryNotFound) => {
+                return Ok(Err(RequestError::GovernanceNotFound(
+                    governance_id.to_str(),
+                )))
+            }
+            Err(error) => return Err(InternalError::DatabaseError { source: error }),
+        };
+        let properties: Value = serde_json::from_str(&governance.properties)
+            .map_err(|_| InternalError::DeserializationError)?;
+        let policies = get_as_array(&properties, "Policies")?;
+        let schema_policy = get_schema_from_policies(policies, &schema_id);
+        let Ok(schema_policy) = schema_policy else {
+            return Ok(Err(schema_policy.unwrap_err()));
+        }; // El return dentro de otro return es una **** que obliga a hacer cosas como esta
+        let stage_str = stage.to_str();
+        let signers_roles: Vec<String> =
+            get_as_array(&schema_policy.get(stage_str).unwrap(), "Roles")?
+                .into_iter()
+                .map(|role| {
+                    let a = role
+                        .as_str()
+                        .ok_or(InternalError::InvalidGovernancePayload)
+                        .map(|s| s.to_owned());
+                    a.expect("Invalid Governance Payload")
+                })
+                .collect();
+        let members = get_members_from_governance(&properties)?;
+        let roles_prop = properties["Roles"]
+            .as_array()
+            .expect("Existe Roles")
+            .to_owned();
+        let roles = get_roles(&schema_id, roles_prop)?;
+        let signers = get_signers_from_roles(&members, &signers_roles, roles)?;
+        let quorum = get_quorum(&schema_policy, stage_str)?;
+        match quorum {
+            Quorum::Majority => Ok(Ok((signers.len() + 1) as u32 / 2)),
+            Quorum::Fixed { Fixed } => Ok(Ok(Fixed)),
+            Quorum::Porcentaje { Porcentaje } => {
+                let result = (signers.len() as f64 * Porcentaje).ceil() as u32;
+                Ok(Ok(result))
+            }
+            Quorum::BFT { BFT } => todo!(),
+        }
     }
 
     // OLD
@@ -673,10 +754,12 @@ fn extract_allowance_and_approval_required(
     Ok((allowance, approval_required))
 }
 
-fn get_members_from_governance(properties: &Value) -> Result<HashSet<String>, InternalError> {
-    let mut member_ids: HashSet<String> = HashSet::new();
+fn get_members_from_governance(
+    properties: &Value,
+) -> Result<HashSet<KeyIdentifier>, InternalError> {
+    let mut member_ids: HashSet<KeyIdentifier> = HashSet::new();
     let members = properties
-        .get("members")
+        .get("Members")
         .unwrap()
         .as_array()
         .unwrap()
@@ -686,11 +769,58 @@ fn get_members_from_governance(properties: &Value) -> Result<HashSet<String>, In
             .get("key")
             .expect("Se ha validado que tiene key")
             .as_str()
-            .expect("Hay id y es str")
-            .to_owned();
+            .expect("Hay id y es str");
+        let member_id = KeyIdentifier::from_str(member_id)
+            .map_err(|_| InternalError::InvalidGovernancePayload)?;
         let true = member_ids.insert(member_id) else {
             return Err(InternalError::InvalidGovernancePayload);
         };
     }
     Ok(member_ids)
+}
+
+fn get_signers_from_roles(
+    members: &HashSet<KeyIdentifier>,
+    roles: &Vec<String>,
+    roles_schema: Vec<Role>,
+) -> Result<HashSet<KeyIdentifier>, InternalError> {
+    let mut signers: HashSet<KeyIdentifier> = HashSet::new();
+    for role in roles_schema {
+        if contains_common_element(&role.Roles, roles) {
+            match role.Who {
+                crate::commons::schema_handler::gov_models::Who::IdObject { Id } => {
+                    signers.insert(KeyIdentifier::from_str(&Id).map_err(|_| InternalError::InvalidGovernancePayload)?);
+                }
+                crate::commons::schema_handler::gov_models::Who::Members => {
+                    return Ok(members.clone())
+                }
+                _ => {}
+                // Entiendo que con esto no se hace nada de cara a validación
+                // crate::commons::schema_handler::gov_models::Who::All => todo!(),
+                // crate::commons::schema_handler::gov_models::Who::External => todo!(),
+            }
+        }
+    }
+    Ok(signers)
+}
+
+fn get_roles(schema_id: &str, roles_prop: Vec<Value>) -> Result<Vec<Role>, InternalError> {
+    let mut roles = Vec::new();
+    for role in roles_prop {
+        let role_data: Role =
+            serde_json::from_value(role).map_err(|_| InternalError::InvalidGovernancePayload)?;
+        match role_data.Schema {
+            Schema::IdObject { Id } => {
+                if &Id == schema_id {
+                    roles.push(role_data)
+                }
+            }
+            Schema::AllSchemas => roles.push(role_data),
+        }
+    }
+    Ok(roles)
+}
+
+fn contains_common_element(set1: &HashSet<String>, vec2: &[String]) -> bool {
+    vec2.iter().any(|s| set1.contains(s))
 }

@@ -134,10 +134,12 @@ pub fn get_governance_schema() -> Value {
           }
         },
         "Roles": {
-          "type": "object",
-          "properties": {
-            "Id": {
-              "oneOf": [
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "Who": {
+                "oneOf": [
                 {
                   "type": "object",
                   "properties": {
@@ -180,11 +182,12 @@ pub fn get_governance_schema() -> Value {
                 {
                   "const": "All_Schemas"
                 }
-              ]
-            }
-          },
-          "required": ["Id", "Roles", "Schema"],
-          "additionalProperties": false
+                ]
+              }
+            },
+            "required": ["Who", "Roles", "Schema"],
+            "additionalProperties": false
+          }
         },
         "Schemas": {
           "type": "array",

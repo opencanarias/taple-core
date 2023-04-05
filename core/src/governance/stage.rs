@@ -6,7 +6,6 @@ pub enum ValidationStage {
     Witness,
     Create,
     Close,
-    Invoke,
 }
 
 impl ValidationStage {
@@ -18,7 +17,6 @@ impl ValidationStage {
             ValidationStage::Witness => "Witness",
             ValidationStage::Create => "Create",
             ValidationStage::Close => "Close",
-            ValidationStage::Invoke => "Invoke",
         }
     }
 }
