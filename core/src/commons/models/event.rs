@@ -170,7 +170,8 @@ impl Default for Event {
                     governance_id: DigestIdentifier::from_str("J3pDuDQICA7iSCGDKUfIr2rconDPQ11jCKJhLUrSPM_U").unwrap(), 
                     governance_version: 0, 
                     schema_id: "Prueba".to_owned(), 
-                    owner: KeyIdentifier::from_str("ED8MpwKh3OjPEw_hQdqJixrXlKzpVzdvHf2DqrPvdz7Y").unwrap() }, approved: true 
+                    owner: KeyIdentifier::from_str("ED8MpwKh3OjPEw_hQdqJixrXlKzpVzdvHf2DqrPvdz7Y").unwrap(),
+                    subject_id: DigestIdentifier::from_str("J3pDuDQICA7iSCGDKUfIr2rconDPQ11jCKJhLUrSPM_U").unwrap(), }, approved: true 
                 },
             signature: Signature {
                 content: SignatureContent {

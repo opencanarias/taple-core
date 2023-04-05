@@ -2,6 +2,8 @@ use jsonschema::JSONSchema;
 use serde_json::{json, Value};
 use std::str::FromStr;
 
+pub mod gov_models;
+
 use crate::commons::{errors::Error, identifier::KeyIdentifier};
 
 #[derive(Debug)]
@@ -102,13 +104,13 @@ pub fn get_governance_schema() -> Value {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "members",
-        "schemas",
-        "policies",
-        "roles"
+        "Members",
+        "Schemas",
+        "Policies",
+        "Roles"
       ],
       "properties": {
-        "members": {
+        "Members": {
           "type": "array",
           "items": {
             "type": "object",
@@ -131,7 +133,7 @@ pub fn get_governance_schema() -> Value {
             "additionalProperties": false
           }
         },
-        "roles": {
+        "Roles": {
           "type": "object",
           "properties": {
             "Id": {
@@ -665,7 +667,7 @@ pub fn get_governance_schema() -> Value {
             "additionalProperties": false
           }
         },
-        "policies": {
+        "Policies": {
           "type": "array",
           "items": {
             "type": "object",

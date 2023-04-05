@@ -10,6 +10,7 @@ use crate::commons::{
 pub mod error;
 pub mod governance;
 pub mod inner_governance;
+pub mod stage;
 
 pub use governance::{GovernanceAPI, GovernanceInterface};
 

@@ -9,6 +9,7 @@ use crate::{
             event_content::Metadata,
             event_request::{EventRequest, EventRequestType},
         },
+        schema_handler::gov_models::Quorum,
     },
     database::Error as DbError,
 };
@@ -16,6 +17,7 @@ use serde_json::Value;
 
 use super::{
     error::{InternalError, RequestError},
+    stage::ValidationStage,
     RequestQuorum,
 };
 use crate::commons::models::event_request::EventRequestType::State;
@@ -36,6 +38,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         }
     }
 
+    // UPDATED
     pub fn get_schema(
         &self,
         governance_id: DigestIdentifier,
@@ -66,6 +69,51 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         return Ok(Err(RequestError::SchemaNotFound(schema_id)));
     }
 
+    // NEW
+    pub fn get_signers(
+        &self,
+        metadata: Metadata,
+        stage: ValidationStage,
+    ) -> Result<Result<HashSet<KeyIdentifier>, RequestError>, InternalError> {
+        let mut governance_id = metadata.governance_id;
+        if governance_id.digest.is_empty() {
+            governance_id = metadata.subject_id;
+        }
+        let schema_id = metadata.schema_id;
+        let governance = self.repo_access.get_subject(&governance_id);
+        let governance = match governance {
+            Ok(governance) => {
+                if governance.subject_data.is_some() {
+                    governance.subject_data.unwrap()
+                } else {
+                    return Ok(Err(RequestError::GovernanceNotFound(
+                        governance_id.to_str(),
+                    )));
+                }
+            }
+            Err(DbError::EntryNotFound) => {
+                return Ok(Err(RequestError::GovernanceNotFound(
+                    governance_id.to_str(),
+                )))
+            }
+            Err(error) => return Err(InternalError::DatabaseError { source: error }),
+        };
+        let properties: Value = serde_json::from_str(&governance.properties)
+            .map_err(|_| InternalError::DeserializationError)?;
+        let policies = get_as_array(&properties, "Policies")?;
+        let schema_policy = get_schema_from_policies(policies, &schema_id);
+        let Ok(schema_policy) = schema_policy else {
+            return Ok(Err(schema_policy.unwrap_err()));
+        }; // El return dentro de otro return es una **** que obliga a hacer cosas como esta
+        let signers = get_as_array(&schema_policy.get(stage.to_str()).unwrap(), "Roles")?;
+        let all_signers = get_members_from_set(&signers);
+        let Ok(all_signers) = all_signers else {
+                return Ok(Err(all_signers.unwrap_err()));
+            };
+        Ok(Ok(all_signers))
+    }
+
+    // OLD
     pub fn get_validators(
         &self,
         event: Event,
@@ -102,6 +150,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         }
     }
 
+    // OLD
     pub fn get_approvers(
         &self,
         event_request: EventRequest,
@@ -149,6 +198,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         }
     }
 
+    // OLD
     fn parche(event: Event) -> Result<Result<HashSet<KeyIdentifier>, RequestError>, InternalError> {
         if event.event_content.metadata.governance_id.digest.is_empty() {
             if let State(state_request) = event.event_content.event_request.request {
@@ -179,10 +229,12 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         }
     }
 
+    // OLD
     pub fn check_policy(&self) -> Result<Result<bool, RequestError>, InternalError> {
         Ok(Ok(true))
     }
 
+    // OLD BUT OK
     pub fn get_governance_version(
         &self,
         governance_id: DigestIdentifier,
@@ -206,6 +258,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         Ok(Ok(subject_data.sn))
     }
 
+    // OLD y se prefiere quitar esto de aquí
     pub fn check_quorum(
         // TODO: Adapt
         &self,
@@ -259,6 +312,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         )));
     }
 
+    // OLD y se prefiere quitar esto de aquí
     fn parche2(
         &self,
         signers: HashSet<KeyIdentifier>,
@@ -300,6 +354,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         }
     }
 
+    // OLD y se prefiere quitar esto de aquí
     pub fn check_quorum_request(
         &self,
         event_request: EventRequest,
@@ -391,6 +446,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         return Ok(Ok((quorum_result, remaining_signatures)));
     }
 
+    // OLD pero puede valer
     pub fn is_governance(
         &self,
         subject_id: &DigestIdentifier,
@@ -406,6 +462,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         Ok(Ok(subject_data.governance_id.digest.is_empty()))
     }
 
+    // OLD
     fn check_invokation(
         &self,
         properties: &Value,
@@ -429,6 +486,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         )?))
     }
 
+    // OLD
     pub fn check_invokation_permission(
         &self,
         subject_id: DigestIdentifier,
@@ -531,7 +589,7 @@ fn get_schema_from_policies<'a>(
 ) -> Result<&'a Value, RequestError> {
     data.iter()
         .find(|&policy| {
-            let id = policy.get("id").unwrap().as_str().unwrap();
+            let id = policy.get("Id").unwrap().as_str().unwrap();
             id == key
         })
         .ok_or(RequestError::SchemaNotFoundInPolicies)
@@ -550,13 +608,14 @@ fn get_members_from_set<'a>(data: &'a Vec<Value>) -> Result<HashSet<KeyIdentifie
     Ok(all_validators)
 }
 
-fn get_quorum<'a>(data: &'a Value, key: &str) -> Result<f64, InternalError> {
-    data.get(key)
+fn get_quorum<'a>(data: &'a Value, key: &str) -> Result<Quorum, InternalError> {
+    let json_data = data
+        .get(key)
         .ok_or(InternalError::InvalidGovernancePayload)?
-        .get("quorum")
-        .ok_or(InternalError::InvalidGovernancePayload)?
-        .as_f64()
-        .ok_or(InternalError::InvalidGovernancePayload)
+        .get("Quorum")
+        .ok_or(InternalError::InvalidGovernancePayload)?;
+    let quorum: Quorum = serde_json::from_value(json_data["Quorum"].clone()).unwrap();
+    Ok(quorum)
 }
 
 fn is_valid_invokator(

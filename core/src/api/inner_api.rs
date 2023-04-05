@@ -347,6 +347,7 @@ impl<D: DatabaseManager> InnerAPI<D> {
             subject_data.sn,
             DigestIdentifier::default(),
             Metadata {
+                subject_id: subject_data.subject_id,
                 namespace: format!(""),
                 governance_id: subject_data.governance_id,
                 governance_version: 0,
