@@ -9,7 +9,7 @@ use crate::{
             event_content::Metadata,
             event_request::{EventRequest, EventRequestType},
         },
-        schema_handler::gov_models::{Quorum, Role, Schema},
+        schema_handler::gov_models::{Invoke, Quorum, Role, Schema},
     },
     database::Error as DbError,
 };
@@ -192,6 +192,47 @@ impl<D: DatabaseManager> InnerGovernance<D> {
             }
             Quorum::BFT { BFT } => todo!(),
         }
+    }
+
+    // NEW
+    pub fn get_invoke_info(
+        &self,
+        metadata: Metadata,
+        fact: &str,
+    ) -> Result<Result<Option<Invoke>, RequestError>, InternalError> {
+        let mut governance_id = metadata.governance_id;
+        if governance_id.digest.is_empty() {
+            governance_id = metadata.subject_id;
+        }
+        let schema_id = metadata.schema_id;
+        let governance = self.repo_access.get_subject(&governance_id);
+        let governance = match governance {
+            Ok(governance) => {
+                if governance.subject_data.is_some() {
+                    governance.subject_data.unwrap()
+                } else {
+                    return Ok(Err(RequestError::GovernanceNotFound(
+                        governance_id.to_str(),
+                    )));
+                }
+            }
+            Err(DbError::EntryNotFound) => {
+                return Ok(Err(RequestError::GovernanceNotFound(
+                    governance_id.to_str(),
+                )))
+            }
+            Err(error) => return Err(InternalError::DatabaseError { source: error }),
+        };
+        let properties: Value = serde_json::from_str(&governance.properties)
+            .map_err(|_| InternalError::DeserializationError)?;
+        let policies = get_as_array(&properties, "Policies")?;
+        let schema_policy = get_schema_from_policies(policies, &schema_id);
+        let Ok(schema_policy) = schema_policy else {
+            return Ok(Err(schema_policy.unwrap_err()));
+        }; // El return dentro de otro return es una **** que obliga a hacer cosas como esta
+           // Se puede refactorizar lo de arriba de aquí y meter en una función porque es lo mismo en todos los métodos nuevos
+        let invoke = get_invoke_from_policy(schema_policy, fact)?;
+        Ok(Ok(invoke))
     }
 
     // OLD
@@ -823,4 +864,16 @@ fn get_roles(schema_id: &str, roles_prop: Vec<Value>) -> Result<Vec<Role>, Inter
 
 fn contains_common_element(set1: &HashSet<String>, vec2: &[String]) -> bool {
     vec2.iter().any(|s| set1.contains(s))
+}
+
+fn get_invoke_from_policy(policy: &Value, fact: &str) -> Result<Option<Invoke>, InternalError> {
+    let invokes = policy["Invoke"].as_array().expect("Invoke Exists");
+    for invoke in invokes {
+        let invoke: Invoke = serde_json::from_value(invoke.to_owned())
+            .map_err(|_| InternalError::InvalidGovernancePayload)?;
+        if &invoke.Fact == fact {
+            return Ok(Some(invoke));
+        }
+    }
+    Ok(None)
 }

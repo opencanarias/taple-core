@@ -36,3 +36,10 @@ pub struct Role {
     pub Roles: HashSet<String>,
     pub Schema: Schema,
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Invoke {
+    pub Fact: String,
+    pub ApprovalRequired: bool,
+    pub Roles: HashSet<String>,
+}
