@@ -37,14 +37,14 @@ pub struct Role {
     pub Schema: Schema,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Invoke {
     pub Fact: String,
     pub ApprovalRequired: bool,
     pub Roles: HashSet<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Contract {
     Name: String,
     Content: String,
