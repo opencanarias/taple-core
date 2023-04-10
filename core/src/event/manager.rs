@@ -3,7 +3,7 @@ use crate::{
         channel::{ChannelData, MpscChannel, SenderEnd},
     },
     governance::GovernanceAPI,
-    protocol::command_head_manager::self_signature_manager::SelfSignatureManager,
+    protocol::{command_head_manager::self_signature_manager::SelfSignatureManager, protocol_message_manager::ProtocolManagerMessages}, message::MessageTaskCommand,
 };
 use crate::database::{DB, DatabaseManager};
 use super::{errors::EventError, EventCommand, EventResponse, event_completer::EventCompleter};
@@ -36,10 +36,11 @@ impl<D: DatabaseManager> NotaryManager<D> {
         signature_manager: SelfSignatureManager,
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+        message_channel: SenderEnd<MessageTaskCommand<ProtocolManagerMessages>, ()>,
     ) -> Self {
         Self {
             input_channel,
-            inner_notary: EventCompleter::new(gov_api, database, signature_manager),
+            inner_notary: EventCompleter::new(gov_api, database, signature_manager, message_channel),
             shutdown_receiver,
             shutdown_sender,
         }
