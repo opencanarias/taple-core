@@ -14,6 +14,8 @@ use super::event_request::EventRequest;
 pub struct Metadata {
     pub namespace: String,
     #[schema(value_type = String)]
+    pub subject_id: DigestIdentifier,
+    #[schema(value_type = String)]
     pub governance_id: DigestIdentifier,
     pub governance_version: u64,
     pub schema_id: String,

@@ -185,11 +185,12 @@ impl EventRequest {
                 Err(_) => Err(SubjectError::SubjectSignatureFailed),
                 Ok(subject_id) => {
                     let mut event_content = EventContent::new(
-                        subject_id,
+                        subject_id.clone(),
                         self.clone(),
                         0,
                         DigestIdentifier::default(),
                         Metadata {
+                            subject_id: subject_id,
                             namespace: create_req.namespace,
                             governance_id: create_req.governance_id,
                             governance_version,
@@ -232,12 +233,13 @@ impl EventRequest {
                 }
                 let subject_data = subject.subject_data.as_ref().expect("Hay data");
                 let mut event_content = EventContent {
-                    subject_id: state_req.subject_id,
+                    subject_id: state_req.subject_id.clone(),
                     event_request: self,
                     sn: subject_data.sn + 1,
                     previous_hash: prev_event_hash,
                     state_hash: DigestIdentifier::default(),
                     metadata: Metadata {
+                        subject_id: state_req.subject_id,
                         namespace: subject_data.namespace.clone(),
                         governance_id: subject_data.governance_id.clone(),
                         governance_version,
