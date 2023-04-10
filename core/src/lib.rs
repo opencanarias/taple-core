@@ -88,6 +88,7 @@ pub(crate) mod notary;
 pub(crate) mod evaluator;
 pub(crate) mod distribution;
 pub mod protocol;
+pub mod event;
 
 mod unitary_component;
 pub use api::{
