@@ -1,3 +1,4 @@
+use super::EventMessages;
 use super::{errors::EventError, event_completer::EventCompleter, EventCommand, EventResponse};
 use crate::database::{DatabaseManager, DB};
 use crate::governance::error::RequestError;
@@ -40,7 +41,7 @@ impl<D: DatabaseManager> NotaryManager<D> {
         signature_manager: SelfSignatureManager,
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
-        message_channel: SenderEnd<MessageTaskCommand<ProtocolManagerMessages>, ()>,
+        message_channel: SenderEnd<MessageTaskCommand<EventMessages>, ()>,
         notification_sender: tokio::sync::broadcast::Sender<Notification>,
         ledger_sender: SenderEnd<(), ()>,
     ) -> Self {

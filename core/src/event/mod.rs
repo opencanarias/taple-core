@@ -1,4 +1,6 @@
-use crate::identifier::DigestIdentifier;
+use serde::{Serialize, Deserialize};
+
+use crate::{identifier::DigestIdentifier, message::TaskCommandContent};
 
 use self::errors::EventError;
 
@@ -26,3 +28,10 @@ pub enum EventCommand {
 pub enum EventResponse {
     Event(Result<DigestIdentifier, EventError>),
 }
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub enum EventMessages {
+
+}
+
+impl TaskCommandContent for EventMessages {}
