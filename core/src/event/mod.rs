@@ -1,13 +1,28 @@
+use crate::identifier::DigestIdentifier;
+
+use self::errors::EventError;
+
 pub mod manager;
 pub mod event_completer;
 pub mod errors;
 
 #[derive(Debug, Clone)]
 pub enum EventCommand {
-    // NotaryEvent(NotaryEvent),
+    Event{
+
+    },
+    EvaluatorResponse {
+
+    },
+    ApproverResponse {
+
+    },
+    NotaryResponse {
+
+    },
 }
 
 #[derive(Debug, Clone)]
 pub enum EventResponse {
-    // NotaryEventResponse(Result<NotaryEventResponse, NotaryError>),
+    Event(Result<DigestIdentifier, EventError>),
 }

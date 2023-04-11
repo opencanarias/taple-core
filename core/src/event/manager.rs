@@ -1,12 +1,16 @@
+use super::{errors::EventError, event_completer::EventCompleter, EventCommand, EventResponse};
+use crate::database::{DatabaseManager, DB};
+use crate::governance::error::RequestError;
 use crate::{
-    commons::{
-        channel::{ChannelData, MpscChannel, SenderEnd},
-    },
+    commons::channel::{ChannelData, MpscChannel, SenderEnd},
     governance::GovernanceAPI,
-    protocol::{command_head_manager::self_signature_manager::SelfSignatureManager, protocol_message_manager::ProtocolManagerMessages}, message::MessageTaskCommand,
+    message::MessageTaskCommand,
+    protocol::{
+        command_head_manager::self_signature_manager::SelfSignatureManager,
+        protocol_message_manager::ProtocolManagerMessages,
+    },
+    Notification,
 };
-use crate::database::{DB, DatabaseManager};
-use super::{errors::EventError, EventCommand, EventResponse, event_completer::EventCompleter};
 
 #[derive(Clone, Debug)]
 pub struct EventAPI {
@@ -23,7 +27,7 @@ pub struct NotaryManager<D: DatabaseManager> {
     /// Communication channel for incoming petitions
     input_channel: MpscChannel<EventCommand, EventResponse>,
     /// Notarization functions
-    inner_notary: EventCompleter<D>,
+    event_completer: EventCompleter<D>,
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
 }
@@ -37,10 +41,19 @@ impl<D: DatabaseManager> NotaryManager<D> {
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
         message_channel: SenderEnd<MessageTaskCommand<ProtocolManagerMessages>, ()>,
+        notification_sender: tokio::sync::broadcast::Sender<Notification>,
+        ledger_sender: SenderEnd<(), ()>,
     ) -> Self {
         Self {
             input_channel,
-            inner_notary: EventCompleter::new(gov_api, database, signature_manager, message_channel),
+            event_completer: EventCompleter::new(
+                gov_api,
+                database,
+                signature_manager,
+                message_channel,
+                notification_sender,
+                ledger_sender,
+            ),
             shutdown_receiver,
             shutdown_sender,
         }
@@ -85,6 +98,31 @@ impl<D: DatabaseManager> NotaryManager<D> {
         };
         let response = {
             match data {
+                EventCommand::Event {} => {
+                    let response = self.event_completer.new_event();
+                    match response.clone() {
+                        Err(error) => match error {
+                            EventError::ChannelClosed => {
+                                log::error!("Channel Closed");
+                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                return Err(EventError::ChannelClosed);
+                            }
+                            EventError::GovernanceError(inner_error)
+                                if inner_error == RequestError::ChannelClosed =>
+                            {
+                                log::error!("Channel Closed");
+                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                return Err(EventError::ChannelClosed);
+                            }
+                            _ => {}
+                        },
+                        _ => {}
+                    }
+                    EventResponse::Event(response)
+                }
+                EventCommand::EvaluatorResponse {} => todo!(),
+                EventCommand::ApproverResponse {} => todo!(),
+                EventCommand::NotaryResponse {} => todo!(),
             }
         };
         if sender.is_some() {
