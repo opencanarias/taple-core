@@ -114,7 +114,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
             .as_array()
             .expect("Existe Roles")
             .to_owned();
-        let roles = get_roles(&schema_id, roles_prop)?;
+        let roles = get_roles(&schema_id, roles_prop, &metadata.namespace)?;
         let signers = get_signers_from_roles(&members, &signers_roles, roles)?;
         Ok(Ok(signers))
     }
@@ -172,7 +172,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
             .as_array()
             .expect("Existe Roles")
             .to_owned();
-        let roles = get_roles(&schema_id, roles_prop)?;
+        let roles = get_roles(&schema_id, roles_prop, &metadata.namespace)?;
         let signers = get_signers_from_roles(&members, &signers_roles, roles)?;
         let quorum = get_quorum(&schema_policy, stage_str)?;
         match quorum {
@@ -371,10 +371,10 @@ fn get_signers_from_roles(
 ) -> Result<HashSet<KeyIdentifier>, InternalError> {
     let mut signers: HashSet<KeyIdentifier> = HashSet::new();
     for role in roles_schema {
-        if contains_common_element(&role.Roles, roles) {
-            match role.Who {
-                crate::commons::schema_handler::gov_models::Who::IdObject { Id } => {
-                    signers.insert(KeyIdentifier::from_str(&Id).map_err(|_| InternalError::InvalidGovernancePayload)?);
+        if contains_common_element(&role.roles, roles) {
+            match role.who {
+                crate::commons::schema_handler::gov_models::Who::Id { id } => {
+                    signers.insert(KeyIdentifier::from_str(&id).map_err(|_| InternalError::InvalidGovernancePayload)?);
                 }
                 crate::commons::schema_handler::gov_models::Who::Members => {
                     return Ok(members.clone())
@@ -389,14 +389,21 @@ fn get_signers_from_roles(
     Ok(signers)
 }
 
-fn get_roles(schema_id: &str, roles_prop: Vec<Value>) -> Result<Vec<Role>, InternalError> {
+fn get_roles(
+    schema_id: &str,
+    roles_prop: Vec<Value>,
+    namespace: &str,
+) -> Result<Vec<Role>, InternalError> {
     let mut roles = Vec::new();
     for role in roles_prop {
         let role_data: Role =
             serde_json::from_value(role).map_err(|_| InternalError::InvalidGovernancePayload)?;
-        match role_data.Schema {
-            Schema::IdObject { Id } => {
-                if &Id == schema_id {
+        if !namespace_contiene(&role_data.namespace, namespace) {
+            continue;
+        }
+        match role_data.schema {
+            Schema::Id { id } => {
+                if &id == schema_id {
                     roles.push(role_data)
                 }
             }
@@ -415,9 +422,34 @@ fn get_invoke_from_policy(policy: &Value, fact: &str) -> Result<Option<Invoke>, 
     for invoke in invokes {
         let invoke: Invoke = serde_json::from_value(invoke.to_owned())
             .map_err(|_| InternalError::InvalidGovernancePayload)?;
-        if &invoke.Fact == fact {
+        if &invoke.fact == fact {
             return Ok(Some(invoke));
         }
     }
     Ok(None)
+}
+
+fn namespace_contiene(namespace_padre: &str, namespace_hijo: &str) -> bool {
+    // Si el namespace padre es vacío, contiene a todos
+    if namespace_padre.is_empty() {
+        return true;
+    }
+
+    // Si el namespace padre y el namespace hijo son iguales, entonces contiene
+    if namespace_padre == namespace_hijo {
+        return true;
+    }
+
+    // Asegurarse de que el namespace hijo comienza con el namespace padre
+    if !namespace_hijo.starts_with(namespace_padre) {
+        return false;
+    }
+
+    // Verificar si el namespace padre contiene al hijo como subnamespace
+    if let Some(remaining) = namespace_hijo.strip_prefix(namespace_padre) {
+        // El primer carácter después del prefijo del namespace padre debe ser un punto
+        return remaining.starts_with(".");
+    }
+
+    false
 }

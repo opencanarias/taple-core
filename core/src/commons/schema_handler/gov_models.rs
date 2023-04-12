@@ -14,45 +14,48 @@ pub enum Quorum {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged)]
-#[allow(non_snake_case)]
 pub enum Who {
-    IdObject { Id: String },
+    Id { id: String },
+    #[serde(rename = "members")]
     Members,
+    #[serde(rename = "all")]
     All,
+    #[serde(rename = "external")]
     External,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Schema {
-    IdObject { Id: String },
+    Id { id: String },
+    #[serde(rename = "all_schemas")]
     AllSchemas,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Role {
-    pub Who: Who,
-    pub Namespace: String,
-    pub Roles: HashSet<String>,
-    pub Schema: Schema,
+    pub who: Who,
+    pub namespace: String,
+    pub roles: HashSet<String>,
+    pub schema: Schema,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Invoke {
-    pub Fact: String,
-    pub ApprovalRequired: bool,
-    pub Roles: HashSet<String>,
+    pub fact: String,
+    pub approval_required: bool,
+    pub roles: HashSet<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Contract {
-    Name: String,
-    Content: String,
+    name: String,
+    content: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Facts {
-    Name: String,
-    Description: Option<String>,
-    Schema: serde_json::Value,
+    name: String,
+    description: Option<String>,
+    schema: serde_json::Value,
 }
