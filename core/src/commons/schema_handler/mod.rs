@@ -49,12 +49,12 @@ pub fn get_governance_schema() -> Value {
         "quorum": {
           "oneOf": [
             {
-              "const": "Majority"
+              "const": "majority"
             },
             {
               "type": "object",
               "properties": {
-                "Fixed": {
+                "fixed": {
                   "type": "number",
                   "minimum": 1,
                   "multipleOf": 1
@@ -66,7 +66,7 @@ pub fn get_governance_schema() -> Value {
             {
               "type": "object",
               "properties": {
-                "Porcentaje": {
+                "porcentaje": {
                   "type": "number",
                   "minimum": 0,
                   "maximum": 1

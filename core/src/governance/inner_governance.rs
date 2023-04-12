@@ -176,10 +176,10 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         let signers = get_signers_from_roles(&members, &signers_roles, roles)?;
         let quorum = get_quorum(&schema_policy, stage_str)?;
         match quorum {
-            Quorum::Majority => Ok(Ok((signers.len() + 1) as u32 / 2)),
-            Quorum::Fixed { Fixed } => Ok(Ok(Fixed)),
-            Quorum::Porcentaje { Porcentaje } => {
-                let result = (signers.len() as f64 * Porcentaje).ceil() as u32;
+            Quorum::Majority => Ok(Ok((signers.len() as u32 / 2) + 1)),
+            Quorum::Fixed { fixed } => Ok(Ok(fixed)),
+            Quorum::Porcentaje { porcentaje } => {
+                let result = (signers.len() as f64 * porcentaje).ceil() as u32;
                 Ok(Ok(result))
             }
             Quorum::BFT { BFT } => todo!(),

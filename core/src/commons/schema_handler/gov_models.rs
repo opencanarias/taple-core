@@ -6,9 +6,10 @@ use serde::{Deserialize, Serialize};
 #[serde(untagged)]
 #[allow(non_snake_case)]
 pub enum Quorum {
+    #[serde(rename = "majority")]
     Majority,
-    Fixed { Fixed: u32 },
-    Porcentaje { Porcentaje: f64 },
+    Fixed { fixed: u32 },
+    Porcentaje { porcentaje: f64 },
     BFT { BFT: f64 },
 }
 
