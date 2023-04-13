@@ -1107,6 +1107,16 @@ mod test {
         ) -> Result<(), RequestError> {
             Ok(())
         }
+        async fn get_roles_of_invokator(
+            &self,
+            invokator: &KeyIdentifier,
+            governance_id: &DigestIdentifier,
+            governance_version: u64,
+            schema_id: &str,
+            namespace: &str,
+        ) -> Result<Vec<String>, RequestError> {
+            todo!()
+        }
     }
 
     fn create_state_request(

@@ -1,35 +1,53 @@
-use crate::evaluator::errors::ExecutorErrorResponses;
+use crate::{
+    evaluator::{errors::ExecutorErrorResponses, Context},
+    governance::GovernanceInterface,
+};
 
 use super::context::MemoryManager;
+use serde::{Deserialize, Serialize};
 use wasmtime::{Caller, Engine, Linker, Module, Store};
 
-pub struct ContractExecutor {
-    engine: Engine,
+#[derive(Serialize, Deserialize)]
+pub struct ContractResult {
+    pub final_state: String,
+    pub approval_required: bool,
+    pub success: bool,
 }
 
-impl ContractExecutor {
-    pub fn new(engine: Engine) -> Self {
-        Self {
-            engine,
-        }
+pub struct ContractExecutor<G: GovernanceInterface + Send> {
+    engine: Engine,
+    gov_api: G,
+}
+
+impl<G: GovernanceInterface + Send> ContractExecutor<G> {
+    pub fn new(engine: Engine, gov_api: G) -> Self {
+        Self { engine, gov_api }
     }
 
-    pub fn execute_contract(
+    pub async fn execute_contract(
         &self,
         state: String,
         event: String,
+        context: Context,
+        governance_version: u64,
         compiled_contract: Vec<u8>,
-    ) -> Result<String, ExecutorErrorResponses> {
-        // Cargar wasm
-        let module = unsafe {
-            Module::deserialize(
-                &self.engine,
-                compiled_contract,
+    ) -> Result<ContractResult, ExecutorErrorResponses> {
+        // Obtener Roles del usuario
+        let roles = self
+            .gov_api
+            .get_roles_of_invokator(
+                &context.invokator,
+                &context.governance_id,
+                governance_version,
+                &context.schema_id,
+                &context.namespace,
             )
-            .unwrap()
-        };
+            .await
+            .map_err(|_| ExecutorErrorResponses::RolesObtentionFailed)?;
+        // Cargar wasm
+        let module = unsafe { Module::deserialize(&self.engine, compiled_contract).unwrap() };
         // Generar contexto
-        let (context, state_ptr, event_ptr) = self.generate_context(state, event);
+        let (context, state_ptr, event_ptr, roles_ptr) = self.generate_context(state, event, roles);
         let mut store = Store::new(&self.engine, context);
         // Generar Linker
         let linker = self.generate_linker(&self.engine)?;
@@ -39,28 +57,47 @@ impl ContractExecutor {
             .map_err(|_| ExecutorErrorResponses::ContractNotInstantiated)?;
         // Ejecución contrato
         let contract_entrypoint = instance
-            .get_typed_func::<(u32, u32), u32>(&mut store, "main_function")
+            .get_typed_func::<(u32, u32, u32), u32>(&mut store, "main_function")
             .map_err(|_| ExecutorErrorResponses::ContractEntryPointNotFound)?;
         let result_ptr = contract_entrypoint
-            .call(&mut store, (state_ptr, event_ptr))
+            .call(&mut store, (state_ptr, event_ptr, roles_ptr))
             .map_err(|_| ExecutorErrorResponses::ContractExecutionFailed)?;
         // Obtención "NEW STATE" almacenado en el contexto
-        Ok(self.get_new_state(&store, result_ptr)?)
+        Ok(self.get_result(&store, result_ptr)?)
     }
 
-    fn generate_context(&self, state: String, event: String) -> (MemoryManager, u32, u32) {
+    fn generate_context(
+        &self,
+        state: String,
+        event: String,
+        roles: Vec<String>,
+    ) -> (MemoryManager, u32, u32, u32) {
         let mut context = MemoryManager::new();
         let state_ptr = context.add_date_raw(state.as_bytes());
         let event_ptr = context.add_date_raw(event.as_bytes());
-        (context, state_ptr as u32, event_ptr as u32)
+        let roles_ptr = context.add_data(roles);
+        (
+            context,
+            state_ptr as u32,
+            event_ptr as u32,
+            roles_ptr as u32,
+        )
     }
 
-    fn get_new_state(&self, store: &Store<MemoryManager>, pointer: u32) -> Result<String, ExecutorErrorResponses> {
-        let new_state_bytes = store.data().read_data(pointer as usize)?;
-        Ok(String::from_utf8(new_state_bytes.to_vec()).expect("No UTF8"))
+    fn get_result(
+        &self,
+        store: &Store<MemoryManager>,
+        pointer: u32,
+    ) -> Result<ContractResult, ExecutorErrorResponses> {
+        let bytes = store.data().read_data(pointer as usize)?;
+        Ok(bincode::deserialize(bytes)
+            .map_err(|_| ExecutorErrorResponses::CantGenerateContractResult)?)
     }
 
-    fn generate_linker(&self, engine: &Engine) -> Result<Linker<MemoryManager>, ExecutorErrorResponses> {
+    fn generate_linker(
+        &self,
+        engine: &Engine,
+    ) -> Result<Linker<MemoryManager>, ExecutorErrorResponses> {
         let mut linker = Linker::new(&engine);
         linker
             .func_wrap(

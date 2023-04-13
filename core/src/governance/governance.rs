@@ -223,6 +223,14 @@ pub trait GovernanceInterface: Sync + Send {
         governance_version: u64,
         namespace: String,
     )-> Result<(), RequestError>;
+    async fn get_roles_of_invokator(
+        &self,
+        invokator: &KeyIdentifier,
+        governance_id: &DigestIdentifier,
+        governance_version: u64,
+        schema_id: &str,
+        namespace: &str
+    ) -> Result<Vec<String>, RequestError>;
 }
 
 #[derive(Debug, Clone)]
@@ -443,6 +451,17 @@ impl GovernanceInterface for GovernanceAPI {
         governance_version: u64,
         namespace: String,
     )-> Result<(), RequestError> {
+        todo!()
+    }
+
+    async fn get_roles_of_invokator(
+        &self,
+        invokator: &KeyIdentifier,
+        governance_id: &DigestIdentifier,
+        governance_version: u64,
+        schema_id: &str,
+        namespace: &str
+    ) -> Result<Vec<String>, RequestError> {
         todo!()
     }
 }
