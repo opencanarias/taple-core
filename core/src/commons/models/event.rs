@@ -145,33 +145,33 @@
 // impl Default for Event {
 //     fn default() -> Self {
 //         Self {
-//             event_content:  EventContent { 
-//                 subject_id: DigestIdentifier::from_str("Ju536BiUXBqbuNdJsOBwYWnbzrKjsYtVEauI6IsMh3tM").unwrap(), 
-//                 event_request: EventRequest { 
+//             event_content:  EventContent {
+//                 subject_id: DigestIdentifier::from_str("Ju536BiUXBqbuNdJsOBwYWnbzrKjsYtVEauI6IsMh3tM").unwrap(),
+//                 event_request: EventRequest {
 //                     request: EventRequestType::State(StateRequest {
 //                         subject_id: DigestIdentifier::from_str("Ju536BiUXBqbuNdJsOBwYWnbzrKjsYtVEauI6IsMh3tM").unwrap(),
 //                         payload: RequestPayload::Json("{\"localizacion\":\"Argentina\",\"temperatura\":-2}".to_owned()),
-//                     }), 
-//                     timestamp: TimeStamp::now(), 
-//                     signature: Signature { 
+//                     }),
+//                     timestamp: TimeStamp::now(),
+//                     signature: Signature {
 //                         content: SignatureContent {
 //                         signer: KeyIdentifier::from_str("ED8MpwKh3OjPEw_hQdqJixrXlKzpVzdvHf2DqrPvdz7Y").unwrap(),
 //                         event_content_hash: DigestIdentifier::from_str("Jnb4JtdYKZVyX1tFCCVXJ71X-badXlPnxYJ9xe5wzrCs").unwrap(),
 //                         timestamp: TimeStamp::now(),
-//                         }, 
+//                         },
 //                         signature: SignatureIdentifier::from_str("SErazBOSVMRgEc89jp5Xr3IT2T5D3Y_BhiyBV-Wq8HIujTjWDPPkHL6xoLYDWQu0MWnzVZ24O_dXmOEf9AxwxeDw").unwrap()
-//                     }, 
-//                     approvals: HashSet::new() 
-//                 }, 
-//                 sn: 1, 
+//                     },
+//                     approvals: HashSet::new()
+//                 },
+//                 sn: 1,
 //                 previous_hash: DigestIdentifier::from_str("Js9yM-ALHzBPi0pLWKzVZ7Zx8XUI3L2Wk0Wawt4hHpac").unwrap(),
-//                 state_hash: DigestIdentifier::from_str("JHoBQ4IHh2QsnjvXBOs76T5Us9nwdMnNwiKn4rukMkNg").unwrap(), metadata: Metadata { 
-//                     namespace: "namespace1".to_owned(), 
-//                     governance_id: DigestIdentifier::from_str("J3pDuDQICA7iSCGDKUfIr2rconDPQ11jCKJhLUrSPM_U").unwrap(), 
-//                     governance_version: 0, 
-//                     schema_id: "Prueba".to_owned(), 
+//                 state_hash: DigestIdentifier::from_str("JHoBQ4IHh2QsnjvXBOs76T5Us9nwdMnNwiKn4rukMkNg").unwrap(), metadata: Metadata {
+//                     namespace: "namespace1".to_owned(),
+//                     governance_id: DigestIdentifier::from_str("J3pDuDQICA7iSCGDKUfIr2rconDPQ11jCKJhLUrSPM_U").unwrap(),
+//                     governance_version: 0,
+//                     schema_id: "Prueba".to_owned(),
 //                     owner: KeyIdentifier::from_str("ED8MpwKh3OjPEw_hQdqJixrXlKzpVzdvHf2DqrPvdz7Y").unwrap(),
-//                     subject_id: DigestIdentifier::from_str("J3pDuDQICA7iSCGDKUfIr2rconDPQ11jCKJhLUrSPM_U").unwrap(), }, approved: true 
+//                     subject_id: DigestIdentifier::from_str("J3pDuDQICA7iSCGDKUfIr2rconDPQ11jCKJhLUrSPM_U").unwrap(), }, approved: true
 //                 },
 //             signature: Signature {
 //                 content: SignatureContent {
@@ -190,7 +190,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use super::{event_proposal::EventProposal, approval::Approval};
+use super::{approval::Approval, event_proposal::EventProposal};
 
 #[derive(
     Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
@@ -200,4 +200,20 @@ pub struct Event {
     pub approvals: Vec<Approval>,
     pub execution: bool,
     pub signature: Signature,
+}
+
+impl Event {
+    pub fn new(
+        event_proposal: EventProposal,
+        approvals: Vec<Approval>,
+        execution: bool,
+        signature: Signature,
+    ) -> Result<Self, ()> {
+        Ok(Self {
+            event_proposal,
+            approvals,
+            execution,
+            signature,
+        })
+    }
 }

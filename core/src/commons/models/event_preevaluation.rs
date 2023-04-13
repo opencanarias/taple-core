@@ -1,15 +1,11 @@
 //! Contains the data structures related to event preevaluations to send to evaluators.
-use std::collections::HashSet;
-
 use borsh::{BorshDeserialize, BorshSerialize};
-use json_patch::patch;
 
 use crate::{
     event_request::EventRequest,
     identifier::{DigestIdentifier, KeyIdentifier},
 };
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use utoipa::ToSchema;
 
 #[derive(
@@ -36,4 +32,18 @@ pub struct Context {
     pub owner: KeyIdentifier,
     pub actual_state: String,
     pub namespace: String,
+}
+
+impl EventPreEvaluation {
+    pub fn new(
+        event_request: EventRequest,
+        context: Context,
+        sn: u64,
+    ) -> Self {
+        EventPreEvaluation {
+            event_request,
+            context,
+            sn,
+        }
+    }
 }

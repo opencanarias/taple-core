@@ -30,3 +30,21 @@ pub struct Evaluation {
     pub approval_required: bool,
     pub json_patch: String,
 }
+
+impl EventProposal {
+    pub fn new(
+        event_request: EventRequest,
+        sn: u64,
+        evaluation: Evaluation,
+        evaluation_signatures: Vec<Signature>,
+        subject_signature: Signature,
+    ) -> Self {
+        EventProposal {
+            event_request,
+            sn,
+            evaluation,
+            evaluation_signatures,
+            subject_signature,
+        }
+    }
+}

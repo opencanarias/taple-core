@@ -120,6 +120,16 @@ pub struct StateRequest {
     pub invokation: String,
 }
 
+impl EventRequest {
+    pub fn new(request: EventRequestType, signature: Signature) -> Self {
+        Self {
+            request,
+            timestamp: TimeStamp::now(),
+            signature,
+        }
+    }
+}
+
 // impl EventRequest {
 //     pub fn check_against_schema(
 //         &self,
