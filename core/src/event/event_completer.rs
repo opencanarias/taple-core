@@ -57,6 +57,8 @@ impl<D: DatabaseManager> EventCompleter<D> {
         // Mirar en que estado está el evento, si está en evaluación o no
         // Comprobar si la versión de la governanza coincide con la nuestra, si no no lo aceptamos
         // Comprobar que todo es correcto y JSON-P Coincide con los anteriores
+        // Si devuelven error de invocación que hacemos? TODO:
+        // Comprobar governance-version que sea la misma que la nuestra
         // Comprobar si llegamos a Quorum y si es así parar la petición de firmas y empezar a pedir las approves con el evento completo con lo nuevo obtenido en esta fase
         todo!();
     }

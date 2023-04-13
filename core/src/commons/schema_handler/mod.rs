@@ -7,17 +7,17 @@ pub mod gov_models;
 use crate::commons::{errors::Error, identifier::KeyIdentifier};
 
 #[derive(Debug)]
-pub struct schema {
+pub struct Schema {
     json_schema: JSONSchema,
 }
 
-impl schema {
+impl Schema {
     pub fn compile(schema: &Value) -> Result<Self, Error> {
         match JSONSchema::options()
             .with_format("keyidentifier", validate_gov_keyidentifiers)
             .compile(&schema)
         {
-            Ok(json_schema) => Ok(schema { json_schema }),
+            Ok(json_schema) => Ok(Schema { json_schema }),
             Err(_) => Err(Error::SchemaCreationError),
         }
     }
