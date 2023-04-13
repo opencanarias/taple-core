@@ -99,8 +99,8 @@ impl<D: DatabaseManager> NotaryManager<D> {
         };
         let response = {
             match data {
-                EventCommand::Event {} => {
-                    let response = self.event_completer.new_event();
+                EventCommand::Event { event_request } => {
+                    let response = self.event_completer.new_event(event_request).await;
                     match response.clone() {
                         Err(error) => match error {
                             EventError::ChannelClosed => {
@@ -121,9 +121,11 @@ impl<D: DatabaseManager> NotaryManager<D> {
                     }
                     EventResponse::Event(response)
                 }
-                EventCommand::EvaluatorResponse {} => todo!(),
-                EventCommand::ApproverResponse {} => todo!(),
-                EventCommand::NotaryResponse {} => todo!(),
+                EventCommand::EvaluatorResponse {
+                    evaluation,
+                    signature,
+                } => todo!(),
+                EventCommand::ApproverResponse { approval } => todo!(),
             }
         };
         if sender.is_some() {

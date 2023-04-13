@@ -1,6 +1,6 @@
 use serde::{Serialize, Deserialize};
 
-use crate::{identifier::DigestIdentifier, message::TaskCommandContent};
+use crate::{identifier::DigestIdentifier, message::TaskCommandContent, commons::models::{event_proposal::{Evaluation, EventProposal}, approval::Approval, event_preevaluation::EventPreEvaluation}, signature::Signature, event_request::EventRequest};
 
 use self::errors::EventError;
 
@@ -11,16 +11,14 @@ pub mod errors;
 #[derive(Debug, Clone)]
 pub enum EventCommand {
     Event{
-
+        event_request: EventRequest,
     },
     EvaluatorResponse {
-
+        evaluation: Evaluation,
+        signature: Signature,
     },
     ApproverResponse {
-
-    },
-    NotaryResponse {
-
+        approval: Approval,
     },
 }
 
@@ -31,7 +29,8 @@ pub enum EventResponse {
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub enum EventMessages {
-
+    EvaluationRequest(EventPreEvaluation),
+    ApprovalRequest(EventProposal),
 }
 
 impl TaskCommandContent for EventMessages {}

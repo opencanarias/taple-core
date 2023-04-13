@@ -12,4 +12,8 @@ pub enum EventError {
     CryptoError(String),
     #[error("Cant send message. Channel closed")]
     ChannelClosed,
+    #[error("Subject has already an Event Completing")]
+    EventAlreadyInProgress,
+    #[error("Subject for state request not found")]
+    SubjectNotFound(String),
 }
