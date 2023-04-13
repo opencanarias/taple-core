@@ -10,16 +10,17 @@ use crate::{
             approval_signature::ApprovalResponse, event::Event, event_content::Metadata,
             event_request::EventRequest, notary::NotaryEventResponse,
         },
-        schema_handler::get_governance_schema,
+        schema_handler::{get_governance_schema, gov_models::{Invoke, Contract}},
     },
     evaluator::compiler::ContractType,
-    DatabaseManager, DB, signature::Signature,
+    signature::Signature,
+    DatabaseManager, DB,
 };
 
 use super::{
     error::{InternalError, RequestError},
     inner_governance::InnerGovernance,
-    GovernanceMessage, GovernanceResponse, RequestQuorum,
+    GovernanceMessage, GovernanceResponse, RequestQuorum, stage::ValidationStage,
 };
 
 pub struct Governance<D: DatabaseManager> {
@@ -72,32 +73,6 @@ impl<D: DatabaseManager> Governance<D> {
                 panic!("Expected AskData, but we got TellData")
             };
             match message {
-                GovernanceMessage::CheckQuorum { signers, event } => {
-                    let to_send = self.inner_governance.check_quorum(signers, event)?;
-                    Ok(sender
-                        .send(GovernanceResponse::CheckQuorumResponse(to_send))
-                        .map_err(|_| InternalError::OneshotClosed)?)
-                }
-                GovernanceMessage::GetValidators { event } => {
-                    let to_send = self.inner_governance.get_validators(event)?;
-                    Ok(sender
-                        .send(GovernanceResponse::GetValidatorsResponse(to_send))
-                        .map_err(|_| InternalError::OneshotClosed)?)
-                }
-                GovernanceMessage::CheckPolicy { .. } => {
-                    let to_send = self.inner_governance.check_policy()?;
-                    Ok(sender
-                        .send(GovernanceResponse::CheckPolicyResponse(to_send.unwrap()))
-                        .unwrap())
-                }
-                GovernanceMessage::GetGovernanceVersion { governance_id } => {
-                    let version = self
-                        .inner_governance
-                        .get_governance_version(governance_id)?;
-                    Ok(sender
-                        .send(GovernanceResponse::GetGovernanceVersionResponse(version))
-                        .map_err(|_| InternalError::OneshotClosed)?)
-                }
                 GovernanceMessage::GetSchema {
                     governance_id,
                     schema_id,
@@ -107,45 +82,40 @@ impl<D: DatabaseManager> Governance<D> {
                         .send(GovernanceResponse::GetSchema(to_send))
                         .map_err(|_| InternalError::OneshotClosed)?)
                 }
-                GovernanceMessage::IsGovernance(subject_id) => {
+                GovernanceMessage::GetSigners { metadata, stage } => {
+                    let to_send = self.inner_governance.get_signers(metadata, stage)?;
+                    Ok(sender
+                        .send(GovernanceResponse::GetSigners(to_send))
+                        .map_err(|_| InternalError::OneshotClosed)?)
+                }
+                GovernanceMessage::GetQuorum { metadata, stage } => {
+                    let to_send = self.inner_governance.get_quorum(metadata, stage)?;
+                    Ok(sender.send(GovernanceResponse::GetQuorum(to_send)).unwrap())
+                }
+                GovernanceMessage::GetGovernanceVersion { governance_id } => {
+                    let version = self
+                        .inner_governance
+                        .get_governance_version(governance_id)?;
+                    Ok(sender
+                        .send(GovernanceResponse::GetGovernanceVersion(version))
+                        .map_err(|_| InternalError::OneshotClosed)?)
+                }
+                GovernanceMessage::IsGovernance { subject_id } => {
                     let to_send = self.inner_governance.is_governance(&subject_id)?;
                     Ok(sender
-                        .send(GovernanceResponse::IsGovernanceResponse(to_send))
+                        .send(GovernanceResponse::IsGovernance(to_send))
                         .map_err(|_| InternalError::OneshotClosed)?)
                 }
-                GovernanceMessage::CheckQuorumRequest {
-                    event_request,
-                    approvals,
-                } => {
-                    let to_send = self
-                        .inner_governance
-                        .check_quorum_request(event_request, approvals)?;
+                GovernanceMessage::GetInvokeInfo { fact, metadata } => {
+                    let to_send = self.inner_governance.get_invoke_info(metadata, &fact)?;
                     Ok(sender
-                        .send(GovernanceResponse::CheckQuorumRequestResponse(to_send))
+                        .send(GovernanceResponse::GetInvokeInfo(to_send))
                         .map_err(|_| InternalError::OneshotClosed)?)
                 }
-                GovernanceMessage::GetValidatorsRequest { event_request } => {
-                    let to_send = self.inner_governance.get_approvers(event_request)?;
+                GovernanceMessage::GetContracts { governance_id } => {
+                    let to_send = self.inner_governance.get_contracts(governance_id)?;
                     Ok(sender
-                        .send(GovernanceResponse::GetValidatorsRequestResponse(to_send))
-                        .map_err(|_| InternalError::OneshotClosed)?)
-                }
-                GovernanceMessage::CheckInvokatorPermission {
-                    subject_id,
-                    invokator,
-                    additional_payload,
-                    metadata,
-                } => {
-                    let to_send = self.inner_governance.check_invokation_permission(
-                        subject_id,
-                        invokator,
-                        additional_payload,
-                        metadata,
-                    )?;
-                    Ok(sender
-                        .send(GovernanceResponse::CheckInvokatorPermissionResponse(
-                            to_send,
-                        ))
+                        .send(GovernanceResponse::GetContracts(to_send))
                         .map_err(|_| InternalError::OneshotClosed)?)
                 }
             }
@@ -159,78 +129,41 @@ impl<D: DatabaseManager> Governance<D> {
 
 #[async_trait]
 pub trait GovernanceInterface: Sync + Send {
-    async fn check_quorum(
-        &self,
-        event: Event,
-        signers: &HashSet<KeyIdentifier>,
-    ) -> Result<(bool, HashSet<KeyIdentifier>), RequestError>;
-    async fn check_quorum_request(
-        &self,
-        event_request: EventRequest,
-        approvals: HashSet<ApprovalResponse>,
-    ) -> Result<(RequestQuorum, HashSet<KeyIdentifier>), RequestError>;
-    async fn check_policy(
-        &self,
-        governance_id: &DigestIdentifier,
-        governance_version: u64,
-        schema_id: &String,
-        subject_namespace: &String,
-        controller_namespace: &String,
-    ) -> Result<bool, RequestError>;
-    async fn get_validators(&self, event: Event) -> Result<HashSet<KeyIdentifier>, RequestError>;
-    async fn get_approvers(
-        &self,
-        event_request: EventRequest,
-    ) -> Result<HashSet<KeyIdentifier>, RequestError>;
-    async fn get_governance_version(
-        &self,
-        governance_id: &DigestIdentifier,
-    ) -> Result<u64, RequestError>;
     async fn get_schema(
         &self,
         governance_id: &DigestIdentifier,
         schema_id: &String,
     ) -> Result<serde_json::Value, RequestError>;
-    async fn is_governance(&self, subject_id: &DigestIdentifier) -> Result<bool, RequestError>;
-    async fn check_invokation_permission(
+
+    async fn get_signers(
         &self,
-        subject_id: DigestIdentifier,
-        invokator: KeyIdentifier,
-        additional_payload: Option<String>,
-        metadata: Option<Metadata>,
-    ) -> Result<(bool, bool), RequestError>;
+        metadata: &Metadata,
+        stage: &ValidationStage,
+    ) -> Result<HashSet<KeyIdentifier>, RequestError>;
+
+    async fn get_quorum(
+        &self,
+        metadata: &Metadata,
+        stage: &ValidationStage,
+    ) -> Result<u32, RequestError>;
+
+    async fn get_invoke_info(
+        &self,
+        metadata: &Metadata,
+        fact: &String,
+    ) -> Result<Option<Invoke>, RequestError>;
+
     async fn get_contracts(
         &self,
-        governance_id: DigestIdentifier,
-    ) -> Result<Vec<(String, ContractType)>, RequestError>;
-    async fn check_if_witness(
-        &self,
-        governance_id: DigestIdentifier,
-        namespace: String,
-        schema_id: String,
-    ) -> Result<bool, RequestError>;
-    async fn check_notary_signatures(
-        &self,
-        signatures: HashSet<NotaryEventResponse>,
-        data_hash: DigestIdentifier,
-        governance_id: DigestIdentifier,
-        namespace: String,
-    ) -> Result<(), RequestError>;
-    async fn check_evaluator_signatures(
-        &self,
-        signatures: HashSet<Signature>,
-        governance_id: DigestIdentifier,
-        governance_version: u64,
-        namespace: String,
-    )-> Result<(), RequestError>;
-    async fn get_roles_of_invokator(
-        &self,
-        invokator: &KeyIdentifier,
         governance_id: &DigestIdentifier,
-        governance_version: u64,
-        schema_id: &str,
-        namespace: &str
-    ) -> Result<Vec<String>, RequestError>;
+    ) -> Result<Vec<Contract>, RequestError>;
+
+    async fn get_governance_version(
+        &self,
+        governance_id: &DigestIdentifier,
+    ) -> Result<u64, RequestError>;
+
+    async fn is_governance(&self, subject_id: &DigestIdentifier) -> Result<bool, RequestError>;
 }
 
 #[derive(Debug, Clone)]
@@ -266,27 +199,79 @@ impl GovernanceInterface for GovernanceAPI {
         }
     }
 
-    async fn check_policy(
+    async fn get_signers(
         &self,
-        governance_id: &DigestIdentifier,
-        governance_version: u64,
-        schema_id: &String,
-        subject_namespace: &String,
-        controller_namespace: &String,
-    ) -> Result<bool, RequestError> {
+        metadata: &Metadata,
+        stage: &ValidationStage,
+    ) -> Result<HashSet<KeyIdentifier>, RequestError> {
         let response = self
             .sender
-            .ask(GovernanceMessage::CheckPolicy {
-                governance_id: governance_id.clone(),
-                governance_version,
-                schema_id: schema_id.clone(),
-                subject_namespace: subject_namespace.clone(),
-                controller_namespace: controller_namespace.clone(),
+            .ask(GovernanceMessage::GetSigners {
+                metadata: metadata.clone(),
+                stage: stage.clone(),
             })
             .await
             .map_err(|_| RequestError::ChannelClosed)?;
-        if let GovernanceResponse::CheckPolicyResponse(result) = response {
-            Ok(result)
+        if let GovernanceResponse::GetSigners(signers) = response {
+            signers
+        } else {
+            Err(RequestError::UnexpectedResponse)
+        }
+    }
+
+    async fn get_quorum(
+        &self,
+        metadata: &Metadata,
+        stage: &ValidationStage,
+    ) -> Result<u32, RequestError> {
+        let response = self
+            .sender
+            .ask(GovernanceMessage::GetQuorum {
+                metadata: metadata.clone(),
+                stage: stage.clone(),
+            })
+            .await
+            .map_err(|_| RequestError::ChannelClosed)?;
+        if let GovernanceResponse::GetQuorum(quorum) = response {
+            quorum
+        } else {
+            Err(RequestError::UnexpectedResponse)
+        }
+    }
+
+    async fn get_invoke_info(
+        &self,
+        metadata: &Metadata,
+        fact: &String,
+    ) -> Result<Option<Invoke>, RequestError> {
+        let response = self
+            .sender
+            .ask(GovernanceMessage::GetInvokeInfo {
+                metadata: metadata.clone(),
+                fact: fact.clone(),
+            })
+            .await
+            .map_err(|_| RequestError::ChannelClosed)?;
+        if let GovernanceResponse::GetInvokeInfo(invoke_info) = response {
+            invoke_info
+        } else {
+            Err(RequestError::UnexpectedResponse)
+        }
+    }
+
+    async fn get_contracts(
+        &self,
+        governance_id: &DigestIdentifier,
+    ) -> Result<Vec<Contract>, RequestError> {
+        let response = self
+            .sender
+            .ask(GovernanceMessage::GetContracts {
+                governance_id: governance_id.clone(),
+            })
+            .await
+            .map_err(|_| RequestError::ChannelClosed)?;
+        if let GovernanceResponse::GetContracts(contracts) = response {
+            contracts
         } else {
             Err(RequestError::UnexpectedResponse)
         }
@@ -303,77 +288,8 @@ impl GovernanceInterface for GovernanceAPI {
             })
             .await
             .map_err(|_| RequestError::ChannelClosed)?;
-        if let GovernanceResponse::GetGovernanceVersionResponse(version) = response {
+        if let GovernanceResponse::GetGovernanceVersion(version) = response {
             version
-        } else {
-            Err(RequestError::UnexpectedResponse)
-        }
-    }
-
-    async fn get_validators(&self, event: Event) -> Result<HashSet<KeyIdentifier>, RequestError> {
-        let response = self
-            .sender
-            .ask(GovernanceMessage::GetValidators { event })
-            .await
-            .expect("The mockup does not fail");
-        if let GovernanceResponse::GetValidatorsResponse(validators) = response {
-            validators
-        } else {
-            Err(RequestError::UnexpectedResponse)
-        }
-    }
-
-    async fn get_approvers(
-        &self,
-        event_request: EventRequest,
-    ) -> Result<HashSet<KeyIdentifier>, RequestError> {
-        let response = self
-            .sender
-            .ask(GovernanceMessage::GetValidatorsRequest { event_request })
-            .await
-            .expect("The mockup does not fail");
-        if let GovernanceResponse::GetValidatorsRequestResponse(validators) = response {
-            validators
-        } else {
-            Err(RequestError::UnexpectedResponse)
-        }
-    }
-
-    async fn check_quorum(
-        &self,
-        event: Event,
-        signers: &HashSet<KeyIdentifier>,
-    ) -> Result<(bool, HashSet<KeyIdentifier>), RequestError> {
-        let response = self
-            .sender
-            .ask(GovernanceMessage::CheckQuorum {
-                event,
-                signers: signers.clone(),
-            })
-            .await
-            .map_err(|_| RequestError::ChannelClosed)?;
-        if let GovernanceResponse::CheckQuorumResponse(result) = response {
-            result
-        } else {
-            Err(RequestError::UnexpectedResponse)
-        }
-    }
-
-    async fn check_quorum_request(
-        &self,
-        event_request: EventRequest,
-        approvals: HashSet<ApprovalResponse>,
-    ) -> Result<(RequestQuorum, HashSet<KeyIdentifier>), RequestError> {
-        let response = self
-            .sender
-            .ask(GovernanceMessage::CheckQuorumRequest {
-                event_request,
-                approvals,
-            })
-            .await
-            .map_err(|_| RequestError::ChannelClosed)?;
-        if let GovernanceResponse::CheckQuorumRequestResponse(result) = response {
-            result
         } else {
             Err(RequestError::UnexpectedResponse)
         }
@@ -382,86 +298,15 @@ impl GovernanceInterface for GovernanceAPI {
     async fn is_governance(&self, subject_id: &DigestIdentifier) -> Result<bool, RequestError> {
         let response = self
             .sender
-            .ask(GovernanceMessage::IsGovernance(subject_id.clone()))
-            .await
-            .map_err(|_| RequestError::ChannelClosed)?;
-        if let GovernanceResponse::IsGovernanceResponse(is_governance) = response {
-            is_governance
-        } else {
-            Err(RequestError::UnexpectedResponse)
-        }
-    }
-
-    async fn check_invokation_permission(
-        &self,
-        subject_id: DigestIdentifier,
-        invokator: KeyIdentifier,
-        additional_payload: Option<String>,
-        metadata: Option<Metadata>,
-    ) -> Result<(bool, bool), RequestError> {
-        let response = self
-            .sender
-            .ask(GovernanceMessage::CheckInvokatorPermission {
-                subject_id,
-                invokator,
-                additional_payload,
-                metadata,
+            .ask(GovernanceMessage::IsGovernance {
+                subject_id: subject_id.clone(),
             })
             .await
             .map_err(|_| RequestError::ChannelClosed)?;
-        if let GovernanceResponse::CheckInvokatorPermissionResponse(invokation_permission) =
-            response
-        {
-            invokation_permission
+        if let GovernanceResponse::IsGovernance(result) = response {
+            result
         } else {
             Err(RequestError::UnexpectedResponse)
         }
-    }
-
-    async fn get_contracts(
-        &self,
-        governance_id: DigestIdentifier,
-    ) -> Result<Vec<(String, ContractType)>, RequestError> {
-        todo!()
-    }
-
-    async fn check_if_witness(
-        &self,
-        governance_id: DigestIdentifier,
-        namespace: String,
-        schema_id: String
-    ) -> Result<bool, RequestError> {
-        todo!()
-    }
-
-    async fn check_notary_signatures(
-        &self,
-        signatures: HashSet<NotaryEventResponse>,
-        data_hash: DigestIdentifier,
-        governance_id: DigestIdentifier,
-        namespace: String,
-    ) -> Result<(), RequestError> {
-        todo!()
-    }
-
-    async fn check_evaluator_signatures(
-        &self,
-        signatures: HashSet<Signature>,
-        governance_id: DigestIdentifier,
-        governance_version: u64,
-        namespace: String,
-    )-> Result<(), RequestError> {
-        todo!()
-    }
-
-    async fn get_roles_of_invokator(
-        &self,
-        invokator: &KeyIdentifier,
-        governance_id: &DigestIdentifier,
-        governance_version: u64,
-        schema_id: &str,
-        namespace: &str
-    ) -> Result<Vec<String>, RequestError> {
-        todo!()
     }
 }
