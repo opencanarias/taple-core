@@ -191,6 +191,7 @@ impl<D: DatabaseManager, G: GovernanceInterface> Compiler<D, G> {
                 _ => return Err(CompilerErrorResponses::InvalidImportFound)
             }
         }
+        println!("{:?}", pending_sdk);
         if !pending_sdk.is_empty() {
             return Err(CompilerErrorResponses::NoSDKFound);
         }
