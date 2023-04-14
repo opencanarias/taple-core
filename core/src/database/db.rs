@@ -120,7 +120,7 @@ impl<M: DatabaseManager> DB<M> {
     pub fn get_events_by_range(
         &self,
         subject_id: &DigestIdentifier,
-        from: Option<String>,
+        from: Option<i64>,
         quantity: isize,
     ) -> Result<Vec<Event>, Error> {
         let id = subject_id.to_str();

@@ -38,7 +38,9 @@ pub struct EventCompleter<D: DatabaseManager> {
     message_channel: SenderEnd<MessageTaskCommand<EventMessages>, ()>,
     notification_sender: tokio::sync::broadcast::Sender<Notification>,
     ledger_sender: SenderEnd<(), ()>,
-    subjects_completing_event: HashSet<DigestIdentifier>,
+    subjects_completing_event: HashMap<DigestIdentifier, ValidationStage>,
+    actual_sn: HashMap<DigestIdentifier, u64>,
+    event_pre_evaluations: HashMap<DigestIdentifier, (EventPreEvaluation, DigestIdentifier)>,
 }
 
 impl<D: DatabaseManager> EventCompleter<D> {
@@ -57,11 +59,29 @@ impl<D: DatabaseManager> EventCompleter<D> {
             message_channel,
             notification_sender,
             ledger_sender,
-            subjects_completing_event: HashSet::new(),
+            subjects_completing_event: HashMap::new(),
+            actual_sn: HashMap::new(),
+            event_pre_evaluations: HashMap::new(),
         }
     }
 
-    /// Función que se llama cuando llega una nueva event request al sistema, ya sea invocada por el controlador o externamente
+    pub fn init(&mut self) -> Result<(), EventError> {
+        // Fill actual_sn with the last sn of last event created (not necessarily validated) of each subject
+        let subjects = self.database.get_all_subjects();
+        for subject in subjects.iter() {
+            let last_event = self
+                .database
+                .get_events_by_range(&subject.subject_id, None, -1)
+                .map_err(|error| EventError::DatabaseError(error.to_string()))?;
+            // Already know that the vec is contained by 1 element
+            let last_event = last_event.pop().unwrap(); // It is impossible that the vec is empty if the subject is in the database ????
+            self.actual_sn
+                .insert(subject.subject_id.to_owned(), last_event.event_proposal.sn);
+        }
+        Ok(())
+    }
+
+    /// Function that is called when a new event request arrives at the system, either invoked by the controller or externally
     pub async fn new_event(
         &mut self,
         event_request: EventRequest,
@@ -71,7 +91,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
         match &event_request.request {
             crate::event_request::EventRequestType::Create(_) => todo!(),
             crate::event_request::EventRequestType::State(state_request) => {
-                // Comprobar si tenemos el sujeto en la base de datos
+                // Check if we have the subject in the database
                 subject_id = state_request.subject_id.to_owned();
                 subject = match self.database.get_subject(&subject_id) {
                     Ok(subject) => subject,
@@ -82,28 +102,28 @@ impl<D: DatabaseManager> EventCompleter<D> {
                         _ => return Err(EventError::DatabaseError(error.to_string())),
                     },
                 };
-                // Comprobar si ya tenemos un evento para ese sujeto
+                // Check if we already have an event for that subject
                 let None = self.subjects_completing_event.get(&subject_id) else {
                     return Err(EventError::EventAlreadyInProgress);
                 };
             }
         };
-        // Comprobar si el contenido es correcto (firma, invokator, etc)
-        // Comprobación de firma:
+        // Check if the content is correct (signature, invoker, etc)
+        // Signature check:
         let hash_request = DigestIdentifier::from_serializable_borsh((
             &event_request.request,
             &event_request.timestamp,
         ))
         .map_err(|_| {
-            EventError::CryptoError(String::from("Error al calcular el hash del request"))
+            EventError::CryptoError(String::from("Error calculating the hash of the request"))
         })?;
-        // Comprobación de que el hash es el mismo
+        // Check that the hash is the same
         if hash_request != event_request.signature.content.event_content_hash {
             return Err(EventError::CryptoError(String::from(
-                "El hash del request no coincide con el contenido de la firma",
+                "The request hash does not match the content of the signature",
             )));
         }
-        // Comprobación de que la firma coincide con el hash
+        // Check that the signature matches the hash
         match event_request.signature.content.signer.verify(
             &hash_request.derivative(),
             event_request.signature.signature.clone(),
@@ -111,14 +131,12 @@ impl<D: DatabaseManager> EventCompleter<D> {
             Ok(_) => (),
             Err(_) => {
                 return Err(EventError::CryptoError(String::from(
-                    "La firma no valida el hash de la request",
+                    "The signature does not validate the request hash",
                 )))
             }
         };
-        // Añado el evento al hashset para no completar dos a la vez del mismo sujeto
-        self.subjects_completing_event.insert(subject_id.clone());
-        // Pedir firmas de evaluación, mandando request, sn y firma del sujeto de todo
-        // Obtengo la lista de evaluadores
+        // Request evaluation signatures, sending request, sn and signature of everything about the subject
+        // Get the list of evaluators
         let governance_version = self
             .gov_api
             .get_governance_version(&subject.governance_id)
@@ -159,7 +177,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 actual_state: subject.properties,
                 namespace: metadata.namespace,
             },
-            subject.sn + 1,
+            self.actual_sn.get(&subject_id).unwrap().to_owned() + 1, // Must be Some, filled in init function
         );
         let evaluators_len = evaluators.len() as f64;
         let quorum_extended =
@@ -167,7 +185,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
         self.message_channel
             .tell(MessageTaskCommand::Request(
                 Some(String::from(format!("E-{}", subject_id.to_str()))),
-                EventMessages::EvaluationRequest(event_preevaluation),
+                EventMessages::EvaluationRequest(event_preevaluation.clone()),
                 evaluators,
                 MessageConfig {
                     timeout: TIMEOUT,
@@ -175,15 +193,44 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 },
             ))
             .await;
+        let event_preevaluation_hash =
+            DigestIdentifier::from_serializable_borsh(&event_preevaluation).map_err(|_| {
+                EventError::CryptoError(String::from(
+                    "Error calculating the hash of the event pre-evaluation",
+                ))
+            })?;
+        self.event_pre_evaluations.insert(
+            subject_id.clone(),
+            (event_preevaluation, event_preevaluation_hash),
+        );
+        if let Some(sn) = self.actual_sn.get_mut(&subject_id) {
+            *sn += 1;
+        } else {
+            unreachable!("Unwraped before")
+        }
+        // Add the event to the hashset to not complete two at the same time for the same subject
+        self.subjects_completing_event
+            .insert(subject_id, ValidationStage::Evaluate);
         Ok(hash_request)
     }
 
     pub fn evaluator_signatures(
         &mut self,
+        subject_id: DigestIdentifier,
         evaluation: Evaluation,
         signature: Signature,
     ) -> Result<(), EventError> {
         // Mirar en que estado está el evento, si está en evaluación o no
+        let Some(&ValidationStage::Evaluate) = self.subjects_completing_event.get(&subject_id) else {
+            return Err(EventError::WrongEventPhase);
+        };
+        // Comprobar que el hash devuelto coincide con el hash de la preevaluación
+        let (_, preevaluation_hash) = self.event_pre_evaluations.get(&subject_id).unwrap();
+        if preevaluation_hash != &evaluation.preevaluation_hash {
+            return Err(EventError::CryptoError(String::from(
+                "The hash of the event pre-evaluation does not match the hash of the evaluation",
+            )));
+        }
         // Comprobar si la versión de la governanza coincide con la nuestra, si no no lo aceptamos
         // Comprobar que todo es correcto y JSON-P Coincide con los anteriores
         // Si devuelven error de invocación que hacemos? TODO:

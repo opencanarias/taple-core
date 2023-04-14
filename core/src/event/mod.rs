@@ -14,10 +14,12 @@ pub enum EventCommand {
         event_request: EventRequest,
     },
     EvaluatorResponse {
+        subject_id: DigestIdentifier,
         evaluation: Evaluation,
         signature: Signature,
     },
     ApproverResponse {
+        subject_id: DigestIdentifier,
         approval: Approval,
     },
 }

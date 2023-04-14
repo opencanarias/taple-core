@@ -16,4 +16,6 @@ pub enum EventError {
     EventAlreadyInProgress,
     #[error("Subject for state request not found")]
     SubjectNotFound(String),
+    #[error("Event phase doesn't match")]
+    WrongEventPhase,
 }
