@@ -10,7 +10,7 @@ use crate::database::{DatabaseManager, DB};
 use crate::evaluator::errors::ExecutorErrorResponses;
 use crate::evaluator::runner::manager::TapleRunner;
 use crate::evaluator::AskForEvaluationResponse;
-use crate::event_request::RequestPayload;
+use crate::event_request::{RequestPayload, EventRequestType};
 use crate::governance::GovernanceInterface;
 use crate::protocol::command_head_manager::self_signature_manager::SelfSignatureInterface;
 use crate::{
@@ -113,10 +113,10 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send + Clone + 'static> Evalua
         let response = 'response: {
             match data {
                 EvaluatorMessage::AskForEvaluation(data) => {
-                    // let EventRequestType::State(state_data) = &data.invokation.request else {
-                    //     break 'response EvaluatorResponse::AskForEvaluation(Err(super::errors::EvaluatorErrorResponses::CreateRequestNotAllowed));
-                    // };
-                    let result = self.runner.execute_contract(data).await;
+                    let EventRequestType::State(state_data) = &data.invokation.request else {
+                        break 'response EvaluatorResponse::AskForEvaluation(Err(super::errors::EvaluatorErrorResponses::CreateRequestNotAllowed));
+                    };
+                    let result = self.runner.execute_contract(&data, state_data).await;
                     match result {
                         Ok(executor_response) => {
                             let governance_version = executor_response.governance_version;
@@ -578,7 +578,10 @@ mod test {
             let response = sx_evaluator
                 .ask(EvaluatorMessage::AskForEvaluation(
                     crate::evaluator::AskForEvaluation {
-                        data: serde_json::to_string(&event).unwrap(),
+                        invokation: create_event_request(
+                            serde_json::to_string(&event).unwrap(),
+                            &signature_manager,
+                        ),
                         hash_request: DigestIdentifier::default().to_str(),
                         context: Context {
                             governance_id: DigestIdentifier::from_str(
@@ -658,7 +661,10 @@ mod test {
             let response = sx_evaluator
                 .ask(EvaluatorMessage::AskForEvaluation(
                     crate::evaluator::AskForEvaluation {
-                        data: serde_json::to_string(&event).unwrap(),
+                        invokation: create_event_request(
+                            serde_json::to_string(&event).unwrap(),
+                            &signature_manager,
+                        ),
                         hash_request: DigestIdentifier::default().to_str(),
                         context: Context {
                             governance_id: DigestIdentifier::from_str(
@@ -715,7 +721,10 @@ mod test {
             let response = sx_evaluator
                 .ask(EvaluatorMessage::AskForEvaluation(
                     crate::evaluator::AskForEvaluation {
-                        data: serde_json::to_string(&event).unwrap(),
+                        invokation: create_event_request(
+                            serde_json::to_string(&event).unwrap(),
+                            &signature_manager,
+                        ),
                         hash_request: DigestIdentifier::default().to_str(),
                         context: Context {
                             governance_id: DigestIdentifier::from_str(
@@ -775,7 +784,10 @@ mod test {
             let response = sx_evaluator
                 .ask(EvaluatorMessage::AskForEvaluation(
                     crate::evaluator::AskForEvaluation {
-                        data: serde_json::to_string(&event).unwrap(),
+                        invokation: create_event_request(
+                            serde_json::to_string(&event).unwrap(),
+                            &signature_manager,
+                        ),
                         hash_request: DigestIdentifier::default().to_str(),
                         context: Context {
                             governance_id: DigestIdentifier::from_str(

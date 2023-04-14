@@ -26,9 +26,9 @@ impl<G: GovernanceInterface + Send> ContractExecutor<G> {
 
     pub async fn execute_contract(
         &self,
-        state: String,
-        event: String,
-        context: Context,
+        state: &str,
+        event: &str,
+        context: &Context,
         governance_version: u64,
         compiled_contract: Vec<u8>,
     ) -> Result<ContractResult, ExecutorErrorResponses> {
@@ -68,8 +68,8 @@ impl<G: GovernanceInterface + Send> ContractExecutor<G> {
 
     fn generate_context(
         &self,
-        state: String,
-        event: String,
+        state: &str,
+        event: &str,
         roles: Vec<String>,
     ) -> (MemoryManager, u32, u32, u32) {
         let mut context = MemoryManager::new();

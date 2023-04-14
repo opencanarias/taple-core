@@ -6,7 +6,7 @@ use crate::{
     evaluator::{errors::ExecutorErrorResponses, AskForEvaluation, Context},
     governance::GovernanceInterface,
     identifier::{Derivable, DigestIdentifier, KeyIdentifier},
-    DatabaseManager,
+    DatabaseManager, event_request::{RequestPayload, StateRequest},
 };
 
 use super::{executor::ContractExecutor, ExecuteContractResponse};
@@ -34,7 +34,8 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send> TapleRunner<D, G> {
 
     pub async fn execute_contract(
         &self,
-        execute_contract: AskForEvaluation,
+        execute_contract: &AskForEvaluation,
+        state_data: &StateRequest
     ) -> Result<ExecuteContractResponse, ExecutorErrorResponses> {
         let context_hash =
             Self::generate_context_hash(&execute_contract.context, execute_contract.sn)?;
@@ -69,9 +70,9 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send> TapleRunner<D, G> {
         let contract_result = self
             .executor
             .execute_contract(
-                execute_contract.state,
-                execute_contract.data,
-                execute_contract.context,
+                &execute_contract.state,
+                &extract_data_from_payload(&state_data.payload),
+                &execute_contract.context,
                 governance_version,
                 contract,
             )
@@ -111,4 +112,11 @@ fn generate_json_patch(
 fn generera_state_hash(state: &str) -> Result<DigestIdentifier, ExecutorErrorResponses> {
     DigestIdentifier::from_serializable_borsh(state)
         .map_err(|_| ExecutorErrorResponses::StateHashGenerationFailed)
+}
+
+fn extract_data_from_payload(payload: &RequestPayload) -> String {
+    match payload {
+        RequestPayload::Json(data) => data.clone(),
+        RequestPayload::JsonPatch(data) => data.clone(),
+    }
 }
