@@ -87,10 +87,26 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         let Ok(schema_policy) = schema_policy else {
             return Ok(Err(schema_policy.unwrap_err()));
         }; // El return dentro de otro return es una **** que obliga a hacer cosas como esta
-        let stage_str = stage.to_str();
-        // TODO: Hacer que los aprobadores cuenten como testigos también
-        let signers_roles: Vec<String> =
-            get_as_array(&schema_policy.get(stage_str).unwrap(), "Roles")?
+        match stage {
+            ValidationStage::Approve => {
+                let stage_str = stage.to_str();
+                let approvers_roles: Vec<String> =
+                    get_as_array(&schema_policy.get(stage_str).unwrap(), "Roles")?
+                        .into_iter()
+                        .map(|role| {
+                            let a = role
+                                .as_str()
+                                .ok_or(InternalError::InvalidGovernancePayload)
+                                .map(|s| s.to_owned());
+                            a.expect("Invalid Governance Payload")
+                        })
+                        .collect();
+                let witness_roles: Vec<String> = get_as_array(
+                    &schema_policy
+                        .get(ValidationStage::Witness.to_str())
+                        .unwrap(),
+                    "Roles",
+                )?
                 .into_iter()
                 .map(|role| {
                     let a = role
@@ -100,14 +116,43 @@ impl<D: DatabaseManager> InnerGovernance<D> {
                     a.expect("Invalid Governance Payload")
                 })
                 .collect();
-        let members = get_members_from_governance(&properties)?;
-        let roles_prop = properties["Roles"]
-            .as_array()
-            .expect("Existe Roles")
-            .to_owned();
-        let roles = get_roles(&schema_id, roles_prop, &metadata.namespace)?;
-        let signers = get_signers_from_roles(&members, &signers_roles, roles)?;
-        Ok(Ok(signers))
+                let mut set: HashSet<String> = HashSet::new();
+                for s in approvers_roles.into_iter().chain(witness_roles.into_iter()) {
+                    set.insert(s);
+                }
+                let signers_roles: Vec<String> = set.into_iter().collect();
+                let members = get_members_from_governance(&properties)?;
+                let roles_prop = properties["Roles"]
+                    .as_array()
+                    .expect("Existe Roles")
+                    .to_owned();
+                let roles = get_roles(&schema_id, roles_prop, &metadata.namespace)?;
+                let signers = get_signers_from_roles(&members, &signers_roles, roles)?;
+                Ok(Ok(signers))
+            }
+            _ => {
+                let stage_str = stage.to_str();
+                let signers_roles: Vec<String> =
+                    get_as_array(&schema_policy.get(stage_str).unwrap(), "Roles")?
+                        .into_iter()
+                        .map(|role| {
+                            let a = role
+                                .as_str()
+                                .ok_or(InternalError::InvalidGovernancePayload)
+                                .map(|s| s.to_owned());
+                            a.expect("Invalid Governance Payload")
+                        })
+                        .collect();
+                let members = get_members_from_governance(&properties)?;
+                let roles_prop = properties["Roles"]
+                    .as_array()
+                    .expect("Existe Roles")
+                    .to_owned();
+                let roles = get_roles(&schema_id, roles_prop, &metadata.namespace)?;
+                let signers = get_signers_from_roles(&members, &signers_roles, roles)?;
+                Ok(Ok(signers))
+            }
+        }
     }
 
     // NEW Devuelve el número de firmas necesarias para que un evento sea válido
