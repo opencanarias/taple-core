@@ -40,7 +40,9 @@ pub struct EventCompleter<D: DatabaseManager> {
     ledger_sender: SenderEnd<(), ()>,
     subjects_completing_event: HashMap<DigestIdentifier, ValidationStage>,
     actual_sn: HashMap<DigestIdentifier, u64>,
-    event_pre_evaluations: HashMap<DigestIdentifier, (EventPreEvaluation, DigestIdentifier)>,
+    event_pre_evaluations: HashMap<DigestIdentifier, EventPreEvaluation>,
+    event_evaluations: HashMap<DigestIdentifier, Evaluation>,
+    evaluations_result: HashMap<DigestIdentifier, u32>,
 }
 
 impl<D: DatabaseManager> EventCompleter<D> {
@@ -62,6 +64,8 @@ impl<D: DatabaseManager> EventCompleter<D> {
             subjects_completing_event: HashMap::new(),
             actual_sn: HashMap::new(),
             event_pre_evaluations: HashMap::new(),
+            event_evaluations: HashMap::new(),
+            evaluations_result: HashMap::new(),
         }
     }
 
@@ -199,10 +203,8 @@ impl<D: DatabaseManager> EventCompleter<D> {
                     "Error calculating the hash of the event pre-evaluation",
                 ))
             })?;
-        self.event_pre_evaluations.insert(
-            subject_id.clone(),
-            (event_preevaluation, event_preevaluation_hash),
-        );
+        self.event_pre_evaluations
+            .insert(event_preevaluation_hash, event_preevaluation);
         if let Some(sn) = self.actual_sn.get_mut(&subject_id) {
             *sn += 1;
         } else {
@@ -214,28 +216,53 @@ impl<D: DatabaseManager> EventCompleter<D> {
         Ok(hash_request)
     }
 
-    pub fn evaluator_signatures(
+    pub async fn evaluator_signatures(
         &mut self,
-        subject_id: DigestIdentifier,
         evaluation: Evaluation,
         signature: Signature,
     ) -> Result<(), EventError> {
+        // Comprobar que el hash devuelto coincide con el hash de la preevaluación
+        let preevaluation_event = match self
+            .event_pre_evaluations
+            .get(&evaluation.preevaluation_hash)
+        {
+            Some(preevaluation_event) => preevaluation_event,
+            None => return Err(EventError::CryptoError(String::from(
+                "The hash of the event pre-evaluation does not match any of the pre-evaluations",
+            ))),
+        };
+        let subject_id = match &preevaluation_event.event_request.request {
+            crate::event_request::EventRequestType::Create(_) => {
+                return Err(EventError::EvaluationInCreationEvent)
+            } // Que hago aquí?? devuelvo error?
+            crate::event_request::EventRequestType::State(state_request) => {
+                state_request.subject_id.clone()
+            }
+        };
+        // Obtener sujeto para saber si lo tenemos y los metadatos del mismo
+        let subject = self
+            .database
+            .get_subject(&subject_id)
+            .map_err(|error| match error {
+                crate::DbError::EntryNotFound => EventError::SubjectNotFound(subject_id.to_str()),
+                _ => EventError::DatabaseError(error.to_string()),
+            })?;
         // Mirar en que estado está el evento, si está en evaluación o no
         let Some(&ValidationStage::Evaluate) = self.subjects_completing_event.get(&subject_id) else {
             return Err(EventError::WrongEventPhase);
         };
-        // Comprobar que el hash devuelto coincide con el hash de la preevaluación
-        let (_, preevaluation_hash) = self.event_pre_evaluations.get(&subject_id).unwrap();
-        if preevaluation_hash != &evaluation.preevaluation_hash {
-            return Err(EventError::CryptoError(String::from(
-                "The hash of the event pre-evaluation does not match the hash of the evaluation",
-            )));
-        }
         // Comprobar si la versión de la governanza coincide con la nuestra, si no no lo aceptamos
+        let governance_version = self
+            .gov_api
+            .get_governance_version(&subject.governance_id)
+            .await
+            .map_err(EventError::GovernanceError)?;
+        if governance_version != evaluation.governance_version {
+            return Err(EventError::WrongGovernanceVersion);
+        }
         // Comprobar que todo es correcto y JSON-P Coincide con los anteriores
-        // Si devuelven error de invocación que hacemos? TODO:
         // Comprobar governance-version que sea la misma que la nuestra
-        // Comprobar si llegamos a Quorum y si es así parar la petición de firmas y empezar a pedir las approves con el evento completo con lo nuevo obtenido en esta fase
+        // Comprobar si llegamos a Quorum y si es así parar la petición de firmas y empezar a pedir las approves con el evento completo con lo nuevo obtenido en esta fase si se requieren approves, si no informar a validator
         todo!();
     }
 

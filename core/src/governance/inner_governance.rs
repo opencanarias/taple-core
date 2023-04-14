@@ -39,8 +39,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         if governance_id.digest.is_empty() {
             return Ok(Ok(self.governance_schema.clone()));
         }
-        let governance = self.repo_access.get_subject(&governance_id);
-        let governance = match governance {
+        let governance = match self.repo_access.get_subject(&governance_id) {
             Ok(governance) => governance,
             Err(DbError::EntryNotFound) => {
                 return Ok(Err(RequestError::GovernanceNotFound(
@@ -49,7 +48,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
             }
             Err(error) => return Err(InternalError::DatabaseError { source: error }),
         };
-        let properties: Value = serde_json::from_str(&governance.subject_data.unwrap().properties)
+        let properties: Value = serde_json::from_str(&governance.properties)
             .map_err(|_| InternalError::DeserializationError)?;
         let schemas = get_as_array(&properties, "schemas")?;
         for schema in schemas {
@@ -72,17 +71,8 @@ impl<D: DatabaseManager> InnerGovernance<D> {
             governance_id = metadata.subject_id;
         }
         let schema_id = metadata.schema_id;
-        let governance = self.repo_access.get_subject(&governance_id);
-        let governance = match governance {
-            Ok(governance) => {
-                if governance.subject_data.is_some() {
-                    governance.subject_data.unwrap()
-                } else {
-                    return Ok(Err(RequestError::GovernanceNotFound(
-                        governance_id.to_str(),
-                    )));
-                }
-            }
+        let governance = match self.repo_access.get_subject(&governance_id) {
+            Ok(governance) => governance,
             Err(DbError::EntryNotFound) => {
                 return Ok(Err(RequestError::GovernanceNotFound(
                     governance_id.to_str(),
@@ -98,6 +88,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
             return Ok(Err(schema_policy.unwrap_err()));
         }; // El return dentro de otro return es una **** que obliga a hacer cosas como esta
         let stage_str = stage.to_str();
+        // TODO: Hacer que los aprobadores cuenten como testigos también
         let signers_roles: Vec<String> =
             get_as_array(&schema_policy.get(stage_str).unwrap(), "Roles")?
                 .into_iter()
@@ -130,17 +121,8 @@ impl<D: DatabaseManager> InnerGovernance<D> {
             governance_id = metadata.subject_id;
         }
         let schema_id = metadata.schema_id;
-        let governance = self.repo_access.get_subject(&governance_id);
-        let governance = match governance {
-            Ok(governance) => {
-                if governance.subject_data.is_some() {
-                    governance.subject_data.unwrap()
-                } else {
-                    return Ok(Err(RequestError::GovernanceNotFound(
-                        governance_id.to_str(),
-                    )));
-                }
-            }
+        let governance = match self.repo_access.get_subject(&governance_id) {
+            Ok(governance) => governance,
             Err(DbError::EntryNotFound) => {
                 return Ok(Err(RequestError::GovernanceNotFound(
                     governance_id.to_str(),
@@ -197,17 +179,8 @@ impl<D: DatabaseManager> InnerGovernance<D> {
             governance_id = metadata.subject_id;
         }
         let schema_id = metadata.schema_id;
-        let governance = self.repo_access.get_subject(&governance_id);
-        let governance = match governance {
-            Ok(governance) => {
-                if governance.subject_data.is_some() {
-                    governance.subject_data.unwrap()
-                } else {
-                    return Ok(Err(RequestError::GovernanceNotFound(
-                        governance_id.to_str(),
-                    )));
-                }
-            }
+        let governance = match self.repo_access.get_subject(&governance_id) {
+            Ok(governance) => governance,
             Err(DbError::EntryNotFound) => {
                 return Ok(Err(RequestError::GovernanceNotFound(
                     governance_id.to_str(),
@@ -232,17 +205,8 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         &self,
         governance_id: DigestIdentifier,
     ) -> Result<Result<Vec<Contract>, RequestError>, InternalError> {
-        let governance = self.repo_access.get_subject(&governance_id);
-        let governance = match governance {
-            Ok(governance) => {
-                if governance.subject_data.is_some() {
-                    governance.subject_data.unwrap()
-                } else {
-                    return Ok(Err(RequestError::GovernanceNotFound(
-                        governance_id.to_str(),
-                    )));
-                }
-            }
+        let governance = match self.repo_access.get_subject(&governance_id) {
+            Ok(governance) => governance,
             Err(DbError::EntryNotFound) => {
                 return Ok(Err(RequestError::GovernanceNotFound(
                     governance_id.to_str(),
@@ -279,11 +243,10 @@ impl<D: DatabaseManager> InnerGovernance<D> {
             }
             Err(error) => return Err(InternalError::DatabaseError { source: error }),
         };
-        let subject_data = governance.subject_data.unwrap();
-        if !subject_data.governance_id.digest.is_empty() {
+        if !governance.governance_id.digest.is_empty() {
             return Ok(Err(RequestError::InvalidGovernanceID));
         }
-        Ok(Ok(subject_data.sn))
+        Ok(Ok(governance.sn))
     }
 
     // OLD pero puede valer
@@ -296,10 +259,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
             Err(DbError::EntryNotFound) => return Ok(Err(RequestError::SubjectNotFound)),
             Err(error) => return Err(InternalError::DatabaseError { source: error }),
         };
-        let Some(subject_data) = subject.subject_data else {
-            return Ok(Err(RequestError::SubjectNotFound))
-        };
-        Ok(Ok(subject_data.governance_id.digest.is_empty()))
+        Ok(Ok(subject.governance_id.digest.is_empty()))
     }
 }
 

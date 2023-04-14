@@ -18,4 +18,8 @@ pub enum EventError {
     SubjectNotFound(String),
     #[error("Event phase doesn't match")]
     WrongEventPhase,
+    #[error("Governance version of evaluator doesn't match with ours")]
+    WrongGovernanceVersion,
+    #[error("Evaluation in Creation Event")]
+    EvaluationInCreationEvent,
 }
