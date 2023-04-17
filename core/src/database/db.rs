@@ -6,7 +6,7 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use crate::commons::models::notary::NotaryEventResponse;
-use crate::commons::models::state::{LedgerState, Subject};
+use crate::commons::models::state::Subject;
 use crate::event_content::EventContent;
 use crate::event_request::EventRequest;
 use crate::identifier::{Derivable, DigestIdentifier, KeyIdentifier};
@@ -34,7 +34,8 @@ pub struct DB<M: DatabaseManager> {
     id_db: Box<dyn DatabaseCollection<InnerDataType = String>>,
     notary_db: Box<dyn DatabaseCollection<InnerDataType = (DigestIdentifier, u64)>>,
     contract_db: Box<dyn DatabaseCollection<InnerDataType = (Vec<u8>, DigestIdentifier, u64)>>,
-    notary_signatures_db: Box<dyn DatabaseCollection<InnerDataType = (u64, HashSet<NotaryEventResponse>)>>,
+    notary_signatures_db:
+        Box<dyn DatabaseCollection<InnerDataType = (u64, HashSet<NotaryEventResponse>)>>,
 }
 
 impl<M: DatabaseManager> DB<M> {
@@ -109,7 +110,7 @@ impl<M: DatabaseManager> DB<M> {
         let mut counter = 0;
         while counter < quantity {
             let Some((_, event)) = iter.next() else {
-              break;
+                break;
             };
             result.push(event);
             counter += 1;
@@ -124,6 +125,10 @@ impl<M: DatabaseManager> DB<M> {
         quantity: isize,
     ) -> Result<Vec<Event>, Error> {
         let id = subject_id.to_str();
+        let from = match from {
+            Some(from) => Some(from.to_string()),
+            None => None,
+        };
         let events_by_subject = self.event_db.partition(&id);
         self.get_by_range(from, quantity, &events_by_subject)
     }
@@ -155,10 +160,7 @@ impl<M: DatabaseManager> DB<M> {
         self.notary_signatures_db.get(&id)
     }
 
-    pub fn delete_notary_signatures(
-        &self,
-        subject_id: &DigestIdentifier,
-    ) -> Result<(), Error> {
+    pub fn delete_notary_signatures(&self, subject_id: &DigestIdentifier) -> Result<(), Error> {
         self.notary_signatures_db.del(&subject_id.to_str())
     }
 

@@ -5,7 +5,7 @@ use crate::governance::error::RequestError;
 #[derive(Error, Clone, Debug)]
 pub enum EventError {
     #[error("A database error has ocurred at main component {0}")]
-    DatabaseError(String), 
+    DatabaseError(String),
     #[error("Governance Error")]
     GovernanceError(#[from] RequestError),
     #[error("Crypto Error")]
@@ -22,4 +22,12 @@ pub enum EventError {
     WrongGovernanceVersion,
     #[error("Evaluation in Creation Event")]
     EvaluationInCreationEvent,
+    #[error("Error parsing json string: {0}")]
+    ErrorParsingJsonString(String),
+    #[error("Error parsing value")]
+    ErrorParsingValue,
+    #[error("Error applying patch json string: {0}")]
+    ErrorApplyingPatch(String),
+    #[error("Channel unnavaible")]
+    ChannelError(#[from] crate::commons::errors::ChannelErrors),
 }

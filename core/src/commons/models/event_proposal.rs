@@ -1,8 +1,12 @@
 //! Contains the data structures related to event  to send to approvers, or to validators if approval is not required.
+use crate::{
+    event_request::EventRequest,
+    identifier::{DigestIdentifier, KeyIdentifier},
+    signature::Signature,
+};
 use borsh::{BorshDeserialize, BorshSerialize};
-use utoipa::ToSchema;
 use serde::{Deserialize, Serialize};
-use crate::{event_request::EventRequest, identifier::{DigestIdentifier, KeyIdentifier}, signature::Signature};
+use utoipa::ToSchema;
 
 use super::Acceptance;
 
@@ -13,6 +17,7 @@ pub struct EventProposal {
     pub event_request: EventRequest,
     pub sn: u64,
     pub evaluation: Evaluation,
+    pub json_patch: String,
     pub evaluation_signatures: Vec<Signature>,
     pub subject_signature: Signature,
 }
@@ -28,7 +33,6 @@ pub struct Evaluation {
     pub governance_version: u64,
     pub acceptance: Acceptance,
     pub approval_required: bool,
-    pub json_patch: String,
 }
 
 impl EventProposal {
@@ -38,6 +42,7 @@ impl EventProposal {
         evaluation: Evaluation,
         evaluation_signatures: Vec<Signature>,
         subject_signature: Signature,
+        json_patch: String,
     ) -> Self {
         EventProposal {
             event_request,
@@ -45,6 +50,7 @@ impl EventProposal {
             evaluation,
             evaluation_signatures,
             subject_signature,
+            json_patch,
         }
     }
 }

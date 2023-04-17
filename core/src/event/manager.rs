@@ -61,6 +61,14 @@ impl<D: DatabaseManager> NotaryManager<D> {
     }
 
     pub async fn start(mut self) {
+        match self.event_completer.init().await {
+            Ok(_) => {}
+            Err(error) => {
+                log::error!("Problemas con Init de Event Manager: {:?}", error);
+                self.shutdown_sender.send(()).expect("Channel Closed");
+                return;
+            }
+        };
         loop {
             tokio::select! {
                 command = self.input_channel.receive() => {
@@ -69,10 +77,12 @@ impl<D: DatabaseManager> NotaryManager<D> {
                             let result = self.process_command(command).await;
                             if result.is_err() {
                                 self.shutdown_sender.send(()).expect("Channel Closed");
+                                break;
                             }
                         }
                         None => {
                             self.shutdown_sender.send(()).expect("Channel Closed");
+                            break;
                         },
                     }
                 },
@@ -123,9 +133,11 @@ impl<D: DatabaseManager> NotaryManager<D> {
                 }
                 EventCommand::EvaluatorResponse {
                     evaluation,
+                    json_patch,
                     signature,
                 } => todo!(),
                 EventCommand::ApproverResponse { approval } => todo!(),
+                EventCommand::ValidatorResponse { signature } => todo!(),
             }
         };
         if sender.is_some() {
