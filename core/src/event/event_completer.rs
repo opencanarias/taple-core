@@ -327,6 +327,12 @@ impl<D: DatabaseManager> EventCompleter<D> {
         if governance_version != evaluation.governance_version {
             return Err(EventError::WrongGovernanceVersion);
         }
+        // Comprobar que el json patch es válido
+        if !hash_match_after_patch(&evaluation.state_hash, &json_patch, &subject.properties)? {
+            return Err(EventError::CryptoError(
+                "Json patch applied to state hash does not match the new state hash".to_string(),
+            ));
+        }
         let signatures_set = match self
             .event_evaluations
             .get_mut(&evaluation.preevaluation_hash)
@@ -552,4 +558,27 @@ fn insert_or_replace_and_check(
     let replaced = set.remove(&new_value); // Si existe un valor igual, lo eliminamos y devolvemos true.
     set.insert(new_value); // Insertamos el nuevo valor.
     replaced // Devolvemos si se ha reemplazado un elemento existente.
+}
+
+fn hash_match_after_patch(
+    state_hash: &DigestIdentifier,
+    json_patch: &str,
+    prev_properties: &str,
+) -> Result<bool, EventError> {
+    let Ok(patch_json) = serde_json::from_str::<Patch>(json_patch) else {
+        return Err(EventError::ErrorParsingJsonString(json_patch.to_owned()));
+    };
+    let Ok(mut state) = serde_json::from_str::<Value>(prev_properties) else {
+        return Err(EventError::ErrorParsingJsonString(prev_properties.to_owned()));
+    };
+    let Ok(()) = patch(&mut state, &patch_json) else {
+        return Err(EventError::ErrorApplyingPatch(json_patch.to_owned()));
+    };
+    let state = serde_json::to_string(&state)
+        .map_err(|_| EventError::ErrorParsingJsonString("New State after patch".to_owned()))?;
+    let state_hash_calculated =
+        DigestIdentifier::from_serializable_borsh(&state).map_err(|_| {
+            EventError::CryptoError(String::from("Error calculating the hash of the state"))
+        })?;
+    return Ok(state_hash_calculated == *state_hash);
 }
