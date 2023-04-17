@@ -446,6 +446,12 @@ impl<D: DatabaseManager> EventCompleter<D> {
                     content: event_content,
                     signature: event_signature,
                 };
+                // TODO: Enviar al Ledger que hay nuevo evento
+                // self.ledger_sender
+                //     .send(LedgerMessages::Event(event.clone()))
+                //     .await
+                //     .map_err(EventError::LedgerError)?;
+                // TODO: lo dle Ledger, importante
                 (
                     ValidationStage::Validate,
                     EventMessages::ValidationRequest(event),
@@ -454,8 +460,11 @@ impl<D: DatabaseManager> EventCompleter<D> {
             let (signers, quorum_size) = self.get_signers_and_quorum(&metadata, &stage).await?;
             self.ask_signatures(&subject_id, event_message, signers.clone(), quorum_size)
                 .await?;
+            // Hacer update de fase por la que va el evento
+            self.subjects_completing_event
+                .insert(subject_id, (stage, signers, quorum_size));
         }
-        todo!();
+        Ok(())
     }
 
     pub fn approver_signatures(&mut self, approval: Approval) -> Result<(), EventError> {
