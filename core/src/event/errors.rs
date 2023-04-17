@@ -30,4 +30,6 @@ pub enum EventError {
     ErrorApplyingPatch(String),
     #[error("Channel unnavaible")]
     ChannelError(#[from] crate::commons::errors::ChannelErrors),
+    #[error("Subject Not Owned: {0}")]
+    SubjectNotOwned(String),
 }

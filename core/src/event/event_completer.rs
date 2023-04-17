@@ -9,21 +9,22 @@ use serde_json::Value;
 use crate::{
     commons::{
         channel::SenderEnd,
+        crypto::{Payload, DSA},
         errors::ChannelErrors,
         models::{
             approval::{self, Approval},
             event_preevaluation::{Context, EventPreEvaluation},
-            event_proposal::{Evaluation, EventProposal},
+            event_proposal::{Evaluation, EventProposal, Proposal},
         },
     },
     event_content::Metadata,
     event_request::EventRequest,
     governance::{stage::ValidationStage, GovernanceAPI, GovernanceInterface},
-    identifier::{Derivable, DigestIdentifier, KeyIdentifier},
+    identifier::{Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier},
     message::{MessageConfig, MessageTaskCommand},
     protocol::command_head_manager::self_signature_manager::SelfSignatureManager,
-    signature::Signature,
-    Event, Notification,
+    signature::{Signature, SignatureContent},
+    Event, Notification, TimeStamp,
 };
 
 use super::{errors::EventError, EventCommand, EventMessages, EventResponse};
@@ -40,11 +41,12 @@ pub struct EventCompleter<D: DatabaseManager> {
     message_channel: SenderEnd<MessageTaskCommand<EventMessages>, ()>,
     notification_sender: tokio::sync::broadcast::Sender<Notification>,
     ledger_sender: SenderEnd<(), ()>,
-    subjects_completing_event: HashMap<DigestIdentifier, ValidationStage>,
+    subjects_completing_event:
+        HashMap<DigestIdentifier, (ValidationStage, Vec<KeyIdentifier>, u32)>,
     // actual_sn: HashMap<DigestIdentifier, u64>,
     event_pre_evaluations: HashMap<DigestIdentifier, EventPreEvaluation>,
+    event_proposals: HashMap<DigestIdentifier, EventProposal>,
     event_evaluations: HashMap<DigestIdentifier, HashSet<Signature>>,
-    evaluations_result: HashMap<DigestIdentifier, u32>,
     // virtual_state: HashMap<DigestIdentifier, Value>,
 }
 
@@ -68,8 +70,8 @@ impl<D: DatabaseManager> EventCompleter<D> {
             // actual_sn: HashMap::new(),
             event_pre_evaluations: HashMap::new(),
             event_evaluations: HashMap::new(),
-            evaluations_result: HashMap::new(),
             // virtual_state: HashMap::new(),
+            event_proposals: HashMap::new(),
         }
     }
 
@@ -95,8 +97,8 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 .map_err(|error| EventError::DatabaseError(error.to_string()))?;
             // Already know that the vec is contained by 1 element
             let last_event = last_event.pop().unwrap();
-            if last_event.event_proposal.sn == subject.sn + 1 {
-            } else if last_event.event_proposal.sn < subject.sn {
+            if last_event.event_proposal.proposal.sn == subject.sn + 1 {
+            } else if last_event.event_proposal.proposal.sn < subject.sn {
                 panic!("Que ha pasado?")
             }
             // self.virtual_state.insert(
@@ -153,6 +155,10 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 };
             }
         };
+        // Chek if we are owner of Subject
+        if subject.keys.is_none() {
+            return Err(EventError::SubjectNotOwned(subject_id.to_str()));
+        }
         // Check if the content is correct (signature, invoker, etc)
         // Signature check:
         let hash_request = DigestIdentifier::from_serializable_borsh((
@@ -215,11 +221,12 @@ impl<D: DatabaseManager> EventCompleter<D> {
             // self.actual_sn.get(&subject_id).unwrap().to_owned() + 1, // Must be Some, filled in init function
             subject.sn,
         );
+        let (signers, quorum_size) = self.get_signers_and_quorum(&metadata, &stage).await?;
         self.ask_signatures(
             &subject_id,
             EventMessages::EvaluationRequest(event_preevaluation.clone()),
-            &metadata,
-            &stage,
+            signers.clone(),
+            quorum_size,
         )
         .await?;
         let event_preevaluation_hash =
@@ -236,8 +243,10 @@ impl<D: DatabaseManager> EventCompleter<D> {
         //     unreachable!("Unwraped before")
         // }
         // Add the event to the hashset to not complete two at the same time for the same subject
-        self.subjects_completing_event
-            .insert(subject_id, ValidationStage::Evaluate);
+        self.subjects_completing_event.insert(
+            subject_id,
+            (ValidationStage::Evaluate, signers, quorum_size),
+        );
         Ok(hash_request)
     }
 
@@ -266,9 +275,15 @@ impl<D: DatabaseManager> EventCompleter<D> {
             }
         };
         // Mirar en que estado está el evento, si está en evaluación o no
-        let Some(&ValidationStage::Evaluate) = self.subjects_completing_event.get(&subject_id) else {
+        let Some((ValidationStage::Evaluate, signers, quorum_size)) = self.subjects_completing_event.get(&subject_id) else {
             return Err(EventError::WrongEventPhase);
         };
+        // Check if evaluator is in the list of evaluators
+        if !signers.contains(&signature.content.signer) {
+            return Err(EventError::CryptoError(String::from(
+                "The signer is not in the list of evaluators",
+            )));
+        }
         // Comprobar que todo es correcto criptográficamente
         let evaluation_hash =
             DigestIdentifier::from_serializable_borsh(&evaluation).map_err(|_| {
@@ -308,19 +323,75 @@ impl<D: DatabaseManager> EventCompleter<D> {
         if governance_version != evaluation.governance_version {
             return Err(EventError::WrongGovernanceVersion);
         }
-        if !self.event_evaluations
-            .entry(evaluation_hash.clone())
-            .or_insert(HashSet::new())
-            .insert(signature) {
-                log::debug!("Evaluation ya estaba presente");
-                return Ok(())
+        let signatures_set = match self
+            .event_evaluations
+            .get_mut(&evaluation.preevaluation_hash)
+        {
+            Some(signatures_set) => {
+                insert_or_replace_and_check(signatures_set, signature);
+                signatures_set
             }
-        let num_evaluations = self
-            .evaluations_result
-            .entry(evaluation_hash.clone())
-            .and_modify(|counter| *counter += 1)
-            .or_insert(1);
-        // Comprobar si llegamos a Quorum y si es así comprobar que json patch aplicado al eventoparar la petición de firmas y empezar a pedir las approves con el evento completo con lo nuevo obtenido en esta fase si se requieren approves, si no informar a validator
+            None => {
+                let mut new_signatures_set = HashSet::new();
+                new_signatures_set.insert(signature);
+                self.event_evaluations
+                    .insert(evaluation.preevaluation_hash.clone(), new_signatures_set);
+                self.event_evaluations
+            .get_mut(&evaluation.preevaluation_hash)
+            .expect("Acabamos de insertar el conjunto de firmas, por lo que debe estar presente")
+            }
+        };
+        let num_signatures_hash =
+            count_signatures_with_event_content_hash(&signatures_set, &evaluation_hash) as u32;
+        // Comprobar si llegamos a Quorum
+        if num_signatures_hash < *quorum_size {
+            return Ok(()); // No llegamos a quorum, no hacemos nada
+        } else {
+            // Si es así comprobar que json patch aplicado al evento parar la petición de firmas y empezar a pedir las approves con el evento completo con lo nuevo obtenido en esta fase si se requieren approves, si no informar a validator
+            // Comprobar que al aplicar Json Patch llegamos al estado final?
+            // Crear Event Proposal
+            let proposal = Proposal::new(
+                preevaluation_event.event_request.clone(),
+                preevaluation_event.sn,
+                evaluation,
+                json_patch,
+                signatures_set.clone(),
+            );
+            let proposal_hash =
+                DigestIdentifier::from_serializable_borsh(&proposal).map_err(|_| {
+                    EventError::CryptoError(String::from(
+                        "Error calculating the hash of the proposal",
+                    ))
+                })?;
+            let subject_keys = subject.keys.expect("Llegados a aquí tenemos que ser owner");
+            let subject_signature = subject_keys
+                .sign(Payload::Buffer(proposal_hash.derivative()))
+                .map_err(|_| {
+                    EventError::CryptoError(String::from("Error signing the hash of the proposal"))
+                })?;
+            let subject_signature = Signature {
+                content: SignatureContent {
+                    signer: subject.public_key.clone(),
+                    event_content_hash: proposal_hash,
+                    timestamp: TimeStamp::now(),
+                },
+                signature: SignatureIdentifier::new(
+                    subject.public_key.to_signature_derivator(),
+                    &subject_signature,
+                ),
+            };
+            let event_proposal = EventProposal::new(proposal, subject_signature);
+            let metadata = Metadata {
+                namespace: subject.namespace,
+                subject_id: subject_id.clone(),
+                governance_id: subject.governance_id,
+                governance_version,
+                schema_id: subject.schema_id,
+                owner: subject.owner,
+            };
+            // Limpiar HashMaps
+            // Pedir Approves si es necesario, si no pedir validaciones
+        }
         todo!();
     }
 
@@ -340,14 +411,12 @@ impl<D: DatabaseManager> EventCompleter<D> {
         todo!();
     }
 
-    async fn ask_signatures(
+    async fn get_signers_and_quorum(
         &self,
-        subject_id: &DigestIdentifier,
-        event_message: EventMessages,
         metadata: &Metadata,
         stage: &ValidationStage,
-    ) -> Result<(), EventError> {
-        let signers: Vec<KeyIdentifier> = self
+    ) -> Result<(Vec<KeyIdentifier>, u32), EventError> {
+        let signers = self
             .gov_api
             .get_signers(&metadata, stage)
             .await
@@ -359,6 +428,16 @@ impl<D: DatabaseManager> EventCompleter<D> {
             .get_quorum(&metadata, stage)
             .await
             .map_err(EventError::GovernanceError)?;
+        Ok((signers, quorum_size))
+    }
+
+    async fn ask_signatures(
+        &self,
+        subject_id: &DigestIdentifier,
+        event_message: EventMessages,
+        signers: Vec<KeyIdentifier>,
+        quorum_size: u32,
+    ) -> Result<(), EventError> {
         let replication_factor = extend_quorum(quorum_size, signers.len());
         self.message_channel
             .tell(MessageTaskCommand::Request(
@@ -380,4 +459,20 @@ pub fn extend_quorum(quorum_size: u32, signers_len: usize) -> f64 {
     let quorum_extended =
         quorum_size + (signers_len as f64 * QUORUM_PORCENTAGE_AMPLIFICATION).ceil() as u32;
     quorum_extended as f64 / signers_len as f64
+}
+
+fn count_signatures_with_event_content_hash(
+    signatures: &HashSet<Signature>,
+    target_event_content_hash: &DigestIdentifier,
+) -> usize {
+    signatures
+        .iter()
+        .filter(|signature| signature.content.event_content_hash == *target_event_content_hash)
+        .count()
+}
+
+fn insert_or_replace_and_check(set: &mut HashSet<Signature>, new_value: Signature) -> bool {
+    let replaced = set.remove(&new_value); // Si existe un valor igual, lo eliminamos y devolvemos true.
+    set.insert(new_value); // Insertamos el nuevo valor.
+    replaced // Devolvemos si se ha reemplazado un elemento existente.
 }
