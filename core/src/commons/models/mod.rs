@@ -16,7 +16,7 @@ pub mod event_proposal;
 pub mod approval;
 
 #[derive(
-    Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
+    Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema, PartialOrd
 )]
 pub enum Acceptance {
     Ok,

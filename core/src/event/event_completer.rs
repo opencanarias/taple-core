@@ -13,6 +13,7 @@ use crate::{
         errors::ChannelErrors,
         models::{
             approval::{self, Approval},
+            event::EventContent,
             event_preevaluation::{Context, EventPreEvaluation},
             event_proposal::{Evaluation, EventProposal, Proposal},
         },
@@ -23,7 +24,7 @@ use crate::{
     identifier::{Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier},
     message::{MessageConfig, MessageTaskCommand},
     protocol::command_head_manager::self_signature_manager::SelfSignatureManager,
-    signature::{Signature, SignatureContent},
+    signature::{Signature, SignatureContent, UniqueSignature},
     Event, Notification, TimeStamp,
 };
 
@@ -44,10 +45,13 @@ pub struct EventCompleter<D: DatabaseManager> {
     subjects_completing_event:
         HashMap<DigestIdentifier, (ValidationStage, Vec<KeyIdentifier>, u32)>,
     // actual_sn: HashMap<DigestIdentifier, u64>,
-    event_pre_evaluations: HashMap<DigestIdentifier, EventPreEvaluation>,
-    event_proposals: HashMap<DigestIdentifier, EventProposal>,
-    event_evaluations: HashMap<DigestIdentifier, HashSet<Signature>>,
     // virtual_state: HashMap<DigestIdentifier, Value>,
+    // Evaluation HashMaps
+    event_pre_evaluations: HashMap<DigestIdentifier, EventPreEvaluation>,
+    event_evaluations: HashMap<DigestIdentifier, HashSet<UniqueSignature>>,
+    // Approval HashMaps
+    event_proposals: HashMap<DigestIdentifier, EventProposal>,
+    // Validation HashMaps
 }
 
 impl<D: DatabaseManager> EventCompleter<D> {
@@ -68,9 +72,9 @@ impl<D: DatabaseManager> EventCompleter<D> {
             ledger_sender,
             subjects_completing_event: HashMap::new(),
             // actual_sn: HashMap::new(),
+            // virtual_state: HashMap::new(),
             event_pre_evaluations: HashMap::new(),
             event_evaluations: HashMap::new(),
-            // virtual_state: HashMap::new(),
             event_proposals: HashMap::new(),
         }
     }
@@ -97,8 +101,8 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 .map_err(|error| EventError::DatabaseError(error.to_string()))?;
             // Already know that the vec is contained by 1 element
             let last_event = last_event.pop().unwrap();
-            if last_event.event_proposal.proposal.sn == subject.sn + 1 {
-            } else if last_event.event_proposal.proposal.sn < subject.sn {
+            if last_event.content.event_proposal.proposal.sn == subject.sn + 1 {
+            } else if last_event.content.event_proposal.proposal.sn < subject.sn {
                 panic!("Que ha pasado?")
             }
             // self.virtual_state.insert(
@@ -328,12 +332,12 @@ impl<D: DatabaseManager> EventCompleter<D> {
             .get_mut(&evaluation.preevaluation_hash)
         {
             Some(signatures_set) => {
-                insert_or_replace_and_check(signatures_set, signature);
+                insert_or_replace_and_check(signatures_set, UniqueSignature { signature });
                 signatures_set
             }
             None => {
                 let mut new_signatures_set = HashSet::new();
-                new_signatures_set.insert(signature);
+                new_signatures_set.insert(UniqueSignature { signature });
                 self.event_evaluations
                     .insert(evaluation.preevaluation_hash.clone(), new_signatures_set);
                 self.event_evaluations
@@ -350,12 +354,16 @@ impl<D: DatabaseManager> EventCompleter<D> {
             // Si es así comprobar que json patch aplicado al evento parar la petición de firmas y empezar a pedir las approves con el evento completo con lo nuevo obtenido en esta fase si se requieren approves, si no informar a validator
             // Comprobar que al aplicar Json Patch llegamos al estado final?
             // Crear Event Proposal
+            let evaluator_signatures = signatures_set
+                .iter()
+                .map(|signature| signature.signature.clone())
+                .collect();
             let proposal = Proposal::new(
                 preevaluation_event.event_request.clone(),
                 preevaluation_event.sn,
-                evaluation,
+                evaluation.clone(),
                 json_patch,
-                signatures_set.clone(),
+                evaluator_signatures,
             );
             let proposal_hash =
                 DigestIdentifier::from_serializable_borsh(&proposal).map_err(|_| {
@@ -390,7 +398,62 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 owner: subject.owner,
             };
             // Limpiar HashMaps
+            self.event_evaluations
+                .remove(&evaluation.preevaluation_hash);
+            self.event_pre_evaluations
+                .remove(&evaluation.preevaluation_hash);
             // Pedir Approves si es necesario, si no pedir validaciones
+            let (stage, event_message) = if evaluation.approval_required {
+                (
+                    ValidationStage::Approve,
+                    EventMessages::ApprovalRequest(event_proposal),
+                )
+            } else {
+                let event_content = EventContent::new(
+                    event_proposal,
+                    HashSet::new(),
+                    match evaluation.acceptance {
+                        crate::commons::models::Acceptance::Ok => true,
+                        crate::commons::models::Acceptance::Ko => false,
+                        crate::commons::models::Acceptance::Error => false,
+                    },
+                );
+                let event_content_hash = DigestIdentifier::from_serializable_borsh(&event_content)
+                    .map_err(|_| {
+                        EventError::CryptoError(String::from(
+                            "Error calculating the hash of the event",
+                        ))
+                    })?;
+                let event_signature = subject_keys
+                    .sign(Payload::Buffer(event_content_hash.derivative()))
+                    .map_err(|_| {
+                        EventError::CryptoError(String::from(
+                            "Error signing the hash of the event content",
+                        ))
+                    })?;
+                let event_signature = Signature {
+                    content: SignatureContent {
+                        signer: subject.public_key.clone(),
+                        event_content_hash: event_content_hash,
+                        timestamp: TimeStamp::now(),
+                    },
+                    signature: SignatureIdentifier::new(
+                        subject.public_key.to_signature_derivator(),
+                        &event_signature,
+                    ),
+                };
+                let event = Event {
+                    content: event_content,
+                    signature: event_signature,
+                };
+                (
+                    ValidationStage::Validate,
+                    EventMessages::ValidationRequest(event),
+                )
+            };
+            let (signers, quorum_size) = self.get_signers_and_quorum(&metadata, &stage).await?;
+            self.ask_signatures(&subject_id, event_message, signers.clone(), quorum_size)
+                .await?;
         }
         todo!();
     }
@@ -462,16 +525,21 @@ pub fn extend_quorum(quorum_size: u32, signers_len: usize) -> f64 {
 }
 
 fn count_signatures_with_event_content_hash(
-    signatures: &HashSet<Signature>,
+    signatures: &HashSet<UniqueSignature>,
     target_event_content_hash: &DigestIdentifier,
 ) -> usize {
     signatures
         .iter()
-        .filter(|signature| signature.content.event_content_hash == *target_event_content_hash)
+        .filter(|signature| {
+            signature.signature.content.event_content_hash == *target_event_content_hash
+        })
         .count()
 }
 
-fn insert_or_replace_and_check(set: &mut HashSet<Signature>, new_value: Signature) -> bool {
+fn insert_or_replace_and_check(
+    set: &mut HashSet<UniqueSignature>,
+    new_value: UniqueSignature,
+) -> bool {
     let replaced = set.remove(&new_value); // Si existe un valor igual, lo eliminamos y devolvemos true.
     set.insert(new_value); // Insertamos el nuevo valor.
     replaced // Devolvemos si se ha reemplazado un elemento existente.

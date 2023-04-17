@@ -185,6 +185,8 @@
 //     }
 // }
 //! Contains the data structures related to event  to send to approvers, or to validators if approval is not required.
+use std::collections::HashSet;
+
 use crate::{identifier::DigestIdentifier, signature::Signature};
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
@@ -196,24 +198,29 @@ use super::{approval::Approval, event_proposal::EventProposal};
     Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
 )]
 pub struct Event {
-    pub event_proposal: EventProposal,
-    pub approvals: Vec<Approval>,
-    pub execution: bool,
+    pub content: EventContent,
     pub signature: Signature,
 }
 
-impl Event {
+#[derive(
+    Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
+)]
+pub struct EventContent {
+    pub event_proposal: EventProposal,
+    pub approvals: HashSet<Approval>,
+    pub execution: bool,
+}
+
+impl EventContent {
     pub fn new(
         event_proposal: EventProposal,
-        approvals: Vec<Approval>,
+        approvals: HashSet<Approval>,
         execution: bool,
-        signature: Signature,
-    ) -> Result<Self, ()> {
-        Ok(Self {
+    ) -> Self {
+        Self {
             event_proposal,
             approvals,
             execution,
-            signature,
-        })
+        }
     }
 }
