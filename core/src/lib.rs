@@ -87,6 +87,8 @@ pub(crate) mod database;
 pub(crate) mod notary;
 pub(crate) mod evaluator;
 pub(crate) mod distribution;
+pub(crate) mod approval;
+
 pub mod protocol;
 
 mod unitary_component;

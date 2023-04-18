@@ -21,10 +21,9 @@ pub enum EvaluatorResponse {
 
 #[derive(Clone, Debug)]
 pub struct AskForEvaluation {
-    data: String, // Event
-    hash_request: String,
+    invokation: EventRequest, // Event
+    // hash_request: String,
     context: Context,
-    state: String,
     sn: u64
 }
 
@@ -35,6 +34,7 @@ pub struct Context {
     invokator: KeyIdentifier,
     creator: KeyIdentifier,
     owner: KeyIdentifier,
+    state: String,
     namespace: String,
 }
 

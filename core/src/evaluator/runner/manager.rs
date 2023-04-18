@@ -4,8 +4,9 @@ use wasmtime::Engine;
 use crate::{
     database::DB,
     evaluator::{errors::ExecutorErrorResponses, AskForEvaluation, Context},
+    event_request::{EventRequest, RequestPayload, StateRequest},
     governance::GovernanceInterface,
-    identifier::{Derivable, DigestIdentifier, KeyIdentifier},
+    identifier::DigestIdentifier,
     DatabaseManager,
 };
 
@@ -27,17 +28,22 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send> TapleRunner<D, G> {
     pub fn generate_context_hash(
         context: &Context,
         sn: u64,
+        request: &EventRequest,
     ) -> Result<DigestIdentifier, ExecutorErrorResponses> {
-        DigestIdentifier::from_serializable_borsh((context, sn))
+        DigestIdentifier::from_serializable_borsh((request, context, sn))
             .map_err(|_| ExecutorErrorResponses::ContextHashGenerationFailed)
     }
 
     pub async fn execute_contract(
         &self,
-        execute_contract: AskForEvaluation,
+        execute_contract: &AskForEvaluation,
+        state_data: &StateRequest,
     ) -> Result<ExecuteContractResponse, ExecutorErrorResponses> {
-        let context_hash =
-            Self::generate_context_hash(&execute_contract.context, execute_contract.sn)?;
+        let context_hash = Self::generate_context_hash(
+            &execute_contract.context,
+            execute_contract.sn,
+            &execute_contract.invokation
+        )?;
         let (contract, governance_version) = match self.database.get_contract(
             &execute_contract.context.governance_id,
             &execute_contract.context.schema_id,
@@ -65,13 +71,13 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send> TapleRunner<D, G> {
             }
             Err(error) => return Err(ExecutorErrorResponses::DatabaseError(error.to_string())),
         };
-        let previous_state = execute_contract.state.clone();
+        let previous_state = execute_contract.context.state.clone();
         let contract_result = self
             .executor
             .execute_contract(
-                execute_contract.state,
-                execute_contract.data,
-                execute_contract.context,
+                &execute_contract.context.state,
+                &extract_data_from_payload(&state_data.payload),
+                &execute_contract.context,
                 governance_version,
                 contract,
             )
@@ -111,4 +117,11 @@ fn generate_json_patch(
 fn generera_state_hash(state: &str) -> Result<DigestIdentifier, ExecutorErrorResponses> {
     DigestIdentifier::from_serializable_borsh(state)
         .map_err(|_| ExecutorErrorResponses::StateHashGenerationFailed)
+}
+
+fn extract_data_from_payload(payload: &RequestPayload) -> String {
+    match payload {
+        RequestPayload::Json(data) => data.clone(),
+        RequestPayload::JsonPatch(data) => data.clone(),
+    }
 }

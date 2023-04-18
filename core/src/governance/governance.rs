@@ -10,7 +10,10 @@ use crate::{
             approval_signature::ApprovalResponse, event::Event, event_content::Metadata,
             event_request::EventRequest, notary::NotaryEventResponse,
         },
-        schema_handler::{get_governance_schema, gov_models::{Invoke, Contract}},
+        schema_handler::{
+            get_governance_schema,
+            gov_models::{Contract, Invoke},
+        },
     },
     evaluator::compiler::ContractType,
     signature::Signature,
@@ -20,7 +23,8 @@ use crate::{
 use super::{
     error::{InternalError, RequestError},
     inner_governance::InnerGovernance,
-    GovernanceMessage, GovernanceResponse, RequestQuorum, stage::ValidationStage,
+    stage::ValidationStage,
+    GovernanceMessage, GovernanceResponse, RequestQuorum,
 };
 
 pub struct Governance<D: DatabaseManager> {
@@ -164,6 +168,13 @@ pub trait GovernanceInterface: Sync + Send {
     ) -> Result<u64, RequestError>;
 
     async fn is_governance(&self, subject_id: &DigestIdentifier) -> Result<bool, RequestError>;
+
+    async fn has_invokator_permission(
+        &self,
+        governance_id: &DigestIdentifier,
+        schema_id: &str,
+        namespace: &str,
+    ) -> Result<bool, RequestError>;
 }
 
 #[derive(Debug, Clone)]
@@ -308,5 +319,23 @@ impl GovernanceInterface for GovernanceAPI {
         } else {
             Err(RequestError::UnexpectedResponse)
         }
+    }
+
+    async fn get_approvers(
+        &self,
+        governance_id: &DigestIdentifier,
+        schema_id: &str,
+        namespace: &str,
+    ) -> Result<HashSet<KeyIdentifier>, RequestError> {
+        todo!()
+    }
+
+    async fn get_evaluators(
+        &self,
+        governance_id: &DigestIdentifier,
+        schema_id: &str,
+        namespace: &str,
+    ) -> Result<HashSet<KeyIdentifier>, RequestError> {
+        todo!()
     }
 }

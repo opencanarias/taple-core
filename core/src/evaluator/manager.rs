@@ -10,7 +10,7 @@ use crate::database::{DatabaseManager, DB};
 use crate::evaluator::errors::ExecutorErrorResponses;
 use crate::evaluator::runner::manager::TapleRunner;
 use crate::evaluator::AskForEvaluationResponse;
-use crate::event_request::RequestPayload;
+use crate::event_request::{RequestPayload, EventRequestType};
 use crate::governance::GovernanceInterface;
 use crate::protocol::command_head_manager::self_signature_manager::SelfSignatureInterface;
 use crate::{
@@ -113,18 +113,18 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send + Clone + 'static> Evalua
         let response = 'response: {
             match data {
                 EvaluatorMessage::AskForEvaluation(data) => {
-                    // let EventRequestType::State(state_data) = &data.invokation.request else {
-                    //     break 'response EvaluatorResponse::AskForEvaluation(Err(super::errors::EvaluatorErrorResponses::CreateRequestNotAllowed));
-                    // };
-                    let result = self.runner.execute_contract(data).await;
+                    let EventRequestType::State(state_data) = &data.invokation.request else {
+                        break 'response EvaluatorResponse::AskForEvaluation(Err(super::errors::EvaluatorErrorResponses::CreateRequestNotAllowed));
+                    };
+                    let result = self.runner.execute_contract(&data, state_data).await;
                     match result {
                         Ok(executor_response) => {
                             let governance_version = executor_response.governance_version;
                             let signature = self
                                 .signature_manager
                                 .sign(&(
-                                    &executor_response.hash_new_state,
                                     &executor_response.context_hash,
+                                    &executor_response.hash_new_state,
                                     governance_version,
                                     &executor_response.success,
                                     &executor_response.approval_required,
@@ -578,8 +578,11 @@ mod test {
             let response = sx_evaluator
                 .ask(EvaluatorMessage::AskForEvaluation(
                     crate::evaluator::AskForEvaluation {
-                        data: serde_json::to_string(&event).unwrap(),
-                        hash_request: DigestIdentifier::default().to_str(),
+                        invokation: create_event_request(
+                            serde_json::to_string(&event).unwrap(),
+                            &signature_manager,
+                        ),
+                        // hash_request: DigestIdentifier::default().to_str(),
                         context: Context {
                             governance_id: DigestIdentifier::from_str(
                                 "JGSPR6FL-vE7iZxWMd17o09qn7NeTqlcImDVWmijXczw",
@@ -598,9 +601,9 @@ mod test {
                                 "EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg",
                             )
                             .unwrap(),
+                            state: initial_state_json.clone(),
                             namespace: "namespace1".into(),
                         },
-                        state: initial_state_json.clone(),
                         sn: 1,
                     },
                 ))
@@ -658,8 +661,11 @@ mod test {
             let response = sx_evaluator
                 .ask(EvaluatorMessage::AskForEvaluation(
                     crate::evaluator::AskForEvaluation {
-                        data: serde_json::to_string(&event).unwrap(),
-                        hash_request: DigestIdentifier::default().to_str(),
+                        invokation: create_event_request(
+                            serde_json::to_string(&event).unwrap(),
+                            &signature_manager,
+                        ),
+                        // hash_request: DigestIdentifier::default().to_str(),
                         context: Context {
                             governance_id: DigestIdentifier::from_str(
                                 "JGSPR6FL-vE7iZxWMd17o09qn7NeTqlcImDVWmijXczw",
@@ -668,9 +674,9 @@ mod test {
                             invokator: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
                             creator: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
                             owner: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
+                            state: initial_state_json.clone(),
                             namespace: "namespace1".into(),
                         },
-                        state: initial_state_json.clone(),
                         sn: 1,
                     },
                 ))
@@ -715,8 +721,11 @@ mod test {
             let response = sx_evaluator
                 .ask(EvaluatorMessage::AskForEvaluation(
                     crate::evaluator::AskForEvaluation {
-                        data: serde_json::to_string(&event).unwrap(),
-                        hash_request: DigestIdentifier::default().to_str(),
+                        invokation: create_event_request(
+                            serde_json::to_string(&event).unwrap(),
+                            &signature_manager,
+                        ),
+                        // hash_request: DigestIdentifier::default().to_str(),
                         context: Context {
                             governance_id: DigestIdentifier::from_str(
                                 "JGSPR6FL-vE7iZxWMd17o09qn7NeTqlcImDVWmijXczw",
@@ -725,9 +734,9 @@ mod test {
                             invokator: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
                             creator: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
                             owner: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
+                            state: initial_state_json.clone(),
                             namespace: "namespace1".into(),
                         },
-                        state: initial_state_json.clone(),
                         sn: 1,
                     },
                 ))
@@ -775,8 +784,11 @@ mod test {
             let response = sx_evaluator
                 .ask(EvaluatorMessage::AskForEvaluation(
                     crate::evaluator::AskForEvaluation {
-                        data: serde_json::to_string(&event).unwrap(),
-                        hash_request: DigestIdentifier::default().to_str(),
+                        invokation: create_event_request(
+                            serde_json::to_string(&event).unwrap(),
+                            &signature_manager,
+                        ),
+                        // hash_request: DigestIdentifier::default().to_str(),
                         context: Context {
                             governance_id: DigestIdentifier::from_str(
                                 "Jg2Nuv5bNs4swQGcPQ1CXs9MtcfwMVoeQDR2Ea1YNYJw",
@@ -785,9 +797,9 @@ mod test {
                             invokator: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
                             creator: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
                             owner: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
+                            state: initial_state_json.clone(),
                             namespace: "namespace1".into(),
                         },
-                        state: initial_state_json.clone(),
                         sn: 1,
                     },
                 ))
