@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 pub mod approval;
-pub mod approval_signature;
 pub mod event;
 pub mod event_content;
 pub mod event_preevaluation;

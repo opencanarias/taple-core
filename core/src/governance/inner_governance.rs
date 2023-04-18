@@ -262,7 +262,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         let properties: Value = serde_json::from_str(&governance.properties)
             .map_err(|_| InternalError::DeserializationError)?;
         let schemas = get_as_array(&properties, "Schemas")?;
-        let result = Vec::new();
+        let mut result = Vec::new();
         for schema in schemas {
             let contract: Contract = serde_json::from_value(schema["Contract"])
                 .map_err(|_| InternalError::InvalidGovernancePayload)?;

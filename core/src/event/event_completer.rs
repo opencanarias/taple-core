@@ -10,13 +10,15 @@ use serde_json::Value;
 use crate::{
     commons::{
         channel::SenderEnd,
-        crypto::{Payload, DSA},
+        crypto::{KeyPair, Payload, DSA},
         errors::ChannelErrors,
         models::{
             approval::{self, Approval, UniqueApproval},
             event::EventContent,
             event_preevaluation::{Context, EventPreEvaluation},
             event_proposal::{Evaluation, EventProposal, Proposal},
+            state::Subject,
+            Acceptance,
         },
     },
     event_content::Metadata,
@@ -350,6 +352,9 @@ impl<D: DatabaseManager> EventCompleter<D> {
             // Crear Event Proposal
             let evaluator_signatures = signatures_set
                 .iter()
+                .filter(|signature| {
+                    signature.signature.content.event_content_hash == evaluation_hash
+                })
                 .map(|signature| signature.signature.clone())
                 .collect();
             let proposal = Proposal::new(
@@ -365,7 +370,10 @@ impl<D: DatabaseManager> EventCompleter<D> {
                         "Error calculating the hash of the proposal",
                     ))
                 })?;
-            let subject_keys = subject.keys.expect("Llegados a aquí tenemos que ser owner");
+            let subject_keys = subject
+                .keys
+                .clone()
+                .expect("Llegados a aquí tenemos que ser owner");
             let subject_signature = subject_keys
                 .sign(Payload::Buffer(proposal_hash.derivative()))
                 .map_err(|_| {
@@ -384,12 +392,12 @@ impl<D: DatabaseManager> EventCompleter<D> {
             };
             let event_proposal = EventProposal::new(proposal, subject_signature);
             let metadata = Metadata {
-                namespace: subject.namespace,
+                namespace: subject.namespace.clone(),
                 subject_id: subject_id.clone(),
-                governance_id: subject.governance_id,
+                governance_id: subject.governance_id.clone(),
                 governance_version,
-                schema_id: subject.schema_id,
-                owner: subject.owner,
+                schema_id: subject.schema_id.clone(),
+                owner: subject.owner.clone(),
             };
             // Añadir al hashmap para poder acceder a él cuando lleguen las firmas de los evaluadores
             self.event_proposals
@@ -401,55 +409,18 @@ impl<D: DatabaseManager> EventCompleter<D> {
                     EventMessages::ApprovalRequest(event_proposal),
                 )
             } else {
-                let event_content = EventContent::new(
+                let execution = match evaluation.acceptance {
+                    crate::commons::models::Acceptance::Ok => true,
+                    crate::commons::models::Acceptance::Ko => false,
+                    crate::commons::models::Acceptance::Error => false,
+                };
+                let event_message = self.create_event_prevalidated(
                     event_proposal,
                     HashSet::new(),
-                    match evaluation.acceptance {
-                        crate::commons::models::Acceptance::Ok => true,
-                        crate::commons::models::Acceptance::Ko => false,
-                        crate::commons::models::Acceptance::Error => false,
-                    },
-                );
-                let event_content_hash = DigestIdentifier::from_serializable_borsh(&event_content)
-                    .map_err(|_| {
-                        EventError::CryptoError(String::from(
-                            "Error calculating the hash of the event",
-                        ))
-                    })?;
-                let event_signature = subject_keys
-                    .sign(Payload::Buffer(event_content_hash.derivative()))
-                    .map_err(|_| {
-                        EventError::CryptoError(String::from(
-                            "Error signing the hash of the event content",
-                        ))
-                    })?;
-                let event_signature = Signature {
-                    content: SignatureContent {
-                        signer: subject.public_key.clone(),
-                        event_content_hash: event_content_hash.clone(),
-                        timestamp: TimeStamp::now(),
-                    },
-                    signature: SignatureIdentifier::new(
-                        subject.public_key.to_signature_derivator(),
-                        &event_signature,
-                    ),
-                };
-                let event = Event {
-                    content: event_content,
-                    signature: event_signature,
-                };
-                self.events_to_validate
-                    .insert(event_content_hash, event.clone());
-                // TODO: Enviar al Ledger que hay nuevo evento
-                // self.ledger_sender
-                //     .send(LedgerMessages::Event(event.clone()))
-                //     .await
-                //     .map_err(EventError::LedgerError)?;
-                // TODO: lo dle Ledger, importante
-                (
-                    ValidationStage::Validate,
-                    EventMessages::ValidationRequest(event),
-                )
+                    subject,
+                    execution,
+                )?;
+                (ValidationStage::Validate, event_message)
             };
             // Limpiar HashMaps
             self.event_evaluations
@@ -466,7 +437,10 @@ impl<D: DatabaseManager> EventCompleter<D> {
         Ok(())
     }
 
-    pub fn approver_signatures(&mut self, approval: Approval) -> Result<(), EventError> {
+    pub async fn approver_signatures(&mut self, approval: Approval) -> Result<(), EventError> {
+        if let Acceptance::Error = approval.content.acceptance {
+            return Ok(()); // Ignoramos respuestas de Error
+        }
         // Mirar en que estado está el evento, si está en aprovación o no
         let event_proposal = match self
             .event_proposals
@@ -512,12 +486,19 @@ impl<D: DatabaseManager> EventCompleter<D> {
             .get_mut(&approval.content.event_proposal_hash)
         {
             Some(approval_set) => {
-                insert_or_replace_and_check(approval_set, UniqueApproval { approval });
+                insert_or_replace_and_check(
+                    approval_set,
+                    UniqueApproval {
+                        approval: approval.clone(),
+                    },
+                );
                 approval_set
             }
             None => {
                 let mut new_approval_set = HashSet::new();
-                new_approval_set.insert(UniqueApproval { approval });
+                new_approval_set.insert(UniqueApproval {
+                    approval: approval.clone(),
+                });
                 self.event_approvations.insert(
                     approval.content.event_proposal_hash.clone(),
                     new_approval_set,
@@ -527,16 +508,59 @@ impl<D: DatabaseManager> EventCompleter<D> {
             .expect("Acabamos de insertar el conjunto de approvals, por lo que debe estar presente")
             }
         };
+        // Comprobar si llegamos a Quorum positivo o negativo
         let num_approvals_with_same_acceptance = approval_set
             .iter()
             .filter(|unique_approval| {
                 unique_approval.approval.content.acceptance == approval.content.acceptance
             })
             .count() as u32;
-        // Comprobar si llegamos a Quorum positivo o negativo
-        // Si se llega a Quorum dejamos de pedir approves y empezamos a pedir notarizaciones con el evento completo incluyendo lo nuevo de las approves
-        // Actualizar ultimo sn y virtual properties
-        todo!();
+        let (quorum_size, execution) = match approval.content.acceptance {
+            crate::commons::models::Acceptance::Ok => (quorum_size.to_owned(), true),
+            crate::commons::models::Acceptance::Ko => {
+                (((signers.len() as u32) - quorum_size) + 1, false)
+            }
+
+            crate::commons::models::Acceptance::Error => unreachable!(),
+        };
+        if num_approvals_with_same_acceptance < quorum_size {
+            Ok(()) // No llegamos a quorum, no hacemos nada
+        } else {
+            // Si se llega a Quorum dejamos de pedir approves y empezamos a pedir notarizaciones con el evento completo incluyendo lo nuevo de las approves
+            let metadata = Metadata {
+                namespace: subject.namespace.clone(),
+                subject_id: subject_id.clone(),
+                governance_id: subject.governance_id.clone(),
+                governance_version: 0, // Me lo invento porque da igual para estos métodos
+                schema_id: subject.schema_id.clone(),
+                owner: subject.owner.clone(),
+            };
+            // Creamos el evento final
+            let approvals = approval_set
+                .iter()
+                .filter(|unique_approval| {
+                    unique_approval.approval.content.acceptance == approval.content.acceptance
+                })
+                .map(|approval| approval.approval.clone())
+                .collect();
+            let event_proposal = self
+                .event_proposals
+                .remove(&approval.content.event_proposal_hash)
+                .unwrap();
+            let event_message =
+                self.create_event_prevalidated(event_proposal, approvals, subject, execution)?;
+            // Limpiar HashMaps
+            self.event_approvations
+                .remove(&approval.content.event_proposal_hash);
+            let stage = ValidationStage::Validate;
+            let (signers, quorum_size) = self.get_signers_and_quorum(&metadata, &stage).await?;
+            self.ask_signatures(&subject_id, event_message, signers.clone(), quorum_size)
+                .await?;
+            // Hacer update de fase por la que va el evento
+            self.subjects_completing_event
+                .insert(subject_id, (stage, signers, quorum_size));
+            Ok(())
+        }
     }
 
     pub fn notary_signatures(&mut self, signature: Signature) -> Result<(), EventError> {
@@ -588,6 +612,50 @@ impl<D: DatabaseManager> EventCompleter<D> {
             .await
             .map_err(EventError::ChannelError)?;
         Ok(())
+    }
+
+    fn create_event_prevalidated(
+        &mut self,
+        event_proposal: EventProposal,
+        approvals: HashSet<Approval>,
+        subject: Subject,
+        execution: bool,
+    ) -> Result<EventMessages, EventError> {
+        let event_content = EventContent::new(event_proposal, approvals, execution);
+        let event_content_hash = DigestIdentifier::from_serializable_borsh(&event_content)
+            .map_err(|_| {
+                EventError::CryptoError(String::from("Error calculating the hash of the event"))
+            })?;
+        let subject_keys = subject.keys.expect("Somos propietario");
+        let event_signature = subject_keys
+            .sign(Payload::Buffer(event_content_hash.derivative()))
+            .map_err(|_| {
+                EventError::CryptoError(String::from("Error signing the hash of the event content"))
+            })?;
+        let event_signature = Signature {
+            content: SignatureContent {
+                signer: subject.public_key.clone(),
+                event_content_hash: event_content_hash.clone(),
+                timestamp: TimeStamp::now(),
+            },
+            signature: SignatureIdentifier::new(
+                subject.public_key.to_signature_derivator(),
+                &event_signature,
+            ),
+        };
+        let event = Event {
+            content: event_content,
+            signature: event_signature,
+        };
+        self.events_to_validate
+            .insert(event_content_hash, event.clone());
+        // TODO: Enviar al Ledger que hay nuevo evento
+        // self.ledger_sender
+        //     .send(LedgerMessages::Event(event.clone()))
+        //     .await
+        //     .map_err(EventError::LedgerError)?;
+        // TODO: lo dle Ledger, importante
+        Ok(EventMessages::ValidationRequest(event))
     }
 }
 
