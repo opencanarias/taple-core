@@ -3,6 +3,7 @@ use std::{
     ops::Add,
 };
 
+use borsh::BorshSerialize;
 use json_patch::{patch, Patch};
 use serde_json::Value;
 
@@ -12,7 +13,7 @@ use crate::{
         crypto::{Payload, DSA},
         errors::ChannelErrors,
         models::{
-            approval::{self, Approval},
+            approval::{self, Approval, UniqueApproval},
             event::EventContent,
             event_preevaluation::{Context, EventPreEvaluation},
             event_proposal::{Evaluation, EventProposal, Proposal},
@@ -27,6 +28,7 @@ use crate::{
     signature::{Signature, SignatureContent, UniqueSignature},
     Event, Notification, TimeStamp,
 };
+use std::hash::Hash;
 
 use super::{errors::EventError, EventCommand, EventMessages, EventResponse};
 use crate::database::{DatabaseManager, DB};
@@ -51,7 +53,9 @@ pub struct EventCompleter<D: DatabaseManager> {
     event_evaluations: HashMap<DigestIdentifier, HashSet<UniqueSignature>>,
     // Approval HashMaps
     event_proposals: HashMap<DigestIdentifier, EventProposal>,
+    event_approvations: HashMap<DigestIdentifier, HashSet<UniqueApproval>>,
     // Validation HashMaps
+    events_to_validate: HashMap<DigestIdentifier, Event>,
 }
 
 impl<D: DatabaseManager> EventCompleter<D> {
@@ -76,6 +80,8 @@ impl<D: DatabaseManager> EventCompleter<D> {
             event_pre_evaluations: HashMap::new(),
             event_evaluations: HashMap::new(),
             event_proposals: HashMap::new(),
+            events_to_validate: HashMap::new(),
+            event_approvations: HashMap::new(),
         }
     }
 
@@ -272,7 +278,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
         };
         let subject_id = match &preevaluation_event.event_request.request {
             crate::event_request::EventRequestType::Create(_) => {
-                return Err(EventError::EvaluationInCreationEvent)
+                return Err(EventError::EvaluationOrApprovationInCreationEvent)
             } // Que hago aquí?? devuelvo error?
             crate::event_request::EventRequestType::State(state_request) => {
                 state_request.subject_id.clone()
@@ -289,26 +295,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
             )));
         }
         // Comprobar que todo es correcto criptográficamente
-        let evaluation_hash =
-            DigestIdentifier::from_serializable_borsh(&evaluation).map_err(|_| {
-                EventError::CryptoError(String::from(
-                    "Error calculating the hash of the evaluation",
-                ))
-            })?;
-        if evaluation_hash != signature.content.event_content_hash {
-            return Err(EventError::CryptoError(String::from(
-                "The evaluation hash does not match the content of the signature",
-            )));
-        }
-        signature
-            .content
-            .signer
-            .verify(&evaluation_hash.derivative(), signature.signature.clone())
-            .map_err(|_| {
-                EventError::CryptoError(String::from(
-                    "The signature does not validate the evaluation hash",
-                ))
-            })?;
+        let evaluation_hash = check_cryptography(&evaluation, &signature)?;
         // Obtener sujeto para saber si lo tenemos y los metadatos del mismo
         let subject = self
             .database
@@ -333,6 +320,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 "Json patch applied to state hash does not match the new state hash".to_string(),
             ));
         }
+        // Guardar evaluación
         let signatures_set = match self
             .event_evaluations
             .get_mut(&evaluation.preevaluation_hash)
@@ -386,7 +374,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
             let subject_signature = Signature {
                 content: SignatureContent {
                     signer: subject.public_key.clone(),
-                    event_content_hash: proposal_hash,
+                    event_content_hash: proposal_hash.clone(),
                     timestamp: TimeStamp::now(),
                 },
                 signature: SignatureIdentifier::new(
@@ -403,11 +391,9 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 schema_id: subject.schema_id,
                 owner: subject.owner,
             };
-            // Limpiar HashMaps
-            self.event_evaluations
-                .remove(&evaluation.preevaluation_hash);
-            self.event_pre_evaluations
-                .remove(&evaluation.preevaluation_hash);
+            // Añadir al hashmap para poder acceder a él cuando lleguen las firmas de los evaluadores
+            self.event_proposals
+                .insert(proposal_hash, event_proposal.clone());
             // Pedir Approves si es necesario, si no pedir validaciones
             let (stage, event_message) = if evaluation.approval_required {
                 (
@@ -440,7 +426,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 let event_signature = Signature {
                     content: SignatureContent {
                         signer: subject.public_key.clone(),
-                        event_content_hash: event_content_hash,
+                        event_content_hash: event_content_hash.clone(),
                         timestamp: TimeStamp::now(),
                     },
                     signature: SignatureIdentifier::new(
@@ -452,6 +438,8 @@ impl<D: DatabaseManager> EventCompleter<D> {
                     content: event_content,
                     signature: event_signature,
                 };
+                self.events_to_validate
+                    .insert(event_content_hash, event.clone());
                 // TODO: Enviar al Ledger que hay nuevo evento
                 // self.ledger_sender
                 //     .send(LedgerMessages::Event(event.clone()))
@@ -463,6 +451,11 @@ impl<D: DatabaseManager> EventCompleter<D> {
                     EventMessages::ValidationRequest(event),
                 )
             };
+            // Limpiar HashMaps
+            self.event_evaluations
+                .remove(&evaluation.preevaluation_hash);
+            self.event_pre_evaluations
+                .remove(&evaluation.preevaluation_hash);
             let (signers, quorum_size) = self.get_signers_and_quorum(&metadata, &stage).await?;
             self.ask_signatures(&subject_id, event_message, signers.clone(), quorum_size)
                 .await?;
@@ -475,6 +468,71 @@ impl<D: DatabaseManager> EventCompleter<D> {
 
     pub fn approver_signatures(&mut self, approval: Approval) -> Result<(), EventError> {
         // Mirar en que estado está el evento, si está en aprovación o no
+        let event_proposal = match self
+            .event_proposals
+            .get(&approval.content.event_proposal_hash)
+        {
+            Some(event_proposal) => event_proposal,
+            None => {
+                return Err(EventError::CryptoError(String::from(
+                    "The hash of the event proposal does not match any of the proposals",
+                )))
+            }
+        };
+        let subject_id = match &event_proposal.proposal.event_request.request {
+            crate::event_request::EventRequestType::Create(_) => {
+                return Err(EventError::EvaluationOrApprovationInCreationEvent)
+            } // Que hago aquí?? devuelvo error?
+            crate::event_request::EventRequestType::State(state_request) => {
+                state_request.subject_id.clone()
+            }
+        };
+        let Some((ValidationStage::Validate, signers, quorum_size)) = self.subjects_completing_event.get(&subject_id) else {
+            return Err(EventError::WrongEventPhase);
+        };
+        // Check if approver is in the list of approvers
+        if !signers.contains(&approval.signature.content.signer) {
+            return Err(EventError::CryptoError(String::from(
+                "The signer is not in the list of approvers",
+            )));
+        }
+        // Comprobar que todo es correcto criptográficamente
+        let approval_hash = check_cryptography(&approval.content, &approval.signature)?;
+        // Obtener sujeto para saber si lo tenemos y los metadatos del mismo
+        let subject = self
+            .database
+            .get_subject(&subject_id)
+            .map_err(|error| match error {
+                crate::DbError::EntryNotFound => EventError::SubjectNotFound(subject_id.to_str()),
+                _ => EventError::DatabaseError(error.to_string()),
+            })?;
+        // Guardar aprobación
+        let approval_set = match self
+            .event_approvations
+            .get_mut(&approval.content.event_proposal_hash)
+        {
+            Some(approval_set) => {
+                insert_or_replace_and_check(approval_set, UniqueApproval { approval });
+                approval_set
+            }
+            None => {
+                let mut new_approval_set = HashSet::new();
+                new_approval_set.insert(UniqueApproval { approval });
+                self.event_approvations.insert(
+                    approval.content.event_proposal_hash.clone(),
+                    new_approval_set,
+                );
+                self.event_approvations
+            .get_mut(&approval.content.event_proposal_hash)
+            .expect("Acabamos de insertar el conjunto de approvals, por lo que debe estar presente")
+            }
+        };
+        let num_approvals_with_same_acceptance = approval_set
+            .iter()
+            .filter(|unique_approval| {
+                unique_approval.approval.content.acceptance == approval.content.acceptance
+            })
+            .count() as u32;
         // Comprobar si llegamos a Quorum positivo o negativo
         // Si se llega a Quorum dejamos de pedir approves y empezamos a pedir notarizaciones con el evento completo incluyendo lo nuevo de las approves
         // Actualizar ultimo sn y virtual properties
@@ -551,9 +609,9 @@ fn count_signatures_with_event_content_hash(
         .count()
 }
 
-fn insert_or_replace_and_check(
-    set: &mut HashSet<UniqueSignature>,
-    new_value: UniqueSignature,
+fn insert_or_replace_and_check<T: PartialEq + Eq + Hash>(
+    set: &mut HashSet<T>,
+    new_value: T,
 ) -> bool {
     let replaced = set.remove(&new_value); // Si existe un valor igual, lo eliminamos y devolvemos true.
     set.insert(new_value); // Insertamos el nuevo valor.
@@ -581,4 +639,28 @@ fn hash_match_after_patch(
             EventError::CryptoError(String::from("Error calculating the hash of the state"))
         })?;
     return Ok(state_hash_calculated == *state_hash);
+}
+
+fn check_cryptography<T: BorshSerialize>(
+    serializable: T,
+    signature: &Signature,
+) -> Result<DigestIdentifier, EventError> {
+    let hash = DigestIdentifier::from_serializable_borsh(&serializable).map_err(|_| {
+        EventError::CryptoError(String::from(
+            "Error calculating the hash of the serializable",
+        ))
+    })?;
+    if hash != signature.content.event_content_hash {
+        return Err(EventError::CryptoError(String::from(
+            "The hash does not match the content of the signature",
+        )));
+    }
+    signature
+        .content
+        .signer
+        .verify(&hash.derivative(), signature.signature.clone())
+        .map_err(|_| {
+            EventError::CryptoError(String::from("The signature does not validate the hash"))
+        })?;
+    Ok(hash)
 }

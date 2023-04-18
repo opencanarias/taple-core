@@ -21,7 +21,7 @@ pub enum EventError {
     #[error("Governance version of evaluator doesn't match with ours")]
     WrongGovernanceVersion,
     #[error("Evaluation in Creation Event")]
-    EvaluationInCreationEvent,
+    EvaluationOrApprovationInCreationEvent,
     #[error("Error parsing json string: {0}")]
     ErrorParsingJsonString(String),
     #[error("Error parsing value")]
