@@ -135,9 +135,73 @@ impl<D: DatabaseManager> NotaryManager<D> {
                     evaluation,
                     json_patch,
                     signature,
-                } => todo!(),
-                EventCommand::ApproverResponse { approval } => todo!(),
-                EventCommand::ValidatorResponse { signature } => todo!(),
+                } => {
+                    match self
+                        .event_completer
+                        .evaluator_signatures(evaluation, json_patch, signature)
+                        .await
+                    {
+                        Err(error) => match error {
+                            EventError::ChannelClosed => {
+                                log::error!("Channel Closed");
+                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                return Err(EventError::ChannelClosed);
+                            }
+                            EventError::GovernanceError(inner_error)
+                                if inner_error == RequestError::ChannelClosed =>
+                            {
+                                log::error!("Channel Closed");
+                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                return Err(EventError::ChannelClosed);
+                            }
+                            _ => {}
+                        },
+                        _ => {}
+                    }
+                    EventResponse::NoResponse
+                }
+                EventCommand::ApproverResponse { approval } => {
+                    match self.event_completer.approver_signatures(approval).await {
+                        Err(error) => match error {
+                            EventError::ChannelClosed => {
+                                log::error!("Channel Closed");
+                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                return Err(EventError::ChannelClosed);
+                            }
+                            EventError::GovernanceError(inner_error)
+                                if inner_error == RequestError::ChannelClosed =>
+                            {
+                                log::error!("Channel Closed");
+                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                return Err(EventError::ChannelClosed);
+                            }
+                            _ => {}
+                        },
+                        _ => {}
+                    }
+                    EventResponse::NoResponse
+                }
+                EventCommand::ValidatorResponse { signature } => {
+                    match self.event_completer.validation_signatures(signature).await {
+                        Err(error) => match error {
+                            EventError::ChannelClosed => {
+                                log::error!("Channel Closed");
+                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                return Err(EventError::ChannelClosed);
+                            }
+                            EventError::GovernanceError(inner_error)
+                                if inner_error == RequestError::ChannelClosed =>
+                            {
+                                log::error!("Channel Closed");
+                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                return Err(EventError::ChannelClosed);
+                            }
+                            _ => {}
+                        },
+                        _ => {}
+                    }
+                    EventResponse::NoResponse
+                }
             }
         };
         if sender.is_some() {

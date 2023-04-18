@@ -565,7 +565,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
         }
     }
 
-    pub fn notary_signatures(&mut self, signature: Signature) -> Result<(), EventError> {
+    pub async fn validation_signatures(&mut self, signature: Signature) -> Result<(), EventError> {
         // Mirar en que estado está el evento, si está en notarización o no
         let event = match self
             .events_to_validate

@@ -40,6 +40,7 @@ pub enum EventCommand {
 #[derive(Debug, Clone)]
 pub enum EventResponse {
     Event(Result<DigestIdentifier, EventError>),
+    NoResponse,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
