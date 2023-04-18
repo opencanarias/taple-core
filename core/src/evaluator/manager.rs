@@ -123,8 +123,8 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send + Clone + 'static> Evalua
                             let signature = self
                                 .signature_manager
                                 .sign(&(
-                                    &executor_response.hash_new_state,
                                     &executor_response.context_hash,
+                                    &executor_response.hash_new_state,
                                     governance_version,
                                     &executor_response.success,
                                     &executor_response.approval_required,
@@ -582,7 +582,7 @@ mod test {
                             serde_json::to_string(&event).unwrap(),
                             &signature_manager,
                         ),
-                        hash_request: DigestIdentifier::default().to_str(),
+                        // hash_request: DigestIdentifier::default().to_str(),
                         context: Context {
                             governance_id: DigestIdentifier::from_str(
                                 "JGSPR6FL-vE7iZxWMd17o09qn7NeTqlcImDVWmijXczw",
@@ -601,9 +601,9 @@ mod test {
                                 "EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg",
                             )
                             .unwrap(),
+                            state: initial_state_json.clone(),
                             namespace: "namespace1".into(),
                         },
-                        state: initial_state_json.clone(),
                         sn: 1,
                     },
                 ))
@@ -665,7 +665,7 @@ mod test {
                             serde_json::to_string(&event).unwrap(),
                             &signature_manager,
                         ),
-                        hash_request: DigestIdentifier::default().to_str(),
+                        // hash_request: DigestIdentifier::default().to_str(),
                         context: Context {
                             governance_id: DigestIdentifier::from_str(
                                 "JGSPR6FL-vE7iZxWMd17o09qn7NeTqlcImDVWmijXczw",
@@ -674,9 +674,9 @@ mod test {
                             invokator: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
                             creator: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
                             owner: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
+                            state: initial_state_json.clone(),
                             namespace: "namespace1".into(),
                         },
-                        state: initial_state_json.clone(),
                         sn: 1,
                     },
                 ))
@@ -725,7 +725,7 @@ mod test {
                             serde_json::to_string(&event).unwrap(),
                             &signature_manager,
                         ),
-                        hash_request: DigestIdentifier::default().to_str(),
+                        // hash_request: DigestIdentifier::default().to_str(),
                         context: Context {
                             governance_id: DigestIdentifier::from_str(
                                 "JGSPR6FL-vE7iZxWMd17o09qn7NeTqlcImDVWmijXczw",
@@ -734,9 +734,9 @@ mod test {
                             invokator: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
                             creator: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
                             owner: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
+                            state: initial_state_json.clone(),
                             namespace: "namespace1".into(),
                         },
-                        state: initial_state_json.clone(),
                         sn: 1,
                     },
                 ))
@@ -788,7 +788,7 @@ mod test {
                             serde_json::to_string(&event).unwrap(),
                             &signature_manager,
                         ),
-                        hash_request: DigestIdentifier::default().to_str(),
+                        // hash_request: DigestIdentifier::default().to_str(),
                         context: Context {
                             governance_id: DigestIdentifier::from_str(
                                 "Jg2Nuv5bNs4swQGcPQ1CXs9MtcfwMVoeQDR2Ea1YNYJw",
@@ -797,9 +797,9 @@ mod test {
                             invokator: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
                             creator: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
                             owner: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
+                            state: initial_state_json.clone(),
                             namespace: "namespace1".into(),
                         },
-                        state: initial_state_json.clone(),
                         sn: 1,
                     },
                 ))

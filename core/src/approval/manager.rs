@@ -1,36 +1,53 @@
 use crate::{
     commons::channel::{ChannelData, MpscChannel, SenderEnd},
+    database::DB,
     governance::GovernanceAPI,
-    message::MessageTaskCommand,
+    message::{MessageConfig, MessageTaskCommand},
+    protocol::{
+        command_head_manager::self_signature_manager::SelfSignatureManager,
+    },
+    DatabaseManager, Notification, TapleSettings,
 };
 
 use super::{
     error::{ApprovalErrorResponse, ApprovalManagerError},
-    ApprovalMessages,
+    inner_manager::{InnerApprovalManager, RequestNotifier},
+    ApprovalMessages, VoteMessage,
 };
 
-struct ApprovalManager {
-    gov_api: GovernanceAPI,
+struct ApprovalManager<D: DatabaseManager> {
     input_channel: MpscChannel<ApprovalMessages, Result<(), ApprovalErrorResponse>>,
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
-    messenger_channel: SenderEnd<MessageTaskCommand<ApprovalMessages>, ()>,
+    messenger_channel: SenderEnd<MessageTaskCommand<VoteMessage>, ()>,
+    inner_manager: InnerApprovalManager<GovernanceAPI, D, RequestNotifier>,
 }
 
-impl ApprovalManager {
+impl<D: DatabaseManager> ApprovalManager<D> {
     pub fn new(
         gov_api: GovernanceAPI,
         input_channel: MpscChannel<ApprovalMessages, Result<(), ApprovalErrorResponse>>,
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
-        messenger_channel: SenderEnd<MessageTaskCommand<ApprovalMessages>, ()>,
+        messenger_channel: SenderEnd<MessageTaskCommand<VoteMessage>, ()>,
+        signature_manager: SelfSignatureManager,
+        notification_sender: tokio::sync::broadcast::Sender<Notification>,
+        settings: TapleSettings,
+        database: DB<D>,
     ) -> Self {
+        let passvotation = settings.node.passvotation.into();
         Self {
-            gov_api,
             input_channel,
             shutdown_sender,
             shutdown_receiver,
             messenger_channel,
+            inner_manager: InnerApprovalManager::new(
+                gov_api,
+                database,
+                RequestNotifier::new(notification_sender),
+                signature_manager,
+                passvotation,
+            ),
         }
     }
 
@@ -61,16 +78,62 @@ impl ApprovalManager {
         &mut self,
         command: ChannelData<ApprovalMessages, Result<(), ApprovalErrorResponse>>,
     ) -> Result<(), ApprovalManagerError> {
-        let data = match command {
-            ChannelData::AskData(_) => {
-                return Err(ApprovalManagerError::AskNoAllowed);
+        let (sender, data) = match command {
+            ChannelData::AskData(data) => {
+                let (sender, data) = data.get();
+                (Some(sender), data)
             }
             ChannelData::TellData(data) => {
                 let data = data.get();
-                data
+                (None, data)
             }
         };
 
-        todo!();
+        match data {
+            ApprovalMessages::RequestApproval(message) => {
+                if sender.is_some() {
+                    return Err(ApprovalManagerError::AskNoAllowed);
+                }
+                let result = self.inner_manager.process_approval_request(message).await?;
+                if let Ok(Some((msg_to_send, sender))) = result {
+                    self.messenger_channel
+                        .tell(MessageTaskCommand::Request(
+                            None,
+                            msg_to_send,
+                            vec![sender],
+                            MessageConfig::direct_response(),
+                        ))
+                        .await;
+                }
+            }
+            ApprovalMessages::EmitVote(message) => {
+                match self
+                    .inner_manager
+                    .generate_vote(&message.request_id, message.acceptance)
+                    .await?
+                {
+                    Ok((vote, owner)) => {
+                        self.messenger_channel
+                            .tell(MessageTaskCommand::Request(
+                                None,
+                                vote,
+                                vec![owner],
+                                MessageConfig::direct_response(),
+                            ))
+                            .await;
+                        if sender.is_some() {
+                            sender.unwrap().send(Ok(()));
+                        }
+                    }
+                    Err(error) => {
+                        if sender.is_some() {
+                            sender.unwrap().send(Err(error));
+                        }
+                    }
+                }
+            }
+        };
+
+        Ok(())
     }
 }

@@ -50,6 +50,11 @@ pub enum Notification {
         subject_id: String,
         default_message: String,
     },
+    RequestDeleted {
+        request_id: String,
+        subject_id: String,
+        default_message: String,
+    }
 }
 
 impl Notification {
@@ -102,6 +107,11 @@ impl Notification {
             } => default_message,
             Notification::RequestQuroumReached {
                 default_message, ..
+            } => default_message,
+            Notification::RequestDeleted {
+                request_id,
+                subject_id,
+                default_message
             } => default_message,
         }
     }

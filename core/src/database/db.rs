@@ -95,6 +95,7 @@ impl<M: DatabaseManager> DB<M> {
                     }
                     iter.next();
                 }
+                iter.next(); // Exclusive From
                 (convert(iter), quantity.abs())
             }
             None => {
