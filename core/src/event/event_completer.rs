@@ -58,6 +58,7 @@ pub struct EventCompleter<D: DatabaseManager> {
     event_approvations: HashMap<DigestIdentifier, HashSet<UniqueApproval>>,
     // Validation HashMaps
     events_to_validate: HashMap<DigestIdentifier, Event>,
+    event_validations: HashMap<DigestIdentifier, HashSet<UniqueSignature>>,
 }
 
 impl<D: DatabaseManager> EventCompleter<D> {
@@ -84,6 +85,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
             event_proposals: HashMap::new(),
             events_to_validate: HashMap::new(),
             event_approvations: HashMap::new(),
+            event_validations: HashMap::new(),
         }
     }
 
@@ -461,7 +463,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 state_request.subject_id.clone()
             }
         };
-        let Some((ValidationStage::Validate, signers, quorum_size)) = self.subjects_completing_event.get(&subject_id) else {
+        let Some((ValidationStage::Approve, signers, quorum_size)) = self.subjects_completing_event.get(&subject_id) else {
             return Err(EventError::WrongEventPhase);
         };
         // Check if approver is in the list of approvers
@@ -565,10 +567,82 @@ impl<D: DatabaseManager> EventCompleter<D> {
 
     pub fn notary_signatures(&mut self, signature: Signature) -> Result<(), EventError> {
         // Mirar en que estado está el evento, si está en notarización o no
+        let event = match self
+            .events_to_validate
+            .get(&signature.content.event_content_hash)
+        {
+            Some(event) => event,
+            None => {
+                return Err(EventError::CryptoError(String::from(
+                    "The hash of the event does not match any of the events",
+                )))
+            }
+        };
+        let subject_id = match &event.content.event_proposal.proposal.event_request.request {
+            crate::event_request::EventRequestType::Create(_) => {
+                return Err(EventError::EvaluationOrApprovationInCreationEvent)
+            } // Que hago aquí?? devuelvo error?
+            crate::event_request::EventRequestType::State(state_request) => {
+                state_request.subject_id.clone()
+            }
+        };
+        // CHeck phase
+        let Some((ValidationStage::Validate, signers, quorum_size)) = self.subjects_completing_event.get(&subject_id) else {
+            return Err(EventError::WrongEventPhase);
+        };
+        // Check if approver is in the list of approvers
+        if !signers.contains(&signature.content.signer) {
+            return Err(EventError::CryptoError(String::from(
+                "The signer is not in the list of approvers",
+            )));
+        }
+        // Comprobar que todo es correcto criptográficamente
+        let event_hash = check_cryptography(&event.content, &signature)?;
+        // Obtener sujeto para saber si lo tenemos y los metadatos del mismo
+        let subject = self
+            .database
+            .get_subject(&subject_id)
+            .map_err(|error| match error {
+                crate::DbError::EntryNotFound => EventError::SubjectNotFound(subject_id.to_str()),
+                _ => EventError::DatabaseError(error.to_string()),
+            })?;
+        // Guardar validación
+        let validation_set = match self.event_validations.get_mut(&event_hash) {
+            Some(validation_set) => {
+                insert_or_replace_and_check(validation_set, UniqueSignature { signature });
+                validation_set
+            }
+            None => {
+                let mut new_validation_set = HashSet::new();
+                new_validation_set.insert(UniqueSignature { signature });
+                self.event_validations
+                    .insert(event_hash.clone(), new_validation_set);
+                self.event_validations.get_mut(&event_hash).expect(
+                    "Acabamos de insertar el conjunto de validations, por lo que debe estar presente",
+                )
+            }
+        };
         // Comprobar si llegamos a Quorum y si es así dejar de pedir firmas
-        // Si se llega a Quorum creamos el evento final, lo firmamos y lo mandamos al ledger
-        // El ledger se encarga de mandarlo a los testigos o somos nosotros?
-        todo!();
+        if (validation_set.len() as u32) < *quorum_size {
+            Ok(())
+        } else {
+            let validation_signatures: HashSet<Signature> = validation_set
+                .iter()
+                .map(|unique_signature| unique_signature.signature.clone())
+                .collect();
+            // Si se llega a Quorum lo mandamos al ledger
+            // TODO: Enviar al Ledger que hay nuevo evento validado
+            // self.ledger_sender
+            //     .send(LedgerMessages::EventValidated(event, validation_signatures))
+            //     .await
+            //     .map_err(EventError::LedgerError)?;
+            // TODO: lo dle Ledger, importante
+            // Limpiar HashMaps
+            self.events_to_validate.remove(&event_hash);
+            self.event_validations.remove(&event_hash);
+            self.subjects_completing_event.remove(&subject_id);
+            Ok(())
+        }
     }
 
     async fn get_signers_and_quorum(
