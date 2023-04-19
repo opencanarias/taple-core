@@ -407,6 +407,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
             .await
             .map_err(EventError::GovernanceError)?;
         // Comprobar governance-version que sea la misma que la nuestra
+        // TODO: Pedir gov si la versión del evaluador es mayor
         if governance_version != evaluation.governance_version {
             return Err(EventError::WrongGovernanceVersion);
         }
