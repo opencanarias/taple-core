@@ -1,10 +1,8 @@
 use crate::database::Error as DbError;
-use crate::governance::{GovernanceInterface};
+use crate::evaluator::errors::CompilerError;
+use crate::governance::GovernanceInterface;
 use crate::identifier::Derivable;
-use crate::{
-    database::DB, evaluator::errors::CompilerErrorResponses,
-    DatabaseManager,
-};
+use crate::{database::DB, evaluator::errors::CompilerErrorResponses, DatabaseManager};
 use async_std::fs;
 use std::collections::HashSet;
 use std::path::Path;
@@ -19,7 +17,7 @@ pub struct Compiler<D: DatabaseManager, G: GovernanceInterface> {
     gov_api: G,
     engine: Engine,
     contracts_path: String,
-    available_imports_set: HashSet<String>
+    available_imports_set: HashSet<String>,
 }
 
 impl<D: DatabaseManager, G: GovernanceInterface> Compiler<D, G> {
@@ -30,8 +28,32 @@ impl<D: DatabaseManager, G: GovernanceInterface> Compiler<D, G> {
             gov_api,
             engine,
             contracts_path,
-            available_imports_set
+            available_imports_set,
         }
+    }
+
+    pub async fn init(&self) -> Result<(), CompilerErrorResponses> {
+        // Comprueba si existe el contrato de gobernanza en el sistema
+        // Si no existe, lo compila y lo guarda
+        match self.database.get_governance_contract() {
+            Ok(_) => return Ok(()),
+            Err(error) => return Err(CompilerErrorResponses::DatabaseError(error.to_string())),
+            Err(DbError::EntryNotFound) => {
+                self.compile(
+                    super::gov_contract::get_gov_contract(),
+                    "taple",
+                    "governance",
+                )
+                .await?;
+                let compiled_contract = self
+                    .add_contract("taple", "governance")
+                    .await?;
+                self.database
+                    .put_governance_contract(compiled_contract)
+                    .map_err(|error| CompilerError::DatabaseError(error.to_string()))?;
+            }
+        }
+        Ok(())
     }
 
     pub async fn update_contracts(
@@ -42,7 +64,7 @@ impl<D: DatabaseManager, G: GovernanceInterface> Compiler<D, G> {
         // Read the contract from database
         let contracts = self
             .gov_api
-            .get_contracts(compile_info.governance_id.clone())
+            .get_contracts(&compile_info.governance_id.clone())
             .await
             .map_err(CompilerErrorResponses::GovernanceError)?;
         for contract_info in contracts {
@@ -168,16 +190,11 @@ impl<D: DatabaseManager, G: GovernanceInterface> Compiler<D, G> {
         ))
         .await
         .map_err(|_| CompilerErrorResponses::AddContractFail)?;
-        let module_bytes =self.engine
+        let module_bytes = self
+            .engine
             .precompile_module(&file)
             .map_err(|_| CompilerErrorResponses::AddContractFail)?;
-        let module = unsafe {
-            wasmtime::Module::deserialize(
-                &self.engine,
-                &module_bytes,
-            )
-            .unwrap()
-        };
+        let module = unsafe { wasmtime::Module::deserialize(&self.engine, &module_bytes).unwrap() };
         let imports = module.imports();
         let mut pending_sdk = self.available_imports_set.clone();
         for import in imports {
@@ -188,7 +205,7 @@ impl<D: DatabaseManager, G: GovernanceInterface> Compiler<D, G> {
                     }
                     pending_sdk.remove(import.name());
                 }
-                _ => return Err(CompilerErrorResponses::InvalidImportFound)
+                _ => return Err(CompilerErrorResponses::InvalidImportFound),
             }
         }
         println!("{:?}", pending_sdk);
@@ -200,10 +217,13 @@ impl<D: DatabaseManager, G: GovernanceInterface> Compiler<D, G> {
 }
 
 fn get_sdk_functions_identifier() -> HashSet<String> {
-    HashSet::from_iter(vec![
-        "alloc".to_owned(),
-        "write_byte".to_owned(),
-        "pointer_len".to_owned(),
-        "read_byte".to_owned()
-    ].into_iter())
+    HashSet::from_iter(
+        vec![
+            "alloc".to_owned(),
+            "write_byte".to_owned(),
+            "pointer_len".to_owned(),
+            "read_byte".to_owned(),
+        ]
+        .into_iter(),
+    )
 }

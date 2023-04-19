@@ -56,12 +56,14 @@ pub enum ExecutorErrorResponses {
     CantGenerateContractResult
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum CompilerError {
     #[error("A database error has ocurred at main component {0}")]
     DatabaseError(String),
     #[error("Channel not available")]
     ChannelNotAvailable,
+    #[error("Init process error")]
+    InitError,
     #[error("Internal Error")]
     InternalError(#[from] CompilerErrorResponses)
 }
