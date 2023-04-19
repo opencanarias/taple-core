@@ -8,17 +8,18 @@ use crate::commons::{
     },
     schema_handler::{get_governance_schema, Schema},
 };
-use time::OffsetDateTime;
 use json_patch::patch;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use utoipa::{ToSchema, openapi::schema};
+use time::OffsetDateTime;
+use utoipa::{openapi::schema, ToSchema};
 
 use super::{
     event::Event,
     event_content::EventContent,
-    event_request::{EventRequestType},
-    signature::{Signature, SignatureContent}, timestamp::TimeStamp,
+    event_request::EventRequestType,
+    signature::{Signature, SignatureContent},
+    timestamp::TimeStamp,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 
@@ -47,6 +48,48 @@ pub struct Subject {
     pub creator: KeyIdentifier,
     /// Current status of the subject
     pub properties: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
+pub struct SubjectData {
+    /// Subject identifier
+    #[schema(value_type = String)]
+    pub subject_id: DigestIdentifier,
+    /// Governance identifier
+    #[schema(value_type = String)]
+    pub governance_id: DigestIdentifier,
+    /// Current sequence number of the subject
+    pub sn: u64,
+    /// Public key of the subject
+    #[schema(value_type = String)]
+    pub public_key: KeyIdentifier,
+    pub namespace: String,
+    /// Identifier of the schema used by the subject and defined in associated governance
+    pub schema_id: String,
+    /// Subject owner identifier
+    #[schema(value_type = String)]
+    pub owner: KeyIdentifier,
+    /// Subject creator identifier
+    #[schema(value_type = String)]
+    pub creator: KeyIdentifier,
+    /// Current status of the subject
+    pub properties: String,
+}
+
+impl From<Subject> for SubjectData {
+    fn from(subject: Subject) -> Self {
+        Self {
+            subject_id: subject.subject_id,
+            governance_id: subject.governance_id,
+            sn: subject.sn,
+            public_key: subject.public_key,
+            namespace: subject.namespace,
+            schema_id: subject.schema_id,
+            owner: subject.owner,
+            creator: subject.creator,
+            properties: subject.properties,
+        }
+    }
 }
 
 // impl Subject {

@@ -1,6 +1,7 @@
 use super::{CreateRequest as ApiCreateRequest, ExternalEventRequest};
+use crate::commons::models::Acceptance;
 use crate::governance::error::RequestError;
-use crate::ledger::errors::LedgerManagerError;
+// use crate::ledger::errors::LedgerManagerError;
 use crate::protocol::{
     command_head_manager::{
         manager::CommandAPI,
@@ -16,7 +17,6 @@ use crate::{
         crypto::KeyPair,
         identifier::{derive::KeyDerivator, DigestIdentifier, KeyIdentifier, SignatureIdentifier},
         models::{
-            approval_signature::Acceptance,
             event_content::{EventContent, Metadata},
             event_request::{CreateRequest, EventRequest, EventRequestType, StateRequest},
             signature::{Signature, SignatureContent},
@@ -71,7 +71,6 @@ impl<D: DatabaseManager> InnerAPI<D> {
                     governance_id: id,
                     schema_id: data.schema_id.clone(),
                     namespace: data.namespace.clone(),
-                    payload: data.payload.into(),
                 })
             }
             ApiCreateRequest::State(data) => {
@@ -80,7 +79,7 @@ impl<D: DatabaseManager> InnerAPI<D> {
                 };
                 EventRequestType::State(StateRequest {
                     subject_id: id,
-                    payload: data.payload.into(),
+                    invokation: data.payload.into(),
                 })
             }
         };
@@ -92,7 +91,6 @@ impl<D: DatabaseManager> InnerAPI<D> {
             request,
             timestamp,
             signature,
-            approvals: HashSet::new(),
         };
         let result = self.request_api.event_request(event_request).await;
         match result {
@@ -101,18 +99,18 @@ impl<D: DatabaseManager> InnerAPI<D> {
                 EventCreationError::EventCreationFailed {
                     source: ledger_error,
                 } => match &ledger_error {
-                    LedgerManagerError::GovernanceError(RequestError::GovernanceNotFound(
-                        governance_id,
-                    )) => APIResponses::CreateRequest(Err(ApiError::NotFound(format!(
-                        "Governance {}",
-                        governance_id
-                    )))),
-                    LedgerManagerError::GovernanceError(RequestError::SchemaNotFound(
-                        schema_id,
-                    )) => APIResponses::CreateRequest(Err(ApiError::NotFound(format!(
-                        "Schema {}",
-                        schema_id
-                    )))),
+                    // LedgerManagerError::GovernanceError(RequestError::GovernanceNotFound(
+                    //     governance_id,
+                    // )) => APIResponses::CreateRequest(Err(ApiError::NotFound(format!(
+                    //     "Governance {}",
+                    //     governance_id
+                    // )))),
+                    // LedgerManagerError::GovernanceError(RequestError::SchemaNotFound(
+                    //     schema_id,
+                    // )) => APIResponses::CreateRequest(Err(ApiError::NotFound(format!(
+                    //     "Schema {}",
+                    //     schema_id
+                    // )))),
                     _ => APIResponses::CreateRequest(Err(source.into())),
                 },
                 _ => APIResponses::CreateRequest(Err(source.into())),
@@ -142,7 +140,7 @@ impl<D: DatabaseManager> InnerAPI<D> {
                         )))
                     }
                 },
-                payload: event_request.request.payload.into(),
+                invokation: event_request.request.payload.into(),
             }),
             timestamp: TimeStamp {
                 time: event_request.timestamp,
@@ -173,7 +171,9 @@ impl<D: DatabaseManager> InnerAPI<D> {
                             )))
                         }
                     },
-                    timestamp: TimeStamp { time: event_request.signature.content.timestamp },
+                    timestamp: TimeStamp {
+                        time: event_request.signature.content.timestamp,
+                    },
                 },
                 signature: match SignatureIdentifier::from_str(&event_request.signature.signature) {
                     Ok(signature_id) => signature_id,
@@ -184,7 +184,6 @@ impl<D: DatabaseManager> InnerAPI<D> {
                     }
                 },
             },
-            approvals: HashSet::new(),
         };
         let result = self.request_api.event_request(event_request).await;
         match result {
@@ -243,7 +242,7 @@ impl<D: DatabaseManager> InnerAPI<D> {
         };
         let result = result
             .into_iter()
-            .map(|subject| subject.subject_data.unwrap())
+            .map(|subject| subject.into())
             .collect::<Vec<SubjectData>>();
         APIResponses::GetAllGovernances(Ok(result))
     }
@@ -284,7 +283,9 @@ impl<D: DatabaseManager> InnerAPI<D> {
         };
         match self.db.get_events_by_range(&id, data.from, quantity) {
             Ok(events) => APIResponses::GetEventsOfSubject(Ok(events)),
-            Err(error) => APIResponses::GetEventsOfSubject(Err(ApiError::DatabaseError(error.to_string())))
+            Err(error) => {
+                APIResponses::GetEventsOfSubject(Err(ApiError::DatabaseError(error.to_string())))
+            }
         }
     }
 
@@ -294,8 +295,15 @@ impl<D: DatabaseManager> InnerAPI<D> {
         };
         let signatures = match self.db.get_signatures(&id, data.sn) {
             Ok(signatures) => signatures,
-            Err(DbError::EntryNotFound) => return APIResponses::GetSignatures(Err(ApiError::NotFound(format!("Subject {} SN {}", data.subject_id, data.sn)))),
-            Err(error) => return APIResponses::GetSignatures(Err(ApiError::DatabaseError(error.to_string())))
+            Err(DbError::EntryNotFound) => {
+                return APIResponses::GetSignatures(Err(ApiError::NotFound(format!(
+                    "Subject {} SN {}",
+                    data.subject_id, data.sn
+                ))))
+            }
+            Err(error) => {
+                return APIResponses::GetSignatures(Err(ApiError::DatabaseError(error.to_string())))
+            }
         };
         let signatures = Vec::from_iter(signatures);
         let (init, end) = get_init_and_end(data.from, data.quantity, &signatures);
@@ -309,15 +317,22 @@ impl<D: DatabaseManager> InnerAPI<D> {
         };
         let request = EventRequestType::State(StateRequest {
             subject_id: id.clone(),
-            payload: data.payload.clone().into(),
+            invokation: data.payload.clone().into(),
         });
         let Ok(signature) = self.signature_manager.sign(&request) else {
             return APIResponses::SimulateEvent(Err(ApiError::SignError));
         };
         let subject = match self.db.get_subject(&id) {
             Ok(subject) => subject,
-            Err(DbError::EntryNotFound) => return APIResponses::SimulateEvent(Err(ApiError::NotFound(format!("Subject {}", data.subject_id)))),
-            Err(error) => return APIResponses::SimulateEvent(Err(ApiError::DatabaseError(error.to_string())))
+            Err(DbError::EntryNotFound) => {
+                return APIResponses::SimulateEvent(Err(ApiError::NotFound(format!(
+                    "Subject {}",
+                    data.subject_id
+                ))))
+            }
+            Err(error) => {
+                return APIResponses::SimulateEvent(Err(ApiError::DatabaseError(error.to_string())))
+            }
         };
         let Some(subject_data) = subject.subject_data.clone() else {
             return APIResponses::SimulateEvent(Err(ApiError::NotFound(format!("Subject data of {}", data.subject_id))));
@@ -326,7 +341,6 @@ impl<D: DatabaseManager> InnerAPI<D> {
             request,
             signature,
             timestamp: TimeStamp::now(),
-            approvals: HashSet::new(),
         };
         let schema = match self
             .command_api

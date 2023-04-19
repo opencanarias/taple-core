@@ -5,8 +5,7 @@ use super::{
 };
 use super::{CreateRequest, CreateType, ExternalEventRequest, GetEventsOfSubject};
 use async_trait::async_trait;
-use crate::{DB, DatabaseManager};
-use crate::commons::models::approval_signature::Acceptance;
+use crate::{DB, DatabaseManager, commons::models::Acceptance};
 use crate::commons::models::event::Event;
 use crate::commons::models::event_request::{EventRequest, RequestData, RequestPayload};
 use crate::commons::models::signature::Signature;

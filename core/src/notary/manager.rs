@@ -1,9 +1,8 @@
 use crate::{
     commons::{
-        channel::{ChannelData, MpscChannel, SenderEnd},
+        channel::{ChannelData, MpscChannel, SenderEnd}, self_signature_manager::SelfSignatureManager,
     },
     governance::GovernanceAPI,
-    protocol::command_head_manager::self_signature_manager::SelfSignatureManager,
 };
 use crate::database::{DB, DatabaseManager};
 use super::{errors::NotaryError, notary::Notary, NotaryCommand, NotaryResponse};

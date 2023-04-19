@@ -1,11 +1,12 @@
 use std::collections::{BTreeSet, HashMap, HashSet};
 
+use crate::commons::models::state::SubjectData;
 use crate::database::Error as DbError;
 use crate::governance::error::RequestError;
 use crate::governance::RequestQuorum;
 use crate::{
     database::DB, governance::GovernanceInterface, identifier::DigestIdentifier, DatabaseManager,
-    Event, SubjectData,
+    Event,
 };
 
 use super::error::{DistributionErrorResponses, DistributionManagerError};

@@ -1,12 +1,9 @@
 use std::collections::HashMap;
 
 use crate::{
-    commons::errors::ChannelErrors,
+    commons::{errors::ChannelErrors, self_signature_manager::{SelfSignatureManager, SelfSignatureInterface}},
     governance::{GovernanceAPI, GovernanceInterface},
     identifier::DigestIdentifier,
-    protocol::command_head_manager::self_signature_manager::{
-        SelfSignatureInterface, SelfSignatureManager,
-    },
 };
 
 use super::{errors::NotaryError, NotaryEvent, NotaryEventResponse};
@@ -108,6 +105,7 @@ impl<D: DatabaseManager> Notary<D> {
 
 #[cfg(test)]
 mod tests {
+    use crate::commons::self_signature_manager::SelfSignatureManager;
     use crate::database::{MemoryManager, DB};
     use crate::{
         commons::{
