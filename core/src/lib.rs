@@ -90,6 +90,7 @@ pub(crate) mod distribution;
 pub(crate) mod approval;
 
 pub mod protocol;
+pub mod event;
 
 mod unitary_component;
 pub use api::{

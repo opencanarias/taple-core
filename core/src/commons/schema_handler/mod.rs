@@ -40,21 +40,21 @@ fn validate_gov_keyidentifiers(key: &str) -> bool {
 pub fn get_governance_schema() -> Value {
     json!({
       "$defs": {
-        "Roles": {
+        "roles": {
           "type": "array",
           "items": {
             "type": "string"
           }
         },
-        "Quorum": {
+        "quorum": {
           "oneOf": [
             {
-              "const": "Majority"
+              "const": "majority"
             },
             {
               "type": "object",
               "properties": {
-                "Fixed": {
+                "fixed": {
                   "type": "number",
                   "minimum": 1,
                   "multipleOf": 1
@@ -66,7 +66,7 @@ pub fn get_governance_schema() -> Value {
             {
               "type": "object",
               "properties": {
-                "Porcentaje": {
+                "porcentaje": {
                   "type": "number",
                   "minimum": 0,
                   "maximum": 1
@@ -89,28 +89,28 @@ pub fn get_governance_schema() -> Value {
             }
           ]
         },
-        "Validation": {
+        "validation": {
           "type": "object",
                 "additionalProperties": false,
-                "required": ["Roles", "Quorum"],
-                "Roles": {
-                  "$ref": "#/$defs/Roles"
+                "required": ["roles", "quorum"],
+                "roles": {
+                  "$ref": "#/$defs/roles"
                 },
-                "Quorum": {
-                  "$ref": "#/$defs/Quorum"
+                "quorum": {
+                  "$ref": "#/$defs/quorum"
                 }
         }
       },
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "Members",
-        "Schemas",
-        "Policies",
-        "Roles"
+        "members",
+        "schemas",
+        "policies",
+        "roles"
       ],
       "properties": {
-        "Members": {
+        "members": {
           "type": "array",
           "items": {
             "type": "object",
@@ -133,72 +133,72 @@ pub fn get_governance_schema() -> Value {
             "additionalProperties": false
           }
         },
-        "Roles": {
+        "roles": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "Who": {
+              "who": {
                 "oneOf": [
                 {
                   "type": "object",
                   "properties": {
-                    "Id": {
+                    "id": {
                       "type": "string"
                     }
                   },
-                  "required": ["Id"],
+                  "required": ["id"],
                   "additionalProperties": false
                 },
                 {
-                  "const": "Members"
+                  "const": "members"
                 },
                 {
-                  "const": "All"
+                  "const": "all"
                 },
                 {
-                  "const": "External"
+                  "const": "external"
                 }
               ]
             },
-            "Namespace": {
+            "namespace": {
               "type": "string"
             },
-            "Roles": {
-              "$ref": "#/$defs/Roles"
+            "roles": {
+              "$ref": "#/$defs/roles"
             },
-            "Schema": {
+            "schema": {
               "oneOf": [
                 {
                   "type": "object",
                   "properties": {
-                    "Id": {
+                    "id": {
                       "type": "string"
                     }
                   },
-                  "required": ["Id"],
+                  "required": ["id"],
                   "additionalProperties": false
                 },
                 {
-                  "const": "All_Schemas"
+                  "const": "all_schemas"
                 }
                 ]
               }
             },
-            "required": ["Who", "Roles", "Schema"],
+            "required": ["who", "roles", "schema", "namespace"],
             "additionalProperties": false
           }
         },
-        "Schemas": {
+        "schemas": {
           "type": "array",
           "minItems": 0,
           "items": {
             "type": "object",
             "properties": {
-              "Id": {
+              "id": {
                 "type": "string"
               },
-              "State-Schema": {
+              "state_schema": {
                 "$schema": "http://json-schema.org/draft/2020-12/schema",
                 "$id": "http://json-schema.org/draft/2020-12/schema",
                 "$vocabulary": {
@@ -211,7 +211,7 @@ pub fn get_governance_schema() -> Value {
                   "http://json-schema.org/draft/2020-12/vocab/content": true
                 },
                 "$dynamicAnchor": "meta",
-                "title": "Core and Validation specifications meta-schema",
+                "title": "Core and validation specifications meta-schema",
                 "allOf": [
                   {
                     "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -248,7 +248,7 @@ pub fn get_governance_schema() -> Value {
                       },
                       "$vocabulary": {
                         "type": "object",
-                        "propertyNames": {
+                        "propertynames": {
                           "$ref": "#/$defs/uriString"
                         },
                         "additionalProperties": {
@@ -317,19 +317,19 @@ pub fn get_governance_schema() -> Value {
                         "additionalProperties": {
                           "$dynamicRef": "#meta"
                         },
-                        "propertyNames": {
+                        "propertynames": {
                           "format": "regex"
                         },
                         "default": {}
                       },
-                      "dependentSchemas": {
+                      "dependentschemas": {
                         "type": "object",
                         "additionalProperties": {
                           "$dynamicRef": "#meta"
                         },
                         "default": {}
                       },
-                      "propertyNames": {
+                      "propertynames": {
                         "$dynamicRef": "#meta"
                       },
                       "if": {
@@ -392,7 +392,7 @@ pub fn get_governance_schema() -> Value {
                       "https://json-schema.org/draft/2020-12/vocab/validation": true
                     },
                     "$dynamicAnchor": "meta",
-                    "title": "Validation vocabulary meta-schema",
+                    "title": "validation vocabulary meta-schema",
                     "type": [
                       "object",
                       "boolean"
@@ -570,7 +570,7 @@ pub fn get_governance_schema() -> Value {
                       "https://json-schema.org/draft/2020-12/vocab/content": true
                     },
                     "$dynamicAnchor": "meta",
-                    "title": "Content vocabulary meta-schema",
+                    "title": "content vocabulary meta-schema",
                     "type": [
                       "object",
                       "boolean"
@@ -582,7 +582,7 @@ pub fn get_governance_schema() -> Value {
                       "contentMediaType": {
                         "type": "string"
                       },
-                      "contentSchema": {
+                      "contentschema": {
                         "$dynamicRef": "#meta"
                       }
                     }
@@ -604,7 +604,7 @@ pub fn get_governance_schema() -> Value {
                     "default": {}
                   },
                   "dependencies": {
-                    "$comment": "\"dependencies\" has been split and replaced by \"dependentSchemas\" and \"dependentRequired\" in order to serve their differing semantics.",
+                    "$comment": "\"dependencies\" has been split and replaced by \"dependentschemas\" and \"dependentRequired\" in order to serve their differing semantics.",
                     "type": "object",
                     "additionalProperties": {
                       "anyOf": [
@@ -631,93 +631,93 @@ pub fn get_governance_schema() -> Value {
                   }
                 }
               },
-              "Initial-Value": {},
-              "Contract": {
+              "initial_value": {},
+              "contract": {
                 "type": "object",
                 "properties": {
-                  "Name": {
+                  "name": {
                     "type": "string"
                   },
-                  "Content": {
+                  "content": {
                     "type": "string"
                   },
                 },
                 "additionalProperties": false,
-                "required": ["Name", "Content"]
+                "required": ["name", "content"]
               },
-              "Facts": {
+              "facts": {
                 "type": "object",
                 "properties": {
-                  "Name": {
+                  "name": {
                     "type": "string"
                   },
-                  "Description": {
+                  "description": {
                     "type": "string"
                   },
-                  "Schema":{}
+                  "schema":{}
                 },
                 "additionalProperties": false,
-                "required": ["Name", "Schema"]
+                "required": ["name", "schema"]
               }
             },
             "required": [
-              "Id",
-              "State-Schema",
-              "Initial-Value",
-              "Contract",
-              "Facts"
+              "id",
+              "state_schema",
+              "initial_value",
+              "contract",
+              "facts"
             ],
             "additionalProperties": false
           }
         },
-        "Policies": {
+        "policies": {
           "type": "array",
           "items": {
             "type": "object",
             "additionalProperties": false,
             "required": [
-              "Id", "Approve", "Evaluate", "Validate", "Create", "Witness", "Close", "Invoke"
+              "id", "approve", "evaluate", "validate", "create", "witness", "close", "invoke"
             ],
             "properties": {
-              "Id": {
+              "id": {
                 "type": "string"
               },
-              "Approve": {
-                "$ref": "#/$defs/Validation"
+              "approve": {
+                "$ref": "#/$defs/validation"
               },
-              "Evaluate": {
-                "$ref": "#/$defs/Validation"
+              "evaluate": {
+                "$ref": "#/$defs/validation"
               },
-              "Validate": {
-                "$ref": "#/$defs/Validation"
+              "validate": {
+                "$ref": "#/$defs/validation"
               },
-              "Create": {
-                "$ref": "#/$defs/Roles"
+              "create": {
+                "$ref": "#/$defs/roles"
               },
-              "Witness": {
-                "$ref": "#/$defs/Roles"
+              "witness": {
+                "$ref": "#/$defs/roles"
               },
-              "Close": {
-                "$ref": "#/$defs/Roles"
+              "close": {
+                "$ref": "#/$defs/roles"
               },
-              "Invoke": {
+              "invoke": {
                 "type": "array",
                 "items": {
                   "type": "object",
                   "properties": {
-                    "Fact": {
+                    "fact": {
                       "type": "string"
                     },
-                    "ApprovalRequired": {
+                    "approval_required": {
                       "type": "boolean"
                     },
-                    "Roles": {
-                      "$ref": "#/$defs/Roles"
+                    "roles": {
+                      "$ref": "#/$defs/roles"
                     }
                   },
                   "additionalProperties": false,
                   "required": [
-                    "Fact", "ApprovalRequired", "Roles"
+                    "fact", "approval_required", "roles"
                   ]
                 }
               }

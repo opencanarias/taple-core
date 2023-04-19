@@ -274,11 +274,6 @@ impl<D: DatabaseManager> InnerAPI<D> {
     }
 
     pub async fn get_events_of_subject(&self, data: GetEventsOfSubject) -> APIResponses {
-        let from = if data.from.is_none() {
-            None
-        } else {
-            Some(format!("{}", data.from.unwrap()))
-        };
         let quantity = if data.quantity.is_none() {
             MAX_QUANTITY
         } else {
@@ -287,7 +282,7 @@ impl<D: DatabaseManager> InnerAPI<D> {
         let Ok(id) = DigestIdentifier::from_str(&data.subject_id) else {
             return APIResponses::GetEventsOfSubject(Err(ApiError::InvalidParameters(format!("SubjectID {}", data.subject_id))));
         };
-        match self.db.get_events_by_range(&id, from, quantity) {
+        match self.db.get_events_by_range(&id, data.from, quantity) {
             Ok(events) => APIResponses::GetEventsOfSubject(Ok(events)),
             Err(error) => APIResponses::GetEventsOfSubject(Err(ApiError::DatabaseError(error.to_string())))
         }

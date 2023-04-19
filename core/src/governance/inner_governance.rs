@@ -39,8 +39,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         if governance_id.digest.is_empty() {
             return Ok(Ok(self.governance_schema.clone()));
         }
-        let governance = self.repo_access.get_subject(&governance_id);
-        let governance = match governance {
+        let governance = match self.repo_access.get_subject(&governance_id) {
             Ok(governance) => governance,
             Err(DbError::EntryNotFound) => {
                 return Ok(Err(RequestError::GovernanceNotFound(
@@ -49,7 +48,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
             }
             Err(error) => return Err(InternalError::DatabaseError { source: error }),
         };
-        let properties: Value = serde_json::from_str(&governance.subject_data.unwrap().properties)
+        let properties: Value = serde_json::from_str(&governance.properties)
             .map_err(|_| InternalError::DeserializationError)?;
         let schemas = get_as_array(&properties, "schemas")?;
         for schema in schemas {
@@ -72,17 +71,8 @@ impl<D: DatabaseManager> InnerGovernance<D> {
             governance_id = metadata.subject_id;
         }
         let schema_id = metadata.schema_id;
-        let governance = self.repo_access.get_subject(&governance_id);
-        let governance = match governance {
-            Ok(governance) => {
-                if governance.subject_data.is_some() {
-                    governance.subject_data.unwrap()
-                } else {
-                    return Ok(Err(RequestError::GovernanceNotFound(
-                        governance_id.to_str(),
-                    )));
-                }
-            }
+        let governance = match self.repo_access.get_subject(&governance_id) {
+            Ok(governance) => governance,
             Err(DbError::EntryNotFound) => {
                 return Ok(Err(RequestError::GovernanceNotFound(
                     governance_id.to_str(),
@@ -97,9 +87,26 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         let Ok(schema_policy) = schema_policy else {
             return Ok(Err(schema_policy.unwrap_err()));
         }; // El return dentro de otro return es una **** que obliga a hacer cosas como esta
-        let stage_str = stage.to_str();
-        let signers_roles: Vec<String> =
-            get_as_array(&schema_policy.get(stage_str).unwrap(), "Roles")?
+        match stage {
+            ValidationStage::Approve => {
+                let stage_str = stage.to_str();
+                let approvers_roles: Vec<String> =
+                    get_as_array(&schema_policy.get(stage_str).unwrap(), "Roles")?
+                        .into_iter()
+                        .map(|role| {
+                            let a = role
+                                .as_str()
+                                .ok_or(InternalError::InvalidGovernancePayload)
+                                .map(|s| s.to_owned());
+                            a.expect("Invalid Governance Payload")
+                        })
+                        .collect();
+                let witness_roles: Vec<String> = get_as_array(
+                    &schema_policy
+                        .get(ValidationStage::Witness.to_str())
+                        .unwrap(),
+                    "Roles",
+                )?
                 .into_iter()
                 .map(|role| {
                     let a = role
@@ -109,14 +116,43 @@ impl<D: DatabaseManager> InnerGovernance<D> {
                     a.expect("Invalid Governance Payload")
                 })
                 .collect();
-        let members = get_members_from_governance(&properties)?;
-        let roles_prop = properties["Roles"]
-            .as_array()
-            .expect("Existe Roles")
-            .to_owned();
-        let roles = get_roles(&schema_id, roles_prop)?;
-        let signers = get_signers_from_roles(&members, &signers_roles, roles)?;
-        Ok(Ok(signers))
+                let mut set: HashSet<String> = HashSet::new();
+                for s in approvers_roles.into_iter().chain(witness_roles.into_iter()) {
+                    set.insert(s);
+                }
+                let signers_roles: Vec<String> = set.into_iter().collect();
+                let members = get_members_from_governance(&properties)?;
+                let roles_prop = properties["Roles"]
+                    .as_array()
+                    .expect("Existe Roles")
+                    .to_owned();
+                let roles = get_roles(&schema_id, roles_prop, &metadata.namespace)?;
+                let signers = get_signers_from_roles(&members, &signers_roles, roles)?;
+                Ok(Ok(signers))
+            }
+            _ => {
+                let stage_str = stage.to_str();
+                let signers_roles: Vec<String> =
+                    get_as_array(&schema_policy.get(stage_str).unwrap(), "Roles")?
+                        .into_iter()
+                        .map(|role| {
+                            let a = role
+                                .as_str()
+                                .ok_or(InternalError::InvalidGovernancePayload)
+                                .map(|s| s.to_owned());
+                            a.expect("Invalid Governance Payload")
+                        })
+                        .collect();
+                let members = get_members_from_governance(&properties)?;
+                let roles_prop = properties["Roles"]
+                    .as_array()
+                    .expect("Existe Roles")
+                    .to_owned();
+                let roles = get_roles(&schema_id, roles_prop, &metadata.namespace)?;
+                let signers = get_signers_from_roles(&members, &signers_roles, roles)?;
+                Ok(Ok(signers))
+            }
+        }
     }
 
     // NEW Devuelve el número de firmas necesarias para que un evento sea válido
@@ -130,17 +166,8 @@ impl<D: DatabaseManager> InnerGovernance<D> {
             governance_id = metadata.subject_id;
         }
         let schema_id = metadata.schema_id;
-        let governance = self.repo_access.get_subject(&governance_id);
-        let governance = match governance {
-            Ok(governance) => {
-                if governance.subject_data.is_some() {
-                    governance.subject_data.unwrap()
-                } else {
-                    return Ok(Err(RequestError::GovernanceNotFound(
-                        governance_id.to_str(),
-                    )));
-                }
-            }
+        let governance = match self.repo_access.get_subject(&governance_id) {
+            Ok(governance) => governance,
             Err(DbError::EntryNotFound) => {
                 return Ok(Err(RequestError::GovernanceNotFound(
                     governance_id.to_str(),
@@ -172,14 +199,14 @@ impl<D: DatabaseManager> InnerGovernance<D> {
             .as_array()
             .expect("Existe Roles")
             .to_owned();
-        let roles = get_roles(&schema_id, roles_prop)?;
+        let roles = get_roles(&schema_id, roles_prop, &metadata.namespace)?;
         let signers = get_signers_from_roles(&members, &signers_roles, roles)?;
         let quorum = get_quorum(&schema_policy, stage_str)?;
         match quorum {
-            Quorum::Majority => Ok(Ok((signers.len() + 1) as u32 / 2)),
-            Quorum::Fixed { Fixed } => Ok(Ok(Fixed)),
-            Quorum::Porcentaje { Porcentaje } => {
-                let result = (signers.len() as f64 * Porcentaje).ceil() as u32;
+            Quorum::Majority => Ok(Ok((signers.len() as u32 / 2) + 1)),
+            Quorum::Fixed { fixed } => Ok(Ok(fixed)),
+            Quorum::Porcentaje { porcentaje } => {
+                let result = (signers.len() as f64 * porcentaje).ceil() as u32;
                 Ok(Ok(result))
             }
             Quorum::BFT { BFT } => todo!(),
@@ -197,17 +224,8 @@ impl<D: DatabaseManager> InnerGovernance<D> {
             governance_id = metadata.subject_id;
         }
         let schema_id = metadata.schema_id;
-        let governance = self.repo_access.get_subject(&governance_id);
-        let governance = match governance {
-            Ok(governance) => {
-                if governance.subject_data.is_some() {
-                    governance.subject_data.unwrap()
-                } else {
-                    return Ok(Err(RequestError::GovernanceNotFound(
-                        governance_id.to_str(),
-                    )));
-                }
-            }
+        let governance = match self.repo_access.get_subject(&governance_id) {
+            Ok(governance) => governance,
             Err(DbError::EntryNotFound) => {
                 return Ok(Err(RequestError::GovernanceNotFound(
                     governance_id.to_str(),
@@ -232,17 +250,8 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         &self,
         governance_id: DigestIdentifier,
     ) -> Result<Result<Vec<Contract>, RequestError>, InternalError> {
-        let governance = self.repo_access.get_subject(&governance_id);
-        let governance = match governance {
-            Ok(governance) => {
-                if governance.subject_data.is_some() {
-                    governance.subject_data.unwrap()
-                } else {
-                    return Ok(Err(RequestError::GovernanceNotFound(
-                        governance_id.to_str(),
-                    )));
-                }
-            }
+        let governance = match self.repo_access.get_subject(&governance_id) {
+            Ok(governance) => governance,
             Err(DbError::EntryNotFound) => {
                 return Ok(Err(RequestError::GovernanceNotFound(
                     governance_id.to_str(),
@@ -253,7 +262,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         let properties: Value = serde_json::from_str(&governance.properties)
             .map_err(|_| InternalError::DeserializationError)?;
         let schemas = get_as_array(&properties, "Schemas")?;
-        let result = Vec::new();
+        let mut result = Vec::new();
         for schema in schemas {
             let contract: Contract = serde_json::from_value(schema["Contract"])
                 .map_err(|_| InternalError::InvalidGovernancePayload)?;
@@ -279,11 +288,10 @@ impl<D: DatabaseManager> InnerGovernance<D> {
             }
             Err(error) => return Err(InternalError::DatabaseError { source: error }),
         };
-        let subject_data = governance.subject_data.unwrap();
-        if !subject_data.governance_id.digest.is_empty() {
+        if !governance.governance_id.digest.is_empty() {
             return Ok(Err(RequestError::InvalidGovernanceID));
         }
-        Ok(Ok(subject_data.sn))
+        Ok(Ok(governance.sn))
     }
 
     // OLD pero puede valer
@@ -296,10 +304,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
             Err(DbError::EntryNotFound) => return Ok(Err(RequestError::SubjectNotFound)),
             Err(error) => return Err(InternalError::DatabaseError { source: error }),
         };
-        let Some(subject_data) = subject.subject_data else {
-            return Ok(Err(RequestError::SubjectNotFound))
-        };
-        Ok(Ok(subject_data.governance_id.digest.is_empty()))
+        Ok(Ok(subject.governance_id.digest.is_empty()))
     }
 }
 
@@ -371,10 +376,10 @@ fn get_signers_from_roles(
 ) -> Result<HashSet<KeyIdentifier>, InternalError> {
     let mut signers: HashSet<KeyIdentifier> = HashSet::new();
     for role in roles_schema {
-        if contains_common_element(&role.Roles, roles) {
-            match role.Who {
-                crate::commons::schema_handler::gov_models::Who::IdObject { Id } => {
-                    signers.insert(KeyIdentifier::from_str(&Id).map_err(|_| InternalError::InvalidGovernancePayload)?);
+        if contains_common_element(&role.roles, roles) {
+            match role.who {
+                crate::commons::schema_handler::gov_models::Who::Id { id } => {
+                    signers.insert(KeyIdentifier::from_str(&id).map_err(|_| InternalError::InvalidGovernancePayload)?);
                 }
                 crate::commons::schema_handler::gov_models::Who::Members => {
                     return Ok(members.clone())
@@ -389,14 +394,21 @@ fn get_signers_from_roles(
     Ok(signers)
 }
 
-fn get_roles(schema_id: &str, roles_prop: Vec<Value>) -> Result<Vec<Role>, InternalError> {
+fn get_roles(
+    schema_id: &str,
+    roles_prop: Vec<Value>,
+    namespace: &str,
+) -> Result<Vec<Role>, InternalError> {
     let mut roles = Vec::new();
     for role in roles_prop {
         let role_data: Role =
             serde_json::from_value(role).map_err(|_| InternalError::InvalidGovernancePayload)?;
-        match role_data.Schema {
-            Schema::IdObject { Id } => {
-                if &Id == schema_id {
+        if !namespace_contiene(&role_data.namespace, namespace) {
+            continue;
+        }
+        match role_data.schema {
+            Schema::Id { id } => {
+                if &id == schema_id {
                     roles.push(role_data)
                 }
             }
@@ -415,9 +427,34 @@ fn get_invoke_from_policy(policy: &Value, fact: &str) -> Result<Option<Invoke>, 
     for invoke in invokes {
         let invoke: Invoke = serde_json::from_value(invoke.to_owned())
             .map_err(|_| InternalError::InvalidGovernancePayload)?;
-        if &invoke.Fact == fact {
+        if &invoke.fact == fact {
             return Ok(Some(invoke));
         }
     }
     Ok(None)
+}
+
+fn namespace_contiene(namespace_padre: &str, namespace_hijo: &str) -> bool {
+    // Si el namespace padre es vacío, contiene a todos
+    if namespace_padre.is_empty() {
+        return true;
+    }
+
+    // Si el namespace padre y el namespace hijo son iguales, entonces contiene
+    if namespace_padre == namespace_hijo {
+        return true;
+    }
+
+    // Asegurarse de que el namespace hijo comienza con el namespace padre
+    if !namespace_hijo.starts_with(namespace_padre) {
+        return false;
+    }
+
+    // Verificar si el namespace padre contiene al hijo como subnamespace
+    if let Some(remaining) = namespace_hijo.strip_prefix(namespace_padre) {
+        // El primer carácter después del prefijo del namespace padre debe ser un punto
+        return remaining.starts_with(".");
+    }
+
+    false
 }
