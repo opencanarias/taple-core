@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use serde::Serialize;
+
 use crate::evaluator::errors::ExecutorErrorResponses;
 
 #[derive(Debug)]
@@ -53,4 +55,13 @@ impl MemoryManager {
         }
         ptr
     }
+
+    pub fn add_data<S: Serialize>(&mut self, data: S) -> usize {
+        let bytes = bincode::serialize(&data).unwrap();
+        let ptr = self.alloc(bytes.len());
+        for (index, byte) in bytes.iter().enumerate() {
+          self.memory[ptr + index] = *byte;
+        }
+        ptr
+      }
 }

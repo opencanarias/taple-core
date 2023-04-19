@@ -5,13 +5,12 @@ use wasmtime::Engine;
 use super::compiler::manager::TapleCompiler;
 use super::compiler::{CompilerMessages, CompilerResponses};
 use super::errors::EvaluatorError;
-use super::runner::ExecuteContract;
 use super::{EvaluatorMessage, EvaluatorResponse};
 use crate::database::{DatabaseManager, DB};
 use crate::evaluator::errors::ExecutorErrorResponses;
 use crate::evaluator::runner::manager::TapleRunner;
 use crate::evaluator::AskForEvaluationResponse;
-use crate::event_request::{EventRequestType, RequestPayload};
+use crate::event_request::{RequestPayload, EventRequestType};
 use crate::governance::GovernanceInterface;
 use crate::protocol::command_head_manager::self_signature_manager::SelfSignatureInterface;
 use crate::{
@@ -30,18 +29,21 @@ impl EvaluatorAPI {
     }
 }
 
-pub struct EvaluatorManager<D: DatabaseManager + Send + 'static> {
+pub struct EvaluatorManager<
+    D: DatabaseManager + Send + 'static,
+    G: GovernanceInterface + Send + Clone + 'static,
+> {
     /// Communication channel for incoming petitions
     input_channel: MpscChannel<EvaluatorMessage, EvaluatorResponse>,
     /// Contract executioner
-    runner: TapleRunner<D>,
+    runner: TapleRunner<D, G>,
     signature_manager: SelfSignatureManager,
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
 }
 
-impl<D: DatabaseManager> EvaluatorManager<D> {
-    pub fn new<G: GovernanceInterface + Send + 'static>(
+impl<D: DatabaseManager, G: GovernanceInterface + Send + Clone + 'static> EvaluatorManager<D, G> {
+    pub fn new(
         input_channel: MpscChannel<EvaluatorMessage, EvaluatorResponse>,
         database: Arc<D>,
         signature_manager: SelfSignatureManager,
@@ -55,7 +57,7 @@ impl<D: DatabaseManager> EvaluatorManager<D> {
         let compiler = TapleCompiler::new(
             compiler_channel,
             DB::new(database.clone()),
-            gov_api,
+            gov_api.clone(),
             contracts_path,
             engine.clone(),
             shutdown_sender.subscribe(),
@@ -65,7 +67,7 @@ impl<D: DatabaseManager> EvaluatorManager<D> {
         });
         Self {
             input_channel,
-            runner: TapleRunner::new(DB::new(database.clone()), engine),
+            runner: TapleRunner::new(DB::new(database.clone()), engine, gov_api),
             signature_manager,
             shutdown_receiver,
             shutdown_sender,
@@ -114,24 +116,18 @@ impl<D: DatabaseManager> EvaluatorManager<D> {
                     let EventRequestType::State(state_data) = &data.invokation.request else {
                         break 'response EvaluatorResponse::AskForEvaluation(Err(super::errors::EvaluatorErrorResponses::CreateRequestNotAllowed));
                     };
-                    let result = self
-                        .runner
-                        .execute_contract(ExecuteContract {
-                            governance_id: data.governance_id,
-                            schema: data.schema_id,
-                            state: data.state,
-                            event: extract_data_from_payload(&state_data.payload),
-                        })
-                        .await;
+                    let result = self.runner.execute_contract(&data, state_data).await;
                     match result {
                         Ok(executor_response) => {
                             let governance_version = executor_response.governance_version;
                             let signature = self
                                 .signature_manager
                                 .sign(&(
+                                    &executor_response.context_hash,
                                     &executor_response.hash_new_state,
-                                    &executor_response.json_patch,
                                     governance_version,
+                                    &executor_response.success,
+                                    &executor_response.approval_required,
                                 ))
                                 .map_err(|_| EvaluatorError::SignatureGenerationFailed)?;
                             EvaluatorResponse::AskForEvaluation(Ok(AskForEvaluationResponse {
@@ -139,6 +135,8 @@ impl<D: DatabaseManager> EvaluatorManager<D> {
                                 hash_new_state: executor_response.hash_new_state,
                                 json_patch: executor_response.json_patch,
                                 signature,
+                                success: executor_response.success,
+                                approval_required: executor_response.approval_required,
                             }))
                         }
                         Err(ExecutorErrorResponses::DatabaseError(error)) => {
@@ -185,21 +183,23 @@ mod test {
     use crate::{
         commons::{
             channel::{MpscChannel, SenderEnd},
-            crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair}, models::notary::NotaryEventResponse,
+            crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair},
+            models::notary::NotaryEventResponse,
         },
         evaluator::{
             compiler::{CompilerMessages, CompilerResponses, ContractType, NewGovVersion},
-            errors::{EvaluatorErrorResponses, ExecutorErrorResponses, CompilerErrorResponses},
-            EvaluatorMessage, EvaluatorResponse,
+            errors::{CompilerErrorResponses, EvaluatorErrorResponses, ExecutorErrorResponses},
+            Context, EvaluatorMessage, EvaluatorResponse,
         },
         event_content::Metadata,
         event_request::{EventRequest, EventRequestType, RequestPayload, StateRequest},
         governance::{error::RequestError, GovernanceInterface, RequestQuorum},
-        identifier::{DigestIdentifier, KeyIdentifier},
+        identifier::{Derivable, DigestIdentifier, KeyIdentifier},
         protocol::command_head_manager::self_signature_manager::{
             SelfSignatureInterface, SelfSignatureManager,
         },
-        ApprovalResponse, Event, MemoryManager, TimeStamp, signature::Signature,
+        signature::Signature,
+        ApprovalResponse, Event, MemoryManager, TimeStamp,
     };
 
     use crate::evaluator::manager::EvaluatorManager;
@@ -236,13 +236,15 @@ mod test {
         pub three: u32,
     }
 
+    #[derive(Clone)]
     struct GovernanceMockup {}
 
     fn get_file_wrong() -> String {
         String::from(
             r#"
         #[no_mangle]
-        pub unsafe fn main_function(state_ptr: i32, event_ptr: i32) {
+        pub unsafe fn main_function(state_ptr: i32, event_ptr: i32, roles_ptr: i32) {
+            
         }
       "#,
         )
@@ -252,7 +254,7 @@ mod test {
         String::from(
             r#"
         #[no_mangle]
-        pub unsafe fn main_function(state_ptr: i32, event_ptr: i32) -> i32 {
+        pub unsafe fn main_function(state_ptr: i32, event_ptr: i32, roles_ptr: i32) -> i32 {
             4
         }
       "#,
@@ -262,66 +264,87 @@ mod test {
     fn get_file() -> String {
         String::from(
             r#"
-        mod externf;
-        mod sdk;
-        use serde::{Deserialize, Serialize};
-    
-        // Intento de simulación de cómo podría ser un contrato
-    
-        // Definir "estado del sujeto"
-        #[repr(C)]
-        #[derive(Serialize, Deserialize)]
-        pub struct Data {
-            pub one: u32,
-            pub two: u32,
-            pub three: u32,
-        }
-    
-        // Definir "Familia de eventos"
-        #[derive(Serialize, Deserialize, Debug)]
-        pub enum EventType {
-            Notify,
-            ModOne{data: u32},
-            ModTwo{data: u32},
-            ModThree{data: u32},
-            ModAll{data: (u32, u32, u32)},
-        }
-    
-        #[no_mangle]
-        pub unsafe fn main_function(state_ptr: i32, event_ptr: i32) -> u32 {
-            sdk::execute_contract(state_ptr, event_ptr, contract_logic)
-        }
-    
-        // Lógica del contrato con los tipos de datos esperados
-        // Devuelve el puntero a los datos escritos con el estado modificado
-        fn contract_logic(state: &mut Data, event: &EventType) {
-            // Sería posible añadir gestión de errores
-            // Podría ser interesante hacer las operaciones directamente como serde_json:Value en lugar de "Custom Data"
-            match event {
-                EventType::ModAll{data} => {
-                    // Evento que modifica el estado entero
-                    state.one = data.0;
-                    state.two = data.1;
-                    state.three = data.2;
-                }
-                EventType::ModOne{data} => {
-                    // Evento que modifica Data.one
-                    state.one = *data;
-                }
-                EventType::ModTwo{data} => {
-                    // Evento que modifica Data.two
-                    state.two = *data;
-                }
-                EventType::ModThree{data} => {
-                    // Evento que modifica Data.three
-                    state.three = *data;
-                }
-                EventType::Notify => {
-                    // Evento que no modifica el estado
-                    // Estos eventos se añadirían a la cadena, pero dentro del contrato apenas harían algo
-                }
+            mod sdk;
+            use serde::{Deserialize, Serialize};
+            
+            // Intento de simulación de cómo podría ser un contrato
+            
+            // Definir "estado del sujeto"
+            #[repr(C)]
+            #[derive(Serialize, Deserialize, Clone)]
+            pub struct Data {
+                pub one: u32,
+                pub two: u32,
+                pub three: u32,
             }
-        } 
+            
+            // Definir "Familia de eventos"
+            #[derive(Serialize, Deserialize, Debug)]
+            pub enum EventType {
+                Notify,
+                Patch { data: String },
+                ModOne { data: u32 },
+                ModTwo { data: u32 },
+                ModThree { data: u32 },
+                ModAll { data: (u32, u32, u32) },
+            }
+            
+            #[no_mangle]
+            pub unsafe fn main_function(state_ptr: i32, event_ptr: i32, roles_ptr: i32) -> u32 {
+                sdk::execute_contract(state_ptr, event_ptr, roles_ptr, contract_logic)
+            }
+            
+            /*
+               context -> inmutable con estado inicial roles y evento
+               result -> mutable success y approvalRequired, y estado final
+               approvalRequired por defecto a false y siempre false si KO o error
+            */
+            
+            // Lógica del contrato con los tipos de datos esperados
+            // Devuelve el puntero a los datos escritos con el estado modificado
+            fn contract_logic(
+                context: &sdk::Context<Data, EventType>,
+                contract_result: &mut sdk::ContractResult<Data>,
+            ) {
+                // Sería posible añadir gestión de errores
+                // Podría ser interesante hacer las operaciones directamente como serde_json:Value en lugar de "Custom Data"
+                let state = &mut contract_result.final_state;
+                let roles = &context.roles;
+                match &context.event {
+                    EventType::ModAll { data } => {
+                        // Evento que modifica el estado entero
+                        state.one = data.0;
+                        state.two = data.1;
+                        state.three = data.2;
+                    }
+                    EventType::ModOne { data } => {
+                        // Evento que modifica Data.one
+                        if roles.contains(&"RolA".into()) {
+                            state.one = *data;
+                        }
+                    }
+                    EventType::ModTwo { data } => {
+                        // Evento que modifica Data.two
+                        state.two = *data;
+                    }
+                    EventType::ModThree { data } => {
+                        // Evento que modifica Data.three
+                        state.three = *data;
+                    }
+                    EventType::Notify => {
+                        // Evento que no modifica el estado
+                        // Estos eventos se añadirían a la cadena, pero dentro del contrato apenas harían algo
+                    }
+                    EventType::Patch { data } => {
+                        // Se recibe un JSON PATCH
+                        // Se aplica directamente al estado
+                        let patched_state = sdk::apply_patch(&data, &context.initial_state).unwrap();
+                        *state = patched_state;
+                        // El usuario debería añadir una función que compruebe el estado del sujeto.
+                    }
+                }
+                contract_result.success = true;
+            }            
       "#,
         )
     }
@@ -431,21 +454,40 @@ mod test {
                     ContractType::String(String::from("test")),
                 )])
             } else if governance_id
-            == DigestIdentifier::from_str("Jg2Nuc5bNs4swQGcPQ1CXs9MtcfwMVoeQDR2Ea1YNYJw")
-                .unwrap() {
-                    Ok(vec![("test".to_owned(), ContractType::String(get_file_wrong()))])
-                } else if governance_id
+                == DigestIdentifier::from_str("Jg2Nuc5bNs4swQGcPQ1CXs9MtcfwMVoeQDR2Ea1YNYJw")
+                    .unwrap()
+            {
+                Ok(vec![(
+                    "test".to_owned(),
+                    ContractType::String(get_file_wrong()),
+                )])
+            } else if governance_id
                 == DigestIdentifier::from_str("Jg2Nuc5bNs4swQGcPQ2CXs9MtcfwMVoeQDR2Ea2YNYJw")
-                    .unwrap() {
-                        Ok(vec![("test".to_owned(), ContractType::String(get_file_wrong2()))])
-                    } else {
+                    .unwrap()
+            {
+                Ok(vec![(
+                    "test".to_owned(),
+                    ContractType::String(get_file_wrong2()),
+                )])
+            } else {
                 Ok(vec![("test".to_owned(), ContractType::String(get_file()))])
             }
+        }
+
+        async fn get_roles_of_invokator(
+            &self,
+            invokator: &KeyIdentifier,
+            governance_id: &DigestIdentifier,
+            governance_version: u64,
+            schema_id: &str,
+            namespace: &str,
+        ) -> Result<Vec<String>, RequestError> {
+            Ok(vec![])
         }
     }
 
     fn build_module() -> (
-        EvaluatorManager<MemoryManager>,
+        EvaluatorManager<MemoryManager, GovernanceMockup>,
         SenderEnd<EvaluatorMessage, EvaluatorResponse>,
         SenderEnd<CompilerMessages, CompilerResponses>,
         SelfSignatureManager,
@@ -536,16 +578,33 @@ mod test {
             let response = sx_evaluator
                 .ask(EvaluatorMessage::AskForEvaluation(
                     crate::evaluator::AskForEvaluation {
-                        governance_id: DigestIdentifier::from_str(
-                            "JGSPR6FL-vE7iZxWMd17o09qn7NeTqlcImDVWmijXczw",
-                        )
-                        .unwrap(),
-                        schema_id: "test".into(),
-                        state: initial_state_json.clone(),
                         invokation: create_event_request(
                             serde_json::to_string(&event).unwrap(),
                             &signature_manager,
                         ),
+                        // hash_request: DigestIdentifier::default().to_str(),
+                        context: Context {
+                            governance_id: DigestIdentifier::from_str(
+                                "JGSPR6FL-vE7iZxWMd17o09qn7NeTqlcImDVWmijXczw",
+                            )
+                            .unwrap(),
+                            schema_id: "test".into(),
+                            invokator: KeyIdentifier::from_str(
+                                "EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg",
+                            )
+                            .unwrap(),
+                            creator: KeyIdentifier::from_str(
+                                "EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg",
+                            )
+                            .unwrap(),
+                            owner: KeyIdentifier::from_str(
+                                "EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg",
+                            )
+                            .unwrap(),
+                            state: initial_state_json.clone(),
+                            namespace: "namespace1".into(),
+                        },
+                        sn: 1,
                     },
                 ))
                 .await
@@ -572,6 +631,7 @@ mod test {
 
     #[test]
     fn contract_execution_fail() {
+        // Fail reason: Bad Event
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async move {
             let (evaluator, sx_evaluator, sx_compiler, signature_manager) = build_module();
@@ -601,31 +661,38 @@ mod test {
             let response = sx_evaluator
                 .ask(EvaluatorMessage::AskForEvaluation(
                     crate::evaluator::AskForEvaluation {
-                        governance_id: DigestIdentifier::from_str(
-                            "JGSPR6FL-vE7iZxWMd17o09qn7NeTqlcImDVWmijXczw",
-                        )
-                        .unwrap(),
-                        schema_id: "test".into(),
-                        state: initial_state_json.clone(),
                         invokation: create_event_request(
                             serde_json::to_string(&event).unwrap(),
                             &signature_manager,
                         ),
+                        // hash_request: DigestIdentifier::default().to_str(),
+                        context: Context {
+                            governance_id: DigestIdentifier::from_str(
+                                "JGSPR6FL-vE7iZxWMd17o09qn7NeTqlcImDVWmijXczw",
+                            ).unwrap(),
+                            schema_id: "test".into(),
+                            invokator: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
+                            creator: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
+                            owner: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
+                            state: initial_state_json.clone(),
+                            namespace: "namespace1".into(),
+                        },
+                        sn: 1,
                     },
                 ))
                 .await
                 .unwrap();
             let EvaluatorResponse::AskForEvaluation(result) = response;
-            assert!(result.is_err());
-            let EvaluatorErrorResponses::ContractExecutionError(ExecutorErrorResponses::ContractExecutionFailed) = result.unwrap_err() else {
-                panic!("Invalid response received");
-            };
+            assert!(result.is_ok());
+            let result = result.unwrap();
+            assert!(!result.success);
             handler.abort();
         });
     }
 
     #[test]
     fn contract_execution_fail2() {
+        // Fail reason: Bad State
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async move {
             let (evaluator, sx_evaluator, sx_compiler, signature_manager) = build_module();
@@ -654,26 +721,31 @@ mod test {
             let response = sx_evaluator
                 .ask(EvaluatorMessage::AskForEvaluation(
                     crate::evaluator::AskForEvaluation {
-                        governance_id: DigestIdentifier::from_str(
-                            "JGSPR6FL-vE7iZxWMd17o09qn7NeTqlcImDVWmijXczw",
-                        )
-                        .unwrap(),
-                        schema_id: "test".into(),
-                        state: initial_state_json.clone(),
                         invokation: create_event_request(
                             serde_json::to_string(&event).unwrap(),
                             &signature_manager,
                         ),
+                        // hash_request: DigestIdentifier::default().to_str(),
+                        context: Context {
+                            governance_id: DigestIdentifier::from_str(
+                                "JGSPR6FL-vE7iZxWMd17o09qn7NeTqlcImDVWmijXczw",
+                            ).unwrap(),
+                            schema_id: "test".into(),
+                            invokator: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
+                            creator: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
+                            owner: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
+                            state: initial_state_json.clone(),
+                            namespace: "namespace1".into(),
+                        },
+                        sn: 1,
                     },
                 ))
                 .await
                 .unwrap();
             let EvaluatorResponse::AskForEvaluation(result) = response;
-            assert!(result.is_err());
-            println!("{:?}", result);
-            let EvaluatorErrorResponses::ContractExecutionError(ExecutorErrorResponses::ContractExecutionFailed) = result.unwrap_err() else {
-                panic!("Invalid response received");
-            };
+            assert!(result.is_ok());
+            let result = result.unwrap();
+            assert!(!result.success);
             handler.abort();
         });
     }
@@ -712,27 +784,30 @@ mod test {
             let response = sx_evaluator
                 .ask(EvaluatorMessage::AskForEvaluation(
                     crate::evaluator::AskForEvaluation {
-                        governance_id: DigestIdentifier::from_str(
-                            "Jg2Nuv5bNs4swQGcPQ1CXs9MtcfwMVoeQDR2Ea1YNYJw",
-                        )
-                        .unwrap(),
-                        schema_id: "teste".into(),
-                        state: initial_state_json.clone(),
                         invokation: create_event_request(
                             serde_json::to_string(&event).unwrap(),
                             &signature_manager,
                         ),
+                        // hash_request: DigestIdentifier::default().to_str(),
+                        context: Context {
+                            governance_id: DigestIdentifier::from_str(
+                                "Jg2Nuv5bNs4swQGcPQ1CXs9MtcfwMVoeQDR2Ea1YNYJw",
+                            ).unwrap(),
+                            schema_id: "test".into(),
+                            invokator: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
+                            creator: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
+                            owner: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
+                            state: initial_state_json.clone(),
+                            namespace: "namespace1".into(),
+                        },
+                        sn: 1,
                     },
                 ))
-                .await;
-            let result = response.unwrap();
-            let EvaluatorResponse::AskForEvaluation(result) = result else {
-                panic!("Invalid response received");
-            };
-            assert!(result.is_err());
-            let EvaluatorErrorResponses::ContractExecutionError(ExecutorErrorResponses::ContractNotFound(_,_)) = result.unwrap_err() else {
-                panic!("Invalid response received");
-            };
+                .await.unwrap();
+            let EvaluatorResponse::AskForEvaluation(result) = response;
+            assert!(result.is_ok());
+            let result = result.unwrap();
+            assert!(!result.success);
             handler.abort();
         });
     }
@@ -741,17 +816,7 @@ mod test {
     fn contract_compilation_no_sdk() {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async move {
-            let (evaluator, sx_evaluator, sx_compiler, signature_manager) = build_module();
-            let initial_state = Data {
-                one: 10,
-                two: 11,
-                three: 13,
-            };
-            let initial_state_json = serde_json::to_string(&initial_state).unwrap();
-            let event = EventType::ModTwo {
-                data: 100,
-                chunk: vec![123, 45, 20],
-            };
+            let (evaluator, _sx_evaluator, sx_compiler, signature_manager) = build_module();
 
             let handler = tokio::spawn(async move {
                 evaluator.start().await;
@@ -767,71 +832,13 @@ mod test {
                 }))
                 .await
                 .unwrap();
-            if let CompilerResponses::CompileContract(Err(CompilerErrorResponses::NoSDKFound)) = response {
+            if let CompilerResponses::CompileContract(Err(CompilerErrorResponses::NoSDKFound)) =
+                response
+            {
                 handler.abort();
             } else {
                 assert!(false)
             };
-        });
-    }
-
-    #[test]
-    fn contract_execution_wrong_entrypoint() {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async move {
-            let (evaluator, sx_evaluator, sx_compiler, signature_manager) = build_module();
-            let initial_state = Data {
-                one: 10,
-                two: 11,
-                three: 13,
-            };
-            let initial_state_json = serde_json::to_string(&initial_state).unwrap();
-            let event = EventType::ModTwo {
-                data: 100,
-                chunk: vec![123, 45, 20],
-            };
-
-            let handler = tokio::spawn(async move {
-                evaluator.start().await;
-            });
-
-            let response = sx_compiler
-                .ask(CompilerMessages::NewGovVersion(NewGovVersion {
-                    governance_id: DigestIdentifier::from_str(
-                        "Jg2Nuc5bNs4swQGcPQ1CXs9MtcfwMVoeQDR2Ea1YNYJw",
-                    )
-                    .unwrap(),
-                    governance_version: 0,
-                }))
-                .await
-                .unwrap();
-            println!("{:?}", response);
-            let response = sx_evaluator
-                .ask(EvaluatorMessage::AskForEvaluation(
-                    crate::evaluator::AskForEvaluation {
-                        governance_id: DigestIdentifier::from_str(
-                            "Jg2Nuc5bNs4swQGcPQ1CXs9MtcfwMVoeQDR2Ea1YNYJw",
-                        )
-                        .unwrap(),
-                        schema_id: "test".into(),
-                        state: initial_state_json.clone(),
-                        invokation: create_event_request(
-                            serde_json::to_string(&event).unwrap(),
-                            &signature_manager,
-                        ),
-                    },
-                ))
-                .await;
-            let result = response.unwrap();
-            let EvaluatorResponse::AskForEvaluation(result) = result else {
-                panic!("Invalid response received");
-            };
-            assert!(result.is_err());
-            println!("{:?}", result);
-            let EvaluatorErrorResponses::ContractExecutionError(ExecutorErrorResponses::ContractEntryPointNotFound) = result.unwrap_err() else {
-                panic!("Invalid response received");
-            };
-            handler.abort();
         });
     }
 

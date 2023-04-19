@@ -46,8 +46,14 @@ pub enum ExecutorErrorResponses {
     JSONPATCHDeserializationFailed,
     #[error("State hash generation failed")]
     StateHashGenerationFailed,
+    #[error("Context hash generation failed")]
+    ContextHashGenerationFailed,
     #[error("Invalid pointer provided by contract")]
-    InvalidPointerPovided
+    InvalidPointerPovided,
+    #[error("Can't get roles of invokator")]
+    RolesObtentionFailed,
+    #[error("Cant genererate Contract Result")]
+    CantGenerateContractResult
 }
 
 #[derive(Error, Debug)]

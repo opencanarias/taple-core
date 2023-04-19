@@ -1,4 +1,6 @@
-use crate::{event_request::EventRequest, identifier::DigestIdentifier, signature::Signature};
+use borsh::BorshSerialize;
+
+use crate::{event_request::EventRequest, identifier::{DigestIdentifier, KeyIdentifier}, signature::Signature};
 
 use self::errors::EvaluatorErrorResponses;
 
@@ -19,10 +21,21 @@ pub enum EvaluatorResponse {
 
 #[derive(Clone, Debug)]
 pub struct AskForEvaluation {
+    invokation: EventRequest, // Event
+    // hash_request: String,
+    context: Context,
+    sn: u64
+}
+
+#[derive(Clone, Debug, BorshSerialize)]
+pub struct Context {
     governance_id: DigestIdentifier,
     schema_id: String,
+    invokator: KeyIdentifier,
+    creator: KeyIdentifier,
+    owner: KeyIdentifier,
     state: String,
-    invokation: EventRequest,
+    namespace: String,
 }
 
 #[derive(Clone, Debug)]
@@ -30,5 +43,7 @@ pub struct AskForEvaluationResponse {
     pub governance_version: u64,
     pub hash_new_state: DigestIdentifier,
     pub json_patch: String,
+    pub success: bool,
+    pub approval_required: bool,
     pub signature: Signature,
 }
