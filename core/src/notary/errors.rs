@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::{commons::errors::ChannelErrors, protocol::errors::ProtocolErrors};
+use crate::{commons::errors::ChannelErrors, commons::errors::ProtocolErrors};
 
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum NotaryError {

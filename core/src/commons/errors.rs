@@ -2,6 +2,8 @@ use ed25519_dalek::ed25519;
 use std::convert::Infallible;
 use thiserror::Error;
 
+use crate::governance::error::RequestError;
+
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("Schema Creation Error")]
@@ -183,4 +185,36 @@ pub enum SubjectError {
     InvalidUseOfJSONPATCH,
     #[error("Approvers is not subset of validators")]
     ApproversAreNotValidators,
+}
+
+#[derive(Error, Debug, Clone, PartialEq)]
+pub enum ProtocolErrors {
+    #[error("Errors that can never happen")]
+    InfalibleError {
+        #[from]
+        source: Infallible,
+    },
+    #[error("Secret Key not found")]
+    SignatureError,
+    #[error("Channel unavaible")]
+    ChannelError {
+        #[from]
+        source: crate::commons::errors::ChannelErrors,
+    },
+    #[error("Oneshot channel not available")]
+    OneshotUnavailable,
+    #[error("Ledger response not expected")]
+    UnexpectedLedgerResponse,
+    // #[error("Ledger error")]
+    // LedgerError {
+    //     #[from]
+    //     source: LedgerManagerError,
+    // },
+    #[error("Not validator")]
+    NotValidator,
+    #[error("Governance error")]
+    GovernanceError {
+        #[from]
+        source: RequestError,
+    },
 }

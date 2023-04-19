@@ -80,7 +80,7 @@ pub(crate) mod api;
 pub(crate) mod commons;
 pub mod error;
 pub(crate) mod governance;
-pub(crate) mod ledger;
+// pub(crate) mod ledger;
 pub(crate) mod message;
 pub(crate) mod network;
 pub(crate) mod database;
@@ -89,7 +89,7 @@ pub(crate) mod evaluator;
 pub(crate) mod distribution;
 pub(crate) mod approval;
 
-pub mod protocol;
+// pub mod protocol;
 pub mod event;
 
 mod unitary_component;
@@ -100,9 +100,7 @@ pub use api::{
 };
 pub use commons::identifier;
 pub use commons::models::{
-    approval_signature::{Acceptance, ApprovalResponse, ApprovalResponseContent},
     event::Event,
-    state::SubjectData,
 };
 pub use commons::models::{event_content, event_request, signature};
 pub use commons::{
@@ -112,6 +110,6 @@ pub use commons::{
     models::notification::Notification,
 };
 pub use error::Error;
-pub use unitary_component::{NotificationHandler, Taple};
+// pub use unitary_component::{NotificationHandler, Taple};
 pub use database::{DatabaseManager, MemoryManager, Error as DbError, DatabaseCollection};
 pub(crate) use database::DB;

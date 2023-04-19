@@ -138,7 +138,7 @@ impl<M: DatabaseManager> DB<M> {
         // TODO: DETERMINAR SI DEVOLVER RESULT
         let id = subject_id.to_str();
         let events_by_subject = self.event_db.partition(&id);
-        let sn = event.event_content.sn.to_string();
+        let sn = event.content.event_proposal.proposal.sn.to_string();
         events_by_subject.put(&sn, event)
     }
 
@@ -216,39 +216,32 @@ impl<M: DatabaseManager> DB<M> {
         self.subject_db.put(&id, subject)
     }
 
-    pub fn set_negociating_true(&self, subject_id: &DigestIdentifier) -> Result<(), Error> {
-        let mut subject = self.get_subject(subject_id)?;
-        subject.ledger_state.negociating_next = true;
-        // Persist the change
-        self.set_subject(&subject_id, subject)
-    }
+    // pub fn apply_event_sourcing(&self, event_content: &EventContent) -> Result<(), Error> {
+    //     // TODO: Consultar sobre si este método debería existir
+    //     let subject_id = &event_content.subject_id;
+    //     let mut subject = self.get_subject(&subject_id)?;
+    //     subject
+    //         .apply(event_content)
+    //         .map_err(|_| Error::SubjectApplyFailed)?;
+    //     // Persist the change
+    //     self.set_subject(subject_id, subject)?;
+    //     let id = subject_id.to_str();
+    //     let signatures_by_subject = self.signature_db.partition(&id);
+    //     match signatures_by_subject.del(&(event_content.sn - 1).to_string()) {
+    //         Ok(_) | Err(Error::EntryNotFound) => Ok(()),
+    //         Err(error) => Err(error),
+    //     }
+    // }
 
-    pub fn apply_event_sourcing(&self, event_content: &EventContent) -> Result<(), Error> {
-        // TODO: Consultar sobre si este método debería existir
-        let subject_id = &event_content.subject_id;
-        let mut subject = self.get_subject(&subject_id)?;
-        subject
-            .apply(event_content)
-            .map_err(|_| Error::SubjectApplyFailed)?;
-        // Persist the change
-        self.set_subject(subject_id, subject)?;
-        let id = subject_id.to_str();
-        let signatures_by_subject = self.signature_db.partition(&id);
-        match signatures_by_subject.del(&(event_content.sn - 1).to_string()) {
-            Ok(_) | Err(Error::EntryNotFound) => Ok(()),
-            Err(error) => Err(error),
-        }
-    }
-
-    pub fn get_all_heads(&self) -> Result<HashMap<DigestIdentifier, LedgerState>, Error> {
-        let mut result = HashMap::new();
-        for (key, subject) in self.subject_db.iter() {
-            let subject_id =
-                DigestIdentifier::from_str(&key).map_err(|_| Error::NoDigestIdentifier)?;
-            result.insert(subject_id, subject.ledger_state);
-        }
-        Ok(result)
-    }
+    // pub fn get_all_heads(&self) -> Result<HashMap<DigestIdentifier, LedgerState>, Error> {
+    //     let mut result = HashMap::new();
+    //     for (key, subject) in self.subject_db.iter() {
+    //         let subject_id =
+    //             DigestIdentifier::from_str(&key).map_err(|_| Error::NoDigestIdentifier)?;
+    //         result.insert(subject_id, subject.ledger_state);
+    //     }
+    //     Ok(result)
+    // }
 
     pub fn get_all_subjects(&self) -> Vec<Subject> {
         let mut result = Vec::new();
@@ -286,11 +279,9 @@ impl<M: DatabaseManager> DB<M> {
     pub fn get_request(
         &self,
         subject_id: &DigestIdentifier,
-        request_id: &DigestIdentifier,
     ) -> Result<EventRequest, Error> {
         let id = subject_id.to_str();
-        let requests_by_subject = self.request_db.partition(&id);
-        requests_by_subject.get(&request_id.to_str())
+        self.request_db.get(&id)
     }
 
     pub fn set_request(
@@ -299,9 +290,7 @@ impl<M: DatabaseManager> DB<M> {
         request: EventRequest,
     ) -> Result<(), Error> {
         let id = subject_id.to_str();
-        let requests_by_subject = self.request_db.partition(&id);
-        let req_id = request.signature.content.event_content_hash.to_str();
-        requests_by_subject.put(&req_id, request)
+        self.request_db.put(&id, request)
     }
 
     pub fn del_request(

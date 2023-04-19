@@ -42,7 +42,6 @@ const QUORUM_PORCENTAGE_AMPLIFICATION: f64 = 0.2;
 pub struct EventCompleter<D: DatabaseManager> {
     gov_api: GovernanceAPI,
     database: DB<D>,
-    signature_manager: SelfSignatureManager,
     message_channel: SenderEnd<MessageTaskCommand<EventMessages>, ()>,
     notification_sender: tokio::sync::broadcast::Sender<Notification>,
     ledger_sender: SenderEnd<(), ()>,
@@ -67,7 +66,6 @@ impl<D: DatabaseManager> EventCompleter<D> {
     pub fn new(
         gov_api: GovernanceAPI,
         database: DB<D>,
-        signature_manager: SelfSignatureManager,
         message_channel: SenderEnd<MessageTaskCommand<EventMessages>, ()>,
         notification_sender: tokio::sync::broadcast::Sender<Notification>,
         ledger_sender: SenderEnd<(), ()>,
@@ -76,7 +74,6 @@ impl<D: DatabaseManager> EventCompleter<D> {
         Self {
             gov_api,
             database,
-            signature_manager,
             message_channel,
             notification_sender,
             ledger_sender,
