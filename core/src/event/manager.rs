@@ -2,6 +2,7 @@ use super::EventMessages;
 use super::{errors::EventError, event_completer::EventCompleter, EventCommand, EventResponse};
 use crate::database::{DatabaseManager, DB};
 use crate::governance::error::RequestError;
+use crate::identifier::KeyIdentifier;
 use crate::{
     commons::channel::{ChannelData, MpscChannel, SenderEnd},
     governance::GovernanceAPI,
@@ -44,6 +45,7 @@ impl<D: DatabaseManager> NotaryManager<D> {
         message_channel: SenderEnd<MessageTaskCommand<EventMessages>, ()>,
         notification_sender: tokio::sync::broadcast::Sender<Notification>,
         ledger_sender: SenderEnd<(), ()>,
+        own_identifier: KeyIdentifier,
     ) -> Self {
         Self {
             input_channel,
@@ -54,6 +56,7 @@ impl<D: DatabaseManager> NotaryManager<D> {
                 message_channel,
                 notification_sender,
                 ledger_sender,
+                own_identifier,
             ),
             shutdown_receiver,
             shutdown_sender,
@@ -200,6 +203,34 @@ impl<D: DatabaseManager> NotaryManager<D> {
                         },
                         _ => {}
                     }
+                    EventResponse::NoResponse
+                }
+                EventCommand::NewGovVersion(new_gov_version) => {
+                    match self
+                        .event_completer
+                        .new_governance_version(
+                            new_gov_version.governance_id,
+                            new_gov_version.governance_version,
+                        )
+                        .await
+                    {
+                        Err(error) => match error {
+                            EventError::ChannelClosed => {
+                                log::error!("Channel Closed");
+                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                return Err(EventError::ChannelClosed);
+                            }
+                            EventError::GovernanceError(inner_error)
+                                if inner_error == RequestError::ChannelClosed =>
+                            {
+                                log::error!("Channel Closed");
+                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                return Err(EventError::ChannelClosed);
+                            }
+                            _ => {}
+                        },
+                        _ => {}
+                    };
                     EventResponse::NoResponse
                 }
             }

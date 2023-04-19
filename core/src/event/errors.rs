@@ -32,4 +32,8 @@ pub enum EventError {
     ChannelError(#[from] crate::commons::errors::ChannelErrors),
     #[error("Subject Not Owned: {0}")]
     SubjectNotOwned(String),
+    #[error("External Genesis Event")]
+    ExternalGenesisEvent,
+    #[error("Creating Permission Denied")]
+    CreatingPermissionDenied,
 }

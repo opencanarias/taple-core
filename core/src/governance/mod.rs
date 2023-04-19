@@ -3,8 +3,7 @@ use std::collections::HashSet;
 use crate::commons::{
     identifier::{DigestIdentifier, KeyIdentifier},
     models::{
-        approval_signature::ApprovalResponse, event::Event, event_content::Metadata,
-        event_request::EventRequest,
+        event_content::Metadata,
     },
     schema_handler::gov_models::{Invoke, Contract},
 };

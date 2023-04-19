@@ -10,7 +10,10 @@ use crate::{
             approval_signature::ApprovalResponse, event::Event, event_content::Metadata,
             event_request::EventRequest, notary::NotaryEventResponse,
         },
-        schema_handler::{get_governance_schema, gov_models::{Invoke, Contract}},
+        schema_handler::{
+            get_governance_schema,
+            gov_models::{Contract, Invoke},
+        },
     },
     evaluator::compiler::ContractType,
     signature::Signature,
@@ -20,7 +23,8 @@ use crate::{
 use super::{
     error::{InternalError, RequestError},
     inner_governance::InnerGovernance,
-    GovernanceMessage, GovernanceResponse, RequestQuorum, stage::ValidationStage,
+    stage::ValidationStage,
+    GovernanceMessage, GovernanceResponse, RequestQuorum,
 };
 
 pub struct Governance<D: DatabaseManager> {
@@ -131,39 +135,39 @@ impl<D: DatabaseManager> Governance<D> {
 pub trait GovernanceInterface: Sync + Send {
     async fn get_schema(
         &self,
-        governance_id: &DigestIdentifier,
-        schema_id: &String,
+        governance_id: DigestIdentifier,
+        schema_id: String,
     ) -> Result<serde_json::Value, RequestError>;
 
     async fn get_signers(
         &self,
-        metadata: &Metadata,
-        stage: &ValidationStage,
+        metadata: Metadata,
+        stage: ValidationStage,
     ) -> Result<HashSet<KeyIdentifier>, RequestError>;
 
     async fn get_quorum(
         &self,
-        metadata: &Metadata,
-        stage: &ValidationStage,
+        metadata: Metadata,
+        stage: ValidationStage,
     ) -> Result<u32, RequestError>;
 
     async fn get_invoke_info(
         &self,
-        metadata: &Metadata,
+        metadata: Metadata,
         fact: &String,
     ) -> Result<Option<Invoke>, RequestError>;
 
     async fn get_contracts(
         &self,
-        governance_id: &DigestIdentifier,
+        governance_id: DigestIdentifier,
     ) -> Result<Vec<Contract>, RequestError>;
 
     async fn get_governance_version(
         &self,
-        governance_id: &DigestIdentifier,
+        governance_id: DigestIdentifier,
     ) -> Result<u64, RequestError>;
 
-    async fn is_governance(&self, subject_id: &DigestIdentifier) -> Result<bool, RequestError>;
+    async fn is_governance(&self, subject_id: DigestIdentifier) -> Result<bool, RequestError>;
 }
 
 #[derive(Debug, Clone)]
@@ -181,14 +185,14 @@ impl GovernanceAPI {
 impl GovernanceInterface for GovernanceAPI {
     async fn get_schema(
         &self,
-        governance_id: &DigestIdentifier,
-        schema_id: &String,
+        governance_id: DigestIdentifier,
+        schema_id: String,
     ) -> Result<serde_json::Value, RequestError> {
         let response = self
             .sender
             .ask(GovernanceMessage::GetSchema {
-                governance_id: governance_id.clone(),
-                schema_id: schema_id.clone(),
+                governance_id,
+                schema_id,
             })
             .await
             .map_err(|_| RequestError::ChannelClosed)?;
@@ -201,15 +205,12 @@ impl GovernanceInterface for GovernanceAPI {
 
     async fn get_signers(
         &self,
-        metadata: &Metadata,
-        stage: &ValidationStage,
+        metadata: Metadata,
+        stage: ValidationStage,
     ) -> Result<HashSet<KeyIdentifier>, RequestError> {
         let response = self
             .sender
-            .ask(GovernanceMessage::GetSigners {
-                metadata: metadata.clone(),
-                stage: stage.clone(),
-            })
+            .ask(GovernanceMessage::GetSigners { metadata, stage })
             .await
             .map_err(|_| RequestError::ChannelClosed)?;
         if let GovernanceResponse::GetSigners(signers) = response {
@@ -221,15 +222,12 @@ impl GovernanceInterface for GovernanceAPI {
 
     async fn get_quorum(
         &self,
-        metadata: &Metadata,
-        stage: &ValidationStage,
+        metadata: Metadata,
+        stage: ValidationStage,
     ) -> Result<u32, RequestError> {
         let response = self
             .sender
-            .ask(GovernanceMessage::GetQuorum {
-                metadata: metadata.clone(),
-                stage: stage.clone(),
-            })
+            .ask(GovernanceMessage::GetQuorum { metadata, stage })
             .await
             .map_err(|_| RequestError::ChannelClosed)?;
         if let GovernanceResponse::GetQuorum(quorum) = response {
@@ -241,15 +239,12 @@ impl GovernanceInterface for GovernanceAPI {
 
     async fn get_invoke_info(
         &self,
-        metadata: &Metadata,
-        fact: &String,
+        metadata: Metadata,
+        fact: String,
     ) -> Result<Option<Invoke>, RequestError> {
         let response = self
             .sender
-            .ask(GovernanceMessage::GetInvokeInfo {
-                metadata: metadata.clone(),
-                fact: fact.clone(),
-            })
+            .ask(GovernanceMessage::GetInvokeInfo { metadata, fact })
             .await
             .map_err(|_| RequestError::ChannelClosed)?;
         if let GovernanceResponse::GetInvokeInfo(invoke_info) = response {
@@ -261,13 +256,11 @@ impl GovernanceInterface for GovernanceAPI {
 
     async fn get_contracts(
         &self,
-        governance_id: &DigestIdentifier,
+        governance_id: DigestIdentifier,
     ) -> Result<Vec<Contract>, RequestError> {
         let response = self
             .sender
-            .ask(GovernanceMessage::GetContracts {
-                governance_id: governance_id.clone(),
-            })
+            .ask(GovernanceMessage::GetContracts { governance_id })
             .await
             .map_err(|_| RequestError::ChannelClosed)?;
         if let GovernanceResponse::GetContracts(contracts) = response {
@@ -279,13 +272,11 @@ impl GovernanceInterface for GovernanceAPI {
 
     async fn get_governance_version(
         &self,
-        governance_id: &DigestIdentifier,
+        governance_id: DigestIdentifier,
     ) -> Result<u64, RequestError> {
         let response = self
             .sender
-            .ask(GovernanceMessage::GetGovernanceVersion {
-                governance_id: governance_id.clone(),
-            })
+            .ask(GovernanceMessage::GetGovernanceVersion { governance_id })
             .await
             .map_err(|_| RequestError::ChannelClosed)?;
         if let GovernanceResponse::GetGovernanceVersion(version) = response {
@@ -295,12 +286,10 @@ impl GovernanceInterface for GovernanceAPI {
         }
     }
 
-    async fn is_governance(&self, subject_id: &DigestIdentifier) -> Result<bool, RequestError> {
+    async fn is_governance(&self, subject_id: DigestIdentifier) -> Result<bool, RequestError> {
         let response = self
             .sender
-            .ask(GovernanceMessage::IsGovernance {
-                subject_id: subject_id.clone(),
-            })
+            .ask(GovernanceMessage::IsGovernance { subject_id })
             .await
             .map_err(|_| RequestError::ChannelClosed)?;
         if let GovernanceResponse::IsGovernance(result) = response {

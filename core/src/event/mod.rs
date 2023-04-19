@@ -10,7 +10,7 @@ use crate::{
     identifier::DigestIdentifier,
     message::TaskCommandContent,
     signature::Signature,
-    Event,
+    Event, evaluator::compiler::NewGovVersion,
 };
 
 use self::errors::EventError;
@@ -35,6 +35,7 @@ pub enum EventCommand {
     ValidatorResponse {
         signature: Signature,
     },
+    NewGovVersion(NewGovVersion),
 }
 
 #[derive(Debug, Clone)]
