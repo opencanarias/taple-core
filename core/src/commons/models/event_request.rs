@@ -22,13 +22,13 @@ use super::{
     state::Subject, timestamp::TimeStamp,
 };
 
-#[derive(
-    Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
-)]
-pub enum RequestPayload {
-    Json(String),
-    JsonPatch(String),
-}
+// #[derive(
+//     Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
+// )]
+// pub enum RequestPayload {
+//     Json(String),
+//     JsonPatch(String),
+// }
 
 // #[derive(
 //     Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,

@@ -3,6 +3,7 @@ use crate::{commons, identifier::DigestIdentifier};
 use super::errors::CompilerErrorResponses;
 use base64::decode;
 mod compiler;
+mod gov_contract;
 pub(crate) mod manager;
 
 #[derive(Clone, Debug)]
