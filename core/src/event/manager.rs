@@ -3,6 +3,7 @@ use super::{errors::EventError, event_completer::EventCompleter, EventCommand, E
 use crate::database::{DatabaseManager, DB};
 use crate::governance::error::RequestError;
 use crate::identifier::KeyIdentifier;
+use crate::ledger::{LedgerCommand, LedgerResponse};
 use crate::{
     commons::channel::{ChannelData, MpscChannel, SenderEnd},
     governance::GovernanceAPI,
@@ -21,7 +22,7 @@ impl EventAPI {
     }
 }
 
-pub struct NotaryManager<D: DatabaseManager> {
+pub struct EventManager<D: DatabaseManager> {
     /// Communication channel for incoming petitions
     input_channel: MpscChannel<EventCommand, EventResponse>,
     /// Notarization functions
@@ -30,7 +31,7 @@ pub struct NotaryManager<D: DatabaseManager> {
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
 }
 
-impl<D: DatabaseManager> NotaryManager<D> {
+impl<D: DatabaseManager> EventManager<D> {
     pub fn new(
         input_channel: MpscChannel<EventCommand, EventResponse>,
         gov_api: GovernanceAPI,
@@ -39,7 +40,7 @@ impl<D: DatabaseManager> NotaryManager<D> {
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
         message_channel: SenderEnd<MessageTaskCommand<EventMessages>, ()>,
         notification_sender: tokio::sync::broadcast::Sender<Notification>,
-        ledger_sender: SenderEnd<(), ()>,
+        ledger_sender: SenderEnd<LedgerCommand, LedgerResponse>,
         own_identifier: KeyIdentifier,
     ) -> Self {
         Self {

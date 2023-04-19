@@ -80,7 +80,7 @@ pub(crate) mod api;
 pub(crate) mod commons;
 pub mod error;
 pub(crate) mod governance;
-// pub(crate) mod ledger;
+pub(crate) mod ledger;
 pub(crate) mod message;
 pub(crate) mod network;
 pub(crate) mod database;

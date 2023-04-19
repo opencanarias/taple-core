@@ -25,14 +25,14 @@ use crate::{
     event_request::EventRequest,
     governance::{stage::ValidationStage, GovernanceAPI, GovernanceInterface},
     identifier::{Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier},
+    ledger::{LedgerCommand, LedgerResponse},
     message::{MessageConfig, MessageTaskCommand},
-    protocol::command_head_manager::self_signature_manager::SelfSignatureManager,
     signature::{Signature, SignatureContent, UniqueSignature},
     Event, Notification, TimeStamp,
 };
 use std::hash::Hash;
 
-use super::{errors::EventError, EventCommand, EventMessages, EventResponse};
+use super::{errors::EventError, EventMessages};
 use crate::database::{DatabaseManager, DB};
 
 const TIMEOUT: u32 = 2000;
@@ -44,7 +44,7 @@ pub struct EventCompleter<D: DatabaseManager> {
     database: DB<D>,
     message_channel: SenderEnd<MessageTaskCommand<EventMessages>, ()>,
     notification_sender: tokio::sync::broadcast::Sender<Notification>,
-    ledger_sender: SenderEnd<(), ()>,
+    ledger_sender: SenderEnd<LedgerCommand, LedgerResponse>,
     own_identifier: KeyIdentifier,
     subjects_by_governance: HashMap<DigestIdentifier, HashSet<DigestIdentifier>>,
     subjects_completing_event:
@@ -68,7 +68,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
         database: DB<D>,
         message_channel: SenderEnd<MessageTaskCommand<EventMessages>, ()>,
         notification_sender: tokio::sync::broadcast::Sender<Notification>,
-        ledger_sender: SenderEnd<(), ()>,
+        ledger_sender: SenderEnd<LedgerCommand, LedgerResponse>,
         own_identifier: KeyIdentifier,
     ) -> Self {
         Self {
