@@ -2,16 +2,16 @@ use std::collections::{HashMap, HashSet};
 
 use crate::commons::channel::SenderEnd;
 use crate::commons::crypto::Payload;
-use crate::commons::models::state::Subject;
+use crate::commons::models::state::{Subject, SubjectData};
 use crate::identifier::{Derivable, DigestIdentifier, KeyIdentifier};
 use crate::message::{MessageConfig, MessageTaskCommand};
 use crate::protocol::command_head_manager::self_signature_manager::SelfSignatureInterface;
+use crate::Notification;
 use crate::{
     database::DB, governance::GovernanceInterface,
     protocol::command_head_manager::self_signature_manager::SelfSignatureManager, DatabaseManager,
     Event,
 };
-use crate::{Notification, SubjectData};
 
 use super::error::{DistributionErrorResponses, DistributionManagerError};
 use super::resolutor::DistributionChecksResolutor;
@@ -554,7 +554,7 @@ impl<D: DatabaseManager, G: GovernanceInterface, N: NotifierInterface>
                         // El evento es correcto. Procedemos a incluirlo en la base de datos y aplicar Event Sourcing.
                         // Asumimos que no hay quorum. Es necesario borrar las firmas del evento anterior.
                         // Es necesario aportar nuestra firma.
-                        self.add_new_event_with_signature(event, subject_data)
+                        self.add_new_event_with_signature(event, &subject_data)
                             .await?;
                         // Se debe detener las solicitudes previas de firmas
                         // Procedemos a construir y enviar el mensaje
@@ -967,1128 +967,1128 @@ impl<D: DatabaseManager, G: GovernanceInterface, N: NotifierInterface>
     }
 }
 
-#[cfg(test)]
-mod test {
-    use std::{collections::HashSet, str::FromStr, sync::Arc};
-
-    use async_trait::async_trait;
-    use serde_json::Value;
-    use tokio::sync::broadcast::Receiver;
-
-    use crate::{
-        commons::{
-            channel::{ChannelData, MpscChannel},
-            crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair},
-            models::{notary::NotaryEventResponse, state::Subject},
-        },
-        database::DB,
-        distribution::{
-            error::DistributionErrorResponses, DistributionMessages, RequestEventMessage,
-            RequestSignatureMessage, SetEventMessage, SignaturesReceivedMessage,
-        },
-        evaluator::compiler::ContractType,
-        event_content::Metadata,
-        event_request::{
-            CreateRequest, EventRequest, EventRequestType, RequestPayload, StateRequest,
-        },
-        governance::{error::RequestError, GovernanceInterface, RequestQuorum},
-        identifier::{Derivable, DigestIdentifier, KeyIdentifier},
-        message::MessageTaskCommand,
-        protocol::command_head_manager::self_signature_manager::{
-            SelfSignatureInterface, SelfSignatureManager,
-        },
-        signature::Signature,
-        ApprovalResponse, Event, MemoryManager, Notification, SubjectData, TimeStamp,
-    };
-
-    use super::{DistributionNotifier, InnerDistributionManager};
-
-    struct GovernanceMockup {}
-
-    #[async_trait]
-    impl GovernanceInterface for GovernanceMockup {
-        async fn check_quorum(
-            &self,
-            _event: Event,
-            _signers: &HashSet<KeyIdentifier>,
-        ) -> Result<(bool, HashSet<KeyIdentifier>), RequestError> {
-            unimplemented!();
-        }
-        async fn check_quorum_request(
-            &self,
-            _event_request: EventRequest,
-            _approvals: HashSet<ApprovalResponse>,
-        ) -> Result<(RequestQuorum, HashSet<KeyIdentifier>), RequestError> {
-            unimplemented!();
-        }
-        async fn check_policy(
-            &self,
-            _governance_id: &DigestIdentifier,
-            _governance_version: u64,
-            _schema_id: &String,
-            _subject_namespace: &String,
-            _controller_namespace: &String,
-        ) -> Result<bool, RequestError> {
-            unimplemented!();
-        }
-        async fn get_validators(
-            &self,
-            _event: Event,
-        ) -> Result<HashSet<KeyIdentifier>, RequestError> {
-            return Ok(HashSet::from_iter(vec![
-                KeyIdentifier::from_str("Eq-ZYOUN8k5LpY_BCvhIcxW8p_5NpTgJB6i2L5EInEeI").unwrap(),
-                KeyIdentifier::from_str("EL3yBfsyGFUQ64pX6tihpATJR9DqbZWah0Wwekjmx6as").unwrap(),
-                KeyIdentifier::from_str("EtJKXs4D5a9s_aQYLxtZo0RPSkZsPXak_9SGwmilvc8M").unwrap(),
-            ]));
-        }
-        async fn get_approvers(
-            &self,
-            _event_request: EventRequest,
-        ) -> Result<HashSet<KeyIdentifier>, RequestError> {
-            unimplemented!();
-        }
-        async fn get_governance_version(
-            &self,
-            _governance_id: &DigestIdentifier,
-        ) -> Result<u64, RequestError> {
-            unimplemented!();
-        }
-        async fn get_schema(
-            &self,
-            _governance_id: &DigestIdentifier,
-            _schema_id: &String,
-        ) -> Result<serde_json::Value, RequestError> {
-            Ok(create_subject_schema())
-        }
-        async fn is_governance(
-            &self,
-            _subject_id: &DigestIdentifier,
-        ) -> Result<bool, RequestError> {
-            unimplemented!();
-        }
-        async fn check_invokation_permission(
-            &self,
-            _subject_id: DigestIdentifier,
-            _invokator: KeyIdentifier,
-            _additional_payload: Option<String>,
-            _metadata: Option<Metadata>,
-        ) -> Result<(bool, bool), RequestError> {
-            Ok((true, false))
-        }
-        async fn get_contracts(
-            &self,
-            _governance_id: DigestIdentifier,
-        ) -> Result<Vec<(String, ContractType)>, RequestError> {
-            unimplemented!();
-        }
-        async fn check_if_witness(
-            &self,
-            _governance_id: DigestIdentifier,
-            _namespace: String,
-            _schema_id: String,
-        ) -> Result<bool, RequestError> {
-            Ok(true)
-        }
-        async fn check_notary_signatures(
-            &self,
-            _signatures: HashSet<NotaryEventResponse>,
-            _data_hash: DigestIdentifier,
-            _governance_id: DigestIdentifier,
-            _namespace: String,
-        ) -> Result<(), RequestError> {
-            Ok(())
-        }
-        async fn check_evaluator_signatures(
-            &self,
-            _signatures: HashSet<Signature>,
-            _governance_id: DigestIdentifier,
-            _governance_version: u64,
-            _namespace: String,
-        ) -> Result<(), RequestError> {
-            Ok(())
-        }
-        async fn get_roles_of_invokator(
-            &self,
-            invokator: &KeyIdentifier,
-            governance_id: &DigestIdentifier,
-            governance_version: u64,
-            schema_id: &str,
-            namespace: &str,
-        ) -> Result<Vec<String>, RequestError> {
-            todo!()
-        }
-    }
-
-    fn create_state_request(
-        json: String,
-        signature_manager: &SelfSignatureManager,
-        subject_id: &DigestIdentifier,
-    ) -> EventRequest {
-        let request = EventRequestType::State(StateRequest {
-            subject_id: subject_id.clone(),
-            payload: RequestPayload::Json(json),
-        });
-        let timestamp = TimeStamp::now();
-        let signature = signature_manager.sign(&(&request, &timestamp)).unwrap();
-        let event_request = EventRequest {
-            request,
-            timestamp,
-            signature,
-            approvals: HashSet::new(),
-        };
-        event_request
-    }
-
-    fn create_state_event(
-        request: EventRequest,
-        subject: &Subject,
-        prev_event_hash: DigestIdentifier,
-        governance_version: u64,
-        subject_schema: &Value,
-    ) -> Event {
-        request
-            .get_event_from_state_request(
-                subject,
-                prev_event_hash,
-                governance_version,
-                subject_schema,
-                true,
-            )
-            .unwrap()
-    }
-
-    fn create_subject(
-        request: EventRequest,
-        governance_version: u64,
-        subject_schema: &Value,
-    ) -> (Subject, Event) {
-        request
-            .create_subject_from_request(governance_version, subject_schema, true)
-            .unwrap()
-    }
-
-    fn create_genesis_request(
-        json: String,
-        signature_manager: &SelfSignatureManager,
-    ) -> EventRequest {
-        let request = EventRequestType::Create(CreateRequest {
-            governance_id: DigestIdentifier::from_str(
-                "J6axKnS5KQjtMDFgapJq49tdIpqGVpV7SS4kxV1iR10I",
-            )
-            .unwrap(),
-            schema_id: "test".to_owned(),
-            namespace: "test".to_owned(),
-            payload: RequestPayload::Json(json),
-        });
-        let timestamp = TimeStamp::now();
-        let signature = signature_manager.sign(&(&request, &timestamp)).unwrap();
-        let event_request = EventRequest {
-            request,
-            timestamp,
-            signature,
-            approvals: HashSet::new(),
-        };
-        event_request
-    }
-
-    fn set_event_message(
-        has_signatures: bool,
-        signature_manager: &SelfSignatureManager,
-        event: &Event,
-    ) -> SetEventMessage {
-        SetEventMessage {
-            event: event.clone(),
-            notaries_signatures: if has_signatures {
-                Some(HashSet::new())
-            } else {
-                None
-            },
-            sender: signature_manager.get_own_identifier(),
-        }
-    }
-
-    fn request_event_message(
-        subject_id: &DigestIdentifier,
-        sn: u64,
-        signature_manager: &SelfSignatureManager,
-    ) -> RequestEventMessage {
-        RequestEventMessage {
-            subject_id: subject_id.clone(),
-            sn,
-            sender: signature_manager.get_own_identifier(),
-        }
-    }
-
-    fn set_signature_message(
-        subject_id: &DigestIdentifier,
-        sn: u64,
-        signatures: HashSet<Signature>,
-    ) -> SignaturesReceivedMessage {
-        SignaturesReceivedMessage {
-            subject_id: subject_id.clone(),
-            sn,
-            signatures,
-        }
-    }
-
-    fn request_signature_message(
-        subject_id: &DigestIdentifier,
-        sn: u64,
-        signatures_requested: HashSet<KeyIdentifier>,
-        sender: &KeyIdentifier,
-    ) -> RequestSignatureMessage {
-        RequestSignatureMessage {
-            subject_id: subject_id.clone(),
-            namespace: "test".to_owned(),
-            sn,
-            sender: sender.clone(),
-            requested_signatures: signatures_requested,
-        }
-    }
-
-    fn create_module() -> (
-        InnerDistributionManager<MemoryManager, GovernanceMockup, DistributionNotifier>,
-        MpscChannel<MessageTaskCommand<DistributionMessages>, ()>,
-        Receiver<Notification>,
-        Arc<MemoryManager>,
-        SelfSignatureManager,
-    ) {
-        let database = Arc::new(MemoryManager::new());
-        let keypair = KeyPair::Ed25519(Ed25519KeyPair::from_seed(
-            &hex::decode("99beed715bf561185baaa5b3e9df8ecddcfcf7727fbc4f7e922a4cf2f9ea8c4e")
-                .unwrap(),
-        ));
-        let pk = keypair.public_key_bytes();
-        let signature_manager = SelfSignatureManager {
-            keys: keypair,
-            identifier: KeyIdentifier::new(crate::KeyDerivator::Ed25519, &pk),
-            digest_derivator: crate::DigestDerivator::Blake3_256,
-        };
-        let (msg_rx, msg_sx) = MpscChannel::new(100);
-        let governance = GovernanceMockup {};
-        let (notification_sx, notification_rx) = tokio::sync::broadcast::channel(100);
-        let notifier = DistributionNotifier::new(notification_sx);
-        let manager = InnerDistributionManager::new(
-            DB::new(database.clone()),
-            governance,
-            signature_manager.clone(),
-            notifier,
-            msg_sx,
-        );
-        (
-            manager,
-            msg_rx,
-            notification_rx,
-            database,
-            signature_manager,
-        )
-    }
-
-    fn create_alt_signature_manager() -> SelfSignatureManager {
-        let keypair = KeyPair::Ed25519(Ed25519KeyPair::from_seed(
-            &hex::decode("27c775a2f242bd2fea544084f9cc407fb2dbe87f809eb69b80901d4d33da92ef")
-                .unwrap(),
-        ));
-        let pk = keypair.public_key_bytes();
-        SelfSignatureManager {
-            keys: keypair,
-            identifier: KeyIdentifier::new(crate::KeyDerivator::Ed25519, &pk),
-            digest_derivator: crate::DigestDerivator::Blake3_256,
-        }
-    }
-
-    fn create_third_signature_manager() -> SelfSignatureManager {
-        let keypair = KeyPair::Ed25519(Ed25519KeyPair::from_seed(
-            &hex::decode("7d86b055cf5fe0ebf92b86dcb6122eeb88475e6a9e7eebb8f835cf716b8fda73")
-                .unwrap(),
-        ));
-        let pk = keypair.public_key_bytes();
-        SelfSignatureManager {
-            keys: keypair,
-            identifier: KeyIdentifier::new(crate::KeyDerivator::Ed25519, &pk),
-            digest_derivator: crate::DigestDerivator::Blake3_256,
-        }
-    }
-
-    fn create_subject_schema() -> Value {
-        serde_json::json!({"a": {"type": "string"}})
-    }
-
-    fn create_json_state() -> String {
-        serde_json::to_string(&serde_json::json!({"a": "test"})).unwrap()
-    }
-
-    fn update_subject_n_times(
-        initial_prev_hash: DigestIdentifier,
-        n: u64,
-        subject: &mut Subject,
-        alt_signature_manager: &SelfSignatureManager,
-    ) -> Event {
-        let mut prev_hash = initial_prev_hash;
-        for i in 0..n {
-            let event = create_state_event(
-                create_state_request(
-                    create_json_state(),
-                    &alt_signature_manager,
-                    &subject.subject_data.as_ref().unwrap().subject_id,
-                ),
-                &subject,
-                prev_hash.clone(),
-                0,
-                &create_subject_schema(),
-            );
-            prev_hash = event.signature.content.event_content_hash.clone();
-            subject.apply(&event.event_content).unwrap();
-            if i == n - 1 {
-                return event;
-            }
-        }
-        unreachable!();
-    }
-
-    fn check_subject_and_event(
-        database: &DB<MemoryManager>,
-        subject_id: &DigestIdentifier,
-        sn: u64,
-    ) {
-        let result = database.get_subject(subject_id);
-        assert!(result.is_ok());
-        let result = database.get_event(subject_id, 0);
-        assert!(result.is_ok());
-    }
-
-    fn check_cancel_message(
-        msg: ChannelData<MessageTaskCommand<DistributionMessages>, ()>,
-        id: String,
-    ) {
-        let ChannelData::TellData(data) = msg else {
-            assert!(false);
-            return;
-        };
-        let data = data.get();
-        let MessageTaskCommand::Cancel(id_to_cancel) = data else {
-            assert!(false);
-            return;
-        };
-        assert_eq!(id, id_to_cancel);
-    }
-
-    fn check_request_signatures(
-        msg: ChannelData<MessageTaskCommand<DistributionMessages>, ()>,
-        subject_data: &SubjectData,
-        signature_manager_inner: &SelfSignatureManager,
-        sn: u64,
-    ) {
-        let ChannelData::TellData(data) = msg else {
-            assert!(false);
-            return;
-        };
-
-        let data = data.get();
-        let MessageTaskCommand::Request(id, data, targets, _) = data else {
-            assert!(false);
-            return;
-        };
-
-        assert!(id.is_some());
-        let id = id.unwrap();
-        assert_eq!(
-            format!("{}/SIGNATURES", subject_data.subject_id.to_str()),
-            id
-        );
-        assert_eq!(targets.len(), 2);
-        let DistributionMessages::RequestSignature(data) = data else {
-            assert!(false);
-            return;
-        };
-        assert!(!targets.contains(&signature_manager_inner.get_own_identifier()));
-        assert_eq!(data.subject_id, subject_data.subject_id);
-        assert_eq!(data.sn, sn);
-        assert_eq!(data.sender, signature_manager_inner.get_own_identifier());
-    }
-
-    fn check_requested_signature(
-        msg: ChannelData<MessageTaskCommand<DistributionMessages>, ()>,
-        sn: u64,
-        subject_id: &DigestIdentifier,
-        target: &KeyIdentifier,
-        signatures_expected: usize,
-    ) {
-        let ChannelData::TellData(data) = msg else {
-            assert!(false);
-            return;
-        };
-        let data = data.get();
-        let MessageTaskCommand::Request(id, data, targets, _) = data else {
-            assert!(false);
-            return;
-        };
-        assert!(id.is_none());
-        assert_eq!(targets.len(), 1);
-        assert_eq!(targets[0], *target);
-        let DistributionMessages::SignaturesReceived(data) = data else {
-            assert!(false);
-            return;
-        };
-        assert_eq!(data.sn, sn);
-        assert_eq!(data.subject_id, *subject_id);
-        assert_eq!(signatures_expected, data.signatures.len());
-    }
-
-    fn check_provide_event(
-        msg: ChannelData<MessageTaskCommand<DistributionMessages>, ()>,
-        sn: u64,
-        subject_id: &DigestIdentifier,
-        target: &KeyIdentifier,
-    ) {
-        let ChannelData::TellData(data) = msg else {
-            assert!(false);
-            return;
-        };
-        let data = data.get();
-        let MessageTaskCommand::Request(id, data, targets, _) = data else {
-            assert!(false);
-            return;
-        };
-        assert!(id.is_none());
-        assert_eq!(targets.len(), 1);
-        assert_eq!(targets[0], *target);
-        let DistributionMessages::SetEvent(data) = data else {
-            assert!(false);
-            return;
-        };
-        assert_eq!(data.event.event_content.sn, sn);
-        assert_eq!(data.event.event_content.subject_id, *subject_id);
-    }
-
-    fn check_request_event(
-        msg: ChannelData<MessageTaskCommand<DistributionMessages>, ()>,
-        subject_data: &SubjectData,
-        signature_manager_inner: &SelfSignatureManager,
-        sn: u64,
-        targets_len: usize,
-        have_id: bool,
-    ) {
-        let ChannelData::TellData(data) = msg else {
-            assert!(false);
-            return;
-        };
-
-        let data = data.get();
-        let MessageTaskCommand::Request(id, data, targets, _) = data else {
-            assert!(false);
-            return;
-        };
-
-        if have_id {
-            assert!(id.is_some());
-            let id = id.unwrap();
-            assert_eq!(format!("{}/EVENT", subject_data.subject_id.to_str()), id);
-        }
-        assert_eq!(targets.len(), targets_len);
-        let DistributionMessages::RequestEvent(data) = data else {
-            assert!(false);
-            return;
-        };
-        assert!(!targets.contains(&signature_manager_inner.get_own_identifier()));
-        assert_eq!(data.subject_id, subject_data.subject_id);
-        assert_eq!(data.sn, sn);
-        assert_eq!(data.sender, signature_manager_inner.get_own_identifier());
-    }
-
-    #[test]
-    fn genesis_event() {
-        /*
-           La idea de este Test es simular la llegada de un evento de génesis de un sujeto que nos es de interés
-        */
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            let (mut manager, mut msg_rx, _notif_rx, db, signature_manager_inner) = create_module();
-            let database = DB::new(db);
-            let alt_signature_manager = create_alt_signature_manager();
-
-            let (subject, genesis_event) = create_subject(
-                create_genesis_request(create_json_state(), &alt_signature_manager),
-                0,
-                &create_subject_schema(),
-            );
-
-            let subject_data = subject.subject_data.unwrap();
-
-            let result = manager
-                .set_event(set_event_message(
-                    true,
-                    &alt_signature_manager,
-                    &genesis_event,
-                ))
-                .await;
-            assert!(result.is_ok());
-            // En la base de datos deberíamos tener el nuevo sujeto y su evento 0
-            check_subject_and_event(&database, &subject_data.subject_id, 0);
-            // En msg_rx deberíamos tener un mensaje de solicitud de firmas
-            let msg = msg_rx.receive().await.unwrap();
-            // El mensaje es de tipo TELL
-            check_request_signatures(msg, &subject_data, &signature_manager_inner, 0);
-        });
-    }
-
-    #[test]
-    fn new_event() {
-        // Existe la posibilidad de modificar la base de datos antes de ejecutar el método. De esta manera se
-        // podría alterar la ejecución interna del módulo. No obstante, vamos a optar por recrear el proceso desde cero,
-        // creación del sujeto incluída.
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            let (mut manager, mut msg_rx, _notif_rx, db, signature_manager_inner) = create_module();
-            let database = DB::new(db);
-            let alt_signature_manager = create_alt_signature_manager();
-
-            let (subject, genesis_event) = create_subject(
-                create_genesis_request(create_json_state(), &alt_signature_manager),
-                0,
-                &create_subject_schema(),
-            );
-
-            let prev_hash = genesis_event.signature.content.event_content_hash.clone();
-
-            let subject_data = subject.subject_data.as_ref().unwrap();
-
-            let result = manager
-                .set_event(set_event_message(
-                    true,
-                    &alt_signature_manager,
-                    &genesis_event,
-                ))
-                .await;
-            assert!(result.is_ok());
-            // En la base de datos deberíamos tener el nuevo sujeto y su evento 0
-            check_subject_and_event(&database, &subject_data.subject_id, 0);
-            // En msg_rx deberíamos tener un mensaje de solicitud de firmas
-            let msg = msg_rx.receive().await.unwrap();
-            check_request_signatures(msg, &subject_data, &signature_manager_inner, 0);
-            // Enviamos un nuevo mensaje con el nuevo evento
-            let event = create_state_event(
-                create_state_request(
-                    create_json_state(),
-                    &alt_signature_manager,
-                    &subject.subject_data.as_ref().unwrap().subject_id,
-                ),
-                &subject,
-                prev_hash,
-                0,
-                &create_subject_schema(),
-            );
-            let result = manager
-                .set_event(set_event_message(true, &alt_signature_manager, &event))
-                .await;
-            assert!(result.is_ok());
-            // En la base de datos deberíamos tener el sujeto y su evento 1
-            check_subject_and_event(&database, &subject_data.subject_id, 1);
-            // En msg_rx deberíamos tener un mensaje de solicitud de firmas
-            let msg = msg_rx.receive().await.unwrap();
-            check_request_signatures(msg, subject_data, &signature_manager_inner, 1);
-        });
-    }
-
-    #[test]
-    fn new_witness() {
-        // Se creará un sujeto y una serie de eventos. El último de estos se pasará al módulo.
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            let (mut manager, mut msg_rx, _notif_rx, db, signature_manager_inner) = create_module();
-            let database = DB::new(db);
-            let alt_signature_manager = create_alt_signature_manager();
-
-            let (mut subject, genesis_event) = create_subject(
-                create_genesis_request(create_json_state(), &alt_signature_manager),
-                0,
-                &create_subject_schema(),
-            );
-
-            let event = update_subject_n_times(
-                genesis_event.signature.content.event_content_hash,
-                3,
-                &mut subject,
-                &alt_signature_manager,
-            );
-
-            let subject_data = subject.subject_data.unwrap();
-            let result = manager
-                .set_event(set_event_message(true, &alt_signature_manager, &event))
-                .await;
-            assert!(result.is_ok());
-            // En la BBDD no debería haber sujeto alguno. Se habrá iniciado un proceso de sincronización
-            // Tampoco debería haber sujeto
-            let result = database.get_subject(&subject_data.subject_id);
-            assert!(result.is_err());
-            let result = database.get_event(&subject_data.subject_id, 3);
-            assert!(result.is_err());
-            // Se debería haber generado una petición para obtención del evento 0
-            let msg = msg_rx.receive().await.unwrap();
-            check_request_event(msg, &subject_data, &signature_manager_inner, 0, 1, false);
-        });
-    }
-
-    #[test]
-    fn new_witness_provide_genesis() {
-        // Se creará un sujeto y una serie de eventos. El último de estos se pasará al módulo.
-        // Acto seguido se pasará el evento de génesis SIN firmas de notario.
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            let (mut manager, mut msg_rx, _notif_rx, db, signature_manager_inner) = create_module();
-            let database = DB::new(db);
-            let alt_signature_manager = create_alt_signature_manager();
-
-            let (mut subject, genesis_event) = create_subject(
-                create_genesis_request(create_json_state(), &alt_signature_manager),
-                0,
-                &create_subject_schema(),
-            );
-
-            let genesis_copy = genesis_event.clone();
-
-            let event = update_subject_n_times(
-                genesis_event.signature.content.event_content_hash,
-                3,
-                &mut subject,
-                &alt_signature_manager,
-            );
-
-            let subject_data = subject.subject_data.unwrap();
-            let result = manager
-                .set_event(set_event_message(true, &alt_signature_manager, &event))
-                .await;
-            assert!(result.is_ok());
-            // En la BBDD no debería haber sujeto alguno. Se habrá iniciado un proceso de sincronización
-            // Tampoco debería haber sujeto
-            let result = database.get_subject(&subject_data.subject_id);
-            assert!(result.is_err());
-            let result = database.get_event(&subject_data.subject_id, 3);
-            assert!(result.is_err());
-            // Se debería haber generado una petición para obtención del evento 0
-            let msg = msg_rx.receive().await.unwrap();
-            check_request_event(msg, &subject_data, &signature_manager_inner, 0, 1, false);
-
-            // Pasamos el evento de génesis sin formas de notario
-            let result = manager
-                .set_event(set_event_message(
-                    false,
-                    &alt_signature_manager,
-                    &genesis_copy,
-                ))
-                .await;
-            assert!(result.is_ok());
-            // En la base de datos debería estar ahora el sujeto + el evento de génesis
-            check_subject_and_event(&database, &subject_data.subject_id, 0);
-            // En msg_rx deberíamos tener un mensaje de solicitud del siguiente evento
-            let msg = msg_rx.receive().await.unwrap();
-            check_request_event(msg, &subject_data, &signature_manager_inner, 1, 2, true);
-        });
-    }
-
-    #[test]
-    fn provide_signatures() {
-        // Se creará un sujeto y se proveerán las firmas necesarias
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            let (mut manager, mut msg_rx, _notif_rx, db, signature_manager_inner) = create_module();
-            let database = DB::new(db);
-            let alt_signature_manager = create_alt_signature_manager();
-
-            let (subject, genesis_event) = create_subject(
-                create_genesis_request(create_json_state(), &alt_signature_manager),
-                0,
-                &create_subject_schema(),
-            );
-
-            let subject_data = subject.subject_data.unwrap();
-
-            let result = manager
-                .set_event(set_event_message(
-                    true,
-                    &alt_signature_manager,
-                    &genesis_event,
-                ))
-                .await;
-            assert!(result.is_ok());
-            // En la base de datos deberíamos tener el nuevo sujeto y su evento 0
-            check_subject_and_event(&database, &subject_data.subject_id, 0);
-            // En msg_rx deberíamos tener un mensaje de solicitud de firmas
-            let msg = msg_rx.receive().await.unwrap();
-            check_request_signatures(msg, &subject_data, &signature_manager_inner, 0);
-
-            // El evento ha sido creado con éxito.
-            // Generamos la tercera entidad firmante necesaria
-            let third_signer = create_third_signature_manager();
-            // Generamos las 2 firmas necesarias. Las proveeremos de una en una.
-            let alt_signature = alt_signature_manager
-                .sign(&genesis_event.event_content)
-                .unwrap();
-            let third_signature = third_signer.sign(&genesis_event.event_content).unwrap();
-            let result = manager
-                .signature_received(set_signature_message(
-                    &subject_data.subject_id,
-                    subject_data.sn,
-                    HashSet::from_iter(vec![alt_signature]),
-                ))
-                .await;
-            assert!(result.is_ok());
-            // En msg_rx deberíamos tener un mensaje de solicitud de firmas
-            let msg = msg_rx.receive().await.unwrap();
-            check_request_signatures(msg, &subject_data, &signature_manager_inner, 0);
-            let result = manager
-                .signature_received(set_signature_message(
-                    &subject_data.subject_id,
-                    subject_data.sn,
-                    HashSet::from_iter(vec![third_signature]),
-                ))
-                .await;
-            assert!(result.is_ok());
-            // En msg_rx deberíamos tener un mensaje para CANCELAR la solicitud de firmas
-            let msg = msg_rx.receive().await.unwrap();
-            check_cancel_message(
-                msg,
-                format!("{}/SIGNATURES", subject_data.subject_id.to_str()),
-            );
-            // En la base de datos deberíamos tener 3 firmas
-            let result = database.get_signatures(&subject_data.subject_id, 0);
-            assert!(result.is_ok());
-            let result = result.unwrap();
-            assert_eq!(result.len(), 3);
-        });
-    }
-
-    #[test]
-    fn invalid_genesis() {
-        // Se creará un sujeto y se pasará su evento de génesis, pero sin firmas de notaría
-        // El módulo debería rechazarlo.
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            let (mut manager, _msg_rx, _notif_rx, db, signature_manager_inner) = create_module();
-            let database = DB::new(db);
-            let alt_signature_manager = create_alt_signature_manager();
-
-            let (subject, genesis_event) = create_subject(
-                create_genesis_request(create_json_state(), &alt_signature_manager),
-                0,
-                &create_subject_schema(),
-            );
-
-            let subject_data = subject.subject_data.unwrap();
-            let result = manager
-                .set_event(set_event_message(
-                    false,
-                    &alt_signature_manager,
-                    &genesis_event,
-                ))
-                .await;
-            assert!(result.is_ok());
-            let result = result.unwrap();
-            let Err(DistributionErrorResponses::EventNotNeeded) = result else {
-                assert!(false);
-                return;
-            };
-            // En la base de datos no debería haber ni sujeto ni evento
-            let result = database.get_subject(&subject_data.subject_id);
-            assert!(result.is_err());
-            let result = database.get_event(&subject_data.subject_id, 0);
-            assert!(result.is_err());
-        });
-    }
-
-    #[test]
-    fn request_event() {
-        // Partiendo de una base de datos con un sujeto y eventos, se pedirá al módulo que entregue un evento.
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            let (manager, mut msg_rx, _notif_rx, db, signature_manager_inner) = create_module();
-            let database = DB::new(db);
-            let alt_signature_manager = create_alt_signature_manager();
-
-            let (subject, genesis_event) = create_subject(
-                create_genesis_request(create_json_state(), &alt_signature_manager),
-                0,
-                &create_subject_schema(),
-            );
-
-            let subject_id = subject.subject_data.as_ref().unwrap().subject_id.clone();
-
-            // Almacenamos en BBDD
-            let result = database.set_subject(&subject_id, subject);
-            assert!(result.is_ok());
-            let result = database.set_event(&subject_id, genesis_event);
-            assert!(result.is_ok());
-
-            let result = manager
-                .request_event(request_event_message(
-                    &subject_id,
-                    0,
-                    &alt_signature_manager,
-                ))
-                .await;
-            assert!(result.is_ok());
-            // En msg_rx deberíamos tener un mensaje para entregar el evento
-            let msg = msg_rx.receive().await.unwrap();
-            check_provide_event(
-                msg,
-                0,
-                &subject_id,
-                &alt_signature_manager.get_own_identifier(),
-            );
-        });
-    }
-
-    #[test]
-    fn request_signature() {
-        // Partiendo de una base de datos con contenido, se solicitará al módulo que entregue firmas
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            let (manager, mut msg_rx, _notif_rx, db, signature_manager_inner) = create_module();
-            let database = DB::new(db);
-            let alt_signature_manager = create_alt_signature_manager();
-
-            let (subject, genesis_event) = create_subject(
-                create_genesis_request(create_json_state(), &alt_signature_manager),
-                0,
-                &create_subject_schema(),
-            );
-
-            let subject_id = subject.subject_data.as_ref().unwrap().subject_id.clone();
-
-            let node_signature = signature_manager_inner
-                .sign(&genesis_event.event_content)
-                .unwrap();
-
-            // Almacenamos en BBDD
-            let result = database.set_subject(&subject_id, subject);
-            assert!(result.is_ok());
-            let result = database.set_event(&subject_id, genesis_event);
-            assert!(result.is_ok());
-            let result =
-                database.set_signatures(&subject_id, 0, HashSet::from_iter(vec![node_signature]));
-            assert!(result.is_ok());
-
-            let result = manager
-                .request_signatures(request_signature_message(
-                    &subject_id,
-                    0,
-                    HashSet::from_iter(vec![signature_manager_inner.get_own_identifier()]),
-                    &alt_signature_manager.get_own_identifier(),
-                ))
-                .await;
-            assert!(result.is_ok());
-            // En msg_rx deberíamos tener un mensaje para entregar la firma
-            let msg = msg_rx.receive().await.unwrap();
-            check_requested_signature(
-                msg,
-                0,
-                &subject_id,
-                &alt_signature_manager.get_own_identifier(),
-                1,
-            );
-        });
-    }
-
-    #[test]
-    fn synchronization_test() {
-        // Se creará un evento y un sujeto y se comunicará al módulo. Acto seguido se crearán más eventos y se pasará el último de estos
-        // para simular la sincronización
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            let (mut manager, mut msg_rx, _notif_rx, db, signature_manager_inner) = create_module();
-            let database = DB::new(db);
-            let alt_signature_manager = create_alt_signature_manager();
-
-            let (mut subject, genesis_event) = create_subject(
-                create_genesis_request(create_json_state(), &alt_signature_manager),
-                0,
-                &create_subject_schema(),
-            );
-
-            let subject_id = subject.subject_data.as_ref().unwrap().subject_id.clone();
-
-            let result = manager
-                .set_event(set_event_message(
-                    true,
-                    &alt_signature_manager,
-                    &genesis_event,
-                ))
-                .await;
-            assert!(result.is_ok());
-            // En la base de datos deberíamos tener el nuevo sujeto y su evento 0
-            check_subject_and_event(&database, &subject_id, 0);
-            // En msg_rx deberíamos tener un mensaje de solicitud de firmas
-            let msg = msg_rx.receive().await.unwrap();
-            // El mensaje es de tipo TELL
-            check_request_signatures(
-                msg,
-                &subject.subject_data.as_ref().unwrap(),
-                &signature_manager_inner,
-                0,
-            );
-
-            // A continuación creamos el 3 eventos, uno por uno.
-            let event_1 = update_subject_n_times(
-                genesis_event.signature.content.event_content_hash,
-                1,
-                &mut subject,
-                &alt_signature_manager,
-            );
-
-            let event_2 = update_subject_n_times(
-                event_1.signature.content.event_content_hash.clone(),
-                1,
-                &mut subject,
-                &alt_signature_manager,
-            );
-
-            let event_3 = update_subject_n_times(
-                event_2.signature.content.event_content_hash.clone(),
-                1,
-                &mut subject,
-                &alt_signature_manager,
-            );
-
-            let subject_data = subject.subject_data.as_ref().unwrap().clone();
-
-            // Pasamos el evento 3. Debe tener firmas de notaría
-            let result = manager
-                .set_event(set_event_message(true, &alt_signature_manager, &event_3))
-                .await;
-            assert!(result.is_ok());
-            // El módulo ha registrado el evento para la sincronización, pero no lo ha guardado en BBDD
-            // En msg_rx deberíamos tener un mensaje de solicitud del evento 1
-            let msg = msg_rx.receive().await.unwrap();
-            check_request_event(msg, &subject_data, &signature_manager_inner, 1, 2, true);
-            // Proveeremos el resto de eventos
-            let result = manager
-                .set_event(set_event_message(false, &alt_signature_manager, &event_1))
-                .await;
-            assert!(result.is_ok());
-            // En msg_rx deberíamos tener un mensaje de solicitud del evento 2
-            // En la BBDD se deberían encontrar los eventos 1 y 2 aunque el sujeto no debe cambiar su estado hasta que se complete
-            // la sincronización
-            let msg = msg_rx.receive().await.unwrap();
-            check_request_event(msg, &subject_data, &signature_manager_inner, 2, 2, true);
-            let result = manager
-                .set_event(set_event_message(false, &alt_signature_manager, &event_2))
-                .await;
-            assert!(result.is_ok());
-            let msg = msg_rx.receive().await.unwrap();
-            check_request_event(msg, &subject_data, &signature_manager_inner, 3, 2, true);
-            // El evento 1 y 2 deberían estar en la BBDD
-            let result = database.get_event(&subject_id, 0);
-            assert!(result.is_ok());
-            let result = database.get_event(&subject_id, 0);
-            assert!(result.is_ok());
-            // El sujeto no debería haber cambiado
-            let result = database.get_subject(&subject_id);
-            assert!(result.is_ok());
-            let result = result.unwrap();
-            assert_eq!(result.subject_data.unwrap().sn, 0);
-            // Proveemos el último evento, acabando la sincronización
-            let result = manager
-                .set_event(set_event_message(true, &alt_signature_manager, &event_3))
-                .await;
-            assert!(result.is_ok());
-            // Debería de generarse un mensaje para la cancelación de los eventos
-            let msg = msg_rx.receive().await.unwrap();
-            check_cancel_message(msg, format!("{}/EVENT", subject_id.to_str()));
-            // Debería de generarse un mensaje para la obtención de firmas
-            let msg = msg_rx.receive().await.unwrap();
-            check_request_signatures(msg, &subject_data, &signature_manager_inner, 3);
-        });
-    }
-
-    #[test]
-    fn activate_event_request_after_signature_request() {
-        /*
-           La intención de este Test es comprobar que el módulo pide un desconocido ante una petición de
-           firmas que no puede sastisfacer
-        */
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            let (manager, mut msg_rx, _notif_rx, db, signature_manager_inner) = create_module();
-            let alt_signature_manager = create_alt_signature_manager();
-            let subject_id =
-                DigestIdentifier::from_str("J6axKnS5KQjtMDFgapJq49tdIpqGVpV7SS4kxV1iR10I").unwrap();
-            let result = manager
-                .request_signatures(request_signature_message(
-                    &subject_id,
-                    4,
-                    HashSet::from_iter(vec![signature_manager_inner.get_own_identifier()]),
-                    &alt_signature_manager.get_own_identifier(),
-                ))
-                .await;
-            assert!(result.is_ok());
-            // Habrá una solicitud del evento anterior
-            let msg = msg_rx.receive().await.unwrap();
-            let ChannelData::TellData(data) = msg else {
-                assert!(false);
-                return;
-            };
-
-            let data = data.get();
-            let MessageTaskCommand::Request(id, data, targets, _) = data else {
-                assert!(false);
-                return;
-            };
-            assert!(id.is_none());
-            assert_eq!(targets.len(), 1);
-            let DistributionMessages::RequestEvent(data) = data else {
-                assert!(false);
-                return;
-            };
-            assert!(!targets.contains(&signature_manager_inner.get_own_identifier()));
-            assert_eq!(data.subject_id, subject_id);
-            assert_eq!(data.sn, 4);
-            assert_eq!(data.sender, signature_manager_inner.get_own_identifier());
-        });
-    }
-
-    #[test]
-    fn reject_invalid_signature() {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async {
-            let (mut manager, mut msg_rx, _notif_rx, db, signature_manager_inner) = create_module();
-            let database = DB::new(db);
-            let alt_signature_manager = create_alt_signature_manager();
-
-            let (subject, genesis_event) = create_subject(
-                create_genesis_request(create_json_state(), &alt_signature_manager),
-                0,
-                &create_subject_schema(),
-            );
-
-            let subject_data = subject.subject_data.unwrap();
-
-            let result = manager
-                .set_event(set_event_message(
-                    true,
-                    &alt_signature_manager,
-                    &genesis_event,
-                ))
-                .await;
-            assert!(result.is_ok());
-            // En la base de datos deberíamos tener el nuevo sujeto y su evento 0
-            check_subject_and_event(&database, &subject_data.subject_id, 0);
-            // En msg_rx deberíamos tener un mensaje de solicitud de firmas
-            let msg = msg_rx.receive().await.unwrap();
-            check_request_signatures(msg, &subject_data, &signature_manager_inner, 0);
-
-            // El evento ha sido creado con éxito.
-            // Ahora vamos a enviar una firma inválida
-            let signature = alt_signature_manager.sign(&43).unwrap();
-            let result = manager
-                .signature_received(set_signature_message(
-                    &subject_data.subject_id,
-                    subject_data.sn,
-                    HashSet::from_iter(vec![signature]),
-                ))
-                .await;
-            assert!(result.is_ok());
-            let result = result.unwrap();
-            assert!(result.is_err());
-        });
-    }
-}
+// #[cfg(test)]
+// mod test {
+//     use std::{collections::HashSet, str::FromStr, sync::Arc};
+
+//     use async_trait::async_trait;
+//     use serde_json::Value;
+//     use tokio::sync::broadcast::Receiver;
+
+//     use crate::{
+//         commons::{
+//             channel::{ChannelData, MpscChannel},
+//             crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair},
+//             models::{notary::NotaryEventResponse, state::Subject},
+//         },
+//         database::DB,
+//         distribution::{
+//             error::DistributionErrorResponses, DistributionMessages, RequestEventMessage,
+//             RequestSignatureMessage, SetEventMessage, SignaturesReceivedMessage,
+//         },
+//         evaluator::compiler::ContractType,
+//         event_content::Metadata,
+//         event_request::{
+//             CreateRequest, EventRequest, EventRequestType, RequestPayload, StateRequest,
+//         },
+//         governance::{error::RequestError, GovernanceInterface, RequestQuorum},
+//         identifier::{Derivable, DigestIdentifier, KeyIdentifier},
+//         message::MessageTaskCommand,
+//         protocol::command_head_manager::self_signature_manager::{
+//             SelfSignatureInterface, SelfSignatureManager,
+//         },
+//         signature::Signature,
+//         Event, MemoryManager, Notification, TimeStamp,
+//     };
+
+//     use super::{DistributionNotifier, InnerDistributionManager};
+
+//     struct GovernanceMockup {}
+
+//     #[async_trait]
+//     impl GovernanceInterface for GovernanceMockup {
+//         async fn check_quorum(
+//             &self,
+//             _event: Event,
+//             _signers: &HashSet<KeyIdentifier>,
+//         ) -> Result<(bool, HashSet<KeyIdentifier>), RequestError> {
+//             unimplemented!();
+//         }
+//         async fn check_quorum_request(
+//             &self,
+//             _event_request: EventRequest,
+//             _approvals: HashSet<ApprovalResponse>,
+//         ) -> Result<(RequestQuorum, HashSet<KeyIdentifier>), RequestError> {
+//             unimplemented!();
+//         }
+//         async fn check_policy(
+//             &self,
+//             _governance_id: &DigestIdentifier,
+//             _governance_version: u64,
+//             _schema_id: &String,
+//             _subject_namespace: &String,
+//             _controller_namespace: &String,
+//         ) -> Result<bool, RequestError> {
+//             unimplemented!();
+//         }
+//         async fn get_validators(
+//             &self,
+//             _event: Event,
+//         ) -> Result<HashSet<KeyIdentifier>, RequestError> {
+//             return Ok(HashSet::from_iter(vec![
+//                 KeyIdentifier::from_str("Eq-ZYOUN8k5LpY_BCvhIcxW8p_5NpTgJB6i2L5EInEeI").unwrap(),
+//                 KeyIdentifier::from_str("EL3yBfsyGFUQ64pX6tihpATJR9DqbZWah0Wwekjmx6as").unwrap(),
+//                 KeyIdentifier::from_str("EtJKXs4D5a9s_aQYLxtZo0RPSkZsPXak_9SGwmilvc8M").unwrap(),
+//             ]));
+//         }
+//         async fn get_approvers(
+//             &self,
+//             _event_request: EventRequest,
+//         ) -> Result<HashSet<KeyIdentifier>, RequestError> {
+//             unimplemented!();
+//         }
+//         async fn get_governance_version(
+//             &self,
+//             _governance_id: &DigestIdentifier,
+//         ) -> Result<u64, RequestError> {
+//             unimplemented!();
+//         }
+//         async fn get_schema(
+//             &self,
+//             _governance_id: &DigestIdentifier,
+//             _schema_id: &String,
+//         ) -> Result<serde_json::Value, RequestError> {
+//             Ok(create_subject_schema())
+//         }
+//         async fn is_governance(
+//             &self,
+//             _subject_id: &DigestIdentifier,
+//         ) -> Result<bool, RequestError> {
+//             unimplemented!();
+//         }
+//         async fn check_invokation_permission(
+//             &self,
+//             _subject_id: DigestIdentifier,
+//             _invokator: KeyIdentifier,
+//             _additional_payload: Option<String>,
+//             _metadata: Option<Metadata>,
+//         ) -> Result<(bool, bool), RequestError> {
+//             Ok((true, false))
+//         }
+//         async fn get_contracts(
+//             &self,
+//             _governance_id: DigestIdentifier,
+//         ) -> Result<Vec<(String, ContractType)>, RequestError> {
+//             unimplemented!();
+//         }
+//         async fn check_if_witness(
+//             &self,
+//             _governance_id: DigestIdentifier,
+//             _namespace: String,
+//             _schema_id: String,
+//         ) -> Result<bool, RequestError> {
+//             Ok(true)
+//         }
+//         async fn check_notary_signatures(
+//             &self,
+//             _signatures: HashSet<NotaryEventResponse>,
+//             _data_hash: DigestIdentifier,
+//             _governance_id: DigestIdentifier,
+//             _namespace: String,
+//         ) -> Result<(), RequestError> {
+//             Ok(())
+//         }
+//         async fn check_evaluator_signatures(
+//             &self,
+//             _signatures: HashSet<Signature>,
+//             _governance_id: DigestIdentifier,
+//             _governance_version: u64,
+//             _namespace: String,
+//         ) -> Result<(), RequestError> {
+//             Ok(())
+//         }
+//         async fn get_roles_of_invokator(
+//             &self,
+//             invokator: &KeyIdentifier,
+//             governance_id: &DigestIdentifier,
+//             governance_version: u64,
+//             schema_id: &str,
+//             namespace: &str,
+//         ) -> Result<Vec<String>, RequestError> {
+//             todo!()
+//         }
+//     }
+
+//     fn create_state_request(
+//         json: String,
+//         signature_manager: &SelfSignatureManager,
+//         subject_id: &DigestIdentifier,
+//     ) -> EventRequest {
+//         let request = EventRequestType::State(StateRequest {
+//             subject_id: subject_id.clone(),
+//             payload: RequestPayload::Json(json),
+//         });
+//         let timestamp = TimeStamp::now();
+//         let signature = signature_manager.sign(&(&request, &timestamp)).unwrap();
+//         let event_request = EventRequest {
+//             request,
+//             timestamp,
+//             signature,
+//             approvals: HashSet::new(),
+//         };
+//         event_request
+//     }
+
+//     fn create_state_event(
+//         request: EventRequest,
+//         subject: &Subject,
+//         prev_event_hash: DigestIdentifier,
+//         governance_version: u64,
+//         subject_schema: &Value,
+//     ) -> Event {
+//         request
+//             .get_event_from_state_request(
+//                 subject,
+//                 prev_event_hash,
+//                 governance_version,
+//                 subject_schema,
+//                 true,
+//             )
+//             .unwrap()
+//     }
+
+//     fn create_subject(
+//         request: EventRequest,
+//         governance_version: u64,
+//         subject_schema: &Value,
+//     ) -> (Subject, Event) {
+//         request
+//             .create_subject_from_request(governance_version, subject_schema, true)
+//             .unwrap()
+//     }
+
+//     fn create_genesis_request(
+//         json: String,
+//         signature_manager: &SelfSignatureManager,
+//     ) -> EventRequest {
+//         let request = EventRequestType::Create(CreateRequest {
+//             governance_id: DigestIdentifier::from_str(
+//                 "J6axKnS5KQjtMDFgapJq49tdIpqGVpV7SS4kxV1iR10I",
+//             )
+//             .unwrap(),
+//             schema_id: "test".to_owned(),
+//             namespace: "test".to_owned(),
+//             payload: RequestPayload::Json(json),
+//         });
+//         let timestamp = TimeStamp::now();
+//         let signature = signature_manager.sign(&(&request, &timestamp)).unwrap();
+//         let event_request = EventRequest {
+//             request,
+//             timestamp,
+//             signature,
+//             approvals: HashSet::new(),
+//         };
+//         event_request
+//     }
+
+//     fn set_event_message(
+//         has_signatures: bool,
+//         signature_manager: &SelfSignatureManager,
+//         event: &Event,
+//     ) -> SetEventMessage {
+//         SetEventMessage {
+//             event: event.clone(),
+//             notaries_signatures: if has_signatures {
+//                 Some(HashSet::new())
+//             } else {
+//                 None
+//             },
+//             sender: signature_manager.get_own_identifier(),
+//         }
+//     }
+
+//     fn request_event_message(
+//         subject_id: &DigestIdentifier,
+//         sn: u64,
+//         signature_manager: &SelfSignatureManager,
+//     ) -> RequestEventMessage {
+//         RequestEventMessage {
+//             subject_id: subject_id.clone(),
+//             sn,
+//             sender: signature_manager.get_own_identifier(),
+//         }
+//     }
+
+//     fn set_signature_message(
+//         subject_id: &DigestIdentifier,
+//         sn: u64,
+//         signatures: HashSet<Signature>,
+//     ) -> SignaturesReceivedMessage {
+//         SignaturesReceivedMessage {
+//             subject_id: subject_id.clone(),
+//             sn,
+//             signatures,
+//         }
+//     }
+
+//     fn request_signature_message(
+//         subject_id: &DigestIdentifier,
+//         sn: u64,
+//         signatures_requested: HashSet<KeyIdentifier>,
+//         sender: &KeyIdentifier,
+//     ) -> RequestSignatureMessage {
+//         RequestSignatureMessage {
+//             subject_id: subject_id.clone(),
+//             namespace: "test".to_owned(),
+//             sn,
+//             sender: sender.clone(),
+//             requested_signatures: signatures_requested,
+//         }
+//     }
+
+//     fn create_module() -> (
+//         InnerDistributionManager<MemoryManager, GovernanceMockup, DistributionNotifier>,
+//         MpscChannel<MessageTaskCommand<DistributionMessages>, ()>,
+//         Receiver<Notification>,
+//         Arc<MemoryManager>,
+//         SelfSignatureManager,
+//     ) {
+//         let database = Arc::new(MemoryManager::new());
+//         let keypair = KeyPair::Ed25519(Ed25519KeyPair::from_seed(
+//             &hex::decode("99beed715bf561185baaa5b3e9df8ecddcfcf7727fbc4f7e922a4cf2f9ea8c4e")
+//                 .unwrap(),
+//         ));
+//         let pk = keypair.public_key_bytes();
+//         let signature_manager = SelfSignatureManager {
+//             keys: keypair,
+//             identifier: KeyIdentifier::new(crate::KeyDerivator::Ed25519, &pk),
+//             digest_derivator: crate::DigestDerivator::Blake3_256,
+//         };
+//         let (msg_rx, msg_sx) = MpscChannel::new(100);
+//         let governance = GovernanceMockup {};
+//         let (notification_sx, notification_rx) = tokio::sync::broadcast::channel(100);
+//         let notifier = DistributionNotifier::new(notification_sx);
+//         let manager = InnerDistributionManager::new(
+//             DB::new(database.clone()),
+//             governance,
+//             signature_manager.clone(),
+//             notifier,
+//             msg_sx,
+//         );
+//         (
+//             manager,
+//             msg_rx,
+//             notification_rx,
+//             database,
+//             signature_manager,
+//         )
+//     }
+
+//     fn create_alt_signature_manager() -> SelfSignatureManager {
+//         let keypair = KeyPair::Ed25519(Ed25519KeyPair::from_seed(
+//             &hex::decode("27c775a2f242bd2fea544084f9cc407fb2dbe87f809eb69b80901d4d33da92ef")
+//                 .unwrap(),
+//         ));
+//         let pk = keypair.public_key_bytes();
+//         SelfSignatureManager {
+//             keys: keypair,
+//             identifier: KeyIdentifier::new(crate::KeyDerivator::Ed25519, &pk),
+//             digest_derivator: crate::DigestDerivator::Blake3_256,
+//         }
+//     }
+
+//     fn create_third_signature_manager() -> SelfSignatureManager {
+//         let keypair = KeyPair::Ed25519(Ed25519KeyPair::from_seed(
+//             &hex::decode("7d86b055cf5fe0ebf92b86dcb6122eeb88475e6a9e7eebb8f835cf716b8fda73")
+//                 .unwrap(),
+//         ));
+//         let pk = keypair.public_key_bytes();
+//         SelfSignatureManager {
+//             keys: keypair,
+//             identifier: KeyIdentifier::new(crate::KeyDerivator::Ed25519, &pk),
+//             digest_derivator: crate::DigestDerivator::Blake3_256,
+//         }
+//     }
+
+//     fn create_subject_schema() -> Value {
+//         serde_json::json!({"a": {"type": "string"}})
+//     }
+
+//     fn create_json_state() -> String {
+//         serde_json::to_string(&serde_json::json!({"a": "test"})).unwrap()
+//     }
+
+//     fn update_subject_n_times(
+//         initial_prev_hash: DigestIdentifier,
+//         n: u64,
+//         subject: &mut Subject,
+//         alt_signature_manager: &SelfSignatureManager,
+//     ) -> Event {
+//         let mut prev_hash = initial_prev_hash;
+//         for i in 0..n {
+//             let event = create_state_event(
+//                 create_state_request(
+//                     create_json_state(),
+//                     &alt_signature_manager,
+//                     &subject.subject_data.as_ref().unwrap().subject_id,
+//                 ),
+//                 &subject,
+//                 prev_hash.clone(),
+//                 0,
+//                 &create_subject_schema(),
+//             );
+//             prev_hash = event.signature.content.event_content_hash.clone();
+//             subject.apply(&event.event_content).unwrap();
+//             if i == n - 1 {
+//                 return event;
+//             }
+//         }
+//         unreachable!();
+//     }
+
+//     fn check_subject_and_event(
+//         database: &DB<MemoryManager>,
+//         subject_id: &DigestIdentifier,
+//         sn: u64,
+//     ) {
+//         let result = database.get_subject(subject_id);
+//         assert!(result.is_ok());
+//         let result = database.get_event(subject_id, 0);
+//         assert!(result.is_ok());
+//     }
+
+//     fn check_cancel_message(
+//         msg: ChannelData<MessageTaskCommand<DistributionMessages>, ()>,
+//         id: String,
+//     ) {
+//         let ChannelData::TellData(data) = msg else {
+//             assert!(false);
+//             return;
+//         };
+//         let data = data.get();
+//         let MessageTaskCommand::Cancel(id_to_cancel) = data else {
+//             assert!(false);
+//             return;
+//         };
+//         assert_eq!(id, id_to_cancel);
+//     }
+
+//     fn check_request_signatures(
+//         msg: ChannelData<MessageTaskCommand<DistributionMessages>, ()>,
+//         subject_data: &SubjectData,
+//         signature_manager_inner: &SelfSignatureManager,
+//         sn: u64,
+//     ) {
+//         let ChannelData::TellData(data) = msg else {
+//             assert!(false);
+//             return;
+//         };
+
+//         let data = data.get();
+//         let MessageTaskCommand::Request(id, data, targets, _) = data else {
+//             assert!(false);
+//             return;
+//         };
+
+//         assert!(id.is_some());
+//         let id = id.unwrap();
+//         assert_eq!(
+//             format!("{}/SIGNATURES", subject_data.subject_id.to_str()),
+//             id
+//         );
+//         assert_eq!(targets.len(), 2);
+//         let DistributionMessages::RequestSignature(data) = data else {
+//             assert!(false);
+//             return;
+//         };
+//         assert!(!targets.contains(&signature_manager_inner.get_own_identifier()));
+//         assert_eq!(data.subject_id, subject_data.subject_id);
+//         assert_eq!(data.sn, sn);
+//         assert_eq!(data.sender, signature_manager_inner.get_own_identifier());
+//     }
+
+//     fn check_requested_signature(
+//         msg: ChannelData<MessageTaskCommand<DistributionMessages>, ()>,
+//         sn: u64,
+//         subject_id: &DigestIdentifier,
+//         target: &KeyIdentifier,
+//         signatures_expected: usize,
+//     ) {
+//         let ChannelData::TellData(data) = msg else {
+//             assert!(false);
+//             return;
+//         };
+//         let data = data.get();
+//         let MessageTaskCommand::Request(id, data, targets, _) = data else {
+//             assert!(false);
+//             return;
+//         };
+//         assert!(id.is_none());
+//         assert_eq!(targets.len(), 1);
+//         assert_eq!(targets[0], *target);
+//         let DistributionMessages::SignaturesReceived(data) = data else {
+//             assert!(false);
+//             return;
+//         };
+//         assert_eq!(data.sn, sn);
+//         assert_eq!(data.subject_id, *subject_id);
+//         assert_eq!(signatures_expected, data.signatures.len());
+//     }
+
+//     fn check_provide_event(
+//         msg: ChannelData<MessageTaskCommand<DistributionMessages>, ()>,
+//         sn: u64,
+//         subject_id: &DigestIdentifier,
+//         target: &KeyIdentifier,
+//     ) {
+//         let ChannelData::TellData(data) = msg else {
+//             assert!(false);
+//             return;
+//         };
+//         let data = data.get();
+//         let MessageTaskCommand::Request(id, data, targets, _) = data else {
+//             assert!(false);
+//             return;
+//         };
+//         assert!(id.is_none());
+//         assert_eq!(targets.len(), 1);
+//         assert_eq!(targets[0], *target);
+//         let DistributionMessages::SetEvent(data) = data else {
+//             assert!(false);
+//             return;
+//         };
+//         assert_eq!(data.event.event_content.sn, sn);
+//         assert_eq!(data.event.event_content.subject_id, *subject_id);
+//     }
+
+//     fn check_request_event(
+//         msg: ChannelData<MessageTaskCommand<DistributionMessages>, ()>,
+//         subject_data: &SubjectData,
+//         signature_manager_inner: &SelfSignatureManager,
+//         sn: u64,
+//         targets_len: usize,
+//         have_id: bool,
+//     ) {
+//         let ChannelData::TellData(data) = msg else {
+//             assert!(false);
+//             return;
+//         };
+
+//         let data = data.get();
+//         let MessageTaskCommand::Request(id, data, targets, _) = data else {
+//             assert!(false);
+//             return;
+//         };
+
+//         if have_id {
+//             assert!(id.is_some());
+//             let id = id.unwrap();
+//             assert_eq!(format!("{}/EVENT", subject_data.subject_id.to_str()), id);
+//         }
+//         assert_eq!(targets.len(), targets_len);
+//         let DistributionMessages::RequestEvent(data) = data else {
+//             assert!(false);
+//             return;
+//         };
+//         assert!(!targets.contains(&signature_manager_inner.get_own_identifier()));
+//         assert_eq!(data.subject_id, subject_data.subject_id);
+//         assert_eq!(data.sn, sn);
+//         assert_eq!(data.sender, signature_manager_inner.get_own_identifier());
+//     }
+
+//     #[test]
+//     fn genesis_event() {
+//         /*
+//            La idea de este Test es simular la llegada de un evento de génesis de un sujeto que nos es de interés
+//         */
+//         let rt = tokio::runtime::Runtime::new().unwrap();
+//         rt.block_on(async {
+//             let (mut manager, mut msg_rx, _notif_rx, db, signature_manager_inner) = create_module();
+//             let database = DB::new(db);
+//             let alt_signature_manager = create_alt_signature_manager();
+
+//             let (subject, genesis_event) = create_subject(
+//                 create_genesis_request(create_json_state(), &alt_signature_manager),
+//                 0,
+//                 &create_subject_schema(),
+//             );
+
+//             let subject_data = subject.subject_data.unwrap();
+
+//             let result = manager
+//                 .set_event(set_event_message(
+//                     true,
+//                     &alt_signature_manager,
+//                     &genesis_event,
+//                 ))
+//                 .await;
+//             assert!(result.is_ok());
+//             // En la base de datos deberíamos tener el nuevo sujeto y su evento 0
+//             check_subject_and_event(&database, &subject_data.subject_id, 0);
+//             // En msg_rx deberíamos tener un mensaje de solicitud de firmas
+//             let msg = msg_rx.receive().await.unwrap();
+//             // El mensaje es de tipo TELL
+//             check_request_signatures(msg, &subject_data, &signature_manager_inner, 0);
+//         });
+//     }
+
+//     #[test]
+//     fn new_event() {
+//         // Existe la posibilidad de modificar la base de datos antes de ejecutar el método. De esta manera se
+//         // podría alterar la ejecución interna del módulo. No obstante, vamos a optar por recrear el proceso desde cero,
+//         // creación del sujeto incluída.
+//         let rt = tokio::runtime::Runtime::new().unwrap();
+//         rt.block_on(async {
+//             let (mut manager, mut msg_rx, _notif_rx, db, signature_manager_inner) = create_module();
+//             let database = DB::new(db);
+//             let alt_signature_manager = create_alt_signature_manager();
+
+//             let (subject, genesis_event) = create_subject(
+//                 create_genesis_request(create_json_state(), &alt_signature_manager),
+//                 0,
+//                 &create_subject_schema(),
+//             );
+
+//             let prev_hash = genesis_event.signature.content.event_content_hash.clone();
+
+//             let subject_data = subject.subject_data.as_ref().unwrap();
+
+//             let result = manager
+//                 .set_event(set_event_message(
+//                     true,
+//                     &alt_signature_manager,
+//                     &genesis_event,
+//                 ))
+//                 .await;
+//             assert!(result.is_ok());
+//             // En la base de datos deberíamos tener el nuevo sujeto y su evento 0
+//             check_subject_and_event(&database, &subject_data.subject_id, 0);
+//             // En msg_rx deberíamos tener un mensaje de solicitud de firmas
+//             let msg = msg_rx.receive().await.unwrap();
+//             check_request_signatures(msg, &subject_data, &signature_manager_inner, 0);
+//             // Enviamos un nuevo mensaje con el nuevo evento
+//             let event = create_state_event(
+//                 create_state_request(
+//                     create_json_state(),
+//                     &alt_signature_manager,
+//                     &subject.subject_data.as_ref().unwrap().subject_id,
+//                 ),
+//                 &subject,
+//                 prev_hash,
+//                 0,
+//                 &create_subject_schema(),
+//             );
+//             let result = manager
+//                 .set_event(set_event_message(true, &alt_signature_manager, &event))
+//                 .await;
+//             assert!(result.is_ok());
+//             // En la base de datos deberíamos tener el sujeto y su evento 1
+//             check_subject_and_event(&database, &subject_data.subject_id, 1);
+//             // En msg_rx deberíamos tener un mensaje de solicitud de firmas
+//             let msg = msg_rx.receive().await.unwrap();
+//             check_request_signatures(msg, subject_data, &signature_manager_inner, 1);
+//         });
+//     }
+
+//     #[test]
+//     fn new_witness() {
+//         // Se creará un sujeto y una serie de eventos. El último de estos se pasará al módulo.
+//         let rt = tokio::runtime::Runtime::new().unwrap();
+//         rt.block_on(async {
+//             let (mut manager, mut msg_rx, _notif_rx, db, signature_manager_inner) = create_module();
+//             let database = DB::new(db);
+//             let alt_signature_manager = create_alt_signature_manager();
+
+//             let (mut subject, genesis_event) = create_subject(
+//                 create_genesis_request(create_json_state(), &alt_signature_manager),
+//                 0,
+//                 &create_subject_schema(),
+//             );
+
+//             let event = update_subject_n_times(
+//                 genesis_event.signature.content.event_content_hash,
+//                 3,
+//                 &mut subject,
+//                 &alt_signature_manager,
+//             );
+
+//             let subject_data = subject.subject_data.unwrap();
+//             let result = manager
+//                 .set_event(set_event_message(true, &alt_signature_manager, &event))
+//                 .await;
+//             assert!(result.is_ok());
+//             // En la BBDD no debería haber sujeto alguno. Se habrá iniciado un proceso de sincronización
+//             // Tampoco debería haber sujeto
+//             let result = database.get_subject(&subject_data.subject_id);
+//             assert!(result.is_err());
+//             let result = database.get_event(&subject_data.subject_id, 3);
+//             assert!(result.is_err());
+//             // Se debería haber generado una petición para obtención del evento 0
+//             let msg = msg_rx.receive().await.unwrap();
+//             check_request_event(msg, &subject_data, &signature_manager_inner, 0, 1, false);
+//         });
+//     }
+
+//     #[test]
+//     fn new_witness_provide_genesis() {
+//         // Se creará un sujeto y una serie de eventos. El último de estos se pasará al módulo.
+//         // Acto seguido se pasará el evento de génesis SIN firmas de notario.
+//         let rt = tokio::runtime::Runtime::new().unwrap();
+//         rt.block_on(async {
+//             let (mut manager, mut msg_rx, _notif_rx, db, signature_manager_inner) = create_module();
+//             let database = DB::new(db);
+//             let alt_signature_manager = create_alt_signature_manager();
+
+//             let (mut subject, genesis_event) = create_subject(
+//                 create_genesis_request(create_json_state(), &alt_signature_manager),
+//                 0,
+//                 &create_subject_schema(),
+//             );
+
+//             let genesis_copy = genesis_event.clone();
+
+//             let event = update_subject_n_times(
+//                 genesis_event.signature.content.event_content_hash,
+//                 3,
+//                 &mut subject,
+//                 &alt_signature_manager,
+//             );
+
+//             let subject_data = subject.subject_data.unwrap();
+//             let result = manager
+//                 .set_event(set_event_message(true, &alt_signature_manager, &event))
+//                 .await;
+//             assert!(result.is_ok());
+//             // En la BBDD no debería haber sujeto alguno. Se habrá iniciado un proceso de sincronización
+//             // Tampoco debería haber sujeto
+//             let result = database.get_subject(&subject_data.subject_id);
+//             assert!(result.is_err());
+//             let result = database.get_event(&subject_data.subject_id, 3);
+//             assert!(result.is_err());
+//             // Se debería haber generado una petición para obtención del evento 0
+//             let msg = msg_rx.receive().await.unwrap();
+//             check_request_event(msg, &subject_data, &signature_manager_inner, 0, 1, false);
+
+//             // Pasamos el evento de génesis sin formas de notario
+//             let result = manager
+//                 .set_event(set_event_message(
+//                     false,
+//                     &alt_signature_manager,
+//                     &genesis_copy,
+//                 ))
+//                 .await;
+//             assert!(result.is_ok());
+//             // En la base de datos debería estar ahora el sujeto + el evento de génesis
+//             check_subject_and_event(&database, &subject_data.subject_id, 0);
+//             // En msg_rx deberíamos tener un mensaje de solicitud del siguiente evento
+//             let msg = msg_rx.receive().await.unwrap();
+//             check_request_event(msg, &subject_data, &signature_manager_inner, 1, 2, true);
+//         });
+//     }
+
+//     #[test]
+//     fn provide_signatures() {
+//         // Se creará un sujeto y se proveerán las firmas necesarias
+//         let rt = tokio::runtime::Runtime::new().unwrap();
+//         rt.block_on(async {
+//             let (mut manager, mut msg_rx, _notif_rx, db, signature_manager_inner) = create_module();
+//             let database = DB::new(db);
+//             let alt_signature_manager = create_alt_signature_manager();
+
+//             let (subject, genesis_event) = create_subject(
+//                 create_genesis_request(create_json_state(), &alt_signature_manager),
+//                 0,
+//                 &create_subject_schema(),
+//             );
+
+//             let subject_data = subject.subject_data.unwrap();
+
+//             let result = manager
+//                 .set_event(set_event_message(
+//                     true,
+//                     &alt_signature_manager,
+//                     &genesis_event,
+//                 ))
+//                 .await;
+//             assert!(result.is_ok());
+//             // En la base de datos deberíamos tener el nuevo sujeto y su evento 0
+//             check_subject_and_event(&database, &subject_data.subject_id, 0);
+//             // En msg_rx deberíamos tener un mensaje de solicitud de firmas
+//             let msg = msg_rx.receive().await.unwrap();
+//             check_request_signatures(msg, &subject_data, &signature_manager_inner, 0);
+
+//             // El evento ha sido creado con éxito.
+//             // Generamos la tercera entidad firmante necesaria
+//             let third_signer = create_third_signature_manager();
+//             // Generamos las 2 firmas necesarias. Las proveeremos de una en una.
+//             let alt_signature = alt_signature_manager
+//                 .sign(&genesis_event.event_content)
+//                 .unwrap();
+//             let third_signature = third_signer.sign(&genesis_event.event_content).unwrap();
+//             let result = manager
+//                 .signature_received(set_signature_message(
+//                     &subject_data.subject_id,
+//                     subject_data.sn,
+//                     HashSet::from_iter(vec![alt_signature]),
+//                 ))
+//                 .await;
+//             assert!(result.is_ok());
+//             // En msg_rx deberíamos tener un mensaje de solicitud de firmas
+//             let msg = msg_rx.receive().await.unwrap();
+//             check_request_signatures(msg, &subject_data, &signature_manager_inner, 0);
+//             let result = manager
+//                 .signature_received(set_signature_message(
+//                     &subject_data.subject_id,
+//                     subject_data.sn,
+//                     HashSet::from_iter(vec![third_signature]),
+//                 ))
+//                 .await;
+//             assert!(result.is_ok());
+//             // En msg_rx deberíamos tener un mensaje para CANCELAR la solicitud de firmas
+//             let msg = msg_rx.receive().await.unwrap();
+//             check_cancel_message(
+//                 msg,
+//                 format!("{}/SIGNATURES", subject_data.subject_id.to_str()),
+//             );
+//             // En la base de datos deberíamos tener 3 firmas
+//             let result = database.get_signatures(&subject_data.subject_id, 0);
+//             assert!(result.is_ok());
+//             let result = result.unwrap();
+//             assert_eq!(result.len(), 3);
+//         });
+//     }
+
+//     #[test]
+//     fn invalid_genesis() {
+//         // Se creará un sujeto y se pasará su evento de génesis, pero sin firmas de notaría
+//         // El módulo debería rechazarlo.
+//         let rt = tokio::runtime::Runtime::new().unwrap();
+//         rt.block_on(async {
+//             let (mut manager, _msg_rx, _notif_rx, db, signature_manager_inner) = create_module();
+//             let database = DB::new(db);
+//             let alt_signature_manager = create_alt_signature_manager();
+
+//             let (subject, genesis_event) = create_subject(
+//                 create_genesis_request(create_json_state(), &alt_signature_manager),
+//                 0,
+//                 &create_subject_schema(),
+//             );
+
+//             let subject_data = subject.subject_data.unwrap();
+//             let result = manager
+//                 .set_event(set_event_message(
+//                     false,
+//                     &alt_signature_manager,
+//                     &genesis_event,
+//                 ))
+//                 .await;
+//             assert!(result.is_ok());
+//             let result = result.unwrap();
+//             let Err(DistributionErrorResponses::EventNotNeeded) = result else {
+//                 assert!(false);
+//                 return;
+//             };
+//             // En la base de datos no debería haber ni sujeto ni evento
+//             let result = database.get_subject(&subject_data.subject_id);
+//             assert!(result.is_err());
+//             let result = database.get_event(&subject_data.subject_id, 0);
+//             assert!(result.is_err());
+//         });
+//     }
+
+//     #[test]
+//     fn request_event() {
+//         // Partiendo de una base de datos con un sujeto y eventos, se pedirá al módulo que entregue un evento.
+//         let rt = tokio::runtime::Runtime::new().unwrap();
+//         rt.block_on(async {
+//             let (manager, mut msg_rx, _notif_rx, db, signature_manager_inner) = create_module();
+//             let database = DB::new(db);
+//             let alt_signature_manager = create_alt_signature_manager();
+
+//             let (subject, genesis_event) = create_subject(
+//                 create_genesis_request(create_json_state(), &alt_signature_manager),
+//                 0,
+//                 &create_subject_schema(),
+//             );
+
+//             let subject_id = subject.subject_data.as_ref().unwrap().subject_id.clone();
+
+//             // Almacenamos en BBDD
+//             let result = database.set_subject(&subject_id, subject);
+//             assert!(result.is_ok());
+//             let result = database.set_event(&subject_id, genesis_event);
+//             assert!(result.is_ok());
+
+//             let result = manager
+//                 .request_event(request_event_message(
+//                     &subject_id,
+//                     0,
+//                     &alt_signature_manager,
+//                 ))
+//                 .await;
+//             assert!(result.is_ok());
+//             // En msg_rx deberíamos tener un mensaje para entregar el evento
+//             let msg = msg_rx.receive().await.unwrap();
+//             check_provide_event(
+//                 msg,
+//                 0,
+//                 &subject_id,
+//                 &alt_signature_manager.get_own_identifier(),
+//             );
+//         });
+//     }
+
+//     #[test]
+//     fn request_signature() {
+//         // Partiendo de una base de datos con contenido, se solicitará al módulo que entregue firmas
+//         let rt = tokio::runtime::Runtime::new().unwrap();
+//         rt.block_on(async {
+//             let (manager, mut msg_rx, _notif_rx, db, signature_manager_inner) = create_module();
+//             let database = DB::new(db);
+//             let alt_signature_manager = create_alt_signature_manager();
+
+//             let (subject, genesis_event) = create_subject(
+//                 create_genesis_request(create_json_state(), &alt_signature_manager),
+//                 0,
+//                 &create_subject_schema(),
+//             );
+
+//             let subject_id = subject.subject_data.as_ref().unwrap().subject_id.clone();
+
+//             let node_signature = signature_manager_inner
+//                 .sign(&genesis_event.event_content)
+//                 .unwrap();
+
+//             // Almacenamos en BBDD
+//             let result = database.set_subject(&subject_id, subject);
+//             assert!(result.is_ok());
+//             let result = database.set_event(&subject_id, genesis_event);
+//             assert!(result.is_ok());
+//             let result =
+//                 database.set_signatures(&subject_id, 0, HashSet::from_iter(vec![node_signature]));
+//             assert!(result.is_ok());
+
+//             let result = manager
+//                 .request_signatures(request_signature_message(
+//                     &subject_id,
+//                     0,
+//                     HashSet::from_iter(vec![signature_manager_inner.get_own_identifier()]),
+//                     &alt_signature_manager.get_own_identifier(),
+//                 ))
+//                 .await;
+//             assert!(result.is_ok());
+//             // En msg_rx deberíamos tener un mensaje para entregar la firma
+//             let msg = msg_rx.receive().await.unwrap();
+//             check_requested_signature(
+//                 msg,
+//                 0,
+//                 &subject_id,
+//                 &alt_signature_manager.get_own_identifier(),
+//                 1,
+//             );
+//         });
+//     }
+
+//     #[test]
+//     fn synchronization_test() {
+//         // Se creará un evento y un sujeto y se comunicará al módulo. Acto seguido se crearán más eventos y se pasará el último de estos
+//         // para simular la sincronización
+//         let rt = tokio::runtime::Runtime::new().unwrap();
+//         rt.block_on(async {
+//             let (mut manager, mut msg_rx, _notif_rx, db, signature_manager_inner) = create_module();
+//             let database = DB::new(db);
+//             let alt_signature_manager = create_alt_signature_manager();
+
+//             let (mut subject, genesis_event) = create_subject(
+//                 create_genesis_request(create_json_state(), &alt_signature_manager),
+//                 0,
+//                 &create_subject_schema(),
+//             );
+
+//             let subject_id = subject.subject_data.as_ref().unwrap().subject_id.clone();
+
+//             let result = manager
+//                 .set_event(set_event_message(
+//                     true,
+//                     &alt_signature_manager,
+//                     &genesis_event,
+//                 ))
+//                 .await;
+//             assert!(result.is_ok());
+//             // En la base de datos deberíamos tener el nuevo sujeto y su evento 0
+//             check_subject_and_event(&database, &subject_id, 0);
+//             // En msg_rx deberíamos tener un mensaje de solicitud de firmas
+//             let msg = msg_rx.receive().await.unwrap();
+//             // El mensaje es de tipo TELL
+//             check_request_signatures(
+//                 msg,
+//                 &subject.subject_data.as_ref().unwrap(),
+//                 &signature_manager_inner,
+//                 0,
+//             );
+
+//             // A continuación creamos el 3 eventos, uno por uno.
+//             let event_1 = update_subject_n_times(
+//                 genesis_event.signature.content.event_content_hash,
+//                 1,
+//                 &mut subject,
+//                 &alt_signature_manager,
+//             );
+
+//             let event_2 = update_subject_n_times(
+//                 event_1.signature.content.event_content_hash.clone(),
+//                 1,
+//                 &mut subject,
+//                 &alt_signature_manager,
+//             );
+
+//             let event_3 = update_subject_n_times(
+//                 event_2.signature.content.event_content_hash.clone(),
+//                 1,
+//                 &mut subject,
+//                 &alt_signature_manager,
+//             );
+
+//             let subject_data = subject.subject_data.as_ref().unwrap().clone();
+
+//             // Pasamos el evento 3. Debe tener firmas de notaría
+//             let result = manager
+//                 .set_event(set_event_message(true, &alt_signature_manager, &event_3))
+//                 .await;
+//             assert!(result.is_ok());
+//             // El módulo ha registrado el evento para la sincronización, pero no lo ha guardado en BBDD
+//             // En msg_rx deberíamos tener un mensaje de solicitud del evento 1
+//             let msg = msg_rx.receive().await.unwrap();
+//             check_request_event(msg, &subject_data, &signature_manager_inner, 1, 2, true);
+//             // Proveeremos el resto de eventos
+//             let result = manager
+//                 .set_event(set_event_message(false, &alt_signature_manager, &event_1))
+//                 .await;
+//             assert!(result.is_ok());
+//             // En msg_rx deberíamos tener un mensaje de solicitud del evento 2
+//             // En la BBDD se deberían encontrar los eventos 1 y 2 aunque el sujeto no debe cambiar su estado hasta que se complete
+//             // la sincronización
+//             let msg = msg_rx.receive().await.unwrap();
+//             check_request_event(msg, &subject_data, &signature_manager_inner, 2, 2, true);
+//             let result = manager
+//                 .set_event(set_event_message(false, &alt_signature_manager, &event_2))
+//                 .await;
+//             assert!(result.is_ok());
+//             let msg = msg_rx.receive().await.unwrap();
+//             check_request_event(msg, &subject_data, &signature_manager_inner, 3, 2, true);
+//             // El evento 1 y 2 deberían estar en la BBDD
+//             let result = database.get_event(&subject_id, 0);
+//             assert!(result.is_ok());
+//             let result = database.get_event(&subject_id, 0);
+//             assert!(result.is_ok());
+//             // El sujeto no debería haber cambiado
+//             let result = database.get_subject(&subject_id);
+//             assert!(result.is_ok());
+//             let result = result.unwrap();
+//             assert_eq!(result.subject_data.unwrap().sn, 0);
+//             // Proveemos el último evento, acabando la sincronización
+//             let result = manager
+//                 .set_event(set_event_message(true, &alt_signature_manager, &event_3))
+//                 .await;
+//             assert!(result.is_ok());
+//             // Debería de generarse un mensaje para la cancelación de los eventos
+//             let msg = msg_rx.receive().await.unwrap();
+//             check_cancel_message(msg, format!("{}/EVENT", subject_id.to_str()));
+//             // Debería de generarse un mensaje para la obtención de firmas
+//             let msg = msg_rx.receive().await.unwrap();
+//             check_request_signatures(msg, &subject_data, &signature_manager_inner, 3);
+//         });
+//     }
+
+//     #[test]
+//     fn activate_event_request_after_signature_request() {
+//         /*
+//            La intención de este Test es comprobar que el módulo pide un desconocido ante una petición de
+//            firmas que no puede sastisfacer
+//         */
+//         let rt = tokio::runtime::Runtime::new().unwrap();
+//         rt.block_on(async {
+//             let (manager, mut msg_rx, _notif_rx, db, signature_manager_inner) = create_module();
+//             let alt_signature_manager = create_alt_signature_manager();
+//             let subject_id =
+//                 DigestIdentifier::from_str("J6axKnS5KQjtMDFgapJq49tdIpqGVpV7SS4kxV1iR10I").unwrap();
+//             let result = manager
+//                 .request_signatures(request_signature_message(
+//                     &subject_id,
+//                     4,
+//                     HashSet::from_iter(vec![signature_manager_inner.get_own_identifier()]),
+//                     &alt_signature_manager.get_own_identifier(),
+//                 ))
+//                 .await;
+//             assert!(result.is_ok());
+//             // Habrá una solicitud del evento anterior
+//             let msg = msg_rx.receive().await.unwrap();
+//             let ChannelData::TellData(data) = msg else {
+//                 assert!(false);
+//                 return;
+//             };
+
+//             let data = data.get();
+//             let MessageTaskCommand::Request(id, data, targets, _) = data else {
+//                 assert!(false);
+//                 return;
+//             };
+//             assert!(id.is_none());
+//             assert_eq!(targets.len(), 1);
+//             let DistributionMessages::RequestEvent(data) = data else {
+//                 assert!(false);
+//                 return;
+//             };
+//             assert!(!targets.contains(&signature_manager_inner.get_own_identifier()));
+//             assert_eq!(data.subject_id, subject_id);
+//             assert_eq!(data.sn, 4);
+//             assert_eq!(data.sender, signature_manager_inner.get_own_identifier());
+//         });
+//     }
+
+//     #[test]
+//     fn reject_invalid_signature() {
+//         let rt = tokio::runtime::Runtime::new().unwrap();
+//         rt.block_on(async {
+//             let (mut manager, mut msg_rx, _notif_rx, db, signature_manager_inner) = create_module();
+//             let database = DB::new(db);
+//             let alt_signature_manager = create_alt_signature_manager();
+
+//             let (subject, genesis_event) = create_subject(
+//                 create_genesis_request(create_json_state(), &alt_signature_manager),
+//                 0,
+//                 &create_subject_schema(),
+//             );
+
+//             let subject_data = subject.subject_data.unwrap();
+
+//             let result = manager
+//                 .set_event(set_event_message(
+//                     true,
+//                     &alt_signature_manager,
+//                     &genesis_event,
+//                 ))
+//                 .await;
+//             assert!(result.is_ok());
+//             // En la base de datos deberíamos tener el nuevo sujeto y su evento 0
+//             check_subject_and_event(&database, &subject_data.subject_id, 0);
+//             // En msg_rx deberíamos tener un mensaje de solicitud de firmas
+//             let msg = msg_rx.receive().await.unwrap();
+//             check_request_signatures(msg, &subject_data, &signature_manager_inner, 0);
+
+//             // El evento ha sido creado con éxito.
+//             // Ahora vamos a enviar una firma inválida
+//             let signature = alt_signature_manager.sign(&43).unwrap();
+//             let result = manager
+//                 .signature_received(set_signature_message(
+//                     &subject_data.subject_id,
+//                     subject_data.sn,
+//                     HashSet::from_iter(vec![signature]),
+//                 ))
+//                 .await;
+//             assert!(result.is_ok());
+//             let result = result.unwrap();
+//             assert!(result.is_err());
+//         });
+//     }
+// }

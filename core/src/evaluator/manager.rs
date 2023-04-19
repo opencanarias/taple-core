@@ -10,7 +10,7 @@ use crate::database::{DatabaseManager, DB};
 use crate::evaluator::errors::ExecutorErrorResponses;
 use crate::evaluator::runner::manager::TapleRunner;
 use crate::evaluator::AskForEvaluationResponse;
-use crate::event_request::{RequestPayload, EventRequestType};
+use crate::event_request::{EventRequestType, RequestPayload};
 use crate::governance::GovernanceInterface;
 use crate::protocol::command_head_manager::self_signature_manager::SelfSignatureInterface;
 use crate::{
@@ -61,7 +61,7 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send + Clone + 'static> Evalua
             contracts_path,
             engine.clone(),
             shutdown_sender.subscribe(),
-            shutdown_sender.clone()
+            shutdown_sender.clone(),
         );
         tokio::spawn(async move {
             compiler.start().await;
@@ -200,7 +200,7 @@ mod test {
             SelfSignatureInterface, SelfSignatureManager,
         },
         signature::Signature,
-        ApprovalResponse, Event, MemoryManager, TimeStamp,
+        Event, MemoryManager, TimeStamp,
     };
 
     use crate::evaluator::manager::EvaluatorManager;
@@ -352,42 +352,6 @@ mod test {
 
     #[async_trait]
     impl GovernanceInterface for GovernanceMockup {
-        async fn check_quorum(
-            &self,
-            _event: Event,
-            _signers: &HashSet<KeyIdentifier>,
-        ) -> Result<(bool, HashSet<KeyIdentifier>), RequestError> {
-            unimplemented!()
-        }
-        async fn check_quorum_request(
-            &self,
-            _event_request: EventRequest,
-            _approvals: HashSet<ApprovalResponse>,
-        ) -> Result<(RequestQuorum, HashSet<KeyIdentifier>), RequestError> {
-            unimplemented!()
-        }
-        async fn check_policy(
-            &self,
-            _governance_id: &DigestIdentifier,
-            _governance_version: u64,
-            _schema_id: &String,
-            _subject_namespace: &String,
-            _controller_namespace: &String,
-        ) -> Result<bool, RequestError> {
-            unimplemented!()
-        }
-        async fn get_validators(
-            &self,
-            _event: Event,
-        ) -> Result<HashSet<KeyIdentifier>, RequestError> {
-            unimplemented!()
-        }
-        async fn get_approvers(
-            &self,
-            _event_request: EventRequest,
-        ) -> Result<HashSet<KeyIdentifier>, RequestError> {
-            unimplemented!()
-        }
         async fn get_governance_version(
             &self,
             _governance_id: &DigestIdentifier,
@@ -405,41 +369,6 @@ mod test {
             &self,
             _subject_id: &DigestIdentifier,
         ) -> Result<bool, RequestError> {
-            unimplemented!()
-        }
-        async fn check_if_witness(
-            &self,
-            governance_id: DigestIdentifier,
-            namespace: String,
-            schema_id: String,
-        ) -> Result<bool, RequestError> {
-            unimplemented!()
-        }
-        async fn check_notary_signatures(
-            &self,
-            signatures: HashSet<NotaryEventResponse>,
-            data_hash: DigestIdentifier,
-            governance_id: DigestIdentifier,
-            namespace: String,
-        ) -> Result<(), RequestError> {
-            unimplemented!()
-        }
-        async fn check_evaluator_signatures(
-            &self,
-            signatures: HashSet<Signature>,
-            governance_id: DigestIdentifier,
-            governance_version: u64,
-            namespace: String,
-        ) -> Result<(), RequestError> {
-            unimplemented!()
-        }
-        async fn check_invokation_permission(
-            &self,
-            _subject_id: DigestIdentifier,
-            _invokator: KeyIdentifier,
-            _additional_payload: Option<String>,
-            _metadata: Option<Metadata>,
-        ) -> Result<(bool, bool), RequestError> {
             unimplemented!()
         }
         async fn get_contracts(
@@ -475,16 +404,16 @@ mod test {
             }
         }
 
-        async fn get_roles_of_invokator(
-            &self,
-            invokator: &KeyIdentifier,
-            governance_id: &DigestIdentifier,
-            governance_version: u64,
-            schema_id: &str,
-            namespace: &str,
-        ) -> Result<Vec<String>, RequestError> {
-            Ok(vec![])
-        }
+        // async fn get_roles_of_invokator(
+        //     &self,
+        //     invokator: &KeyIdentifier,
+        //     governance_id: &DigestIdentifier,
+        //     governance_version: u64,
+        //     schema_id: &str,
+        //     namespace: &str,
+        // ) -> Result<Vec<String>, RequestError> {
+        //     Ok(vec![])
+        // }
     }
 
     fn build_module() -> (
@@ -525,7 +454,7 @@ mod test {
         let request = EventRequestType::State(StateRequest {
             subject_id: DigestIdentifier::from_str("JXtZRpNgBWVg9v5YG9AaTNfCpPd-rCTTKrFW9cV8-JKs")
                 .unwrap(),
-            payload: RequestPayload::Json(json),
+            invokation: json,
         });
         let timestamp = TimeStamp::now();
         let signature = signature_manager.sign(&(&request, &timestamp)).unwrap();
@@ -533,7 +462,6 @@ mod test {
             request,
             timestamp,
             signature,
-            approvals: HashSet::new(),
         };
         event_request
     }
@@ -670,11 +598,21 @@ mod test {
                         context: Context {
                             governance_id: DigestIdentifier::from_str(
                                 "JGSPR6FL-vE7iZxWMd17o09qn7NeTqlcImDVWmijXczw",
-                            ).unwrap(),
+                            )
+                            .unwrap(),
                             schema_id: "test".into(),
-                            invokator: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
-                            creator: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
-                            owner: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
+                            invokator: KeyIdentifier::from_str(
+                                "EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg",
+                            )
+                            .unwrap(),
+                            creator: KeyIdentifier::from_str(
+                                "EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg",
+                            )
+                            .unwrap(),
+                            owner: KeyIdentifier::from_str(
+                                "EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg",
+                            )
+                            .unwrap(),
                             state: initial_state_json.clone(),
                             namespace: "namespace1".into(),
                         },
@@ -730,11 +668,21 @@ mod test {
                         context: Context {
                             governance_id: DigestIdentifier::from_str(
                                 "JGSPR6FL-vE7iZxWMd17o09qn7NeTqlcImDVWmijXczw",
-                            ).unwrap(),
+                            )
+                            .unwrap(),
                             schema_id: "test".into(),
-                            invokator: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
-                            creator: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
-                            owner: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
+                            invokator: KeyIdentifier::from_str(
+                                "EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg",
+                            )
+                            .unwrap(),
+                            creator: KeyIdentifier::from_str(
+                                "EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg",
+                            )
+                            .unwrap(),
+                            owner: KeyIdentifier::from_str(
+                                "EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg",
+                            )
+                            .unwrap(),
                             state: initial_state_json.clone(),
                             namespace: "namespace1".into(),
                         },
@@ -793,18 +741,29 @@ mod test {
                         context: Context {
                             governance_id: DigestIdentifier::from_str(
                                 "Jg2Nuv5bNs4swQGcPQ1CXs9MtcfwMVoeQDR2Ea1YNYJw",
-                            ).unwrap(),
+                            )
+                            .unwrap(),
                             schema_id: "test".into(),
-                            invokator: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
-                            creator: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
-                            owner: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
+                            invokator: KeyIdentifier::from_str(
+                                "EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg",
+                            )
+                            .unwrap(),
+                            creator: KeyIdentifier::from_str(
+                                "EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg",
+                            )
+                            .unwrap(),
+                            owner: KeyIdentifier::from_str(
+                                "EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg",
+                            )
+                            .unwrap(),
                             state: initial_state_json.clone(),
                             namespace: "namespace1".into(),
                         },
                         sn: 1,
                     },
                 ))
-                .await.unwrap();
+                .await
+                .unwrap();
             let EvaluatorResponse::AskForEvaluation(result) = response;
             assert!(result.is_ok());
             let result = result.unwrap();

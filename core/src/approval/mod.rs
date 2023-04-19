@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     event_request::EventRequest, identifier::DigestIdentifier, message::TaskCommandContent,
-    signature::Signature, Acceptance,
+    signature::Signature, commons::models::Acceptance,
 };
 
 mod error;
@@ -12,7 +12,7 @@ mod manager;
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum ApprovalMessages {
     RequestApproval(RequestApproval),
-    EmitVote(EmitVote)
+    EmitVote(EmitVote),
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -32,8 +32,8 @@ pub struct RequestApproval {
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct EmitVote {
-  request_id: DigestIdentifier,
-  acceptance: Acceptance
+    request_id: DigestIdentifier,
+    acceptance: Acceptance,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

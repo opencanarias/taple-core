@@ -1,12 +1,9 @@
 use std::collections::HashMap;
 
 use crate::{
-    commons::errors::ChannelErrors,
+    commons::{errors::ChannelErrors, self_signature_manager::{SelfSignatureManager, SelfSignatureInterface}},
     governance::{GovernanceAPI, GovernanceInterface},
     identifier::DigestIdentifier,
-    protocol::command_head_manager::self_signature_manager::{
-        SelfSignatureInterface, SelfSignatureManager,
-    },
 };
 
 use super::{errors::NotaryError, NotaryEvent, NotaryEventResponse};
@@ -39,7 +36,7 @@ impl<D: DatabaseManager> Notary<D> {
     ) -> Result<NotaryEventResponse, NotaryError> {
         let actual_gov_version = match self
             .gov_api
-            .get_governance_version(&notary_event.gov_id)
+            .get_governance_version(notary_event.gov_id.clone())
             .await
         {
             Ok(gov_version) => gov_version,
@@ -77,12 +74,14 @@ impl<D: DatabaseManager> Notary<D> {
             },
         };
         // Get in DB, it is important that this goes first to ensure that we dont sign 2 different event_hash for the same event sn and subject
-        self.database.set_notary_register(
-            &notary_event.owner,
-            &notary_event.subject_id,
-            notary_event.event_hash.clone(),
-            notary_event.sn,
-        ).map_err(|_| NotaryError::DatabaseError)?;
+        self.database
+            .set_notary_register(
+                &notary_event.owner,
+                &notary_event.subject_id,
+                notary_event.event_hash.clone(),
+                notary_event.sn,
+            )
+            .map_err(|_| NotaryError::DatabaseError)?;
         // Now we sign and send
         let hash = DigestIdentifier::from_serializable_borsh((
             notary_event.gov_id,
@@ -106,25 +105,22 @@ impl<D: DatabaseManager> Notary<D> {
 
 #[cfg(test)]
 mod tests {
+    use crate::commons::self_signature_manager::SelfSignatureManager;
     use crate::database::{MemoryManager, DB};
     use crate::{
         commons::{
             channel::MpscChannel,
             crypto::{generate, Ed25519KeyPair},
             identifier::DigestIdentifier,
-            models::{
-                state::{LedgerState, Subject},
-                timestamp::TimeStamp,
-            },
+            models::{state::Subject, timestamp::TimeStamp},
         },
         governance::{
             governance::Governance, GovernanceAPI, GovernanceMessage, GovernanceResponse,
         },
         identifier::{KeyIdentifier, SignatureIdentifier},
         notary::{errors::NotaryError, NotaryEvent},
-        protocol::command_head_manager::self_signature_manager::SelfSignatureManager,
         signature::{Signature, SignatureContent},
-        DigestDerivator, SubjectData,
+        DigestDerivator,
     };
     use std::str::FromStr;
     use std::sync::Arc;
@@ -224,23 +220,20 @@ mod tests {
         let manager = Arc::new(manager);
         let db = DB::new(manager.clone());
         let subject = Subject {
-            subject_data: Some(SubjectData {
-                subject_id: DigestIdentifier::from_str(
-                    "JKXo-EvPxQcL_nhbd4iprzyjdNxT9YYrmeJ7p5N_IVrg",
-                )
+            subject_id: DigestIdentifier::from_str("JKXo-EvPxQcL_nhbd4iprzyjdNxT9YYrmeJ7p5N_IVrg")
                 .unwrap(),
-                governance_id: DigestIdentifier::from_str("").unwrap(),
-                sn: 0,
-                public_key: KeyIdentifier::from_str("ED8MpwKh3OjPEw_hQdqJixrXlKzpVzdvHf2DqrPvdz7Y")
-                    .unwrap(),
-                namespace: String::from("governance"),
-                schema_id: String::from("governance"),
-                owner: KeyIdentifier::from_str("ED8MpwKh3OjPEw_hQdqJixrXlKzpVzdvHf2DqrPvdz7Y")
-                    .unwrap(),
-                properties: String::from("governance"),
-            }),
+            governance_id: DigestIdentifier::from_str("").unwrap(),
+            sn: 0,
+            public_key: KeyIdentifier::from_str("ED8MpwKh3OjPEw_hQdqJixrXlKzpVzdvHf2DqrPvdz7Y")
+                .unwrap(),
+            namespace: String::from("governance"),
+            schema_id: String::from("governance"),
+            owner: KeyIdentifier::from_str("ED8MpwKh3OjPEw_hQdqJixrXlKzpVzdvHf2DqrPvdz7Y").unwrap(),
+            properties: String::from("governance"),
+
             keys: None,
-            ledger_state: LedgerState::default(),
+            creator: KeyIdentifier::from_str("ED8MpwKh3OjPEw_hQdqJixrXlKzpVzdvHf2DqrPvdz7Y")
+                .unwrap(),
         };
         db.set_notary_register(
             &KeyIdentifier::from_str("ED8MpwKh3OjPEw_hQdqJixrXlKzpVzdvHf2DqrPvdz7Y").unwrap(),

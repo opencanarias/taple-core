@@ -7,8 +7,8 @@ use crate::{
         channel::{ChannelData, MpscChannel, SenderEnd},
         identifier::{DigestIdentifier, KeyIdentifier},
         models::{
-            approval_signature::ApprovalResponse, event::Event, event_content::Metadata,
-            event_request::EventRequest, notary::NotaryEventResponse,
+            event::Event, event_content::Metadata, event_request::EventRequest,
+            notary::NotaryEventResponse,
         },
         schema_handler::{
             get_governance_schema,
@@ -154,7 +154,7 @@ pub trait GovernanceInterface: Sync + Send {
     async fn get_invoke_info(
         &self,
         metadata: Metadata,
-        fact: &String,
+        fact: String,
     ) -> Result<Option<Invoke>, RequestError>;
 
     async fn get_contracts(
@@ -167,14 +167,7 @@ pub trait GovernanceInterface: Sync + Send {
         governance_id: DigestIdentifier,
     ) -> Result<u64, RequestError>;
 
-    async fn is_governance(&self, subject_id: &DigestIdentifier) -> Result<bool, RequestError>;
-
-    async fn has_invokator_permission(
-        &self,
-        governance_id: &DigestIdentifier,
-        schema_id: &str,
-        namespace: &str,
-    ) -> Result<bool, RequestError>;
+    async fn is_governance(&self, subject_id: DigestIdentifier) -> Result<bool, RequestError>;
 }
 
 #[derive(Debug, Clone)]
@@ -304,23 +297,5 @@ impl GovernanceInterface for GovernanceAPI {
         } else {
             Err(RequestError::UnexpectedResponse)
         }
-    }
-
-    async fn get_approvers(
-        &self,
-        governance_id: &DigestIdentifier,
-        schema_id: &str,
-        namespace: &str,
-    ) -> Result<HashSet<KeyIdentifier>, RequestError> {
-        todo!()
-    }
-
-    async fn get_evaluators(
-        &self,
-        governance_id: &DigestIdentifier,
-        schema_id: &str,
-        namespace: &str,
-    ) -> Result<HashSet<KeyIdentifier>, RequestError> {
-        todo!()
     }
 }

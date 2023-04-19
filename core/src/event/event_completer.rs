@@ -42,7 +42,6 @@ const QUORUM_PORCENTAGE_AMPLIFICATION: f64 = 0.2;
 pub struct EventCompleter<D: DatabaseManager> {
     gov_api: GovernanceAPI,
     database: DB<D>,
-    signature_manager: SelfSignatureManager,
     message_channel: SenderEnd<MessageTaskCommand<EventMessages>, ()>,
     notification_sender: tokio::sync::broadcast::Sender<Notification>,
     ledger_sender: SenderEnd<(), ()>,
@@ -67,7 +66,6 @@ impl<D: DatabaseManager> EventCompleter<D> {
     pub fn new(
         gov_api: GovernanceAPI,
         database: DB<D>,
-        signature_manager: SelfSignatureManager,
         message_channel: SenderEnd<MessageTaskCommand<EventMessages>, ()>,
         notification_sender: tokio::sync::broadcast::Sender<Notification>,
         ledger_sender: SenderEnd<(), ()>,
@@ -76,7 +74,6 @@ impl<D: DatabaseManager> EventCompleter<D> {
         Self {
             gov_api,
             database,
-            signature_manager,
             message_channel,
             notification_sender,
             ledger_sender,
@@ -410,6 +407,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
             .await
             .map_err(EventError::GovernanceError)?;
         // Comprobar governance-version que sea la misma que la nuestra
+        // TODO: Pedir gov si la versión del evaluador es mayor
         if governance_version != evaluation.governance_version {
             return Err(EventError::WrongGovernanceVersion);
         }

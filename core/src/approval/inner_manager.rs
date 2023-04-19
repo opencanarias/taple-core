@@ -12,7 +12,7 @@ use crate::{
         },
         request_manager::VotationType,
     },
-    Acceptance, DatabaseManager, Notification, SubjectData,
+    DatabaseManager, Notification, commons::models::{Acceptance, state::SubjectData},
 };
 
 use super::{
@@ -533,15 +533,6 @@ mod test {
         async fn is_governance(&self, subject_id: &DigestIdentifier) -> Result<bool, RequestError> {
             unreachable!()
         }
-
-        async fn has_invokator_permission(
-            &self,
-            governance_id: &DigestIdentifier,
-            schema_id: &str,
-            namespace: &str,
-        ) -> Result<bool, RequestError> {
-            unreachable!()
-        }
     }
 
     fn create_state_request(
@@ -551,7 +542,7 @@ mod test {
     ) -> EventRequest {
         let request = EventRequestType::State(StateRequest {
             subject_id: subject_id.clone(),
-            payload: RequestPayload::Json(json),
+            invokation: json,
         });
         let timestamp = TimeStamp::now();
         let signature = signature_manager.sign(&(&request, &timestamp)).unwrap();
@@ -559,7 +550,6 @@ mod test {
             request,
             timestamp,
             signature,
-            approvals: HashSet::new(),
         };
         event_request
     }
@@ -585,7 +575,6 @@ mod test {
             .unwrap(),
             schema_id: "test".to_owned(),
             namespace: "test".to_owned(),
-            payload: RequestPayload::Json(json),
         });
         let timestamp = TimeStamp::now();
         let signature = signature_manager.sign(&(&request, &timestamp)).unwrap();
@@ -593,7 +582,6 @@ mod test {
             request,
             timestamp,
             signature,
-            approvals: HashSet::new(),
         };
         event_request
     }

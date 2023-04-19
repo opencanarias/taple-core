@@ -16,20 +16,19 @@ use crate::commons::{
 use utoipa::ToSchema;
 
 use super::{
-    approval_signature::ApprovalResponse,
     event::Event,
     event_content::{EventContent, Metadata},
     signature::Signature,
     state::Subject, timestamp::TimeStamp,
 };
 
-// #[derive(
-//     Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
-// )]
-// pub enum RequestPayload {
-//     Json(String),
-//     JsonPatch(String),
-// }
+#[derive(
+    Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
+)]
+pub enum RequestPayload {
+    Json(String),
+    JsonPatch(String),
+}
 
 // #[derive(
 //     Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
@@ -72,16 +71,16 @@ use super::{
 //     pub approvals: HashSet<ApprovalResponse>,
 // }
 
-// #[derive(
-//     Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
-// )]
-// pub struct RequestData {
-//     pub request: EventRequestType,
-//     pub request_id: String,
-//     pub timestamp: TimeStamp,
-//     pub subject_id: Option<String>,
-//     pub sn: Option<u64>,
-// }
+#[derive(
+    Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
+)]
+pub struct RequestData {
+    pub request: EventRequestType,
+    pub request_id: String,
+    pub timestamp: TimeStamp,
+    pub subject_id: Option<String>,
+    pub sn: Option<u64>,
+}
 
 
 #[derive(
