@@ -357,6 +357,20 @@ impl<M: DatabaseManager> DB<M> {
         schemas_by_governances.get(schema_id)
     }
 
+    pub fn get_governance_contract(
+        &self,
+    ) -> Result<Vec<u8>, Error>  {
+        let contract = self.contract_db.get("governance");
+        match contract {
+            Ok(result) => Ok(result.0),
+            Err(error) => Err(error)
+        }
+    }
+
+    pub fn put_governance_contract(&self, contract: Vec<u8>) -> Result<(), Error> {
+        self.contract_db.put("governance", contract)
+    }
+
     pub fn put_contract(
         &self,
         governance_id: &DigestIdentifier,

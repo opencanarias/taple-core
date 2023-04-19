@@ -61,6 +61,7 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send + Clone + 'static> Evalua
             contracts_path,
             engine.clone(),
             shutdown_sender.subscribe(),
+            shutdown_sender.clone()
         );
         tokio::spawn(async move {
             compiler.start().await;
