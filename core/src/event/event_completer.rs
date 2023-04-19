@@ -173,15 +173,31 @@ impl<D: DatabaseManager> EventCompleter<D> {
         Ok(())
     }
 
-    pub fn new_governance_version(
+    pub async fn new_governance_version(
         &mut self,
         governance_id: DigestIdentifier,
         version: u64,
     ) -> Result<(), EventError> {
-        // Añadir en new event al hashmap de govId -> hashset<subject_id>
         // Pedir event requests para cada subject_id del set y lanza new_event con ellas
-        // borrar del set al llegar a la fase de validación
-        todo!();
+        match self.subjects_by_governance.get(&governance_id) {
+            Some(subjects_affected) => {
+                for subject_id in subjects_affected.iter() {
+                    match self.database.get_request(subject_id) {
+                        Ok(event_request) => {
+                            self.new_event(event_request).await?;
+                        }
+                        Err(error) => match error {
+                            crate::DbError::EntryNotFound => {}
+                            _ => {
+                                return Err(EventError::DatabaseError(error.to_string()));
+                            }
+                        },
+                    }
+                }
+            }
+            None => {}
+        }
+        Ok(())
     }
 
     /// Function that is called when a new event request arrives at the system, either invoked by the controller or externally
@@ -286,7 +302,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
             Metadata {
                 namespace: subject.namespace,
                 subject_id: subject_id.clone(),
-                governance_id: subject.governance_id,
+                governance_id: subject.governance_id.clone(),
                 governance_version,
                 schema_id: subject.schema_id,
                 owner: subject.owner,
@@ -333,9 +349,13 @@ impl<D: DatabaseManager> EventCompleter<D> {
         // }
         // Add the event to the hashset to not complete two at the same time for the same subject
         self.subjects_completing_event.insert(
-            subject_id,
+            subject_id.clone(),
             (ValidationStage::Evaluate, signers, quorum_size),
         );
+        self.subjects_by_governance
+            .entry(subject.governance_id)
+            .or_insert_with(HashSet::new)
+            .insert(subject_id);
         Ok(hash_request)
     }
 
@@ -497,6 +517,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
                     subject,
                     execution,
                 )?;
+                self.subjects_by_governance.remove(&subject_id);
                 (ValidationStage::Validate, event_message)
             };
             // Limpiar HashMaps
@@ -635,6 +656,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 self.get_signers_and_quorum(metadata, stage.clone()).await?;
             self.ask_signatures(&subject_id, event_message, signers.clone(), quorum_size)
                 .await?;
+            self.subjects_by_governance.remove(&subject_id);
             // Hacer update de fase por la que va el evento
             self.subjects_completing_event
                 .insert(subject_id, (stage, signers, quorum_size));
