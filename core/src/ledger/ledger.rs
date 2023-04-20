@@ -29,26 +29,12 @@ impl<D: DatabaseManager> Ledger<D> {
         todo!()
     }
 
-    pub fn event_prevalidated(
-        &self,
-        subject_id: DigestIdentifier,
-        event: Event,
-    ) -> Result<(), LedgerError> {
-        // Añadir a subject_is_gov si es una governance y no está
-        self.database.set_event(&subject_id, event);
-        if self.gov_api.is_governance(subject_id.clone()) {
-            self.subject_is_gov.insert(subject_id, true);
-        } else {
-            self.subject_is_gov.insert(subject_id, false);
-        }
-        todo!()
-    }
-
     pub fn genesis(&self, event_request: EventRequest) -> Result<(), LedgerError> {
         // Añadir a subject_is_gov si es una governance y no está
         // Crear evento a partir de event_request
         // Crear sujeto a partir de genesis y evento
         // Añadir sujeto y evento a base de datos
+        // Mandar subject_id y evento en mensaje
         todo!()
     }
 
@@ -64,7 +50,6 @@ impl<D: DatabaseManager> Ledger<D> {
             &event.content.event_proposal.proposal.sn,
             signatures,
         );
-        let is_gov = self.subject_is_gov.get(&subject_id);
         // Aplicar event sourcing
         let mut subject = self
             .database
@@ -91,6 +76,8 @@ impl<D: DatabaseManager> Ledger<D> {
         self.database
             .set_subject(&subject_id, subject)
             .map_err(|error| LedgerError::DatabaseError(error.to_string()))?;
+        // Comprobar is_gov
+        let is_gov = self.subject_is_gov.get(&subject_id);
         match is_gov {
             Some(true) => {
                 // Enviar mensaje a gov de governance updated con el id y el sn

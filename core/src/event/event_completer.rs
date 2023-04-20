@@ -455,7 +455,8 @@ impl<D: DatabaseManager> EventCompleter<D> {
             let proposal = Proposal::new(
                 preevaluation_event.event_request.clone(),
                 preevaluation_event.sn,
-                evaluation.clone(),
+                evaluation.governance_version,
+                Some(evaluation.clone()),
                 json_patch,
                 evaluator_signatures,
             );
@@ -734,6 +735,14 @@ impl<D: DatabaseManager> EventCompleter<D> {
             //     .await
             //     .map_err(EventError::LedgerError)?;
             // TODO: lo dle Ledger, importante
+            // Cancelar pedir firmas
+            self.message_channel
+                .tell(MessageTaskCommand::Cancel(String::from(format!(
+                    "{}",
+                    subject_id.to_str()
+                ))))
+                .await
+                .map_err(EventError::ChannelError)?;
             // Limpiar HashMaps
             self.events_to_validate.remove(&event_hash);
             self.event_validations.remove(&event_hash);

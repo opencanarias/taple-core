@@ -89,7 +89,6 @@ impl<D: DatabaseManager> EventManager<D> {
                     subject_id,
                 } => todo!(),
                 LedgerCommand::Genesis { event_request } => todo!(),
-                LedgerCommand::EventPreValidated { event, subject_id } => todo!(),
             }
         };
         if sender.is_some() {

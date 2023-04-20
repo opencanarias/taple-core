@@ -10,16 +10,21 @@ pub mod manager;
 
 #[derive(Debug, Clone)]
 pub enum LedgerCommand {
-    EventValidated {
-        subject_id: DigestIdentifier,
+    OwnEvent {
         event: Event,
         signatures: HashSet<Signature>,
     },
-    Genesis {
+    OwnGenesis {
         event_request: EventRequest,
     },
-    EventPreValidated {
-        subject_id: DigestIdentifier,
+    ExternalEvent {
+        event: Event,
+        signatures: HashSet<Signature>,
+    },
+    ExternalGenesis {
+
+    },
+    ExternalIntermediateEvent {
         event: Event,
     },
 }
