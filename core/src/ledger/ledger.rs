@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::{
-    database::DB, event_request::EventRequest, governance::GovernanceAPI, signature::Signature,
-    DatabaseManager, Event, identifier::DigestIdentifier,
+    database::DB, event_request::EventRequest, governance::GovernanceAPI,
+    identifier::DigestIdentifier, signature::Signature, DatabaseManager, Event,
 };
 
 use super::errors::LedgerError;
@@ -26,20 +26,61 @@ impl<D: DatabaseManager> Ledger<D> {
         todo!()
     }
 
-    pub fn event_prevalidated(&self, event: Event) -> Result<(), LedgerError> {
-        self.database.add_event(event);
+    pub fn event_prevalidated(
+        &self,
+        subject_id: DigestIdentifier,
+        event: Event,
+    ) -> Result<(), LedgerError> {
+        // Añadir a subject_is_gov si es una governance y no está
+        self.database.set_event(&subject_id, event);
+        if self.gov_api.is_governance(subject_id.clone()) {
+            self.subject_is_gov.insert(subject_id, true);
+        } else {
+            self.subject_is_gov.insert(subject_id, false);
+        }
         todo!()
     }
 
     pub fn genesis(&self, event_request: EventRequest) -> Result<(), LedgerError> {
+        // Añadir a subject_is_gov si es una governance y no está
+        // Crear evento a partir de event_request
+        // Crear sujeto a partir de genesis y evento
+        // Añadir sujeto y evento a base de datos
         todo!()
     }
 
     pub fn event_validated(
         &self,
+        subject_id: DigestIdentifier,
         event: Event,
         signatures: HashSet<Signature>,
     ) -> Result<(), LedgerError> {
+        // Añadir a subject_is_gov si es una governance y no está
+        self.database.set_signatures(
+            &subject_id,
+            &event.content.event_proposal.proposal.sn,
+            signatures,
+        );
+        let is_gov = self.subject_is_gov.get(&subject_id);
+        // Aplicar event sourcing
+        
+        match is_gov {
+            Some(true) => {
+                // Enviar mensaje a gov de governance updated con el id y el sn
+            }
+            Some(false) => {}
+            None => {
+                // Si no está en el mapa, añadirlo y enviar mensaje a gov de subject updated con el id y el sn
+                self.subject_is_gov.insert(subject_id, false);
+                if self.gov_api.is_governance(subject_id.clone()) {
+                    self.subject_is_gov.insert(subject_id, true);
+                    // Enviar mensaje a gov de governance updated con el id y el sn
+                } else {
+                    self.subject_is_gov.insert(subject_id, false);
+                }
+            }
+        }
+        // Si es gov enviar mensaje a gov de governance updated con el id y el sn
         todo!()
     }
 }

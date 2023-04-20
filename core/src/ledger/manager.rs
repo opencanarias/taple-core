@@ -81,11 +81,17 @@ impl<D: DatabaseManager> EventManager<D> {
                 (None, data)
             }
         };
-        let response = { match data {
-            LedgerCommand::EventValidated { event, signatures } => todo!(),
-            LedgerCommand::Genesis { event_request } => todo!(),
-            LedgerCommand::EventPreValidated { event } => todo!(),
-        } };
+        let response = {
+            match data {
+                LedgerCommand::EventValidated {
+                    event,
+                    signatures,
+                    subject_id,
+                } => todo!(),
+                LedgerCommand::Genesis { event_request } => todo!(),
+                LedgerCommand::EventPreValidated { event, subject_id } => todo!(),
+            }
+        };
         if sender.is_some() {
             sender.unwrap().send(response).expect("Sender Dropped");
         }
