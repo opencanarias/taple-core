@@ -735,6 +735,9 @@ impl<D: DatabaseManager> EventCompleter<D> {
             //     .await
             //     .map_err(EventError::LedgerError)?;
             // TODO: lo dle Ledger, importante
+            self.database
+                .del_prevalidated_event(&subject_id)
+                .map_err(|error| EventError::DatabaseError(error.to_string()))?;
             // Cancelar pedir firmas
             self.message_channel
                 .tell(MessageTaskCommand::Cancel(String::from(format!(
@@ -829,12 +832,12 @@ impl<D: DatabaseManager> EventCompleter<D> {
         };
         self.events_to_validate
             .insert(event_content_hash, event.clone());
-        // TODO: Enviar al Ledger que hay nuevo evento
-        // self.ledger_sender
-        //     .send(LedgerMessages::Event(event.clone()))
-        //     .await
-        //     .map_err(EventError::LedgerError)?;
-        // TODO: lo dle Ledger, importante
+        self.database
+            .set_prevalidated_event(&subject.subject_id, event)
+            .map_err(|error| EventError::DatabaseError(error.to_string()))?;
+        self.database
+            .del_request(&subject.subject_id)
+            .map_err(|error| EventError::DatabaseError(error.to_string()))?;
         Ok(EventMessages::ValidationRequest(event))
     }
 }

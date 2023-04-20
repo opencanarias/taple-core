@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -7,7 +7,6 @@ use serde::Serialize;
 
 use crate::commons::models::notary::NotaryEventResponse;
 use crate::commons::models::state::Subject;
-use crate::event_content::EventContent;
 use crate::event_request::EventRequest;
 use crate::identifier::{Derivable, DigestIdentifier, KeyIdentifier};
 use crate::signature::Signature;
@@ -19,6 +18,7 @@ use super::{DatabaseCollection, DatabaseManager};
 const SIGNATURE_TABLE: &str = "signature";
 const SUBJECT_TABLE: &str = "subject";
 const EVENT_TABLE: &str = "event";
+const PREVALIDATED_EVENT_TABLE: &str = "prevalidated-event";
 const REQUEST_TABLE: &str = "request";
 const ID_TABLE: &str = "controller-id";
 const NOTARY_TABLE: &str = "notary";
@@ -30,6 +30,7 @@ pub struct DB<M: DatabaseManager> {
     signature_db: Box<dyn DatabaseCollection<InnerDataType = HashSet<Signature>>>,
     subject_db: Box<dyn DatabaseCollection<InnerDataType = Subject>>,
     event_db: Box<dyn DatabaseCollection<InnerDataType = Event>>,
+    prevalidated_event_db: Box<dyn DatabaseCollection<InnerDataType = Event>>,
     request_db: Box<dyn DatabaseCollection<InnerDataType = EventRequest>>,
     id_db: Box<dyn DatabaseCollection<InnerDataType = String>>,
     notary_db: Box<dyn DatabaseCollection<InnerDataType = (DigestIdentifier, u64)>>,
@@ -43,6 +44,7 @@ impl<M: DatabaseManager> DB<M> {
         let signature_db = manager.create_collection(SIGNATURE_TABLE);
         let subject_db = manager.create_collection(SUBJECT_TABLE);
         let event_db = manager.create_collection(EVENT_TABLE);
+        let prevalidated_event_db = manager.create_collection(PREVALIDATED_EVENT_TABLE);
         let request_db = manager.create_collection(REQUEST_TABLE);
         let id_db = manager.create_collection(ID_TABLE);
         let notary_db = manager.create_collection(NOTARY_TABLE);
@@ -53,6 +55,7 @@ impl<M: DatabaseManager> DB<M> {
             signature_db,
             subject_db,
             event_db,
+            prevalidated_event_db,
             request_db,
             id_db,
             notary_db,
@@ -140,6 +143,26 @@ impl<M: DatabaseManager> DB<M> {
         let events_by_subject = self.event_db.partition(&id);
         let sn = event.content.event_proposal.proposal.sn.to_string();
         events_by_subject.put(&sn, event)
+    }
+
+    pub fn get_prevalidated_event(&self, subject_id: &DigestIdentifier) -> Result<Event, Error> {
+        let id = subject_id.to_str();
+        self.prevalidated_event_db.get(&id)
+    }
+
+    pub fn set_prevalidated_event(
+        &self,
+        subject_id: &DigestIdentifier,
+        event: Event,
+    ) -> Result<(), Error> {
+        // TODO: DETERMINAR SI DEVOLVER RESULT
+        let id = subject_id.to_str();
+        self.prevalidated_event_db.put(&id, event)
+    }
+
+    pub fn del_prevalidated_event(&self, subject_id: &DigestIdentifier) -> Result<Event, Error> {
+        let id = subject_id.to_str();
+        self.prevalidated_event_db.del(&id)
     }
 
     pub fn get_signatures(
@@ -276,10 +299,7 @@ impl<M: DatabaseManager> DB<M> {
         result
     }
 
-    pub fn get_request(
-        &self,
-        subject_id: &DigestIdentifier,
-    ) -> Result<EventRequest, Error> {
+    pub fn get_request(&self, subject_id: &DigestIdentifier) -> Result<EventRequest, Error> {
         let id = subject_id.to_str();
         self.request_db.get(&id)
     }
@@ -293,14 +313,9 @@ impl<M: DatabaseManager> DB<M> {
         self.request_db.put(&id, request)
     }
 
-    pub fn del_request(
-        &self,
-        subject_id: &DigestIdentifier,
-        request_id: &DigestIdentifier,
-    ) -> Result<(), Error> {
+    pub fn del_request(&self, subject_id: &DigestIdentifier) -> Result<(), Error> {
         let id = subject_id.to_str();
-        let requests_by_subject = self.request_db.partition(&id);
-        requests_by_subject.del(&request_id.to_str())
+        self.request_db.del(&id)
     }
 
     pub fn get_controller_id(&self) -> Result<String, Error> {
@@ -348,13 +363,11 @@ impl<M: DatabaseManager> DB<M> {
         schemas_by_governances.get(schema_id)
     }
 
-    pub fn get_governance_contract(
-        &self,
-    ) -> Result<Vec<u8>, Error>  {
+    pub fn get_governance_contract(&self) -> Result<Vec<u8>, Error> {
         let contract = self.contract_db.get("governance");
         match contract {
             Ok(result) => Ok(result.0),
-            Err(error) => Err(error)
+            Err(error) => Err(error),
         }
     }
 
