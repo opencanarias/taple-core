@@ -1,5 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
+use json_patch::{patch, Patch};
+use serde_json::Value;
+
 use crate::{
     database::DB, event_request::EventRequest, governance::GovernanceAPI,
     identifier::DigestIdentifier, signature::Signature, DatabaseManager, Event,
@@ -63,7 +66,31 @@ impl<D: DatabaseManager> Ledger<D> {
         );
         let is_gov = self.subject_is_gov.get(&subject_id);
         // Aplicar event sourcing
-        
+        let mut subject = self
+            .database
+            .get_subject(&subject_id)
+            .map_err(|error| match error {
+                crate::DbError::EntryNotFound => LedgerError::SubjectNotFound(subject_id.to_str()),
+                _ => LedgerError::DatabaseError(error.to_string()),
+            })?;
+        let json_patch = event.content.event_proposal.proposal.json_patch.to_str();
+        let prev_properties = subject.properties.to_str();
+        let Ok(patch_json) = serde_json::from_str::<Patch>(json_patch) else {
+                return Err(LedgerError::ErrorParsingJsonString(json_patch.to_owned()));
+            };
+        let Ok(mut state) = serde_json::from_str::<Value>(prev_properties) else {
+                return Err(LedgerError::ErrorParsingJsonString(prev_properties.to_owned()));
+            };
+        let Ok(()) = patch(&mut state, &patch_json) else {
+                return Err(LedgerError::ErrorApplyingPatch(json_patch.to_owned()));
+            };
+        let state = serde_json::to_string(&state)
+            .map_err(|_| LedgerError::ErrorParsingJsonString("New State after patch".to_owned()))?;
+        subject.sn = event.content.event_proposal.proposal.sn;
+        subject.properties = state;
+        self.database
+            .set_subject(&subject_id, subject)
+            .map_err(|error| LedgerError::DatabaseError(error.to_string()))?;
         match is_gov {
             Some(true) => {
                 // Enviar mensaje a gov de governance updated con el id y el sn
