@@ -7,7 +7,7 @@ use serde_json::Value;
 use crate::{
     commons::{
         channel::SenderEnd,
-        crypto::{Payload, DSA},
+        crypto::{check_cryptography, Payload, DSA},
         models::{
             approval::{Approval, UniqueApproval},
             event::EventContent,
@@ -101,6 +101,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
                         governance_version: 0, // Not needed
                         schema_id: subject.schema_id.clone(),
                         owner: subject.owner.clone(),
+                        creator: subject.creator.clone(),
                     };
                     let stage = ValidationStage::Validate;
                     let (signers, quorum_size) =
@@ -200,31 +201,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
         let subject;
         // Check if the content is correct (signature, invoker, etc)
         // Signature check:
-        let hash_request = DigestIdentifier::from_serializable_borsh((
-            &event_request.request,
-            &event_request.timestamp,
-        ))
-        .map_err(|_| {
-            EventError::CryptoError(String::from("Error calculating the hash of the request"))
-        })?;
-        // Check that the hash is the same
-        if hash_request != event_request.signature.content.event_content_hash {
-            return Err(EventError::CryptoError(String::from(
-                "The request hash does not match the content of the signature",
-            )));
-        }
-        // Check that the signature matches the hash
-        match event_request.signature.content.signer.verify(
-            &hash_request.derivative(),
-            event_request.signature.signature.clone(),
-        ) {
-            Ok(_) => (),
-            Err(_) => {
-                return Err(EventError::CryptoError(String::from(
-                    "The signature does not validate the request hash",
-                )))
-            }
-        };
+        event_request.check_signatures()?;
         match &event_request.request {
             crate::event_request::EventRequestType::Create(create_request) => {
                 // Comprobar si es governance, entonces vale todo, si no comprobar que el invoker soy yo y puedo hacerlo
@@ -239,9 +216,10 @@ impl<D: DatabaseManager> EventCompleter<D> {
                                 namespace: create_request.namespace.clone(),
                                 subject_id: DigestIdentifier::default(), // Not necessary for this method
                                 governance_id: create_request.governance_id.clone(),
-                                governance_version: 0, // Not necessary for this method
+                                governance_version: 0, // Not necessary for this method TODO: Ahora si sera necesario
                                 schema_id: create_request.schema_id.clone(),
                                 owner: self.own_identifier.clone(),
+                                creator: self.own_identifier.clone(),
                             },
                             ValidationStage::Create,
                         )
@@ -258,7 +236,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 //     .await
                 //     .map_err(EventError::LedgerError)?;
                 // TODO: lo dle Ledger, importante
-                return Ok(hash_request);
+                return Ok(event_request.signature.content.event_content_hash);
             }
             crate::event_request::EventRequestType::State(state_request) => {
                 // Check if we have the subject in the database
@@ -297,6 +275,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 governance_version,
                 schema_id: subject.schema_id,
                 owner: subject.owner,
+                creator: subject.creator,
             },
             ValidationStage::Evaluate,
         );
@@ -347,7 +326,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
             .entry(subject.governance_id)
             .or_insert_with(HashSet::new)
             .insert(subject_id);
-        Ok(hash_request)
+        Ok(event_request.signature.content.event_content_hash)
     }
 
     pub async fn evaluator_signatures(
@@ -385,7 +364,8 @@ impl<D: DatabaseManager> EventCompleter<D> {
             )));
         }
         // Comprobar que todo es correcto criptográficamente
-        let evaluation_hash = check_cryptography(&evaluation, &signature)?;
+        let evaluation_hash = check_cryptography(&evaluation, &signature)
+            .map_err(|error| EventError::CryptoError(error.to_string()))?;
         // Obtener sujeto para saber si lo tenemos y los metadatos del mismo
         let subject = self
             .database
@@ -488,6 +468,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 governance_version,
                 schema_id: subject.schema_id.clone(),
                 owner: subject.owner.clone(),
+                creator: subject.creator.clone(),
             };
             // Añadir al hashmap para poder acceder a él cuando lleguen las firmas de los evaluadores
             self.event_proposals
@@ -563,7 +544,8 @@ impl<D: DatabaseManager> EventCompleter<D> {
             )));
         }
         // Comprobar que todo es correcto criptográficamente
-        let approval_hash = check_cryptography(&approval.content, &approval.signature)?;
+        let approval_hash = check_cryptography(&approval.content, &approval.signature)
+            .map_err(|error| EventError::CryptoError(error.to_string()))?;
         // Obtener sujeto para saber si lo tenemos y los metadatos del mismo
         let subject = self
             .database
@@ -623,9 +605,10 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 namespace: subject.namespace.clone(),
                 subject_id: subject_id.clone(),
                 governance_id: subject.governance_id.clone(),
-                governance_version: 0, // Me lo invento porque da igual para estos métodos
+                governance_version: 0, // Me lo invento porque da igual para estos métodos TODO: Ya no va a dar igual
                 schema_id: subject.schema_id.clone(),
                 owner: subject.owner.clone(),
+                creator: subject.creator.clone(),
             };
             // Creamos el evento final
             let approvals = approval_set
@@ -689,7 +672,8 @@ impl<D: DatabaseManager> EventCompleter<D> {
             )));
         }
         // Comprobar que todo es correcto criptográficamente
-        let event_hash = check_cryptography(&event.content, &signature)?;
+        let event_hash = check_cryptography(&event.content, &signature)
+            .map_err(|error| EventError::CryptoError(error.to_string()))?;
         // Obtener sujeto para saber si lo tenemos y los metadatos del mismo
         let subject = self
             .database
@@ -884,28 +868,4 @@ fn hash_match_after_patch(
             EventError::CryptoError(String::from("Error calculating the hash of the state"))
         })?;
     return Ok(state_hash_calculated == *state_hash);
-}
-
-fn check_cryptography<T: BorshSerialize>(
-    serializable: T,
-    signature: &Signature,
-) -> Result<DigestIdentifier, EventError> {
-    let hash = DigestIdentifier::from_serializable_borsh(&serializable).map_err(|_| {
-        EventError::CryptoError(String::from(
-            "Error calculating the hash of the serializable",
-        ))
-    })?;
-    if hash != signature.content.event_content_hash {
-        return Err(EventError::CryptoError(String::from(
-            "The hash does not match the content of the signature",
-        )));
-    }
-    signature
-        .content
-        .signer
-        .verify(&hash.derivative(), signature.signature.clone())
-        .map_err(|_| {
-            EventError::CryptoError(String::from("The signature does not validate the hash"))
-        })?;
-    Ok(hash)
 }

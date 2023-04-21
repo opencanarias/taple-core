@@ -8,7 +8,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::commons::{
-    crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair},
+    crypto::{check_cryptography, Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair},
+    errors::SubjectError,
     identifier::{Derivable, DigestIdentifier, KeyIdentifier},
     schema_handler::Schema,
 };
@@ -125,6 +126,12 @@ impl EventRequest {
             timestamp: TimeStamp::now(),
             signature,
         }
+    }
+
+    pub fn check_signatures(&self) -> Result<(), SubjectError> {
+        check_cryptography((&self.request, &self.timestamp), &self.signature)
+            .map_err(|error| SubjectError::CryptoError(error.to_string()))?;
+        Ok(())
     }
 }
 

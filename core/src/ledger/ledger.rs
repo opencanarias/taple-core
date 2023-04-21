@@ -149,6 +149,57 @@ impl<D: DatabaseManager> Ledger<D> {
         signatures: HashSet<Signature>,
     ) -> Result<(), LedgerError> {
         // Comprobar si es genesis o state
+        match &event.content.event_proposal.proposal.event_request.request {
+            EventRequestType::Create(create_request) => {
+                // Comprobar que evaluation es None
+                if event.content.event_proposal.proposal.evaluation.is_some() {
+                    return Err(LedgerError::ErrorParsingJsonString(
+                        "Evaluation should be None in external genesis event".to_owned(),
+                    ));
+                }
+                // Comprobaciones criptográficas
+                let subject_id = match DigestIdentifier::from_serializable_borsh((
+                    event
+                        .content
+                        .event_proposal
+                        .proposal
+                        .event_request
+                        .signature
+                        .content
+                        .event_content_hash,
+                    event
+                        .content
+                        .event_proposal
+                        .proposal
+                        .event_request
+                        .signature
+                        .content
+                        .signer
+                        .public_key, // No estoy seguro que esto equivalga al vector de bytes pero creo que si
+                )) {
+                    Ok(subject_id) => subject_id,
+                    Err(_) => {
+                        return Err(LedgerError::CryptoError(
+                            "Error creating subject_id in external event".to_owned(),
+                        ))
+                    }
+                };
+                match self.database.get_subject(&subject_id) {
+                    Ok(_) => {
+                        return Err(LedgerError::SubjectAlreadyExists(
+                            subject_id.to_str().to_owned(),
+                        ))
+                    }
+                    Err(crate::DbError::EntryNotFound) => {}
+                    Err(error) => {
+                        return Err(LedgerError::DatabaseError(error.to_string()));
+                    }
+                };
+            }
+            EventRequestType::State(state_request) => {
+                // Comprobaciones criptográficas
+            }
+        }
         todo!();
     }
 

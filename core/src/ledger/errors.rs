@@ -21,4 +21,8 @@ pub enum LedgerError {
     ChannelError(#[from] crate::commons::errors::ChannelErrors),
     #[error("Subject Error")]
     SubjectError(#[from] SubjectError),
+    #[error("Crypto Error: \"{0}\"")]
+    CryptoError(String),
+    #[error("Subject ALready Exists: \"{0}\"")]
+    SubjectAlreadyExists(String)
 }

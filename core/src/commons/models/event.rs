@@ -192,6 +192,7 @@ use crate::{
         crypto::{KeyPair, Payload},
         errors::SubjectError,
     },
+    event_content::Metadata,
     event_request::EventRequest,
     identifier::{DigestIdentifier, KeyIdentifier, SignatureIdentifier},
     signature::{Signature, SignatureContent},
@@ -304,5 +305,14 @@ impl Event {
             ),
         };
         Ok(Self { content, signature })
+    }
+
+    fn check_signatures(
+        &self,
+        subject_pk: KeyIdentifier,
+        metadata: Metadata,
+        gov_version: u64,
+    ) -> Result<(), SubjectError> {
+        todo!();
     }
 }

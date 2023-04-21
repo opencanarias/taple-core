@@ -9,6 +9,7 @@ pub(crate) mod secp256k1;
 #[cfg(feature = "x25519")]
 pub(crate) mod x25519;
 
+use borsh::BorshSerialize;
 use identifier::error::Error;
 
 use base64::encode_config;
@@ -19,7 +20,36 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "x25519")]
 pub use x25519::X25519KeyPair;
 
-use crate::identifier::{self, derive::KeyDerivator};
+use crate::{
+    identifier::{self, derive::KeyDerivator, DigestIdentifier},
+    signature::Signature,
+};
+
+use self::error::CryptoError;
+
+pub fn check_cryptography<T: BorshSerialize>(
+    serializable: T,
+    signature: &Signature,
+) -> Result<DigestIdentifier, CryptoError> {
+    let hash = DigestIdentifier::from_serializable_borsh(&serializable).map_err(|_| {
+        CryptoError::CryptoError(String::from(
+            "Error calculating the hash of the serializable",
+        ))
+    })?;
+    if hash != signature.content.event_content_hash {
+        return Err(CryptoError::CryptoError(String::from(
+            "The hash does not match the content of the signature",
+        )));
+    }
+    signature
+        .content
+        .signer
+        .verify(&hash.derivative(), signature.signature.clone())
+        .map_err(|_| {
+            CryptoError::CryptoError(String::from("The signature does not validate the hash"))
+        })?;
+    Ok(hash)
+}
 
 /// Asymmetric key pair
 #[derive(Serialize, Deserialize, Debug)]
