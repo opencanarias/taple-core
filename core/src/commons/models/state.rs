@@ -1,12 +1,15 @@
 use std::{collections::HashSet, str::FromStr};
 
-use crate::commons::{
-    crypto::{KeyMaterial, KeyPair, Payload, DSA},
-    errors::SubjectError,
-    identifier::{
-        derive::KeyDerivator, Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier,
+use crate::{
+    commons::{
+        crypto::{Ed25519KeyPair, KeyMaterial, KeyPair, Payload, DSA},
+        errors::SubjectError,
+        identifier::{
+            derive::KeyDerivator, Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier,
+        },
+        schema_handler::{get_governance_schema, Schema},
     },
-    schema_handler::{get_governance_schema, Schema},
+    event_request::EventRequest,
 };
 use json_patch::patch;
 use serde::{Deserialize, Serialize};
@@ -89,6 +92,86 @@ impl From<Subject> for SubjectData {
             creator: subject.creator,
             properties: subject.properties,
         }
+    }
+}
+
+impl Subject {
+    pub fn from_genesis_request(
+        event_request: EventRequest,
+        init_state: String,
+    ) -> Result<Self, SubjectError> {
+        let EventRequestType::Create(create_request) = event_request.request.clone() else {
+            return Err(SubjectError::NotCreateEvent)
+        };
+        // TODO: Pasar que tipo de esquema criptográfico se quiere usar por parametros
+        let keys = KeyPair::Ed25519(Ed25519KeyPair::new());
+        let subject_id = match DigestIdentifier::from_serializable_borsh((
+            event_request.signature.content.event_content_hash,
+            keys.public_key_bytes(),
+        )) {
+            Ok(subject_id) => subject_id,
+            Err(_) => return Err(SubjectError::ErrorCreatingSubjectId),
+        };
+        Ok(Subject {
+            keys: Some(keys),
+            subject_id,
+            governance_id: create_request.governance_id.clone(),
+            sn: 0,
+            public_key: keys.public_key_bytes(),
+            namespace: create_request.namespace.clone(),
+            schema_id: create_request.schema_id.clone(),
+            owner: event_request.signature.content.signer.clone(),
+            creator: event_request.signature.content.signer.clone(),
+            properties: init_state,
+        })
+    }
+
+    pub fn from_genesis_event(event: Event, init_state: String) -> Result<Self, SubjectError> {
+        let EventRequestType::Create(create_request) = event.content.event_proposal.proposal.event_request.request.clone() else {
+            return Err(SubjectError::NotCreateEvent)
+        };
+        let subject_id = match DigestIdentifier::from_serializable_borsh((
+            event
+                .content
+                .event_proposal
+                .proposal
+                .event_request
+                .signature
+                .content
+                .event_content_hash,
+            event.signature.content.signer,
+        )) {
+            Ok(subject_id) => subject_id,
+            Err(_) => return Err(SubjectError::ErrorCreatingSubjectId),
+        };
+        Ok(Subject {
+            keys: None,
+            subject_id,
+            governance_id: create_request.governance_id.clone(),
+            sn: 0,
+            public_key: event.signature.content.signer,
+            namespace: create_request.namespace.clone(),
+            schema_id: create_request.schema_id.clone(),
+            owner: event
+                .content
+                .event_proposal
+                .proposal
+                .event_request
+                .signature
+                .content
+                .signer
+                .clone(),
+            creator: event
+                .content
+                .event_proposal
+                .proposal
+                .event_request
+                .signature
+                .content
+                .signer
+                .clone(),
+            properties: init_state,
+        })
     }
 }
 

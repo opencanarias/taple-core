@@ -14,15 +14,12 @@ pub enum LedgerCommand {
         event: Event,
         signatures: HashSet<Signature>,
     },
-    OwnGenesis {
+    Genesis {
         event_request: EventRequest,
     },
     ExternalEvent {
         event: Event,
         signatures: HashSet<Signature>,
-    },
-    ExternalGenesis {
-
     },
     ExternalIntermediateEvent {
         event: Event,

@@ -4,7 +4,7 @@ use json_patch::{patch, Patch};
 use serde_json::Value;
 
 use crate::{
-    database::DB, event_request::EventRequest, governance::GovernanceAPI,
+    database::DB, event_request::{EventRequest, EventRequestType}, governance::GovernanceAPI,
     identifier::DigestIdentifier, signature::Signature, DatabaseManager, Event,
 };
 
@@ -31,6 +31,9 @@ impl<D: DatabaseManager> Ledger<D> {
 
     pub fn genesis(&self, event_request: EventRequest) -> Result<(), LedgerError> {
         // Añadir a subject_is_gov si es una governance y no está
+        let EventRequestType::Create(create_request) = event_request.request else {
+            return Err(LedgerError::StateInGenesis)
+        };
         // Crear evento a partir de event_request
         // Crear sujeto a partir de genesis y evento
         // Añadir sujeto y evento a base de datos

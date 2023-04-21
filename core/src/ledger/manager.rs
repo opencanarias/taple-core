@@ -83,12 +83,13 @@ impl<D: DatabaseManager> EventManager<D> {
         };
         let response = {
             match data {
-                LedgerCommand::EventValidated {
+                LedgerCommand::OwnEvent {
                     event,
                     signatures,
-                    subject_id,
                 } => todo!(),
                 LedgerCommand::Genesis { event_request } => todo!(),
+                LedgerCommand::ExternalEvent { event, signatures } => todo!(),
+                LedgerCommand::ExternalIntermediateEvent { event } => todo!(),
             }
         };
         if sender.is_some() {

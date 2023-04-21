@@ -15,4 +15,6 @@ pub enum LedgerError {
     ErrorParsingJsonString(String),
     #[error("Error applying patch: \"{0}\"")]
     ErrorApplyingPatch(String),
+    #[error("State Event entered as Genesis")]
+    StateInGenesis,
 }

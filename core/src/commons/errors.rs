@@ -185,6 +185,8 @@ pub enum SubjectError {
     InvalidUseOfJSONPATCH,
     #[error("Approvers is not subset of validators")]
     ApproversAreNotValidators,
+    #[error("Error creating subject id")]
+    ErrorCreatingSubjectId,
 }
 
 #[derive(Error, Debug, Clone, PartialEq)]

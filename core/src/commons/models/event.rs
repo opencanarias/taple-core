@@ -187,7 +187,7 @@
 //! Contains the data structures related to event  to send to approvers, or to validators if approval is not required.
 use std::collections::HashSet;
 
-use crate::{identifier::DigestIdentifier, signature::Signature};
+use crate::{event_request::EventRequest, identifier::DigestIdentifier, signature::Signature};
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;

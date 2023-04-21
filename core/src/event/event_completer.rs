@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    ops::Add,
-};
+use std::collections::{HashMap, HashSet};
 
 use borsh::BorshSerialize;
 use json_patch::{patch, Patch};
@@ -10,10 +7,9 @@ use serde_json::Value;
 use crate::{
     commons::{
         channel::SenderEnd,
-        crypto::{KeyPair, Payload, DSA},
-        errors::ChannelErrors,
+        crypto::{Payload, DSA},
         models::{
-            approval::{self, Approval, UniqueApproval},
+            approval::{Approval, UniqueApproval},
             event::EventContent,
             event_preevaluation::{Context, EventPreEvaluation},
             event_proposal::{Evaluation, EventProposal, Proposal},
