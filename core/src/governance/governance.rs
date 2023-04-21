@@ -122,6 +122,20 @@ impl<D: DatabaseManager> Governance<D> {
                         .send(GovernanceResponse::GetContracts(to_send))
                         .map_err(|_| InternalError::OneshotClosed)?)
                 }
+                GovernanceMessage::GetInitState {
+                    governance_id,
+                    schema_id,
+                    governance_version,
+                } => {
+                    let to_send = self.inner_governance.get_init_state(
+                        governance_id,
+                        schema_id,
+                        governance_version,
+                    )?;
+                    Ok(sender
+                        .send(GovernanceResponse::GetInitState(to_send))
+                        .map_err(|_| InternalError::OneshotClosed)?)
+                }
             }
         } else {
             Err(InternalError::ChannelError {
@@ -133,6 +147,12 @@ impl<D: DatabaseManager> Governance<D> {
 
 #[async_trait]
 pub trait GovernanceInterface: Sync + Send {
+    async fn get_init_state(
+        &self,
+        governance_id: DigestIdentifier,
+        schema_id: String,
+        governance_version: u64,
+    ) -> Result<String, RequestError>;
     async fn get_schema(
         &self,
         governance_id: DigestIdentifier,
@@ -183,6 +203,28 @@ impl GovernanceAPI {
 
 #[async_trait]
 impl GovernanceInterface for GovernanceAPI {
+    async fn get_init_state(
+        &self,
+        governance_id: DigestIdentifier,
+        schema_id: String,
+        governance_version: u64,
+    ) -> Result<String, RequestError> {
+        let response = self
+            .sender
+            .ask(GovernanceMessage::GetInitState {
+                governance_id,
+                schema_id,
+                governance_version,
+            })
+            .await
+            .map_err(|_| RequestError::ChannelClosed)?;
+        if let GovernanceResponse::GetInitState(init_state) = response {
+            init_state
+        } else {
+            Err(RequestError::UnexpectedResponse)
+        }
+    }
+
     async fn get_schema(
         &self,
         governance_id: DigestIdentifier,
