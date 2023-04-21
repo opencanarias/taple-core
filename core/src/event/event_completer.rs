@@ -96,41 +96,39 @@ impl<D: DatabaseManager> EventCompleter<D> {
         let subjects = self.database.get_all_subjects();
         for subject in subjects.iter() {
             // Comprobar si hay eventos más allá del sn del sujeto que indica que debemos pedir las validaciones porque aún está pendiente de validar
-            let last_event = self
-                .database
-                .get_events_by_range(&subject.subject_id, None, -1)
-                .map_err(|error| EventError::DatabaseError(error.to_string()))?;
-            // Already know that the vec is contained by 1 element
-            let last_event = last_event.pop().unwrap();
-            if last_event.content.event_proposal.proposal.sn == subject.sn + 1 {
-                let metadata = Metadata {
-                    namespace: subject.namespace.clone(),
-                    subject_id: subject.subject_id.clone(),
-                    governance_id: subject.governance_id.clone(),
-                    governance_version: 0, // Not needed
-                    schema_id: subject.schema_id.clone(),
-                    owner: subject.owner.clone(),
-                };
-                let stage = ValidationStage::Validate;
-                let (signers, quorum_size) =
-                    self.get_signers_and_quorum(metadata, stage.clone()).await?;
-                let event_message = EventMessages::ValidationRequest(last_event.clone());
-                self.ask_signatures(
-                    &subject.subject_id,
-                    event_message,
-                    signers.clone(),
-                    quorum_size,
-                )
-                .await?;
-                self.events_to_validate.insert(
-                    last_event.signature.content.event_content_hash.clone(),
-                    last_event,
-                );
-                self.subjects_completing_event
-                    .insert(subject.subject_id.clone(), (stage, signers, quorum_size));
-                continue;
-            } else if last_event.content.event_proposal.proposal.sn < subject.sn {
-                panic!("Que ha pasado?")
+            match self.database.get_prevalidated_event(&subject.subject_id) {
+                Ok(last_event) => {
+                    let metadata = Metadata {
+                        namespace: subject.namespace.clone(),
+                        subject_id: subject.subject_id.clone(),
+                        governance_id: subject.governance_id.clone(),
+                        governance_version: 0, // Not needed
+                        schema_id: subject.schema_id.clone(),
+                        owner: subject.owner.clone(),
+                    };
+                    let stage = ValidationStage::Validate;
+                    let (signers, quorum_size) =
+                        self.get_signers_and_quorum(metadata, stage.clone()).await?;
+                    let event_message = EventMessages::ValidationRequest(last_event.clone());
+                    self.ask_signatures(
+                        &subject.subject_id,
+                        event_message,
+                        signers.clone(),
+                        quorum_size,
+                    )
+                    .await?;
+                    self.events_to_validate.insert(
+                        last_event.signature.content.event_content_hash.clone(),
+                        last_event,
+                    );
+                    self.subjects_completing_event
+                        .insert(subject.subject_id.clone(), (stage, signers, quorum_size));
+                    continue;
+                }
+                Err(error) => match error {
+                    crate::DbError::EntryNotFound => {}
+                    _ => return Err(EventError::DatabaseError(error.to_string())),
+                },
             }
             // Comprobar si hay requests en la base de datos que corresponden con eventos que aun no han llegado a la fase de validación y habría que reiniciar desde pedir evaluaciones
             match self.database.get_request(&subject.subject_id) {
