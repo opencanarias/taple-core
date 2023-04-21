@@ -54,11 +54,32 @@ impl<D: DatabaseManager> Ledger<D> {
         let init_state = serde_json::to_string(&init_state)
             .map_err(|_| LedgerError::ErrorParsingJsonString("Init State".to_owned()))?;
         // Crear sujeto a partir de genesis y evento
-        let subject = Subject::from_genesis_request(event_request, init_state)
+        let subject = Subject::from_genesis_request(event_request.clone(), init_state.clone())
             .map_err(LedgerError::SubjectError)?;
         // Crear evento a partir de event_request
+        let event = Event::from_genesis_request(
+            event_request,
+            subject.keys.clone().unwrap(),
+            governance_version,
+            init_state,
+        )
+        .map_err(LedgerError::SubjectError)?;
         // Añadir sujeto y evento a base de datos
+        let subject_id = subject.subject_id.clone();
+        if &create_request.schema_id == "governance" {
+            self.subject_is_gov.insert(subject_id.clone(), true);
+            // Enviar mensaje a gov de governance updated con el id y el sn
+        } else {
+            self.subject_is_gov.insert(subject_id.clone(), false);
+        }
+        self.database
+            .set_subject(&subject_id, subject)
+            .map_err(|error| LedgerError::DatabaseError(error.to_string()))?;
+        self.database
+            .set_event(&subject_id, event)
+            .map_err(|error| LedgerError::DatabaseError(error.to_string()))?;
         // Mandar subject_id y evento en mensaje
+        // TODO
         todo!()
     }
 
@@ -105,6 +126,7 @@ impl<D: DatabaseManager> Ledger<D> {
         match is_gov {
             Some(true) => {
                 // Enviar mensaje a gov de governance updated con el id y el sn
+                // TODO
             }
             Some(false) => {}
             None => {
@@ -118,7 +140,20 @@ impl<D: DatabaseManager> Ledger<D> {
                 }
             }
         }
-        // Si es gov enviar mensaje a gov de governance updated con el id y el sn
         todo!()
+    }
+
+    pub fn external_event(
+        &self,
+        event: Event,
+        signatures: HashSet<Signature>,
+    ) -> Result<(), LedgerError> {
+        // Comprobar si es genesis o state
+        todo!();
+    }
+
+    pub fn external_intermediate_event(&self, event: Event) -> Result<(), LedgerError> {
+        // Comprobar si es genesis o state
+        todo!();
     }
 }

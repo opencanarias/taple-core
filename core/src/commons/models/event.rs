@@ -237,7 +237,9 @@ impl EventContent {
             execution,
         }
     }
+}
 
+impl Event {
     pub fn from_genesis_request(
         event_request: EventRequest,
         subject_keys: KeyPair,
@@ -277,5 +279,30 @@ impl EventContent {
             ),
         };
         let event_proposal = EventProposal::new(proposal, subject_signature);
+        let content = EventContent {
+            event_proposal,
+            approvals: HashSet::new(),
+            execution: true,
+        };
+        let signature = subject_keys
+            .sign(Payload::Buffer(proposal_hash.derivative()))
+            .map_err(|_| {
+                SubjectError::CryptoError(String::from("Error signing the hash of the proposal"))
+            })?;
+        let content_hash = DigestIdentifier::from_serializable_borsh(&content).map_err(|_| {
+            SubjectError::CryptoError(String::from("Error calculating the hash of the proposal"))
+        })?;
+        let subject_signature = Signature {
+            content: SignatureContent {
+                signer: public_key,
+                event_content_hash: content_hash.clone(),
+                timestamp: TimeStamp::now(),
+            },
+            signature: SignatureIdentifier::new(
+                public_key.to_signature_derivator(),
+                &subject_signature,
+            ),
+        };
+        Ok(Self { content, signature })
     }
 }
