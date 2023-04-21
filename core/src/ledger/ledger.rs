@@ -4,8 +4,13 @@ use json_patch::{patch, Patch};
 use serde_json::Value;
 
 use crate::{
-    database::DB, event_request::{EventRequest, EventRequestType}, governance::GovernanceAPI,
-    identifier::DigestIdentifier, signature::Signature, DatabaseManager, Event,
+    commons::models::state::Subject,
+    database::DB,
+    event_request::{EventRequest, EventRequestType},
+    governance::{GovernanceAPI, GovernanceInterface},
+    identifier::DigestIdentifier,
+    signature::Signature,
+    DatabaseManager, Event,
 };
 
 use super::errors::LedgerError;
@@ -29,13 +34,29 @@ impl<D: DatabaseManager> Ledger<D> {
         todo!()
     }
 
-    pub fn genesis(&self, event_request: EventRequest) -> Result<(), LedgerError> {
+    pub async fn genesis(&self, event_request: EventRequest) -> Result<(), LedgerError> {
         // Añadir a subject_is_gov si es una governance y no está
         let EventRequestType::Create(create_request) = event_request.request else {
             return Err(LedgerError::StateInGenesis)
         };
-        // Crear evento a partir de event_request
+        let governance_version = self
+            .gov_api
+            .get_governance_version(create_request.governance_id.clone())
+            .await?;
+        let init_state = self
+            .gov_api
+            .get_init_state(
+                create_request.governance_id,
+                create_request.schema_id,
+                governance_version,
+            )
+            .await?;
+        let init_state = serde_json::to_string(&init_state)
+            .map_err(|_| LedgerError::ErrorParsingJsonString("Init State".to_owned()))?;
         // Crear sujeto a partir de genesis y evento
+        let subject = Subject::from_genesis_request(event_request, init_state)
+            .map_err(LedgerError::SubjectError)?;
+        // Crear evento a partir de event_request
         // Añadir sujeto y evento a base de datos
         // Mandar subject_id y evento en mensaje
         todo!()

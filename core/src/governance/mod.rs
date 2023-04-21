@@ -77,7 +77,7 @@ pub enum GovernanceMessage {
 
 #[derive(Debug, Clone)]
 pub enum GovernanceResponse {
-    GetInitState(Result<String, RequestError>),
+    GetInitState(Result<Value, RequestError>),
     GetSchema(Result<Value, RequestError>),
     GetSigners(Result<HashSet<KeyIdentifier>, RequestError>),
     GetQuorum(Result<u32, RequestError>),

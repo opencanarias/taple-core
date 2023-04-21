@@ -36,7 +36,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         governance_id: DigestIdentifier,
         schema_id: String,
         governance_version: u64,
-    ) -> Result<Result<String, RequestError>, InternalError> {
+    ) -> Result<Result<Value, RequestError>, InternalError> {
         if governance_id.digest.is_empty() {
             // TODO: Devolver init state de gov
             todo!();

@@ -9,7 +9,6 @@ use serde_json::Value;
 
 use crate::commons::{
     crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair},
-    errors::{CryptoErrorEvent, SubjectError},
     identifier::{Derivable, DigestIdentifier, KeyIdentifier},
     schema_handler::Schema,
 };
@@ -19,7 +18,8 @@ use super::{
     event::Event,
     event_content::{EventContent, Metadata},
     signature::Signature,
-    state::Subject, timestamp::TimeStamp,
+    state::Subject,
+    timestamp::TimeStamp,
 };
 
 #[derive(
@@ -58,7 +58,7 @@ pub enum RequestPayload {
 //     State(StateRequest),
 // }
 
-// /// Request that originated the event. It contains basically 
+// /// Request that originated the event. It contains basically
 // /// the proposed change and the votes obtained related to it.
 // #[derive(
 //     Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
@@ -81,7 +81,6 @@ pub struct RequestData {
     pub subject_id: Option<String>,
     pub sn: Option<u64>,
 }
-
 
 #[derive(
     Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,

@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 
 use async_trait::async_trait;
+use serde_json::Value;
 
 use crate::{
     commons::{
@@ -152,7 +153,7 @@ pub trait GovernanceInterface: Sync + Send {
         governance_id: DigestIdentifier,
         schema_id: String,
         governance_version: u64,
-    ) -> Result<String, RequestError>;
+    ) -> Result<Value, RequestError>;
     async fn get_schema(
         &self,
         governance_id: DigestIdentifier,
@@ -208,7 +209,7 @@ impl GovernanceInterface for GovernanceAPI {
         governance_id: DigestIdentifier,
         schema_id: String,
         governance_version: u64,
-    ) -> Result<String, RequestError> {
+    ) -> Result<Value, RequestError> {
         let response = self
             .sender
             .ask(GovernanceMessage::GetInitState {

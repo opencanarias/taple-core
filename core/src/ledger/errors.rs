@@ -1,4 +1,4 @@
-use crate::governance::error::RequestError;
+use crate::{commons::errors::SubjectError, governance::error::RequestError};
 use thiserror::Error;
 
 #[derive(Error, Debug, Clone, PartialEq)]
@@ -17,4 +17,8 @@ pub enum LedgerError {
     ErrorApplyingPatch(String),
     #[error("State Event entered as Genesis")]
     StateInGenesis,
+    #[error("Channel unnavaible")]
+    ChannelError(#[from] crate::commons::errors::ChannelErrors),
+    #[error("Subject Error")]
+    SubjectError(#[from] SubjectError),
 }

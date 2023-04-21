@@ -112,12 +112,13 @@ impl Subject {
             Ok(subject_id) => subject_id,
             Err(_) => return Err(SubjectError::ErrorCreatingSubjectId),
         };
+        let public_key = KeyIdentifier::new(keys.get_key_derivator(), &keys.public_key_bytes());
         Ok(Subject {
             keys: Some(keys),
             subject_id,
             governance_id: create_request.governance_id.clone(),
             sn: 0,
-            public_key: keys.public_key_bytes(),
+            public_key,
             namespace: create_request.namespace.clone(),
             schema_id: create_request.schema_id.clone(),
             owner: event_request.signature.content.signer.clone(),
