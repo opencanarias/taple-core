@@ -8,7 +8,7 @@ use crate::{
     database::DB,
     event_request::{EventRequest, EventRequestType},
     governance::{GovernanceAPI, GovernanceInterface},
-    identifier::{DigestIdentifier, Derivable},
+    identifier::{Derivable, DigestIdentifier},
     signature::Signature,
     DatabaseManager, Event,
 };
@@ -31,6 +31,8 @@ impl<D: DatabaseManager> Ledger<D> {
     }
 
     pub fn init(&self) -> Result<(), LedgerError> {
+        // Revisar si tengo sujetos a medio camino entre estado actual y LCE
+        // Actualizar hashmaps
         todo!()
     }
 
@@ -72,12 +74,8 @@ impl<D: DatabaseManager> Ledger<D> {
         } else {
             self.subject_is_gov.insert(subject_id.clone(), false);
         }
-        self.database
-            .set_subject(&subject_id, subject)
-            .map_err(|error| LedgerError::DatabaseError(error.to_string()))?;
-        self.database
-            .set_event(&subject_id, event)
-            .map_err(|error| LedgerError::DatabaseError(error.to_string()))?;
+        self.database.set_subject(&subject_id, subject)?;
+        self.database.set_event(&subject_id, event)?;
         // Mandar subject_id y evento en mensaje
         // TODO
         todo!()
@@ -101,7 +99,7 @@ impl<D: DatabaseManager> Ledger<D> {
             .get_subject(&subject_id)
             .map_err(|error| match error {
                 crate::DbError::EntryNotFound => LedgerError::SubjectNotFound(subject_id.to_str()),
-                _ => LedgerError::DatabaseError(error.to_string()),
+                _ => LedgerError::DatabaseError(error),
             })?;
         let json_patch = event.content.event_proposal.proposal.json_patch.as_str();
         let prev_properties = subject.properties.as_str();
@@ -120,7 +118,7 @@ impl<D: DatabaseManager> Ledger<D> {
         subject.properties = state;
         self.database
             .set_subject(&subject_id, subject)
-            .map_err(|error| LedgerError::DatabaseError(error.to_string()))?;
+            .map_err(|error| LedgerError::DatabaseError(error))?;
         // Comprobar is_gov
         let is_gov = self.subject_is_gov.get(&subject_id);
         match is_gov {
@@ -192,7 +190,7 @@ impl<D: DatabaseManager> Ledger<D> {
                     }
                     Err(crate::DbError::EntryNotFound) => {}
                     Err(error) => {
-                        return Err(LedgerError::DatabaseError(error.to_string()));
+                        return Err(LedgerError::DatabaseError(error));
                     }
                 };
             }

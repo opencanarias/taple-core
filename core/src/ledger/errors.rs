@@ -1,14 +1,13 @@
 use crate::{commons::errors::SubjectError, governance::error::RequestError};
 use thiserror::Error;
+use crate::database::Error as DbError;
 
-#[derive(Error, Debug, Clone, PartialEq)]
+#[derive(Error, Debug)]
 pub enum LedgerError {
     #[error("A channel has been closed")]
     ChannelClosed,
     #[error("Subject Not Found: {0}")]
     SubjectNotFound(String),
-    #[error("A database error has ocurred at LedgerManager: \"{0}\"")]
-    DatabaseError(String),
     #[error("Error parsing json string: \"{0}\"")]
     ErrorParsingJsonString(String),
     #[error("Error applying patch: \"{0}\"")]
@@ -25,4 +24,6 @@ pub enum LedgerError {
     SubjectAlreadyExists(String),
     #[error("Governance Error")]
     GovernanceError(#[from] RequestError),
+    #[error("Database Error")]
+    DatabaseError(#[from] DbError),
 }
