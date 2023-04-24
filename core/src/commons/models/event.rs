@@ -189,7 +189,7 @@ use std::collections::HashSet;
 
 use crate::{
     commons::{
-        crypto::{KeyPair, Payload},
+        crypto::{check_cryptography, KeyPair, Payload},
         errors::SubjectError,
     },
     event_content::Metadata,
@@ -307,12 +307,9 @@ impl Event {
         Ok(Self { content, signature })
     }
 
-    fn check_signatures(
-        &self,
-        subject_pk: KeyIdentifier,
-        metadata: Metadata,
-        gov_version: u64,
-    ) -> Result<(), SubjectError> {
-        todo!();
+    pub fn check_signatures(&self) -> Result<(), SubjectError> {
+        check_cryptography(&self.content, &self.signature)
+            .map_err(|error| SubjectError::CryptoError(error.to_string()))?;
+        Ok(())
     }
 }

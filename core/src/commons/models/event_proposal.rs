@@ -1,7 +1,12 @@
 //! Contains the data structures related to event  to send to approvers, or to validators if approval is not required.
 use std::collections::HashSet;
 
-use crate::{event_request::EventRequest, identifier::DigestIdentifier, signature::Signature};
+use crate::{
+    commons::{crypto::check_cryptography, errors::SubjectError},
+    event_request::EventRequest,
+    identifier::DigestIdentifier,
+    signature::Signature,
+};
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -67,5 +72,11 @@ impl EventProposal {
             proposal,
             subject_signature,
         }
+    }
+
+    pub fn check_signatures(&self) -> Result<(), SubjectError> {
+        check_cryptography(&self.proposal, &self.subject_signature)
+            .map_err(|error| SubjectError::CryptoError(error.to_string()))?;
+        Ok(())
     }
 }
