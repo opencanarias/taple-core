@@ -73,6 +73,10 @@ pub enum GovernanceMessage {
     IsGovernance {
         subject_id: DigestIdentifier,
     },
+    GetRolesOfInvokator {
+        invokator: KeyIdentifier,
+        metadata: Metadata
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -85,4 +89,5 @@ pub enum GovernanceResponse {
     GetContracts(Result<Vec<Contract>, RequestError>),
     GetGovernanceVersion(Result<u64, RequestError>),
     IsGovernance(Result<bool, RequestError>),
+    GetRolesOfInvokator(Result<Vec<String>, RequestError>),
 }

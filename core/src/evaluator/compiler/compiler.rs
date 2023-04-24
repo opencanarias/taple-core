@@ -66,7 +66,7 @@ impl<D: DatabaseManager, G: GovernanceInterface> Compiler<D, G> {
         // Read the contract from database
         let contracts = self
             .gov_api
-            .get_contracts(&compile_info.governance_id.clone())
+            .get_contracts(compile_info.governance_id.clone())
             .await
             .map_err(CompilerErrorResponses::GovernanceError)?;
         for contract_info in contracts {

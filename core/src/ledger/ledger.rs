@@ -8,7 +8,7 @@ use crate::{
     database::DB,
     event_request::{EventRequest, EventRequestType},
     governance::{GovernanceAPI, GovernanceInterface},
-    identifier::DigestIdentifier,
+    identifier::{DigestIdentifier, Derivable},
     signature::Signature,
     DatabaseManager, Event,
 };
@@ -34,9 +34,9 @@ impl<D: DatabaseManager> Ledger<D> {
         todo!()
     }
 
-    pub async fn genesis(&self, event_request: EventRequest) -> Result<(), LedgerError> {
+    pub async fn genesis(&mut self, event_request: EventRequest) -> Result<(), LedgerError> {
         // Añadir a subject_is_gov si es una governance y no está
-        let EventRequestType::Create(create_request) = event_request.request else {
+        let EventRequestType::Create(create_request) = event_request.request.clone() else {
             return Err(LedgerError::StateInGenesis)
         };
         let governance_version = self
@@ -47,21 +47,21 @@ impl<D: DatabaseManager> Ledger<D> {
             .gov_api
             .get_init_state(
                 create_request.governance_id,
-                create_request.schema_id,
+                create_request.schema_id.clone(),
                 governance_version,
             )
             .await?;
-        let init_state = serde_json::to_string(&init_state)
+        let init_state_string = serde_json::to_string(&init_state)
             .map_err(|_| LedgerError::ErrorParsingJsonString("Init State".to_owned()))?;
         // Crear sujeto a partir de genesis y evento
-        let subject = Subject::from_genesis_request(event_request.clone(), init_state.clone())
+        let subject = Subject::from_genesis_request(event_request.clone(), init_state_string)
             .map_err(LedgerError::SubjectError)?;
         // Crear evento a partir de event_request
         let event = Event::from_genesis_request(
             event_request,
             subject.keys.clone().unwrap(),
             governance_version,
-            init_state,
+            &init_state,
         )
         .map_err(LedgerError::SubjectError)?;
         // Añadir sujeto y evento a base de datos
@@ -83,8 +83,8 @@ impl<D: DatabaseManager> Ledger<D> {
         todo!()
     }
 
-    pub fn event_validated(
-        &self,
+    pub async fn event_validated(
+        &mut self,
         subject_id: DigestIdentifier,
         event: Event,
         signatures: HashSet<Signature>,
@@ -92,7 +92,7 @@ impl<D: DatabaseManager> Ledger<D> {
         // Añadir a subject_is_gov si es una governance y no está
         self.database.set_signatures(
             &subject_id,
-            &event.content.event_proposal.proposal.sn,
+            event.content.event_proposal.proposal.sn,
             signatures,
         );
         // Aplicar event sourcing
@@ -131,8 +131,8 @@ impl<D: DatabaseManager> Ledger<D> {
             Some(false) => {}
             None => {
                 // Si no está en el mapa, añadirlo y enviar mensaje a gov de subject updated con el id y el sn
-                self.subject_is_gov.insert(subject_id, false);
-                if self.gov_api.is_governance(subject_id.clone()) {
+                self.subject_is_gov.insert(subject_id.clone(), false);
+                if self.gov_api.is_governance(subject_id.clone()).await? {
                     self.subject_is_gov.insert(subject_id, true);
                     // Enviar mensaje a gov de governance updated con el id y el sn
                 } else {

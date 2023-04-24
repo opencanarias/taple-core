@@ -111,7 +111,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
                     let stage = ValidationStage::Validate;
                     let (signers, quorum_size) =
                         self.get_signers_and_quorum(metadata, stage.clone()).await?;
-                    let event_message = EventMessages::ValidationRequest(last_event.clone());
+                    let event_message = create_validator_request(last_event.clone());
                     self.ask_signatures(
                         &subject.subject_id,
                         event_message,
@@ -288,7 +288,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
         );
         let invokator = event_request.signature.content.signer.clone();
         let event_preevaluation = EventPreEvaluation {
-            event_request,
+            event_request: event_request.clone(),
             context: Context {
                 governance_id: metadata.governance_id.clone(),
                 schema_id: metadata.schema_id.clone(),
@@ -384,7 +384,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
         // Comprobar si la versión de la governanza coincide con la nuestra, si no no lo aceptamos
         let governance_version = self
             .gov_api
-            .get_governance_version(&subject.governance_id)
+            .get_governance_version(subject.governance_id.clone())
             .await
             .map_err(EventError::GovernanceError)?;
         // Comprobar governance-version que sea la misma que la nuestra
@@ -826,7 +826,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
         self.database
             .del_request(&subject.subject_id)
             .map_err(|error| EventError::DatabaseError(error.to_string()))?;
-        Ok(EventMessages::ValidationRequest(event))
+        Ok(event)
     }
 }
 

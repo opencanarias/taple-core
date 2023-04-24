@@ -220,7 +220,9 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
             Err(error) => return Ok(Err(error)),
         };
 
-        if version != approval_request.proposal.evaluation.governance_version {
+        let evaluation = approval_request.proposal.evaluation.clone().expect("los genesis no se aprueban");
+
+        if version != evaluation.governance_version {
             return Ok(Err(ApprovalErrorResponse::InvalidGovernanceVersion));
         }
 
@@ -282,7 +284,7 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
             .await
             .map_err(|_| ApprovalManagerError::GovernanceChannelFailed)?;
 
-        let hash = DigestIdentifier::from_serializable_borsh(&approval_request.proposal.evaluation)
+        let hash = DigestIdentifier::from_serializable_borsh(&evaluation)
             .map_err(|_| ApprovalManagerError::HashGenerationFailed)?;
 
         for signature in approval_request.proposal.evaluation_signatures.iter() {
@@ -308,7 +310,7 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
             .await
             .map_err(|_| ApprovalManagerError::GovernanceChannelFailed)?;
 
-        match approval_request.proposal.evaluation.acceptance {
+        match evaluation.acceptance {
             Acceptance::Ok => {
                 if !(approval_request.proposal.evaluation_signatures.len() as u32 >= evaluator_quorum) {
                     return Ok(Err(ApprovalErrorResponse::NoQuorumReached));

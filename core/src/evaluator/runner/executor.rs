@@ -1,6 +1,6 @@
 use crate::{
     evaluator::{errors::ExecutorErrorResponses},
-    governance::GovernanceInterface, commons::models::{event_preevaluation::Context, Acceptance},
+    governance::GovernanceInterface, commons::models::{event_preevaluation::Context, Acceptance}, identifier::KeyIdentifier,
 };
 
 use super::context::MemoryManager;
@@ -35,6 +35,7 @@ impl<G: GovernanceInterface + Send> ContractExecutor<G> {
         &self,
         state: &str,
         event: &str,
+        invokator: &KeyIdentifier,
         context: &Context,
         governance_version: u64,
         compiled_contract: Vec<u8>,
@@ -43,7 +44,7 @@ impl<G: GovernanceInterface + Send> ContractExecutor<G> {
         let roles = self
             .gov_api
             .get_roles_of_invokator(
-                &context.invokator,
+                &invokator,
                 &context.governance_id,
                 governance_version,
                 &context.schema_id,

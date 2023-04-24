@@ -77,7 +77,7 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
             .map_err(|e| DistributionManagerError::DatabaseError(e.to_string()))?;
         let governance_version = self
             .governance
-            .get_governance_version(&subject.governance_id)
+            .get_governance_version(subject.governance_id.clone())
             .await
             .map_err(|_| DistributionManagerError::GovernanceChannelNotAvailable)?;
         let subject_id_str = msg.subject_id.to_str();
@@ -228,7 +228,7 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
                 };
                 let governance_version = self
                     .governance
-                    .get_governance_version(&subject.governance_id)
+                    .get_governance_version(subject.governance_id.clone())
                     .await
                     .map_err(|_| DistributionManagerError::GovernanceChannelNotAvailable)?;
                 let metadata = build_metadata(&subject, governance_version);

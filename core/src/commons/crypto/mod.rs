@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 pub use x25519::X25519KeyPair;
 
 use crate::{
-    identifier::{self, derive::KeyDerivator, DigestIdentifier},
+    identifier::{self, derive::KeyDerivator, DigestIdentifier, Derivable},
     signature::Signature,
 };
 

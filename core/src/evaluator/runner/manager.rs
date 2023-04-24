@@ -2,12 +2,13 @@ use json_patch::diff;
 use wasmtime::Engine;
 
 use crate::{
+    commons::models::{event_preevaluation::EventPreEvaluation, Acceptance},
     database::DB,
-    evaluator::{errors::ExecutorErrorResponses},
-    event_request::{StateRequest},
+    evaluator::errors::ExecutorErrorResponses,
+    event_request::StateRequest,
     governance::GovernanceInterface,
     identifier::DigestIdentifier,
-    DatabaseManager, commons::models::{event_preevaluation::{EventPreEvaluation}, Acceptance},
+    DatabaseManager,
 };
 
 use super::{executor::ContractExecutor, ExecuteContractResponse};
@@ -26,7 +27,7 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send> TapleRunner<D, G> {
     }
 
     pub fn generate_context_hash(
-        execute_contract: &EventPreEvaluation
+        execute_contract: &EventPreEvaluation,
     ) -> Result<DigestIdentifier, ExecutorErrorResponses> {
         DigestIdentifier::from_serializable_borsh(execute_contract)
             .map_err(|_| ExecutorErrorResponses::ContextHashGenerationFailed)
@@ -71,6 +72,7 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send> TapleRunner<D, G> {
             .execute_contract(
                 &execute_contract.context.actual_state,
                 &state_data.invokation,
+                &execute_contract.event_request.signature.content.signer,
                 &execute_contract.context,
                 governance_version,
                 contract,
@@ -81,10 +83,8 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send> TapleRunner<D, G> {
                 generate_json_patch(&previous_state, &contract_result.final_state)?,
                 generera_state_hash(&contract_result.final_state)?,
             ),
-            Acceptance::Ko => {
-                (String::from(""), DigestIdentifier::default())
-            },
-            Acceptance::Error => unreachable!()
+            Acceptance::Ko => (String::from(""), DigestIdentifier::default()),
+            Acceptance::Error => unreachable!(),
         };
         Ok(ExecuteContractResponse {
             json_patch: patch,

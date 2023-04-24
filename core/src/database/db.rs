@@ -407,7 +407,8 @@ impl<M: DatabaseManager> DB<M> {
     }
 
     pub fn put_governance_contract(&self, contract: Vec<u8>) -> Result<(), Error> {
-        self.contract_db.put("governance", contract)
+        self.contract_db
+            .put("governance", (contract, DigestIdentifier::default(), 0))
     }
 
     pub fn put_contract(

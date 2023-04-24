@@ -30,6 +30,49 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         }
     }
 
+    pub fn get_roles_of_invokator(
+        &self,
+        invokator: KeyIdentifier,
+        metadata: Metadata,
+    ) -> Result<Result<Vec<String>, RequestError>, InternalError> {
+        // TODO: lo de governance version
+        let mut governance_id = metadata.governance_id;
+        if governance_id.digest.is_empty() {
+            governance_id = metadata.subject_id;
+        }
+        let schema_id = metadata.schema_id;
+        let governance = match self.repo_access.get_subject(&governance_id) {
+            Ok(governance) => governance,
+            Err(DbError::EntryNotFound) => {
+                return Ok(Err(RequestError::GovernanceNotFound(
+                    governance_id.to_str(),
+                )))
+            }
+            Err(error) => return Err(InternalError::DatabaseError { source: error }),
+        };
+        let properties: Value = serde_json::from_str(&governance.properties)
+            .map_err(|_| InternalError::DeserializationError)?;
+        let policies = get_as_array(&properties, "Policies")?;
+        let schema_policy = get_schema_from_policies(policies, &schema_id);
+        let Ok(schema_policy) = schema_policy else {
+            return Ok(Err(schema_policy.unwrap_err()));
+        }; // El return dentro de otro return es una **** que obliga a hacer cosas como esta
+        let roles_prop = properties["Roles"]
+            .as_array()
+            .expect("Existe Roles")
+            .to_owned();
+        let roles = get_roles(&schema_id, roles_prop, &metadata.namespace)?;
+        let members = get_members_from_governance(&properties)?;
+        let mut invokator_roles = get_invokator_roles(&invokator, &members, roles)?;
+        if metadata.creator == invokator {
+            invokator_roles.push("Creator".to_string());
+        }
+        if metadata.owner == invokator {
+            invokator_roles.push("Owner".to_string());
+        }
+        Ok(Ok(invokator_roles))
+    }
+
     // NEW
     pub fn get_init_state(
         &self,
@@ -445,6 +488,42 @@ fn get_roles(
                 }
             }
             Schema::AllSchemas => roles.push(role_data),
+        }
+    }
+    Ok(roles)
+}
+
+fn get_invokator_roles(
+    invokator: &KeyIdentifier,
+    members: &HashSet<KeyIdentifier>,
+    roles_schema: Vec<Role>,
+) -> Result<Vec<String>, InternalError> {
+    let mut roles = Vec::new();
+    let mut is_external = false;
+    if !members.contains(invokator) {
+        is_external = true;
+    }
+    let invokator_str = invokator.to_str();
+    for role in roles_schema {
+        match role.who {
+            crate::commons::schema_handler::gov_models::Who::Id { id } => {
+                if !is_external && &id == &invokator_str {
+                    roles.extend(role.roles.into_iter());
+                }
+            }
+            crate::commons::schema_handler::gov_models::Who::Members => {
+                if !is_external {
+                    roles.extend(role.roles.into_iter());
+                }
+            }
+            crate::commons::schema_handler::gov_models::Who::All => {
+                roles.extend(role.roles.into_iter());
+            }
+            crate::commons::schema_handler::gov_models::Who::External => {
+                if is_external {
+                    roles.extend(role.roles.into_iter());
+                }
+            }
         }
     }
     Ok(roles)

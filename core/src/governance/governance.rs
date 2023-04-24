@@ -7,9 +7,7 @@ use crate::{
     commons::{
         channel::{ChannelData, MpscChannel, SenderEnd},
         identifier::{DigestIdentifier, KeyIdentifier},
-        models::{
-            event_content::Metadata,
-        },
+        models::event_content::Metadata,
         schema_handler::{
             get_governance_schema,
             gov_models::{Contract, Invoke},
@@ -134,6 +132,17 @@ impl<D: DatabaseManager> Governance<D> {
                         .send(GovernanceResponse::GetInitState(to_send))
                         .map_err(|_| InternalError::OneshotClosed)?)
                 }
+                GovernanceMessage::GetRolesOfInvokator {
+                    invokator,
+                    metadata,
+                } => {
+                    let to_send = self
+                        .inner_governance
+                        .get_roles_of_invokator(invokator, metadata)?;
+                    Ok(sender
+                        .send(GovernanceResponse::GetRolesOfInvokator(to_send))
+                        .map_err(|_| InternalError::OneshotClosed)?)
+                }
             }
         } else {
             Err(InternalError::ChannelError {
@@ -186,6 +195,12 @@ pub trait GovernanceInterface: Sync + Send {
     ) -> Result<u64, RequestError>;
 
     async fn is_governance(&self, subject_id: DigestIdentifier) -> Result<bool, RequestError>;
+
+    async fn get_roles_of_invokator(
+        &self,
+        invokator: KeyIdentifier,
+        metadata: Metadata,
+    ) -> Result<Vec<String>, RequestError>;
 }
 
 #[derive(Debug, Clone)]
@@ -250,7 +265,10 @@ impl GovernanceInterface for GovernanceAPI {
     ) -> Result<HashSet<KeyIdentifier>, RequestError> {
         let response = self
             .sender
-            .ask(GovernanceMessage::GetSigners { metadata: metadata.clone(), stage })
+            .ask(GovernanceMessage::GetSigners {
+                metadata: metadata.clone(),
+                stage,
+            })
             .await
             .map_err(|_| RequestError::ChannelClosed)?;
         if let GovernanceResponse::GetSigners(signers) = response {
@@ -267,7 +285,10 @@ impl GovernanceInterface for GovernanceAPI {
     ) -> Result<u32, RequestError> {
         let response = self
             .sender
-            .ask(GovernanceMessage::GetQuorum { metadata: metadata.clone(), stage })
+            .ask(GovernanceMessage::GetQuorum {
+                metadata: metadata.clone(),
+                stage,
+            })
             .await
             .map_err(|_| RequestError::ChannelClosed)?;
         if let GovernanceResponse::GetQuorum(quorum) = response {
@@ -333,6 +354,26 @@ impl GovernanceInterface for GovernanceAPI {
             .await
             .map_err(|_| RequestError::ChannelClosed)?;
         if let GovernanceResponse::IsGovernance(result) = response {
+            result
+        } else {
+            Err(RequestError::UnexpectedResponse)
+        }
+    }
+
+    async fn get_roles_of_invokator(
+        &self,
+        invokator: KeyIdentifier,
+        metadata: Metadata,
+    ) -> Result<Vec<String>, RequestError> {
+        let response = self
+            .sender
+            .ask(GovernanceMessage::GetRolesOfInvokator {
+                invokator,
+                metadata,
+            })
+            .await
+            .map_err(|_| RequestError::ChannelClosed)?;
+        if let GovernanceResponse::GetRolesOfInvokator(result) = response {
             result
         } else {
             Err(RequestError::UnexpectedResponse)

@@ -7,8 +7,6 @@ pub enum LedgerError {
     ChannelClosed,
     #[error("Subject Not Found: {0}")]
     SubjectNotFound(String),
-    #[error("Error \"{0}\" detected with governance")]
-    GovernanceError(RequestError),
     #[error("A database error has ocurred at LedgerManager: \"{0}\"")]
     DatabaseError(String),
     #[error("Error parsing json string: \"{0}\"")]
@@ -24,5 +22,7 @@ pub enum LedgerError {
     #[error("Crypto Error: \"{0}\"")]
     CryptoError(String),
     #[error("Subject ALready Exists: \"{0}\"")]
-    SubjectAlreadyExists(String)
+    SubjectAlreadyExists(String),
+    #[error("Governance Error")]
+    GovernanceError(#[from] RequestError),
 }

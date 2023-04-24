@@ -25,7 +25,7 @@ enum CompilerCodes {
 
 impl<D: DatabaseManager, G: GovernanceInterface + Send> TapleCompiler<D, G> {
     pub fn new(
-        input_channel: MpscChannel<CompilerMessages, EvaluatorResponse>,
+        input_channel: MpscChannel<CompilerMessages, CompilerResponses>,
         database: DB<D>,
         gov_api: G,
         contracts_path: String,
