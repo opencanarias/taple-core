@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
 
-use borsh::BorshSerialize;
 use json_patch::{patch, Patch};
 use serde_json::Value;
 
@@ -16,6 +15,7 @@ use crate::{
             state::Subject,
             Acceptance,
         },
+        self_signature_manager::{SelfSignatureInterface, SelfSignatureManager},
     },
     event_content::Metadata,
     event_request::EventRequest,
@@ -23,6 +23,7 @@ use crate::{
     identifier::{Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier},
     ledger::{LedgerCommand, LedgerResponse},
     message::{MessageConfig, MessageTaskCommand},
+    notary::NotaryEvent,
     protocol::protocol_message_manager::TapleMessages,
     signature::{Signature, SignatureContent, UniqueSignature},
     utils::message::{
@@ -33,7 +34,7 @@ use crate::{
 };
 use std::hash::Hash;
 
-use super::{errors::EventError, EventMessages};
+use super::{errors::EventError};
 use crate::database::{DatabaseManager, DB};
 
 const TIMEOUT: u32 = 2000;
@@ -61,6 +62,8 @@ pub struct EventCompleter<D: DatabaseManager> {
     // Validation HashMaps
     events_to_validate: HashMap<DigestIdentifier, Event>,
     event_validations: HashMap<DigestIdentifier, HashSet<UniqueSignature>>,
+    // SignatureManager
+    signature_manager: SelfSignatureManager,
 }
 
 impl<D: DatabaseManager> EventCompleter<D> {
@@ -71,6 +74,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
         notification_sender: tokio::sync::broadcast::Sender<Notification>,
         ledger_sender: SenderEnd<LedgerCommand, LedgerResponse>,
         own_identifier: KeyIdentifier,
+        signature_manager: SelfSignatureManager,
     ) -> Self {
         Self {
             gov_api,
@@ -89,7 +93,38 @@ impl<D: DatabaseManager> EventCompleter<D> {
             event_validations: HashMap::new(),
             subjects_by_governance: HashMap::new(),
             own_identifier,
+            signature_manager,
         }
+    }
+
+    fn create_notary_event(
+        &self,
+        subject: &Subject,
+        event: &Event,
+        gov_version: u64,
+    ) -> Result<NotaryEvent, EventError> {
+        let signature = self
+            .signature_manager
+            .sign(&(
+                &subject.governance_id,
+                &subject.subject_id,
+                &subject.owner,
+                &event.signature.content.event_content_hash,
+                event.content.event_proposal.proposal.sn,
+                gov_version,
+            ))
+            .map_err(|_| {
+                EventError::CryptoError(String::from("Notary Event hash generation failed"))
+            })?;
+        Ok(NotaryEvent {
+            gov_id: subject.governance_id.clone(),
+            subject_id: subject.subject_id.clone(),
+            owner: subject.owner.clone(),
+            event_hash: event.signature.content.event_content_hash.clone(),
+            sn: event.content.event_proposal.proposal.sn,
+            gov_version,
+            owner_signature: signature,
+        })
     }
 
     pub async fn init(&mut self) -> Result<(), EventError> {
@@ -99,11 +134,15 @@ impl<D: DatabaseManager> EventCompleter<D> {
             // Comprobar si hay eventos más allá del sn del sujeto que indica que debemos pedir las validaciones porque aún está pendiente de validar
             match self.database.get_prevalidated_event(&subject.subject_id) {
                 Ok(last_event) => {
+                    let gov_version = self
+                        .gov_api
+                        .get_governance_version(subject.subject_id.clone())
+                        .await?;
                     let metadata = Metadata {
                         namespace: subject.namespace.clone(),
                         subject_id: subject.subject_id.clone(),
                         governance_id: subject.governance_id.clone(),
-                        governance_version: 0, // Not needed
+                        governance_version: gov_version, // Not needed
                         schema_id: subject.schema_id.clone(),
                         owner: subject.owner.clone(),
                         creator: subject.creator.clone(),
@@ -111,7 +150,11 @@ impl<D: DatabaseManager> EventCompleter<D> {
                     let stage = ValidationStage::Validate;
                     let (signers, quorum_size) =
                         self.get_signers_and_quorum(metadata, stage.clone()).await?;
-                    let event_message = create_validator_request(last_event.clone());
+                    let event_message = create_validator_request(self.create_notary_event(
+                        subject,
+                        &last_event,
+                        gov_version,
+                    )?);
                     self.ask_signatures(
                         &subject.subject_id,
                         event_message,
@@ -173,7 +216,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
     pub async fn new_governance_version(
         &mut self,
         governance_id: DigestIdentifier,
-        version: u64,
+        _version: u64,
     ) -> Result<(), EventError> {
         // Pedir event requests para cada subject_id del set y lanza new_event con ellas
         match self.subjects_by_governance.get(&governance_id).cloned() {
@@ -286,7 +329,6 @@ impl<D: DatabaseManager> EventCompleter<D> {
             },
             ValidationStage::Evaluate,
         );
-        let invokator = event_request.signature.content.signer.clone();
         let event_preevaluation = EventPreEvaluation {
             event_request: event_request.clone(),
             context: Context {
@@ -491,11 +533,20 @@ impl<D: DatabaseManager> EventCompleter<D> {
                     crate::commons::models::Acceptance::Ko => false,
                     crate::commons::models::Acceptance::Error => false,
                 };
-                let event_message = create_validator_request(self.create_event_prevalidated(
+                let gov_version = self
+                    .gov_api
+                    .get_governance_version(subject.subject_id.clone())
+                    .await?;
+                let event = &self.create_event_prevalidated(
                     event_proposal,
                     HashSet::new(),
-                    subject,
+                    &subject,
                     execution,
+                )?;
+                let event_message = create_validator_request(self.create_notary_event(
+                    &subject,
+                    event,
+                    gov_version,
                 )?);
                 self.subjects_by_governance.remove(&subject_id);
                 (ValidationStage::Validate, event_message)
@@ -550,7 +601,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
             )));
         }
         // Comprobar que todo es correcto criptográficamente
-        let approval_hash = check_cryptography(&approval.content, &approval.signature)
+        let _approval_hash = check_cryptography(&approval.content, &approval.signature)
             .map_err(|error| EventError::CryptoError(error.to_string()))?;
         // Obtener sujeto para saber si lo tenemos y los metadatos del mismo
         let subject = self
@@ -628,12 +679,20 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 .event_proposals
                 .remove(&approval.content.event_proposal_hash)
                 .unwrap();
-            let event_message = create_validator_request(self.create_event_prevalidated(
+
+            let gov_version = self
+                .gov_api
+                .get_governance_version(subject.subject_id.clone())
+                .await?;
+            let event = &self.create_event_prevalidated(
                 event_proposal,
                 approvals,
-                subject,
+                &subject,
                 execution,
-            )?);
+            )?;
+            let event_message =
+                create_validator_request(self.create_notary_event(&subject, event, gov_version)?);
+
             // Limpiar HashMaps
             self.event_approvations
                 .remove(&approval.content.event_proposal_hash);
@@ -685,7 +744,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
         let event_hash = check_cryptography(&event.content, &signature)
             .map_err(|error| EventError::CryptoError(error.to_string()))?;
         // Obtener sujeto para saber si lo tenemos y los metadatos del mismo
-        let subject = self
+        let _subject = self
             .database
             .get_subject(&subject_id)
             .map_err(|error| match error {
@@ -789,7 +848,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
         &mut self,
         event_proposal: EventProposal,
         approvals: HashSet<Approval>,
-        subject: Subject,
+        subject: &Subject,
         execution: bool,
     ) -> Result<Event, EventError> {
         let event_content = EventContent::new(event_proposal, approvals, execution);
@@ -797,7 +856,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
             .map_err(|_| {
                 EventError::CryptoError(String::from("Error calculating the hash of the event"))
             })?;
-        let subject_keys = subject.keys.expect("Somos propietario");
+        let subject_keys = subject.keys.as_ref().expect("Somos propietario");
         let event_signature = subject_keys
             .sign(Payload::Buffer(event_content_hash.derivative()))
             .map_err(|_| {
@@ -821,7 +880,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
         self.events_to_validate
             .insert(event_content_hash, event.clone());
         self.database
-            .set_prevalidated_event(&subject.subject_id, event)
+            .set_prevalidated_event(&subject.subject_id, event.clone())
             .map_err(|error| EventError::DatabaseError(error.to_string()))?;
         self.database
             .del_request(&subject.subject_id)

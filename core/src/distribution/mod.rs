@@ -25,17 +25,17 @@ pub enum DistributionMessagesNew {
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct AskForSignatures {
-    subject_id: DigestIdentifier,
-    sn: u64,
-    signatures_requested: HashSet<KeyIdentifier>,
-    sender_id: KeyIdentifier
+    pub subject_id: DigestIdentifier,
+    pub sn: u64,
+    pub signatures_requested: HashSet<KeyIdentifier>,
+    pub sender_id: KeyIdentifier
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct SignaturesReceived {
-    subject_id: DigestIdentifier,
-    sn: u64,
-    signatures: HashSet<Signature>
+    pub subject_id: DigestIdentifier,
+    pub sn: u64,
+    pub signatures: HashSet<Signature>
 }
 
 // Message Recieved from Ledger

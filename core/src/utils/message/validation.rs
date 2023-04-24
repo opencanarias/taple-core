@@ -3,6 +3,8 @@ use crate::{
   notary::{NotaryCommand, NotaryEvent}, Event,
 };
 
-pub fn create_validator_request(notary_event: Event) -> TapleMessages {
+pub fn create_validator_request(
+  notary_event: NotaryEvent,
+) -> TapleMessages {
     TapleMessages::ValidationMessage(NotaryCommand::NotaryEvent(notary_event))
 }

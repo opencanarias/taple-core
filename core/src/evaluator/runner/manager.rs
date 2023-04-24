@@ -76,6 +76,7 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send> TapleRunner<D, G> {
                 &execute_contract.context,
                 governance_version,
                 contract,
+                &state_data.subject_id
             )
             .await?;
         let (patch, hash) = match contract_result.success {

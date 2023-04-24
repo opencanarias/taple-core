@@ -54,9 +54,6 @@ impl<D: DatabaseManager> InnerGovernance<D> {
             .map_err(|_| InternalError::DeserializationError)?;
         let policies = get_as_array(&properties, "Policies")?;
         let schema_policy = get_schema_from_policies(policies, &schema_id);
-        let Ok(schema_policy) = schema_policy else {
-            return Ok(Err(schema_policy.unwrap_err()));
-        }; // El return dentro de otro return es una **** que obliga a hacer cosas como esta
         let roles_prop = properties["Roles"]
             .as_array()
             .expect("Existe Roles")
@@ -339,7 +336,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         let schemas = get_as_array(&properties, "Schemas")?;
         let mut result = Vec::new();
         for schema in schemas {
-            let contract: Contract = serde_json::from_value(schema["Contract"])
+            let contract: Contract = serde_json::from_value(schema["Contract"].clone())
                 .map_err(|_| InternalError::InvalidGovernancePayload)?;
             result.push(contract);
         }
@@ -481,9 +478,9 @@ fn get_roles(
         if !namespace_contiene(&role_data.namespace, namespace) {
             continue;
         }
-        match role_data.schema {
+        match &role_data.schema {
             Schema::Id { id } => {
-                if &id == schema_id {
+                if &id == &schema_id {
                     roles.push(role_data)
                 }
             }

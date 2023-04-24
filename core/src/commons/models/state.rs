@@ -132,7 +132,7 @@ impl Subject {
             return Err(SubjectError::NotCreateEvent)
         };
         let subject_id = match DigestIdentifier::from_serializable_borsh((
-            event
+            &event
                 .content
                 .event_proposal
                 .proposal
@@ -140,7 +140,7 @@ impl Subject {
                 .signature
                 .content
                 .event_content_hash,
-            event.signature.content.signer,
+            &event.signature.content.signer,
         )) {
             Ok(subject_id) => subject_id,
             Err(_) => return Err(SubjectError::ErrorCreatingSubjectId),

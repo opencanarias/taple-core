@@ -122,7 +122,7 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
                 Ok(Err(ApprovalErrorResponse::InvalidGovernanceID))
             }
             Err(RequestError::ChannelClosed) => Err(ApprovalManagerError::GovernanceChannelFailed),
-            Err(error) => Err(ApprovalManagerError::UnexpectedError),
+            Err(_error) => Err(ApprovalManagerError::UnexpectedError),
         }
     }
 
@@ -177,7 +177,7 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
             .content
             .event_content_hash;
 
-        if let Some(data) = self.request_table.get(&id) {
+        if let Some(_data) = self.request_table.get(&id) {
             return Ok(Err(ApprovalErrorResponse::RequestAlreadyKnown));
         }
 
@@ -190,7 +190,7 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
         let subject_data = match self.database.get_subject(&state_request.subject_id) {
             Ok(subject) => subject,
             Err(DbError::EntryNotFound) => return Ok(Err(ApprovalErrorResponse::SubjectNotFound)),
-            Err(error) => return Err(ApprovalManagerError::DatabaseError),
+            Err(_error) => return Err(ApprovalManagerError::DatabaseError),
         };
 
         if approval_request.proposal.sn > subject_data.sn + 1 {
@@ -247,7 +247,7 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
 
         // Verificamos la firma
         let hash = event_proposal_hash_gen(&approval_request)?;
-        if let Err(error) = approval_request.subject_signature.content.signer.verify(
+        if let Err(_error) = approval_request.subject_signature.content.signer.verify(
             &hash.derivative(),
             approval_request.subject_signature.signature.clone(),
         ) {
@@ -435,13 +435,13 @@ fn event_proposal_hash_gen(
 
 fn create_metadata(subject_data: &Subject, governance_version: u64) -> Metadata {
     Metadata {
-        namespace: subject_data.namespace,
-        subject_id: subject_data.subject_id,
-        governance_id: subject_data.governance_id,
+        namespace: subject_data.namespace.clone(),
+        subject_id: subject_data.subject_id.clone(),
+        governance_id: subject_data.governance_id.clone(),
         governance_version,
-        schema_id: subject_data.schema_id,
-        owner: subject_data.owner,
-        creator: subject_data.creator,
+        schema_id: subject_data.schema_id.clone(),
+        owner: subject_data.owner.clone(),
+        creator: subject_data.creator.clone(),
     }
 }
 

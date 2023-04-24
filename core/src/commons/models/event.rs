@@ -274,7 +274,7 @@ impl Event {
             })?;
         let subject_signature = Signature {
             content: SignatureContent {
-                signer: public_key,
+                signer: public_key.clone(),
                 event_content_hash: proposal_hash.clone(),
                 timestamp: TimeStamp::now(),
             },
@@ -299,7 +299,7 @@ impl Event {
             })?;
         let subject_signature = Signature {
             content: SignatureContent {
-                signer: public_key,
+                signer: public_key.clone(),
                 event_content_hash: content_hash,
                 timestamp: TimeStamp::now(),
             },
