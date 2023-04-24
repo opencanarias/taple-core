@@ -50,8 +50,8 @@ pub struct Invoke {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Contract {
-    name: String,
-    content: String,
+    pub name: String,
+    pub content: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

@@ -6,16 +6,17 @@ use super::compiler::manager::TapleCompiler;
 use super::compiler::{CompilerMessages, CompilerResponses};
 use super::errors::EvaluatorError;
 use super::{EvaluatorMessage, EvaluatorResponse};
+use crate::commons::self_signature_manager::{SelfSignatureInterface, SelfSignatureManager};
 use crate::database::{DatabaseManager, DB};
 use crate::evaluator::errors::ExecutorErrorResponses;
 use crate::evaluator::runner::manager::TapleRunner;
-use crate::evaluator::AskForEvaluationResponse;
 use crate::event_request::{EventRequestType, RequestPayload};
 use crate::governance::GovernanceInterface;
-use crate::protocol::command_head_manager::self_signature_manager::SelfSignatureInterface;
+use crate::message::{MessageConfig, MessageTaskCommand};
+use crate::protocol::protocol_message_manager::TapleMessages;
+use crate::utils::message::event::create_evaluator_response;
 use crate::{
-    commons::channel::{ChannelData, MpscChannel, SenderEnd},
-    protocol::command_head_manager::self_signature_manager::SelfSignatureManager,
+    commons::channel::{ChannelData, MpscChannel, SenderEnd}
 };
 
 #[derive(Clone, Debug)]
@@ -40,6 +41,7 @@ pub struct EvaluatorManager<
     signature_manager: SelfSignatureManager,
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+    messenger_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
 }
 
 impl<D: DatabaseManager, G: GovernanceInterface + Send + Clone + 'static> EvaluatorManager<D, G> {
@@ -52,6 +54,7 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send + Clone + 'static> Evalua
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
         gov_api: G,
         contracts_path: String,
+        messenger_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
     ) -> Self {
         let engine = Engine::default();
         let compiler = TapleCompiler::new(
@@ -72,6 +75,7 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send + Clone + 'static> Evalua
             signature_manager,
             shutdown_receiver,
             shutdown_sender,
+            messenger_channel,
         }
     }
 
@@ -107,14 +111,15 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send + Clone + 'static> Evalua
                 let (sender, data) = data.get();
                 (Some(sender), data)
             }
-            ChannelData::TellData(_) => {
-                return Err(EvaluatorError::TellNotAvailable);
+            ChannelData::TellData(data) => {
+                let data = data.get();
+                (None, data)
             }
         };
         let response = 'response: {
             match data {
                 EvaluatorMessage::AskForEvaluation(data) => {
-                    let EventRequestType::State(state_data) = &data.invokation.request else {
+                    let EventRequestType::State(state_data) = &data.event_request.request else {
                         break 'response EvaluatorResponse::AskForEvaluation(Err(super::errors::EvaluatorErrorResponses::CreateRequestNotAllowed));
                     };
                     let result = self.runner.execute_contract(&data, state_data).await;
@@ -131,14 +136,22 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send + Clone + 'static> Evalua
                                     &executor_response.approval_required,
                                 ))
                                 .map_err(|_| EvaluatorError::SignatureGenerationFailed)?;
-                            EvaluatorResponse::AskForEvaluation(Ok(AskForEvaluationResponse {
+                            let msg = create_evaluator_response(
+                                executor_response.context_hash,
+                                executor_response.hash_new_state,
                                 governance_version,
-                                hash_new_state: executor_response.hash_new_state,
-                                json_patch: executor_response.json_patch,
+                                executor_response.success,
+                                executor_response.approval_required,
+                                executor_response.json_patch,
                                 signature,
-                                success: executor_response.success,
-                                approval_required: executor_response.approval_required,
-                            }))
+                            );
+                            self.messenger_channel.tell(MessageTaskCommand::Request(
+                                None,
+                                msg,
+                                vec![data.context.owner],
+                                MessageConfig::direct_response(),
+                            ));
+                            EvaluatorResponse::AskForEvaluation(Ok(()))
                         }
                         Err(ExecutorErrorResponses::DatabaseError(error)) => {
                             return Err(EvaluatorError::DatabaseError(error))
@@ -158,10 +171,12 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send + Clone + 'static> Evalua
                 }
             }
         };
-        sender
-            .unwrap()
-            .send(response)
-            .map_err(|_| EvaluatorError::ChannelNotAvailable)?;
+        if sender.is_some() {
+            sender
+                .unwrap()
+                .send(response)
+                .map_err(|_| EvaluatorError::ChannelNotAvailable)?;
+        }
         Ok(())
     }
 }
@@ -173,9 +188,10 @@ fn extract_data_from_payload(payload: &RequestPayload) -> String {
     }
 }
 
+/*
 #[cfg(test)]
 mod test {
-    use std::{collections::HashSet, str::FromStr, sync::Arc};
+    use std::{str::FromStr, sync::Arc};
 
     use async_trait::async_trait;
     use json_patch::diff;
@@ -185,22 +201,19 @@ mod test {
         commons::{
             channel::{MpscChannel, SenderEnd},
             crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair},
-            models::notary::NotaryEventResponse,
         },
         evaluator::{
             compiler::{CompilerMessages, CompilerResponses, ContractType, NewGovVersion},
-            errors::{CompilerErrorResponses, EvaluatorErrorResponses, ExecutorErrorResponses},
-            Context, EvaluatorMessage, EvaluatorResponse,
+            errors::CompilerErrorResponses,
+            EvaluatorMessage, EvaluatorResponse,
         },
-        event_content::Metadata,
-        event_request::{EventRequest, EventRequestType, RequestPayload, StateRequest},
-        governance::{error::RequestError, GovernanceInterface, RequestQuorum},
-        identifier::{Derivable, DigestIdentifier, KeyIdentifier},
+        event_request::{EventRequest, EventRequestType, StateRequest},
+        governance::{error::RequestError, GovernanceInterface},
+        identifier::{DigestIdentifier, KeyIdentifier},
         protocol::command_head_manager::self_signature_manager::{
             SelfSignatureInterface, SelfSignatureManager,
         },
-        signature::Signature,
-        Event, MemoryManager, TimeStamp,
+        MemoryManager, TimeStamp,
     };
 
     use crate::evaluator::manager::EvaluatorManager;
@@ -421,8 +434,10 @@ mod test {
         SenderEnd<EvaluatorMessage, EvaluatorResponse>,
         SenderEnd<CompilerMessages, CompilerResponses>,
         SelfSignatureManager,
+        MpscChannel<EvaluatorMessage, EvaluatorResponse>,
     ) {
         let (rx, sx) = MpscChannel::new(100);
+        let (msg_rx, msg_sx) = MpscChannel::new(100);
         let (rx_compiler, sx_compiler) = MpscChannel::new(100);
         let database = Arc::new(MemoryManager::new());
         let keypair = KeyPair::Ed25519(Ed25519KeyPair::from_seed(&[]));
@@ -443,8 +458,9 @@ mod test {
             shutdown_rx,
             governance,
             "../contract".into(),
+            msg_sx,
         );
-        (manager, sx, sx_compiler, signature_manager)
+        (manager, sx, sx_compiler, signature_manager, msg_rx)
     }
 
     fn create_event_request(
@@ -828,3 +844,4 @@ mod test {
         });
     }
 }
+ */

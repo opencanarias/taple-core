@@ -6,8 +6,6 @@ use crate::governance::error::RequestError;
 pub enum EvaluatorError {
     #[error("A database error has ocurred at main component {0}")]
     DatabaseError(String),
-    #[error("Can't accept TELL messages over MSPC channel")]
-    TellNotAvailable,
     #[error("Channel not available")]
     ChannelNotAvailable,
     #[error("Create Request not allowed")]
@@ -62,8 +60,8 @@ pub enum CompilerError {
     DatabaseError(String),
     #[error("Channel not available")]
     ChannelNotAvailable,
-    #[error("Init process error")]
-    InitError,
+    #[error("Initialization process error: {0}")]
+    InitError(String),
     #[error("Internal Error")]
     InternalError(#[from] CompilerErrorResponses)
 }

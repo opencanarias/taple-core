@@ -1,67 +1,112 @@
-pub mod manager;
-use std::collections::HashSet;
-use std::hash::{Hash, Hasher};
-
-use crate::commons::models::approval_signature::ApprovalResponse;
-use crate::commons::{
-    identifier::{DigestIdentifier, KeyIdentifier},
-    models::{event::Event, signature::Signature},
-};
-use crate::message::TaskCommandContent;
 use serde::{Deserialize, Serialize};
 
-use super::request_manager::ApprovalRequest;
-
-impl TaskCommandContent for ProtocolManagerMessages {}
-
-// Definition of message structures to be used
-
-// Messages sent to ProtocolMessageManager
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
-pub enum ProtocolManagerMessages {
-    GetMessage(GetMessage),
-    SendMessage(SendMessage),
-    ApprovalRequest(ApprovalRequest), // Sent by the network
-    Vote(ApprovalResponse),           // Sent by the network
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
-pub struct GetMessage {
-    pub sn: EventId,
-    pub subject_id: DigestIdentifier,
-    pub request_content: HashSet<Content>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
-pub enum EventId {
-    SN { sn: u64 },
-    HEAD,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
-pub enum Content {
+use crate::{
+    approval::{error::ApprovalErrorResponse, ApprovalMessages},
+    commons::channel::{ChannelData, MpscChannel, SenderEnd},
+    distribution::{
+        error::DistributionErrorResponses, DistributionMessagesNew,
+        LedgerMessages,
+    },
+    evaluator::{EvaluatorMessage, EvaluatorResponse},
+    event::{EventCommand, EventResponse},
+    message::{Message, TaskCommandContent},
+    notary::{NotaryCommand, NotaryResponse},
     Event,
-    Signatures(HashSet<KeyIdentifier>),
+};
+
+
+mod error;
+use error::ProtocolErrors;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum TapleMessages {
+    DistributionMessage(DistributionMessagesNew),
+    EvaluationMessage(EvaluatorMessage),
+    ValidationMessage(Event),
+    EventMessage(EventCommand),
+    ApprovalMessages(ApprovalMessages),
+    LedgerMessages(LedgerMessages),
 }
 
-impl Hash for Content {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        match self {
-            Content::Event => {
-                state.write_u8(0);
-            }
-            Content::Signatures(_) => {
-                state.write_u8(1);
+impl TaskCommandContent for TapleMessages {}
+
+pub struct ProtocolManager {
+    input: MpscChannel<Message<TapleMessages>, ()>,
+    distribution_sx: SenderEnd<DistributionMessagesNew, Result<(), DistributionErrorResponses>>,
+    evaluation_sx: SenderEnd<EvaluatorMessage, EvaluatorResponse>,
+    validation_sx: SenderEnd<NotaryCommand, NotaryResponse>,
+    event_sx: SenderEnd<EventCommand, EventResponse>,
+    approval_sx: SenderEnd<ApprovalMessages, Result<(), ApprovalErrorResponse>>,
+    shutdown_sender: tokio::sync::broadcast::Sender<()>,
+    shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+}
+
+impl ProtocolManager {
+    pub async fn start(mut self) {
+        loop {
+            tokio::select! {
+                command = self.input.receive() => {
+                    match command {
+                        Some(command) => {
+                            let result = self.process_command(command).await;
+                            if result.is_err() {
+                                log::error!("Protocol Manager: {}", result.unwrap_err());
+                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                break;
+                            }
+                        }
+                        None => {
+                            self.shutdown_sender.send(()).expect("Channel Closed");
+                            break;
+                        },
+                    }
+                },
+                _ = self.shutdown_receiver.recv() => {
+                    break;
+                }
             }
         }
     }
-}
 
-// PUT messages (responses)
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
-pub struct SendMessage {
-    pub event: Option<Event>,
-    pub sn: u64,
-    pub subject_id: DigestIdentifier,
-    pub signatures: Option<HashSet<Signature>>,
+    async fn process_command(
+        &self,
+        command: ChannelData<Message<TapleMessages>, ()>,
+    ) -> Result<(), ProtocolErrors> {
+        let msg = match command {
+            ChannelData::AskData(_data) => {
+                return Err(ProtocolErrors::AskCommandDetected);
+            }
+            ChannelData::TellData(data) => {
+                let data = data.get();
+                data
+            }
+        };
+        let msg = msg.content;
+        match msg {
+            TapleMessages::DistributionMessage(data) => {
+                self.distribution_sx
+                    .tell(data)
+                    .await
+                    .map_err(|_| ProtocolErrors::ChannelClosed)?;
+            }
+            TapleMessages::EventMessage(data) => self
+                .event_sx
+                .tell(data)
+                .await
+                .map_err(|_| ProtocolErrors::ChannelClosed)?,
+            TapleMessages::EvaluationMessage(data) => self
+                .evaluation_sx
+                .tell(data)
+                .await
+                .map_err(|_| ProtocolErrors::ChannelClosed)?,
+            TapleMessages::ValidationMessage(data) => self
+                .validation_sx
+                .tell(data)
+                .await
+                .map_err(|_| ProtocolErrors::ChannelClosed)?,
+            TapleMessages::ApprovalMessages(data) => todo!(),
+            TapleMessages::LedgerMessages(_) => todo!(),
+        }
+        Ok(())
+    }
 }

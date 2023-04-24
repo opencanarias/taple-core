@@ -1,5 +1,4 @@
-use std::collections::{HashMap, HashSet};
-use std::str::FromStr;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use serde::de::DeserializeOwned;
@@ -7,7 +6,6 @@ use serde::Serialize;
 
 use crate::commons::models::notary::NotaryEventResponse;
 use crate::commons::models::state::Subject;
-use crate::event_content::EventContent;
 use crate::event_request::EventRequest;
 use crate::identifier::{Derivable, DigestIdentifier, KeyIdentifier};
 use crate::signature::Signature;
@@ -24,6 +22,7 @@ const ID_TABLE: &str = "controller-id";
 const NOTARY_TABLE: &str = "notary";
 const CONTRACT_TABLE: &str = "contract";
 const NOTARY_SIGNATURES: &str = "notary-signatures";
+const WITNESS_SIGNATURES: &str = "witness-signatures";
 
 pub struct DB<M: DatabaseManager> {
     _manager: Arc<M>,
@@ -36,6 +35,7 @@ pub struct DB<M: DatabaseManager> {
     contract_db: Box<dyn DatabaseCollection<InnerDataType = (Vec<u8>, DigestIdentifier, u64)>>,
     notary_signatures_db:
         Box<dyn DatabaseCollection<InnerDataType = (u64, HashSet<NotaryEventResponse>)>>,
+    witness_signatures_db: Box<dyn DatabaseCollection<InnerDataType = (u64, HashSet<Signature>)>>,
 }
 
 impl<M: DatabaseManager> DB<M> {
@@ -48,6 +48,7 @@ impl<M: DatabaseManager> DB<M> {
         let notary_db = manager.create_collection(NOTARY_TABLE);
         let contract_db = manager.create_collection(CONTRACT_TABLE);
         let notary_signatures_db = manager.create_collection(NOTARY_SIGNATURES);
+        let witness_signatures_db = manager.create_collection(WITNESS_SIGNATURES);
         Self {
             _manager: manager,
             signature_db,
@@ -58,6 +59,7 @@ impl<M: DatabaseManager> DB<M> {
             notary_db,
             contract_db,
             notary_signatures_db,
+            witness_signatures_db,
         }
     }
 
@@ -152,6 +154,14 @@ impl<M: DatabaseManager> DB<M> {
         events_by_subject.get(&sn.to_string())
     }
 
+    pub fn get_witness_signatures(
+        &self,
+        subject_id: &DigestIdentifier,
+    ) -> Result<(u64, HashSet<Signature>), Error> {
+        let id = subject_id.to_str();
+        self.witness_signatures_db.get(&id)
+    }
+
     pub fn get_notary_signatures(
         &self,
         subject_id: &DigestIdentifier,
@@ -201,6 +211,29 @@ impl<M: DatabaseManager> DB<M> {
             }
         };
         self.notary_signatures_db.put(&id, (sn, total_signatures))
+    }
+
+    pub fn set_witness_signatures(
+        &self,
+        subject_id: &DigestIdentifier,
+        sn: u64,
+        signatures: HashSet<Signature>,
+    ) -> Result<(), Error> {
+        let id = subject_id.to_str();
+        let total_signatures = match self.witness_signatures_db.get(&id) {
+            Ok((_, other)) => signatures.union(&other).cloned().collect(),
+            Err(Error::EntryNotFound) => signatures,
+            Err(error) => {
+                // logError!("Error detected in database get_event operation: {}", error);
+                return Err(error);
+            }
+        };
+        self.witness_signatures_db.put(&id, (sn, total_signatures))
+    }
+
+    pub fn del_witness_signatures(&self, subject_id: &DigestIdentifier) -> Result<(), Error> {
+        let id = subject_id.to_str();
+        self.witness_signatures_db.del(&id)
     }
 
     pub fn get_subject(&self, subject_id: &DigestIdentifier) -> Result<Subject, Error> {
@@ -276,10 +309,7 @@ impl<M: DatabaseManager> DB<M> {
         result
     }
 
-    pub fn get_request(
-        &self,
-        subject_id: &DigestIdentifier,
-    ) -> Result<EventRequest, Error> {
+    pub fn get_request(&self, subject_id: &DigestIdentifier) -> Result<EventRequest, Error> {
         let id = subject_id.to_str();
         self.request_db.get(&id)
     }
@@ -348,13 +378,11 @@ impl<M: DatabaseManager> DB<M> {
         schemas_by_governances.get(schema_id)
     }
 
-    pub fn get_governance_contract(
-        &self,
-    ) -> Result<Vec<u8>, Error>  {
+    pub fn get_governance_contract(&self) -> Result<Vec<u8>, Error> {
         let contract = self.contract_db.get("governance");
         match contract {
             Ok(result) => Ok(result.0),
-            Err(error) => Err(error)
+            Err(error) => Err(error),
         }
     }
 

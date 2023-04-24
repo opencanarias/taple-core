@@ -40,19 +40,3 @@ pub enum RequestManagerResponse {
     GetPendingRequests(Vec<EventRequest>),
     GetSingleRequest(Result<EventRequest, ResponseError>),
 }
-
-pub enum VotationType {
-    Normal,
-    AlwaysAccept,
-    AlwaysReject,
-}
-
-impl From<u8> for VotationType {
-    fn from(passvotation: u8) -> Self {
-        match passvotation {
-            2 => Self::AlwaysReject,
-            1 => Self::AlwaysAccept,
-            _ => Self::Normal,
-        }
-    }
-}
