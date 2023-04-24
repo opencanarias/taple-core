@@ -34,7 +34,7 @@ use crate::{
 };
 use std::hash::Hash;
 
-use super::{errors::EventError};
+use super::errors::EventError;
 use crate::database::{DatabaseManager, DB};
 
 const TIMEOUT: u32 = 2000;
@@ -279,14 +279,11 @@ impl<D: DatabaseManager> EventCompleter<D> {
                         return Err(EventError::CreatingPermissionDenied);
                     }
                 }
-                // Mandar mensaje al ledger de nuevo evento genesis
-                // TODO: Enviar al Ledger que hay nuevo evento validado
-                // self.ledger_sender
-                //     .send(LedgerMessages::Genesis(event_request))
-                //     .await
-                //     .map_err(EventError::LedgerError)?;
-                // TODO: lo dle Ledger, importante
-                return Ok(event_request.signature.content.event_content_hash);
+                let request_hash = event_request.signature.content.event_content_hash.clone();
+                self.ledger_sender
+                    .tell(LedgerCommand::Genesis { event_request })
+                    .await?;
+                return Ok(request_hash);
             }
             crate::event_request::EventRequestType::State(state_request) => {
                 // Check if we have the subject in the database
@@ -345,7 +342,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
             sn: subject.sn,
             // self.actual_sn.get(&subject_id).unwrap().to_owned() + 1, // Must be Some, filled in init function
         };
-        let (signers, quorum_size) = self.get_signers_and_quorum(metadata, stage).await?;
+        let (signers, quorum_size) = self.get_signers_and_quorum(metadata, stage.clone()).await?;
         self.ask_signatures(
             &subject_id,
             create_evaluator_request(event_preevaluation.clone()),
@@ -369,7 +366,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
         // Add the event to the hashset to not complete two at the same time for the same subject
         self.subjects_completing_event.insert(
             subject_id.clone(),
-            (ValidationStage::Evaluate, signers, quorum_size),
+            (stage, signers, quorum_size),
         );
         self.subjects_by_governance
             .entry(subject.governance_id)
@@ -435,7 +432,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
             return Err(EventError::WrongGovernanceVersion);
         }
         // Comprobar que el json patch es válido
-        if !hash_match_after_patch(&evaluation.state_hash, &json_patch, &subject.properties)? {
+        if !hash_match_after_patch(&evaluation, &json_patch, &subject.properties)? {
             return Err(EventError::CryptoError(
                 "Json patch applied to state hash does not match the new state hash".to_string(),
             ));
@@ -684,12 +681,8 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 .gov_api
                 .get_governance_version(subject.subject_id.clone())
                 .await?;
-            let event = &self.create_event_prevalidated(
-                event_proposal,
-                approvals,
-                &subject,
-                execution,
-            )?;
+            let event =
+                &self.create_event_prevalidated(event_proposal, approvals, &subject, execution)?;
             let event_message =
                 create_validator_request(self.create_notary_event(&subject, event, gov_version)?);
 
@@ -776,12 +769,12 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 .map(|unique_signature| unique_signature.signature.clone())
                 .collect();
             // Si se llega a Quorum lo mandamos al ledger
-            // TODO: Enviar al Ledger que hay nuevo evento validado
-            // self.ledger_sender
-            //     .send(LedgerMessages::EventValidated(event, validation_signatures))
-            //     .await
-            //     .map_err(EventError::LedgerError)?;
-            // TODO: lo dle Ledger, importante
+            self.ledger_sender
+                .tell(LedgerCommand::OwnEvent {
+                    event: event.clone(),
+                    signatures: validation_signatures,
+                })
+                .await?;
             self.database
                 .del_prevalidated_event(&subject_id)
                 .map_err(|error| EventError::DatabaseError(error.to_string()))?;
@@ -917,24 +910,34 @@ fn insert_or_replace_and_check<T: PartialEq + Eq + Hash>(
 }
 
 fn hash_match_after_patch(
-    state_hash: &DigestIdentifier,
+    evaluation: &Evaluation,
     json_patch: &str,
     prev_properties: &str,
 ) -> Result<bool, EventError> {
-    let Ok(patch_json) = serde_json::from_str::<Patch>(json_patch) else {
-        return Err(EventError::ErrorParsingJsonString(json_patch.to_owned()));
-    };
     let Ok(mut state) = serde_json::from_str::<Value>(prev_properties) else {
-        return Err(EventError::ErrorParsingJsonString(prev_properties.to_owned()));
+    return Err(EventError::ErrorParsingJsonString(prev_properties.to_owned()));
+};
+    if evaluation.acceptance != Acceptance::Ok {
+        let state = serde_json::to_string(&state)
+            .map_err(|_| EventError::ErrorParsingJsonString("New State after patch".to_owned()))?;
+        let state_hash_calculated =
+            DigestIdentifier::from_serializable_borsh(&state).map_err(|_| {
+                EventError::CryptoError(String::from("Error calculating the hash of the state"))
+            })?;
+        Ok(state_hash_calculated == evaluation.state_hash)
+    } else {
+        let Ok(patch_json) = serde_json::from_str::<Patch>(json_patch) else {
+            return Err(EventError::ErrorParsingJsonString(json_patch.to_owned()));
     };
-    let Ok(()) = patch(&mut state, &patch_json) else {
+        let Ok(()) = patch(&mut state, &patch_json) else {
         return Err(EventError::ErrorApplyingPatch(json_patch.to_owned()));
     };
-    let state = serde_json::to_string(&state)
-        .map_err(|_| EventError::ErrorParsingJsonString("New State after patch".to_owned()))?;
-    let state_hash_calculated =
-        DigestIdentifier::from_serializable_borsh(&state).map_err(|_| {
-            EventError::CryptoError(String::from("Error calculating the hash of the state"))
-        })?;
-    return Ok(state_hash_calculated == *state_hash);
+        let state = serde_json::to_string(&state)
+            .map_err(|_| EventError::ErrorParsingJsonString("New State after patch".to_owned()))?;
+        let state_hash_calculated =
+            DigestIdentifier::from_serializable_borsh(&state).map_err(|_| {
+                EventError::CryptoError(String::from("Error calculating the hash of the state"))
+            })?;
+        Ok(state_hash_calculated == evaluation.state_hash)
+    }
 }
