@@ -24,6 +24,7 @@ const ID_TABLE: &str = "controller-id";
 const NOTARY_TABLE: &str = "notary";
 const CONTRACT_TABLE: &str = "contract";
 const NOTARY_SIGNATURES: &str = "notary-signatures";
+const WITNESS_SIGNATURES: &str = "witness-signatures";
 
 pub struct DB<M: DatabaseManager> {
     _manager: Arc<M>,
@@ -37,6 +38,7 @@ pub struct DB<M: DatabaseManager> {
     contract_db: Box<dyn DatabaseCollection<InnerDataType = (Vec<u8>, DigestIdentifier, u64)>>,
     notary_signatures_db:
         Box<dyn DatabaseCollection<InnerDataType = (u64, HashSet<NotaryEventResponse>)>>,
+    witness_signatures_db: Box<dyn DatabaseCollection<InnerDataType = (u64, HashSet<Signature>)>>,
 }
 
 impl<M: DatabaseManager> DB<M> {
@@ -50,6 +52,7 @@ impl<M: DatabaseManager> DB<M> {
         let notary_db = manager.create_collection(NOTARY_TABLE);
         let contract_db = manager.create_collection(CONTRACT_TABLE);
         let notary_signatures_db = manager.create_collection(NOTARY_SIGNATURES);
+        let witness_signatures_db = manager.create_collection(WITNESS_SIGNATURES);
         Self {
             _manager: manager,
             signature_db,
@@ -61,6 +64,7 @@ impl<M: DatabaseManager> DB<M> {
             notary_db,
             contract_db,
             notary_signatures_db,
+            witness_signatures_db,
         }
     }
 
@@ -175,6 +179,14 @@ impl<M: DatabaseManager> DB<M> {
         events_by_subject.get(&sn.to_string())
     }
 
+    pub fn get_witness_signatures(
+        &self,
+        subject_id: &DigestIdentifier,
+    ) -> Result<(u64, HashSet<Signature>), Error> {
+        let id = subject_id.to_str();
+        self.witness_signatures_db.get(&id)
+    }
+
     pub fn get_notary_signatures(
         &self,
         subject_id: &DigestIdentifier,
@@ -224,6 +236,29 @@ impl<M: DatabaseManager> DB<M> {
             }
         };
         self.notary_signatures_db.put(&id, (sn, total_signatures))
+    }
+
+    pub fn set_witness_signatures(
+        &self,
+        subject_id: &DigestIdentifier,
+        sn: u64,
+        signatures: HashSet<Signature>,
+    ) -> Result<(), Error> {
+        let id = subject_id.to_str();
+        let total_signatures = match self.witness_signatures_db.get(&id) {
+            Ok((_, other)) => signatures.union(&other).cloned().collect(),
+            Err(Error::EntryNotFound) => signatures,
+            Err(error) => {
+                // logError!("Error detected in database get_event operation: {}", error);
+                return Err(error);
+            }
+        };
+        self.witness_signatures_db.put(&id, (sn, total_signatures))
+    }
+
+    pub fn del_witness_signatures(&self, subject_id: &DigestIdentifier) -> Result<(), Error> {
+        let id = subject_id.to_str();
+        self.witness_signatures_db.del(&id)
     }
 
     pub fn get_subject(&self, subject_id: &DigestIdentifier) -> Result<Subject, Error> {

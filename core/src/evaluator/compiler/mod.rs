@@ -2,6 +2,7 @@ use crate::{commons, identifier::DigestIdentifier};
 
 use super::errors::CompilerErrorResponses;
 use base64::decode;
+use serde::{Serialize, Deserialize};
 mod compiler;
 mod gov_contract;
 pub(crate) mod manager;
@@ -59,7 +60,7 @@ impl ContractType {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NewGovVersion {
     pub governance_id: DigestIdentifier,
     pub governance_version: u64,

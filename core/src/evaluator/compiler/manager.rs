@@ -3,7 +3,7 @@ use wasmtime::Engine;
 use crate::{
     commons::channel::{ChannelData, MpscChannel},
     database::DB,
-    evaluator::errors::{CompilerError},
+    evaluator::{errors::{CompilerError}, EvaluatorResponse},
     governance::{GovernanceInterface},
     DatabaseManager,
 };
@@ -25,7 +25,7 @@ enum CompilerCodes {
 
 impl<D: DatabaseManager, G: GovernanceInterface + Send> TapleCompiler<D, G> {
     pub fn new(
-        input_channel: MpscChannel<CompilerMessages, CompilerResponses>,
+        input_channel: MpscChannel<CompilerMessages, EvaluatorResponse>,
         database: DB<D>,
         gov_api: G,
         contracts_path: String,
@@ -41,10 +41,10 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send> TapleCompiler<D, G> {
         }
     }
 
-    pub async fn start(&mut self) {
+    pub async fn start(mut self) {
         let init = self.inner_compiler.init().await;
         if let Err(error) = init {
-            log::error!("{}", error);
+            // log::error!("{}", error);
             self.shutdown_sender.send(());
             return;
         }
@@ -56,7 +56,7 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send> TapleCompiler<D, G> {
                             let result = self.process_command(command).await;
                             if result.is_err() {
                                 match result.unwrap_err() {
-                                    CompilerError::InitError => unreachable!(),
+                                    CompilerError::InitError(_) => unreachable!(),
                                     CompilerError::DatabaseError(_) => return,
                                     CompilerError::ChannelNotAvailable => return,
                                     CompilerError::InternalError(internal_error) => match internal_error {

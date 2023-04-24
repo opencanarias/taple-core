@@ -1,6 +1,6 @@
 use crate::{
-    evaluator::{errors::ExecutorErrorResponses, Context},
-    governance::GovernanceInterface,
+    evaluator::{errors::ExecutorErrorResponses},
+    governance::GovernanceInterface, commons::models::{event_preevaluation::Context, Acceptance},
 };
 
 use super::context::MemoryManager;
@@ -8,10 +8,17 @@ use serde::{Deserialize, Serialize};
 use wasmtime::{Caller, Engine, Linker, Module, Store};
 
 #[derive(Serialize, Deserialize)]
-pub struct ContractResult {
+struct WasmContractResult {
     pub final_state: String,
     pub approval_required: bool,
     pub success: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ContractResult {
+    pub final_state: String,
+    pub approval_required: bool,
+    pub success: Acceptance,
 }
 
 pub struct ContractExecutor<G: GovernanceInterface + Send> {
@@ -90,8 +97,17 @@ impl<G: GovernanceInterface + Send> ContractExecutor<G> {
         pointer: u32,
     ) -> Result<ContractResult, ExecutorErrorResponses> {
         let bytes = store.data().read_data(pointer as usize)?;
-        Ok(bincode::deserialize(bytes)
-            .map_err(|_| ExecutorErrorResponses::CantGenerateContractResult)?)
+        let contract_result: WasmContractResult  = bincode::deserialize(bytes)
+            .map_err(|_| ExecutorErrorResponses::CantGenerateContractResult)?;
+        let result = ContractResult {
+            final_state: contract_result.final_state,
+            approval_required: contract_result.approval_required,
+            success: match contract_result.success {
+                true => Acceptance::Ok,
+                false => Acceptance::Ko
+            },
+        };
+        Ok(result)
     }
 
     fn generate_linker(

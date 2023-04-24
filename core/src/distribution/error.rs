@@ -21,7 +21,7 @@ pub enum DistributionManagerError {
   #[error("Subject creation error")]
   SubjectCreationError,
   #[error("Response channel not available")]
-  ResponseChannelNotAvailable
+  ResponseChannelNotAvailable,
 }
 
 #[derive(Error, Debug, Clone)]
@@ -73,5 +73,7 @@ pub enum DistributionErrorResponses {
   #[error("Invalid signature")]
   InvalidSignature,
   #[error("Invalid signer")]
-  InvalidSigner
+  InvalidSigner,
+  #[error("Invalid DigestIdentifier")]
+  InvalidDigestIdentifier
 }

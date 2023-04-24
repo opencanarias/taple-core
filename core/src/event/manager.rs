@@ -1,9 +1,9 @@
-use super::EventMessages;
 use super::{errors::EventError, event_completer::EventCompleter, EventCommand, EventResponse};
 use crate::database::{DatabaseManager, DB};
 use crate::governance::error::RequestError;
 use crate::identifier::KeyIdentifier;
 use crate::ledger::{LedgerCommand, LedgerResponse};
+use crate::protocol::protocol_message_manager::TapleMessages;
 use crate::{
     commons::channel::{ChannelData, MpscChannel, SenderEnd},
     governance::GovernanceAPI,
@@ -38,7 +38,7 @@ impl<D: DatabaseManager> EventManager<D> {
         database: DB<D>,
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
-        message_channel: SenderEnd<MessageTaskCommand<EventMessages>, ()>,
+        message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
         notification_sender: tokio::sync::broadcast::Sender<Notification>,
         ledger_sender: SenderEnd<LedgerCommand, LedgerResponse>,
         own_identifier: KeyIdentifier,

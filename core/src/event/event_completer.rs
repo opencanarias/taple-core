@@ -23,7 +23,12 @@ use crate::{
     identifier::{Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier},
     ledger::{LedgerCommand, LedgerResponse},
     message::{MessageConfig, MessageTaskCommand},
+    protocol::protocol_message_manager::TapleMessages,
     signature::{Signature, SignatureContent, UniqueSignature},
+    utils::message::{
+        approval::create_approval_request, evaluator::create_evaluator_request,
+        validation::create_validator_request,
+    },
     Event, Notification, TimeStamp,
 };
 use std::hash::Hash;
@@ -38,7 +43,7 @@ const QUORUM_PORCENTAGE_AMPLIFICATION: f64 = 0.2;
 pub struct EventCompleter<D: DatabaseManager> {
     gov_api: GovernanceAPI,
     database: DB<D>,
-    message_channel: SenderEnd<MessageTaskCommand<EventMessages>, ()>,
+    message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
     notification_sender: tokio::sync::broadcast::Sender<Notification>,
     ledger_sender: SenderEnd<LedgerCommand, LedgerResponse>,
     own_identifier: KeyIdentifier,
@@ -62,7 +67,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
     pub fn new(
         gov_api: GovernanceAPI,
         database: DB<D>,
-        message_channel: SenderEnd<MessageTaskCommand<EventMessages>, ()>,
+        message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
         notification_sender: tokio::sync::broadcast::Sender<Notification>,
         ledger_sender: SenderEnd<LedgerCommand, LedgerResponse>,
         own_identifier: KeyIdentifier,
@@ -171,7 +176,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
         version: u64,
     ) -> Result<(), EventError> {
         // Pedir event requests para cada subject_id del set y lanza new_event con ellas
-        match self.subjects_by_governance.get(&governance_id) {
+        match self.subjects_by_governance.get(&governance_id).cloned() {
             Some(subjects_affected) => {
                 for subject_id in subjects_affected.iter() {
                     match self.database.get_request(subject_id) {
@@ -212,7 +217,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
                     let creators = self
                         .gov_api
                         .get_signers(
-                            Metadata {
+                            &Metadata {
                                 namespace: create_request.namespace.clone(),
                                 subject_id: DigestIdentifier::default(), // Not necessary for this method
                                 governance_id: create_request.governance_id.clone(),
@@ -264,7 +269,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
         // Get the list of evaluators
         let governance_version = self
             .gov_api
-            .get_governance_version(subject.governance_id.clone())
+            .get_governance_version(&subject.governance_id)
             .await
             .map_err(EventError::GovernanceError)?;
         let (metadata, stage) = (
@@ -280,26 +285,26 @@ impl<D: DatabaseManager> EventCompleter<D> {
             ValidationStage::Evaluate,
         );
         let invokator = event_request.signature.content.signer.clone();
-        let event_preevaluation = EventPreEvaluation::new(
+        let event_preevaluation = EventPreEvaluation {
             event_request,
-            Context {
+            context: Context {
                 governance_id: metadata.governance_id.clone(),
                 schema_id: metadata.schema_id.clone(),
-                invokator,
                 creator: subject.creator,
                 owner: metadata.owner.clone(),
                 actual_state: subject.properties,
                 // serde_json::to_string(self.virtual_state.get(&subject_id).unwrap())
                 //     .map_err(|_| EventError::ErrorParsingValue)?, // Must be Some, filled in init function
                 namespace: metadata.namespace.clone(),
+                governance_version,
             },
+            sn: subject.sn,
             // self.actual_sn.get(&subject_id).unwrap().to_owned() + 1, // Must be Some, filled in init function
-            subject.sn,
-        );
+        };
         let (signers, quorum_size) = self.get_signers_and_quorum(metadata, stage).await?;
         self.ask_signatures(
             &subject_id,
-            EventMessages::EvaluationRequest(event_preevaluation.clone()),
+            create_evaluator_request(event_preevaluation.clone()),
             signers.clone(),
             quorum_size,
         )
@@ -377,7 +382,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
         // Comprobar si la versión de la governanza coincide con la nuestra, si no no lo aceptamos
         let governance_version = self
             .gov_api
-            .get_governance_version(subject.governance_id.clone())
+            .get_governance_version(&subject.governance_id)
             .await
             .map_err(EventError::GovernanceError)?;
         // Comprobar governance-version que sea la misma que la nuestra
@@ -475,22 +480,21 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 .insert(proposal_hash, event_proposal.clone());
             // Pedir Approves si es necesario, si no pedir validaciones
             let (stage, event_message) = if evaluation.approval_required {
-                (
-                    ValidationStage::Approve,
-                    EventMessages::ApprovalRequest(event_proposal),
-                )
+                let msg = create_approval_request(event_proposal);
+                // Retornar TapleMessage directamente
+                (ValidationStage::Approve, msg)
             } else {
                 let execution = match evaluation.acceptance {
                     crate::commons::models::Acceptance::Ok => true,
                     crate::commons::models::Acceptance::Ko => false,
                     crate::commons::models::Acceptance::Error => false,
                 };
-                let event_message = self.create_event_prevalidated(
+                let event_message = create_validator_request(self.create_event_prevalidated(
                     event_proposal,
                     HashSet::new(),
                     subject,
                     execution,
-                )?;
+                )?);
                 self.subjects_by_governance.remove(&subject_id);
                 (ValidationStage::Validate, event_message)
             };
@@ -622,8 +626,12 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 .event_proposals
                 .remove(&approval.content.event_proposal_hash)
                 .unwrap();
-            let event_message =
-                self.create_event_prevalidated(event_proposal, approvals, subject, execution)?;
+            let event_message = create_validator_request(self.create_event_prevalidated(
+                event_proposal,
+                approvals,
+                subject,
+                execution,
+            )?);
             // Limpiar HashMaps
             self.event_approvations
                 .remove(&approval.content.event_proposal_hash);
@@ -739,14 +747,14 @@ impl<D: DatabaseManager> EventCompleter<D> {
     ) -> Result<(Vec<KeyIdentifier>, u32), EventError> {
         let signers = self
             .gov_api
-            .get_signers(metadata.clone(), stage.clone())
+            .get_signers(&metadata, stage.clone())
             .await
             .map_err(EventError::GovernanceError)?
             .into_iter()
             .collect();
         let quorum_size = self
             .gov_api
-            .get_quorum(metadata, stage)
+            .get_quorum(&metadata, stage)
             .await
             .map_err(EventError::GovernanceError)?;
         Ok((signers, quorum_size))
@@ -755,7 +763,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
     async fn ask_signatures(
         &self,
         subject_id: &DigestIdentifier,
-        event_message: EventMessages,
+        event_message: TapleMessages,
         signers: Vec<KeyIdentifier>,
         quorum_size: u32,
     ) -> Result<(), EventError> {
@@ -781,7 +789,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
         approvals: HashSet<Approval>,
         subject: Subject,
         execution: bool,
-    ) -> Result<EventMessages, EventError> {
+    ) -> Result<Event, EventError> {
         let event_content = EventContent::new(event_proposal, approvals, execution);
         let event_content_hash = DigestIdentifier::from_serializable_borsh(&event_content)
             .map_err(|_| {

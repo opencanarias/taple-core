@@ -1,17 +1,17 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    event_request::EventRequest, identifier::DigestIdentifier, message::TaskCommandContent,
-    signature::Signature, commons::models::Acceptance,
+    event_request::EventRequest, identifier::DigestIdentifier,
+    signature::Signature, commons::models::{Acceptance, event_proposal::EventProposal},
 };
 
-mod error;
+pub(crate) mod error;
 mod inner_manager;
 mod manager;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum ApprovalMessages {
-    RequestApproval(RequestApproval),
+    RequestApproval(EventProposal),
     EmitVote(EmitVote),
 }
 
@@ -35,12 +35,3 @@ pub struct EmitVote {
     request_id: DigestIdentifier,
     acceptance: Acceptance,
 }
-
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct VoteMessage {
-    event_proposal_hash: DigestIdentifier,
-    acceptance: Acceptance,
-    signature: Signature,
-}
-
-impl TaskCommandContent for VoteMessage {}

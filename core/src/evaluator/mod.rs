@@ -1,6 +1,9 @@
-use borsh::BorshSerialize;
+use serde::{Deserialize, Serialize};
 
-use crate::{event_request::EventRequest, identifier::{DigestIdentifier, KeyIdentifier}, signature::Signature};
+use crate::{
+    commons::models::event_preevaluation::EventPreEvaluation, identifier::DigestIdentifier,
+    signature::Signature,
+};
 
 use self::errors::EvaluatorErrorResponses;
 
@@ -9,35 +12,15 @@ mod errors;
 mod manager;
 mod runner;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum EvaluatorMessage {
-    AskForEvaluation(AskForEvaluation),
+    AskForEvaluation(EventPreEvaluation),
 }
 
 #[derive(Clone, Debug)]
 pub enum EvaluatorResponse {
-    AskForEvaluation(Result<AskForEvaluationResponse, EvaluatorErrorResponses>),
+    AskForEvaluation(Result<(), EvaluatorErrorResponses>),
 }
-
-#[derive(Clone, Debug)]
-pub struct AskForEvaluation {
-    invokation: EventRequest, // Event
-    // hash_request: String,
-    context: Context,
-    sn: u64
-}
-
-#[derive(Clone, Debug, BorshSerialize)]
-pub struct Context {
-    governance_id: DigestIdentifier,
-    schema_id: String,
-    invokator: KeyIdentifier,
-    creator: KeyIdentifier,
-    owner: KeyIdentifier,
-    state: String,
-    namespace: String,
-}
-
 #[derive(Clone, Debug)]
 pub struct AskForEvaluationResponse {
     pub governance_version: u64,

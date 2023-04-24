@@ -3,12 +3,10 @@ use serde::{Deserialize, Serialize};
 use crate::{
     commons::models::{
         approval::Approval,
-        event_preevaluation::EventPreEvaluation,
-        event_proposal::{Evaluation, EventProposal},
+        event_proposal::{Evaluation},
     },
     event_request::EventRequest,
     identifier::DigestIdentifier,
-    message::TaskCommandContent,
     signature::Signature,
     Event, evaluator::compiler::NewGovVersion,
 };
@@ -19,7 +17,7 @@ pub mod errors;
 pub mod event_completer;
 pub mod manager;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EventCommand {
     Event {
         event_request: EventRequest,
@@ -46,9 +44,7 @@ pub enum EventResponse {
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub enum EventMessages {
-    EvaluationRequest(EventPreEvaluation),
-    ApprovalRequest(EventProposal),
+    //EvaluationRequest(EventPreEvaluation),
+    // ApprovalRequest(EventProposal),
     ValidationRequest(Event),
 }
-
-impl TaskCommandContent for EventMessages {}

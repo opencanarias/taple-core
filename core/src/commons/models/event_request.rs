@@ -92,9 +92,8 @@ pub struct EventRequest {
     pub signature: Signature,
 }
 
-#[derive(
-    Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
-)]
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema)]
 pub enum EventRequestType {
     Create(CreateRequest),
     State(StateRequest),

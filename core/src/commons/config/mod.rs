@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use super::identifier::derive::{digest::DigestDerivator, KeyDerivator};
-use async_std::path::Path;
 use config::Value;
 use serde::Deserialize;
 
@@ -76,5 +75,21 @@ impl From<AccessPoint> for Value {
         map.entry("addr".to_owned())
             .or_insert(Value::new(None, config::ValueKind::String(data.addr)));
         Self::new(None, config::ValueKind::Table(map))
+    }
+}
+
+pub enum VotationType {
+    Normal,
+    AlwaysAccept,
+    AlwaysReject,
+}
+
+impl From<u8> for VotationType {
+    fn from(passvotation: u8) -> Self {
+        match passvotation {
+            2 => Self::AlwaysReject,
+            1 => Self::AlwaysAccept,
+            _ => Self::Normal,
+        }
     }
 }
