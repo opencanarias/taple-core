@@ -1,25 +1,25 @@
 use crate::{
-    commons::channel::{ChannelData, MpscChannel, SenderEnd},
+    commons::{channel::{ChannelData, MpscChannel, SenderEnd}, self_signature_manager::SelfSignatureManager},
     database::DB,
     governance::GovernanceAPI,
     message::{MessageConfig, MessageTaskCommand},
     protocol::{
-        command_head_manager::self_signature_manager::SelfSignatureManager,
+        protocol_message_manager::TapleMessages,
     },
-    DatabaseManager, Notification, TapleSettings,
+    DatabaseManager, Notification, TapleSettings, utils::message::event::create_approver_response,
 };
 
 use super::{
     error::{ApprovalErrorResponse, ApprovalManagerError},
     inner_manager::{InnerApprovalManager, RequestNotifier},
-    ApprovalMessages, VoteMessage,
+    ApprovalMessages,
 };
 
 struct ApprovalManager<D: DatabaseManager> {
     input_channel: MpscChannel<ApprovalMessages, Result<(), ApprovalErrorResponse>>,
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
-    messenger_channel: SenderEnd<MessageTaskCommand<VoteMessage>, ()>,
+    messenger_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
     inner_manager: InnerApprovalManager<GovernanceAPI, D, RequestNotifier>,
 }
 
@@ -29,7 +29,7 @@ impl<D: DatabaseManager> ApprovalManager<D> {
         input_channel: MpscChannel<ApprovalMessages, Result<(), ApprovalErrorResponse>>,
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
-        messenger_channel: SenderEnd<MessageTaskCommand<VoteMessage>, ()>,
+        messenger_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
         signature_manager: SelfSignatureManager,
         notification_sender: tokio::sync::broadcast::Sender<Notification>,
         settings: TapleSettings,
@@ -95,11 +95,12 @@ impl<D: DatabaseManager> ApprovalManager<D> {
                     return Err(ApprovalManagerError::AskNoAllowed);
                 }
                 let result = self.inner_manager.process_approval_request(message).await?;
-                if let Ok(Some((msg_to_send, sender))) = result {
+                if let Ok(Some((approval, sender))) = result {
+                    let msg = create_approver_response(approval);
                     self.messenger_channel
                         .tell(MessageTaskCommand::Request(
                             None,
-                            msg_to_send,
+                            msg,
                             vec![sender],
                             MessageConfig::direct_response(),
                         ))
@@ -113,10 +114,11 @@ impl<D: DatabaseManager> ApprovalManager<D> {
                     .await?
                 {
                     Ok((vote, owner)) => {
+                        let msg = create_approver_response(vote);
                         self.messenger_channel
                             .tell(MessageTaskCommand::Request(
                                 None,
-                                vote,
+                                msg,
                                 vec![owner],
                                 MessageConfig::direct_response(),
                             ))

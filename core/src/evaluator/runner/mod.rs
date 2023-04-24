@@ -1,6 +1,4 @@
-use crate::identifier::DigestIdentifier;
-
-use super::errors::ExecutorErrorResponses;
+use crate::{identifier::DigestIdentifier, commons::models::Acceptance};
 
 mod context;
 mod executor;
@@ -12,7 +10,7 @@ pub struct ExecuteContractResponse {
     pub hash_new_state: DigestIdentifier,
     pub context_hash: DigestIdentifier,
     pub governance_version: u64,
-    pub success: bool,
+    pub success: Acceptance,
     pub approval_required: bool,
 }
 

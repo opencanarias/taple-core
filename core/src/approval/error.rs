@@ -54,4 +54,8 @@ pub enum ApprovalErrorResponse {
   NoQuorumReached,
   #[error("Approval request not found")]
   ApprovalRequestNotFound,
+  #[error("No hash correlation")]
+  NoHashCorrelation,
+  #[error("Invalid acceptance")]
+  InvalidAcceptance
 }

@@ -1,7 +1,7 @@
 use crate::database::Error as DbError;
 use crate::evaluator::errors::CompilerError;
 use crate::governance::GovernanceInterface;
-use crate::identifier::Derivable;
+use crate::identifier::{Derivable, DigestIdentifier};
 use crate::{database::DB, evaluator::errors::CompilerErrorResponses, DatabaseManager};
 use async_std::fs;
 use std::collections::HashSet;
@@ -32,22 +32,24 @@ impl<D: DatabaseManager, G: GovernanceInterface> Compiler<D, G> {
         }
     }
 
-    pub async fn init(&self) -> Result<(), CompilerErrorResponses> {
+    pub async fn init(&self) -> Result<(), CompilerError> {
         // Comprueba si existe el contrato de gobernanza en el sistema
         // Si no existe, lo compila y lo guarda
         match self.database.get_governance_contract() {
             Ok(_) => return Ok(()),
-            Err(error) => return Err(CompilerErrorResponses::DatabaseError(error.to_string())),
+            Err(error) => return Err(CompilerError::DatabaseError(error.to_string())),
             Err(DbError::EntryNotFound) => {
                 self.compile(
                     super::gov_contract::get_gov_contract(),
                     "taple",
                     "governance",
                 )
-                .await?;
+                .await
+                .map_err(|e| CompilerError::InitError(e.to_string()));
                 let compiled_contract = self
                     .add_contract("taple", "governance")
-                    .await?;
+                    .await
+                    .map_err(|e| CompilerError::InitError(e.to_string()))?;
                 self.database
                     .put_governance_contract(compiled_contract)
                     .map_err(|error| CompilerError::DatabaseError(error.to_string()))?;
@@ -70,7 +72,7 @@ impl<D: DatabaseManager, G: GovernanceInterface> Compiler<D, G> {
         for contract_info in contracts {
             let contract_data = match self
                 .database
-                .get_contract(&compile_info.governance_id, &contract_info.0)
+                .get_contract(&compile_info.governance_id, &contract_info.name)
             {
                 Ok((contract, hash, contract_gov_version)) => {
                     Some((contract, hash, contract_gov_version))
@@ -81,10 +83,9 @@ impl<D: DatabaseManager, G: GovernanceInterface> Compiler<D, G> {
                 }
                 Err(error) => return Err(CompilerErrorResponses::DatabaseError(error.to_string())),
             };
-            let new_contract_hash = contract_info
-                .1
-                .get_digest()
-                .map_err(|_| CompilerErrorResponses::BorshSerializeContractError)?;
+            let new_contract_hash =
+                DigestIdentifier::from_serializable_borsh(&contract_info.content)
+                    .map_err(|_| CompilerErrorResponses::BorshSerializeContractError)?;
             if let Some(contract_data) = contract_data {
                 if compile_info.governance_version == contract_data.2 {
                     continue;
@@ -93,7 +94,7 @@ impl<D: DatabaseManager, G: GovernanceInterface> Compiler<D, G> {
                     self.database
                         .put_contract(
                             &compile_info.governance_id,
-                            &contract_info.0,
+                            &contract_info.name,
                             contract_data.0,
                             new_contract_hash,
                             compile_info.governance_version,
@@ -105,21 +106,18 @@ impl<D: DatabaseManager, G: GovernanceInterface> Compiler<D, G> {
                 }
             }
             self.compile(
-                contract_info
-                    .1
-                    .to_string()
-                    .map_err(|_| CompilerErrorResponses::AddContractFail)?,
+                contract_info.content,
                 &compile_info.governance_id.to_str(),
-                &contract_info.0,
+                &contract_info.name,
             )
             .await?;
             let compiled_contract = self
-                .add_contract(&compile_info.governance_id.to_str(), &contract_info.0)
+                .add_contract(&compile_info.governance_id.to_str(), &contract_info.name)
                 .await?;
             self.database
                 .put_contract(
                     &compile_info.governance_id,
-                    &contract_info.0,
+                    &contract_info.name,
                     compiled_contract,
                     new_contract_hash,
                     compile_info.governance_version,

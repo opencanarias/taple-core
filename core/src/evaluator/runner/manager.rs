@@ -3,11 +3,11 @@ use wasmtime::Engine;
 
 use crate::{
     database::DB,
-    evaluator::{errors::ExecutorErrorResponses, AskForEvaluation, Context},
-    event_request::{EventRequest, RequestPayload, StateRequest},
+    evaluator::{errors::ExecutorErrorResponses},
+    event_request::{StateRequest},
     governance::GovernanceInterface,
     identifier::DigestIdentifier,
-    DatabaseManager,
+    DatabaseManager, commons::models::{event_preevaluation::{EventPreEvaluation}, Acceptance},
 };
 
 use super::{executor::ContractExecutor, ExecuteContractResponse};
@@ -26,24 +26,18 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send> TapleRunner<D, G> {
     }
 
     pub fn generate_context_hash(
-        context: &Context,
-        sn: u64,
-        request: &EventRequest,
+        execute_contract: &EventPreEvaluation
     ) -> Result<DigestIdentifier, ExecutorErrorResponses> {
-        DigestIdentifier::from_serializable_borsh((request, context, sn))
+        DigestIdentifier::from_serializable_borsh(execute_contract)
             .map_err(|_| ExecutorErrorResponses::ContextHashGenerationFailed)
     }
 
     pub async fn execute_contract(
         &self,
-        execute_contract: &AskForEvaluation,
+        execute_contract: &EventPreEvaluation,
         state_data: &StateRequest,
     ) -> Result<ExecuteContractResponse, ExecutorErrorResponses> {
-        let context_hash = Self::generate_context_hash(
-            &execute_contract.context,
-            execute_contract.sn,
-            &execute_contract.invokation
-        )?;
+        let context_hash = Self::generate_context_hash(execute_contract)?;
         let (contract, governance_version) = match self.database.get_contract(
             &execute_contract.context.governance_id,
             &execute_contract.context.schema_id,
@@ -54,7 +48,7 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send> TapleRunner<D, G> {
                     .database
                     .get_subject(&execute_contract.context.governance_id)
                 {
-                    Ok(governance) => governance.subject_data.as_ref().unwrap().sn,
+                    Ok(governance) => governance.sn,
                     Err(DbError::EntryNotFound) => 0,
                     Err(error) => {
                         return Err(ExecutorErrorResponses::DatabaseError(error.to_string()))
@@ -65,30 +59,32 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send> TapleRunner<D, G> {
                     hash_new_state: DigestIdentifier::default(),
                     governance_version,
                     context_hash,
-                    success: false,
+                    success: Acceptance::Ko,
                     approval_required: false,
                 });
             }
             Err(error) => return Err(ExecutorErrorResponses::DatabaseError(error.to_string())),
         };
-        let previous_state = execute_contract.context.state.clone();
+        let previous_state = execute_contract.context.actual_state.clone();
         let contract_result = self
             .executor
             .execute_contract(
-                &execute_contract.context.state,
-                &extract_data_from_payload(&state_data.payload),
+                &execute_contract.context.actual_state,
+                &state_data.invokation,
                 &execute_contract.context,
                 governance_version,
                 contract,
             )
             .await?;
-        let (patch, hash) = if contract_result.success {
-            (
+        let (patch, hash) = match contract_result.success {
+            Acceptance::Ok => (
                 generate_json_patch(&previous_state, &contract_result.final_state)?,
                 generera_state_hash(&contract_result.final_state)?,
-            )
-        } else {
-            (String::from(""), DigestIdentifier::default())
+            ),
+            Acceptance::Ko => {
+                (String::from(""), DigestIdentifier::default())
+            },
+            Acceptance::Error => unreachable!()
         };
         Ok(ExecuteContractResponse {
             json_patch: patch,
@@ -117,11 +113,4 @@ fn generate_json_patch(
 fn generera_state_hash(state: &str) -> Result<DigestIdentifier, ExecutorErrorResponses> {
     DigestIdentifier::from_serializable_borsh(state)
         .map_err(|_| ExecutorErrorResponses::StateHashGenerationFailed)
-}
-
-fn extract_data_from_payload(payload: &RequestPayload) -> String {
-    match payload {
-        RequestPayload::Json(data) => data.clone(),
-        RequestPayload::JsonPatch(data) => data.clone(),
-    }
 }

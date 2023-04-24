@@ -5,15 +5,45 @@ use serde::{Deserialize, Serialize};
 use crate::{
     commons::models::notary::NotaryEventResponse,
     identifier::{DigestIdentifier, KeyIdentifier},
-    message::TaskCommandContent,
     signature::Signature,
     Event,
 };
 
-mod error;
-mod inner_manager;
+pub(crate) mod error;
+// mod inner_manager;
+// mod manager;
+// mod resolutor;
+
 mod manager;
-mod resolutor;
+mod inner_manager;
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub enum DistributionMessagesNew {
+    ProvideSignatures(AskForSignatures),
+    SignaturesReceived(SignaturesReceived),
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct AskForSignatures {
+    subject_id: DigestIdentifier,
+    sn: u64,
+    signatures_requested: HashSet<KeyIdentifier>,
+    sender_id: KeyIdentifier
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct SignaturesReceived {
+    subject_id: DigestIdentifier,
+    sn: u64,
+    signatures: HashSet<Signature>
+}
+
+// Message Recieved from Ledger
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct StartDistribution {
+    subject_id: DigestIdentifier,
+    sn: u64
+}
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum DistributionMessages {
@@ -23,7 +53,23 @@ pub enum DistributionMessages {
     SignaturesReceived(SignaturesReceivedMessage),
 }
 
-impl TaskCommandContent for DistributionMessages {}
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub enum LedgerMessages {
+    LceRequested(LceRequested),
+    EventRequested(EventRequested)
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct LceRequested {
+    pub subject_id: DigestIdentifier,
+    pub sender_id: KeyIdentifier,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct EventRequested {
+    pub subject_id: DigestIdentifier,
+    pub sn: u64
+}
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct SetEventMessage {

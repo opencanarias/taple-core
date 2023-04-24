@@ -1,48 +1,49 @@
 use crate::{
-    commons::channel::{ChannelData, MpscChannel, SenderEnd},
+    commons::{
+        channel::{ChannelData, MpscChannel, SenderEnd},
+        self_signature_manager::SelfSignatureManager,
+    },
     database::DB,
     governance::GovernanceAPI,
     message::MessageTaskCommand,
-    protocol::command_head_manager::self_signature_manager::SelfSignatureManager,
-    DatabaseManager, Notification,
+    protocol::protocol_message_manager::TapleMessages,
+    DatabaseManager, TapleSettings,
 };
 
 use super::{
     error::{DistributionErrorResponses, DistributionManagerError},
-    inner_manager::{DistributionNotifier, InnerDistributionManager},
-    DistributionMessages,
+    inner_manager::InnerDistributionManager,
+    DistributionMessagesNew,
 };
 
-// En principio los mensajes no los enviará este módulo sino que habrá otro encargado.
-// El módulo solo recibirá mensajes provenientes de la red. Ninguno de la API.
-pub struct DistributionManager<D: DatabaseManager> {
-    input: MpscChannel<DistributionMessages, Result<(), DistributionErrorResponses>>,
+struct DistributionManager<D: DatabaseManager> {
+    input_channel: MpscChannel<DistributionMessagesNew, Result<(), DistributionErrorResponses>>,
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
-    inner: InnerDistributionManager<D, GovernanceAPI, DistributionNotifier>,
+    inner_manager: InnerDistributionManager<GovernanceAPI, D>,
 }
 
 impl<D: DatabaseManager> DistributionManager<D> {
-    pub fn new(
-        governance: GovernanceAPI,
-        input: MpscChannel<DistributionMessages, Result<(), DistributionErrorResponses>>,
+    fn new(
+        input_channel: MpscChannel<DistributionMessagesNew, Result<(), DistributionErrorResponses>>,
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
-        db: DB<D>,
+        messenger_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
+        gov_api: GovernanceAPI,
         signature_manager: SelfSignatureManager,
-        notification_sender: tokio::sync::broadcast::Sender<Notification>,
-        messenger_channel: SenderEnd<MessageTaskCommand<DistributionMessages>, ()>,
+        settings: TapleSettings,
+        db: DB<D>,
     ) -> Self {
         Self {
-            input,
+            input_channel,
             shutdown_sender,
             shutdown_receiver,
-            inner: InnerDistributionManager::new(
+            inner_manager: InnerDistributionManager::new(
+                gov_api,
                 db,
-                governance,
-                signature_manager,
-                DistributionNotifier::new(notification_sender),
                 messenger_channel,
+                signature_manager,
+                settings,
             ),
         }
     }
@@ -50,7 +51,7 @@ impl<D: DatabaseManager> DistributionManager<D> {
     pub async fn start(mut self) {
         loop {
             tokio::select! {
-                command = self.input.receive() => {
+                command = self.input_channel.receive() => {
                     match command {
                         Some(command) => {
                             let result = self.process_command(command).await;
@@ -61,6 +62,7 @@ impl<D: DatabaseManager> DistributionManager<D> {
                         }
                         None => {
                             self.shutdown_sender.send(()).expect("Channel Closed");
+                            break;
                         },
                     }
                 },
@@ -71,37 +73,35 @@ impl<D: DatabaseManager> DistributionManager<D> {
         }
     }
 
-    pub async fn process_command(
+    async fn process_command(
         &mut self,
-        command: ChannelData<DistributionMessages, Result<(), DistributionErrorResponses>>,
+        command: ChannelData<DistributionMessagesNew, Result<(), DistributionErrorResponses>>,
     ) -> Result<(), DistributionManagerError> {
         let (sender, data) = match command {
             ChannelData::AskData(data) => {
                 let (sender, data) = data.get();
                 (Some(sender), data)
             }
-            ChannelData::TellData(_) => {
-                return Err(DistributionManagerError::TellNoAllowed);
+            ChannelData::TellData(data) => {
+                let data = data.get();
+                (None, data)
             }
         };
 
         let response = match data {
-            DistributionMessages::SetEvent(message) => self.inner.set_event(message).await?,
-            DistributionMessages::RequestSignature(message) => {
-                self.inner.request_signatures(message).await?
+            DistributionMessagesNew::ProvideSignatures(data) => {
+                self.inner_manager.provide_signatures(&data).await?
             }
-            DistributionMessages::SignaturesReceived(message) => {
-                self.inner.signature_received(message).await?
-            }
-            DistributionMessages::RequestEvent(message) => {
-                self.inner.request_event(message).await?
+            DistributionMessagesNew::SignaturesReceived(data) => {
+                self.inner_manager.signatures_received(data).await?
             }
         };
-
-        sender
-            .unwrap()
-            .send(response)
-            .map_err(|_| DistributionManagerError::ResponseChannelNotAvailable)?;
+        if sender.is_some() {
+            sender
+                .unwrap()
+                .send(response)
+                .map_err(|_| DistributionManagerError::ResponseChannelNotAvailable)?;
+        }
         Ok(())
     }
 }
