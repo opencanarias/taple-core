@@ -164,7 +164,7 @@ impl<M: DatabaseManager> DB<M> {
         self.prevalidated_event_db.put(&id, event)
     }
 
-    pub fn del_prevalidated_event(&self, subject_id: &DigestIdentifier) -> Result<Event, Error> {
+    pub fn del_prevalidated_event(&self, subject_id: &DigestIdentifier) -> Result<(), Error> {
         let id = subject_id.to_str();
         self.prevalidated_event_db.del(&id)
     }

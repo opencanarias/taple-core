@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::governance::error::RequestError;
+use crate::{governance::error::RequestError, commons::errors::SubjectError};
 
 #[derive(Error, Clone, Debug)]
 pub enum EventError {
@@ -8,6 +8,8 @@ pub enum EventError {
     DatabaseError(String),
     #[error("Governance Error")]
     GovernanceError(#[from] RequestError),
+    #[error("Governance Error")]
+    SubjectError(#[from] SubjectError),
     #[error("Crypto Error")]
     CryptoError(String),
     #[error("Cant send message. Channel closed")]

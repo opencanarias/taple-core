@@ -206,7 +206,9 @@ impl<D: DatabaseManager> EventCompleter<D> {
         let subject;
         // Check if the content is correct (signature, invoker, etc)
         // Signature check:
-        event_request.check_signatures()?;
+        event_request
+            .check_signatures()
+            .map_err(EventError::SubjectError)?;
         match &event_request.request {
             crate::event_request::EventRequestType::Create(create_request) => {
                 // Comprobar si es governance, entonces vale todo, si no comprobar que el invoker soy yo y puedo hacerlo
@@ -269,7 +271,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
         // Get the list of evaluators
         let governance_version = self
             .gov_api
-            .get_governance_version(&subject.governance_id)
+            .get_governance_version(subject.governance_id.clone())
             .await
             .map_err(EventError::GovernanceError)?;
         let (metadata, stage) = (
@@ -280,7 +282,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 governance_version,
                 schema_id: subject.schema_id,
                 owner: subject.owner,
-                creator: subject.creator,
+                creator: subject.creator.clone(),
             },
             ValidationStage::Evaluate,
         );

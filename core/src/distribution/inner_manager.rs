@@ -292,5 +292,6 @@ fn build_metadata(subject: &Subject, governance_version: u64) -> Metadata {
         governance_version: governance_version,
         schema_id: subject.schema_id,
         owner: subject.owner,
+        creator: subject.creator,
     }
 }

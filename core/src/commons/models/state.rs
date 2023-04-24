@@ -2,7 +2,7 @@ use std::{collections::HashSet, str::FromStr};
 
 use crate::{
     commons::{
-        crypto::{Ed25519KeyPair, KeyMaterial, KeyPair, Payload, DSA},
+        crypto::{Ed25519KeyPair, KeyMaterial, KeyPair, Payload, DSA, KeyGenerator},
         errors::SubjectError,
         identifier::{
             derive::KeyDerivator, Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier,

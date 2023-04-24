@@ -189,17 +189,17 @@ use std::collections::HashSet;
 
 use crate::{
     commons::{
-        crypto::{check_cryptography, KeyPair, Payload},
+        crypto::{check_cryptography, KeyPair, Payload, DSA, KeyMaterial},
         errors::SubjectError,
     },
     event_content::Metadata,
     event_request::EventRequest,
-    identifier::{DigestIdentifier, KeyIdentifier, SignatureIdentifier},
+    identifier::{DigestIdentifier, KeyIdentifier, SignatureIdentifier, Derivable},
     signature::{Signature, SignatureContent},
     TimeStamp,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
-use json_patch::diff;
+use json_patch::{diff, Patch};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use utoipa::ToSchema;
@@ -247,7 +247,11 @@ impl Event {
         gov_version: u64,
         init_state: &Value,
     ) -> Result<Self, SubjectError> {
-        let json_patch = diff(&json!({}), init_state);
+        let json_patch = serde_json::to_string(&serde_json::to_value(diff(&json!({}), init_state)).map_err(|_| {
+            SubjectError::CryptoError(String::from("Error converting patch to value"))
+        })?).map_err(|_| {
+            SubjectError::CryptoError(String::from("Error converting patch to string"))
+        })?;
         let proposal = Proposal {
             event_request,
             sn: 0,
@@ -285,26 +289,26 @@ impl Event {
             approvals: HashSet::new(),
             execution: true,
         };
-        let signature = subject_keys
-            .sign(Payload::Buffer(proposal_hash.derivative()))
-            .map_err(|_| {
-                SubjectError::CryptoError(String::from("Error signing the hash of the proposal"))
-            })?;
         let content_hash = DigestIdentifier::from_serializable_borsh(&content).map_err(|_| {
             SubjectError::CryptoError(String::from("Error calculating the hash of the proposal"))
         })?;
+        let signature = subject_keys
+            .sign(Payload::Buffer(content_hash.derivative()))
+            .map_err(|_| {
+                SubjectError::CryptoError(String::from("Error signing the hash of the proposal"))
+            })?;
         let subject_signature = Signature {
             content: SignatureContent {
                 signer: public_key,
-                event_content_hash: content_hash.clone(),
+                event_content_hash: content_hash,
                 timestamp: TimeStamp::now(),
             },
             signature: SignatureIdentifier::new(
                 public_key.to_signature_derivator(),
-                &subject_signature,
+                &signature,
             ),
         };
-        Ok(Self { content, signature })
+        Ok(Self { content, signature: subject_signature })
     }
 
     pub fn check_signatures(&self) -> Result<(), SubjectError> {

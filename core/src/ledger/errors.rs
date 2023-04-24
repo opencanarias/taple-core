@@ -5,8 +5,8 @@ use thiserror::Error;
 pub enum LedgerError {
     #[error("A channel has been closed")]
     ChannelClosed,
-    #[error("Subject Not Found")]
-    SubjectNotFound,
+    #[error("Subject Not Found: {0}")]
+    SubjectNotFound(String),
     #[error("Error \"{0}\" detected with governance")]
     GovernanceError(RequestError),
     #[error("A database error has ocurred at LedgerManager: \"{0}\"")]

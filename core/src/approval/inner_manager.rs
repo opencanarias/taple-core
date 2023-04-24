@@ -113,7 +113,7 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
         &self,
         governance_id: &DigestIdentifier,
     ) -> Result<Result<u64, ApprovalErrorResponse>, ApprovalManagerError> {
-        match self.governance.get_governance_version(&governance_id).await {
+        match self.governance.get_governance_version(governance_id.to_owned()).await {
             Ok(data) => Ok(Ok(data)),
             Err(RequestError::GovernanceNotFound(_str)) => {
                 Ok(Err(ApprovalErrorResponse::GovernanceNotFound))
@@ -439,6 +439,7 @@ fn create_metadata(subject_data: &Subject, governance_version: u64) -> Metadata 
         governance_version,
         schema_id: subject_data.schema_id,
         owner: subject_data.owner,
+        creator: subject_data.creator,
     }
 }
 

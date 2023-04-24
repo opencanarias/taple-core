@@ -103,8 +103,8 @@ impl<D: DatabaseManager> Ledger<D> {
                 crate::DbError::EntryNotFound => LedgerError::SubjectNotFound(subject_id.to_str()),
                 _ => LedgerError::DatabaseError(error.to_string()),
             })?;
-        let json_patch = event.content.event_proposal.proposal.json_patch.to_str();
-        let prev_properties = subject.properties.to_str();
+        let json_patch = event.content.event_proposal.proposal.json_patch.as_str();
+        let prev_properties = subject.properties.as_str();
         let Ok(patch_json) = serde_json::from_str::<Patch>(json_patch) else {
                 return Err(LedgerError::ErrorParsingJsonString(json_patch.to_owned()));
             };
