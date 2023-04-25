@@ -255,6 +255,7 @@ impl Event {
         let proposal = Proposal {
             event_request,
             sn: 0,
+            hash_prev_event: DigestIdentifier::default(),
             gov_version,
             evaluation: None,
             json_patch,
