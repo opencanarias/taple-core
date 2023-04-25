@@ -441,10 +441,12 @@ impl<D: DatabaseManager> Ledger<D> {
                                 // Comprobar que el evento es el siguiente
                                 if event.content.event_proposal.proposal.sn == current_sn + 1 {
                                     // Comprobar que el evento es el que necesito
-                                    self.check_event(event, metadata).await?;
+                                    self.check_event(event.clone(), metadata).await?;
+                                    // Guardar Evento
+                                    self.database.set_event(&subject_id, event)?;
                                     // Hacer event sourcing del evento y actualizar subject
                                     self.event_sourcing(subject_id.clone(), current_sn + 1)?;
-                                    if head == current_sn + 1 {
+                                    if head == current_sn + 2 {
                                         // Hacer event sourcing del LCE tambien y actualizar subject
                                         self.event_sourcing(subject_id.clone(), head)?;
                                         self.ledger_state.insert(
@@ -593,10 +595,12 @@ impl<D: DatabaseManager> Ledger<D> {
                 }
                 _ => LedgerError::DatabaseError(error),
             })?;
-            // Comprobar evento previo encaja
-            if event.content.event_proposal.proposal.hash_prev_event != event.signature.content.event_content_hash {
-                return Err(LedgerError::EventDoesNotFitHash);
-            }
+        // Comprobar evento previo encaja
+        if event.content.event_proposal.proposal.hash_prev_event
+            != event.signature.content.event_content_hash
+        {
+            return Err(LedgerError::EventDoesNotFitHash);
+        }
         let mut subject = self.database.get_subject(&subject_id)?;
         subject.update_subject(
             &event.content.event_proposal.proposal.json_patch,
