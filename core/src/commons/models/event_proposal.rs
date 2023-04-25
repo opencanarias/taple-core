@@ -27,6 +27,7 @@ pub struct EventProposal {
 pub struct Proposal {
     pub event_request: EventRequest,
     pub sn: u64,
+    pub hash_prev_event: DigestIdentifier,
     pub gov_version: u64,
     pub evaluation: Option<Evaluation>,
     pub json_patch: String,
@@ -37,6 +38,7 @@ impl Proposal {
     pub fn new(
         event_request: EventRequest,
         sn: u64,
+        hash_prev_event: DigestIdentifier,
         gov_version: u64,
         evaluation: Option<Evaluation>,
         json_patch: String,
@@ -45,6 +47,7 @@ impl Proposal {
         Proposal {
             event_request,
             sn,
+            hash_prev_event,
             gov_version,
             evaluation,
             json_patch,
@@ -77,6 +80,7 @@ impl EventProposal {
     pub fn check_signatures(&self) -> Result<(), SubjectError> {
         check_cryptography(&self.proposal, &self.subject_signature)
             .map_err(|error| SubjectError::CryptoError(error.to_string()))?;
+        self.proposal.event_request.check_signatures()?;
         Ok(())
     }
 }

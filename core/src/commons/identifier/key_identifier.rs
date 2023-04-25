@@ -39,7 +39,7 @@ impl KeyIdentifier {
         }
     }
 
-    pub fn verify(&self, data: &[u8], signature: SignatureIdentifier) -> Result<(), Error> {
+    pub fn verify(&self, data: &[u8], signature: &SignatureIdentifier) -> Result<(), Error> {
         match self.derivator {
             KeyDerivator::Ed25519 => {
                 let kp = Ed25519KeyPair::from_public_key(&self.public_key);
@@ -165,7 +165,7 @@ mod tests {
         let sig = kp.sign(Payload::Buffer(message.to_vec())).unwrap();
         let id = KeyIdentifier::new(KeyDerivator::Ed25519, &kp.public_key_bytes());
         let signature = SignatureIdentifier::new(SignatureDerivator::Ed25519Sha512, &sig);
-        assert!(id.verify(message, signature).is_ok());
+        assert!(id.verify(message, &signature).is_ok());
     }
 
     #[test]
@@ -175,6 +175,6 @@ mod tests {
         let sig = kp.sign(Payload::Buffer(message.to_vec())).unwrap();
         let id = KeyIdentifier::new(KeyDerivator::Secp256k1, &kp.public_key_bytes());
         let signature = SignatureIdentifier::new(SignatureDerivator::ECDSAsecp256k1, &sig);
-        assert!(id.verify(message, signature).is_ok());
+        assert!(id.verify(message, &signature).is_ok());
     }
 }

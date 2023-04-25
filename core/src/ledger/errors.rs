@@ -1,14 +1,13 @@
 use crate::{commons::errors::SubjectError, governance::error::RequestError};
 use thiserror::Error;
+use crate::database::Error as DbError;
 
-#[derive(Error, Debug, Clone, PartialEq)]
+#[derive(Error, Debug)]
 pub enum LedgerError {
     #[error("A channel has been closed")]
     ChannelClosed,
     #[error("Subject Not Found: {0}")]
     SubjectNotFound(String),
-    #[error("A database error has ocurred at LedgerManager: \"{0}\"")]
-    DatabaseError(String),
     #[error("Error parsing json string: \"{0}\"")]
     ErrorParsingJsonString(String),
     #[error("Error applying patch: \"{0}\"")]
@@ -25,4 +24,26 @@ pub enum LedgerError {
     SubjectAlreadyExists(String),
     #[error("Governance Error")]
     GovernanceError(#[from] RequestError),
+    #[error("Database Error")]
+    DatabaseError(#[from] DbError),
+    #[error("Event Already Exists")]
+    EventAlreadyExists,
+    #[error("Unauthorized: {0}")]
+    Unauthorized(String),
+    #[error("Not Enough Signatures: {0}")]
+    NotEnoughSignatures(String),
+    #[error("0 events for subject: {0}")]
+    ZeroEventsSubject(String),
+    #[error("Wrong SN in Subject: {0}")]
+    WrongSnInSubject(String),
+    #[error("LCE bigger than last LCE, so we ignore it")]
+    LCEBiggerSN,
+    #[error("Unsigned Unknown Event")]
+    UnsignedUnknowEvent,
+    #[error("Unsigned Unknown Event")]
+    UnexpectEventMissingInEventSourcing,
+    #[error("Event Not Next")]
+    EventNotNext,
+    #[error("Event Does Not Fit Hash")]
+    EventDoesNotFitHash,
 }

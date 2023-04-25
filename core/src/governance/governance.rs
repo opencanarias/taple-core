@@ -162,19 +162,19 @@ pub trait GovernanceInterface: Sync + Send {
     ) -> Result<Value, RequestError>;
     async fn get_schema(
         &self,
-        governance_id: &DigestIdentifier,
+        governance_id: DigestIdentifier,
         schema_id: String,
     ) -> Result<serde_json::Value, RequestError>;
 
     async fn get_signers(
         &self,
-        metadata: &Metadata,
+        metadata: Metadata,
         stage: ValidationStage,
     ) -> Result<HashSet<KeyIdentifier>, RequestError>;
 
     async fn get_quorum(
         &self,
-        metadata: &Metadata,
+        metadata: Metadata,
         stage: ValidationStage,
     ) -> Result<u32, RequestError>;
 
@@ -240,7 +240,7 @@ impl GovernanceInterface for GovernanceAPI {
 
     async fn get_schema(
         &self,
-        governance_id: &DigestIdentifier,
+        governance_id: DigestIdentifier,
         schema_id: String,
     ) -> Result<serde_json::Value, RequestError> {
         let response = self
@@ -260,7 +260,7 @@ impl GovernanceInterface for GovernanceAPI {
 
     async fn get_signers(
         &self,
-        metadata: &Metadata,
+        metadata: Metadata,
         stage: ValidationStage,
     ) -> Result<HashSet<KeyIdentifier>, RequestError> {
         let response = self
@@ -280,7 +280,7 @@ impl GovernanceInterface for GovernanceAPI {
 
     async fn get_quorum(
         &self,
-        metadata: &Metadata,
+        metadata: Metadata,
         stage: ValidationStage,
     ) -> Result<u32, RequestError> {
         let response = self
