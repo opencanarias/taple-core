@@ -26,6 +26,21 @@ impl EventAPI {
     }
 }
 
+#[async_trait]
+pub trait EventAPIInterface {
+    async fn send_event_request(&self, event_request: EventRequest) -> EventResponse;
+}
+
+#[async_trait]
+impl EventAPIInterface for EventAPI {
+    async fn send_event_request(&self, event_request: EventRequest) -> EventResponse {
+        match self.sender.ask(EventCommand::Event { event_request }).await {
+            Ok(response) => response,
+            Err(error) => EventResponse::Event(Err(EventError::EventApiChannelNotAvailable)),
+        }
+    }
+}
+
 pub struct EventManager<D: DatabaseManager> {
     /// Communication channel for incoming petitions
     input_channel: MpscChannel<EventCommand, EventResponse>,

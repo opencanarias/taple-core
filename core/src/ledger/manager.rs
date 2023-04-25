@@ -35,7 +35,7 @@ impl<D: DatabaseManager> EventManager<D> {
     }
 
     pub async fn start(mut self) {
-        match self.inner_ledger.init() {
+        match self.inner_ledger.init().await {
             Ok(_) => {}
             Err(error) => {
                 log::error!("Problemas con Init de Ledger Manager: {:?}", error);

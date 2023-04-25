@@ -36,4 +36,12 @@ pub enum LedgerError {
     ZeroEventsSubject(String),
     #[error("Wrong SN in Subject: {0}")]
     WrongSnInSubject(String),
+    #[error("LCE bigger than last LCE, so we ignore it")]
+    LCEBiggerSN,
+    #[error("Unsigned Unknown Event")]
+    UnsignedUnknowEvent,
+    #[error("Unsigned Unknown Event")]
+    UnexpectEventMissingInEventSourcing,
+    #[error("Event Not Next")]
+    EventNotNext,
 }

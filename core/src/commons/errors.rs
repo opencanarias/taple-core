@@ -152,9 +152,9 @@ pub enum SubjectError {
     #[error("InvalidPayload {0}")]
     InvalidPayload(String),
     #[error("Error parsing json string")]
-    ErrorParsingJsonString,
+    ErrorParsingJsonString(String),
     #[error("Error applying patch")]
-    ErrorApplyingPatch,
+    ErrorApplyingPatch(String),
     #[error("Duplicated schema or member")]
     DuplicatedSchemaOrMember,
     #[error("Policies Missing for Some Schema")]
