@@ -1,18 +1,42 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    event_request::EventRequest, identifier::DigestIdentifier,
-    signature::Signature, commons::models::{Acceptance, event_proposal::EventProposal},
+    commons::models::{event_proposal::EventProposal, Acceptance},
+    event_request::EventRequest,
+    identifier::{DigestIdentifier, KeyIdentifier},
+    signature::Signature,
 };
+
+use self::error::ApprovalErrorResponse;
 
 pub(crate) mod error;
 mod inner_manager;
-mod manager;
+pub(crate) mod manager;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum ApprovalMessages {
     RequestApproval(EventProposal),
     EmitVote(EmitVote),
+    GetAllRequest,
+    GetSingleRequest(DigestIdentifier),
+}
+
+pub enum ApprovalResponses {
+    RequestApproval(Result<(), ApprovalErrorResponse>),
+    EmitVote(Result<(), ApprovalErrorResponse>),
+    GetAllRequest(Vec<ApprovalPetitionData>),
+    GetSingleRequest(Result<ApprovalPetitionData, ApprovalErrorResponse>),
+}
+
+#[derive(Clone, Debug)]
+pub struct ApprovalPetitionData {
+    pub subject_id: DigestIdentifier,
+    pub sn: u64,
+    pub governance_id: DigestIdentifier,
+    pub governance_version: u64,
+    pub hash_event_proporsal: DigestIdentifier,
+    pub sender: KeyIdentifier,
+    pub json_patch: String,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

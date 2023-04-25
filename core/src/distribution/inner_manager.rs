@@ -77,10 +77,9 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
             .map_err(|e| DistributionManagerError::DatabaseError(e.to_string()))?;
         let governance_version = self
             .governance
-            .get_governance_version(&subject.governance_id)
+            .get_governance_version(subject.governance_id.clone())
             .await
             .map_err(|_| DistributionManagerError::GovernanceChannelNotAvailable)?;
-        let subject_id_str = msg.subject_id.to_str();
         // Empezamos la distribución
         let metadata = build_metadata(&subject, governance_version);
         let mut targets = self.get_targets(&metadata).await?;
@@ -205,7 +204,6 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
     ) -> Result<Result<(), DistributionErrorResponses>, DistributionManagerError> {
         // Se reciben firmas de testificación
         // Comprobamos la validez de las firmas y las guardamos, actualizando además la tarea
-        let signatures = &msg.signatures;
         // Comprobamos si tenemos el sujeto y evento al que pertenecen las firmas
         // En pricnipio, si lo tenemos es tan sencillo como comprobar si ya tenemos firmas de testificación previas
         match self.db.get_witness_signatures(&msg.subject_id) {
@@ -228,7 +226,7 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
                 };
                 let governance_version = self
                     .governance
-                    .get_governance_version(&subject.governance_id)
+                    .get_governance_version(subject.governance_id.clone())
                     .await
                     .map_err(|_| DistributionManagerError::GovernanceChannelNotAvailable)?;
                 let metadata = build_metadata(&subject, governance_version);
@@ -286,11 +284,12 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
 
 fn build_metadata(subject: &Subject, governance_version: u64) -> Metadata {
     Metadata {
-        namespace: subject.namespace,
-        subject_id: subject.subject_id,
-        governance_id: subject.governance_id,
+        namespace: subject.namespace.clone(),
+        subject_id: subject.subject_id.clone(),
+        governance_id: subject.governance_id.clone(),
         governance_version: governance_version,
-        schema_id: subject.schema_id,
-        owner: subject.owner,
+        schema_id: subject.schema_id.clone(),
+        owner: subject.owner.clone(),
+        creator: subject.creator.clone(),
     }
 }

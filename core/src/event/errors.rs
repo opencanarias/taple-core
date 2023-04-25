@@ -1,13 +1,17 @@
 use thiserror::Error;
 
-use crate::governance::error::RequestError;
+use crate::{governance::error::RequestError, commons::errors::SubjectError};
 
 #[derive(Error, Clone, Debug)]
 pub enum EventError {
+    #[error("Event API channel not available")]
+    EventApiChannelNotAvailable,
     #[error("A database error has ocurred at main component {0}")]
     DatabaseError(String),
     #[error("Governance Error")]
     GovernanceError(#[from] RequestError),
+    #[error("Governance Error")]
+    SubjectError(#[from] SubjectError),
     #[error("Crypto Error")]
     CryptoError(String),
     #[error("Cant send message. Channel closed")]

@@ -187,12 +187,27 @@
 //! Contains the data structures related to event  to send to approvers, or to validators if approval is not required.
 use std::collections::HashSet;
 
-use crate::{identifier::DigestIdentifier, signature::Signature};
+use crate::{
+    commons::{
+        crypto::{check_cryptography, KeyPair, Payload, DSA, KeyMaterial},
+        errors::SubjectError,
+    },
+    event_content::Metadata,
+    event_request::EventRequest,
+    identifier::{DigestIdentifier, KeyIdentifier, SignatureIdentifier, Derivable},
+    signature::{Signature, SignatureContent},
+    TimeStamp,
+};
 use borsh::{BorshDeserialize, BorshSerialize};
+use json_patch::{diff, Patch};
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use utoipa::ToSchema;
 
-use super::{approval::Approval, event_proposal::EventProposal};
+use super::{
+    approval::Approval,
+    event_proposal::{EventProposal, Proposal},
+};
 
 #[derive(
     Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
@@ -222,5 +237,83 @@ impl EventContent {
             approvals,
             execution,
         }
+    }
+}
+
+impl Event {
+    pub fn from_genesis_request(
+        event_request: EventRequest,
+        subject_keys: KeyPair,
+        gov_version: u64,
+        init_state: &Value,
+    ) -> Result<Self, SubjectError> {
+        let json_patch = serde_json::to_string(&serde_json::to_value(diff(&json!({}), init_state)).map_err(|_| {
+            SubjectError::CryptoError(String::from("Error converting patch to value"))
+        })?).map_err(|_| {
+            SubjectError::CryptoError(String::from("Error converting patch to string"))
+        })?;
+        let proposal = Proposal {
+            event_request,
+            sn: 0,
+            gov_version,
+            evaluation: None,
+            json_patch,
+            evaluation_signatures: HashSet::new(),
+        };
+        let public_key = KeyIdentifier::new(
+            subject_keys.get_key_derivator(),
+            &subject_keys.public_key_bytes(),
+        );
+        let proposal_hash = DigestIdentifier::from_serializable_borsh(&proposal).map_err(|_| {
+            SubjectError::CryptoError(String::from("Error calculating the hash of the proposal"))
+        })?;
+        let subject_signature = subject_keys
+            .sign(Payload::Buffer(proposal_hash.derivative()))
+            .map_err(|_| {
+                SubjectError::CryptoError(String::from("Error signing the hash of the proposal"))
+            })?;
+        let subject_signature = Signature {
+            content: SignatureContent {
+                signer: public_key.clone(),
+                event_content_hash: proposal_hash.clone(),
+                timestamp: TimeStamp::now(),
+            },
+            signature: SignatureIdentifier::new(
+                public_key.to_signature_derivator(),
+                &subject_signature,
+            ),
+        };
+        let event_proposal = EventProposal::new(proposal, subject_signature);
+        let content = EventContent {
+            event_proposal,
+            approvals: HashSet::new(),
+            execution: true,
+        };
+        let content_hash = DigestIdentifier::from_serializable_borsh(&content).map_err(|_| {
+            SubjectError::CryptoError(String::from("Error calculating the hash of the proposal"))
+        })?;
+        let signature = subject_keys
+            .sign(Payload::Buffer(content_hash.derivative()))
+            .map_err(|_| {
+                SubjectError::CryptoError(String::from("Error signing the hash of the proposal"))
+            })?;
+        let subject_signature = Signature {
+            content: SignatureContent {
+                signer: public_key.clone(),
+                event_content_hash: content_hash,
+                timestamp: TimeStamp::now(),
+            },
+            signature: SignatureIdentifier::new(
+                public_key.to_signature_derivator(),
+                &signature,
+            ),
+        };
+        Ok(Self { content, signature: subject_signature })
+    }
+
+    pub fn check_signatures(&self) -> Result<(), SubjectError> {
+        check_cryptography(&self.content, &self.signature)
+            .map_err(|error| SubjectError::CryptoError(error.to_string()))?;
+        Ok(())
     }
 }

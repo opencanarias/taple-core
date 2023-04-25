@@ -30,6 +30,78 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         }
     }
 
+    pub fn get_roles_of_invokator(
+        &self,
+        invokator: KeyIdentifier,
+        metadata: Metadata,
+    ) -> Result<Result<Vec<String>, RequestError>, InternalError> {
+        // TODO: lo de governance version
+        let mut governance_id = metadata.governance_id;
+        if governance_id.digest.is_empty() {
+            governance_id = metadata.subject_id;
+        }
+        let schema_id = metadata.schema_id;
+        let governance = match self.repo_access.get_subject(&governance_id) {
+            Ok(governance) => governance,
+            Err(DbError::EntryNotFound) => {
+                return Ok(Err(RequestError::GovernanceNotFound(
+                    governance_id.to_str(),
+                )))
+            }
+            Err(error) => return Err(InternalError::DatabaseError { source: error }),
+        };
+        let properties: Value = serde_json::from_str(&governance.properties)
+            .map_err(|_| InternalError::DeserializationError)?;
+        let policies = get_as_array(&properties, "Policies")?;
+        let schema_policy = get_schema_from_policies(policies, &schema_id);
+        let roles_prop = properties["Roles"]
+            .as_array()
+            .expect("Existe Roles")
+            .to_owned();
+        let roles = get_roles(&schema_id, roles_prop, &metadata.namespace)?;
+        let members = get_members_from_governance(&properties)?;
+        let mut invokator_roles = get_invokator_roles(&invokator, &members, roles)?;
+        if metadata.creator == invokator {
+            invokator_roles.push("Creator".to_string());
+        }
+        if metadata.owner == invokator {
+            invokator_roles.push("Owner".to_string());
+        }
+        Ok(Ok(invokator_roles))
+    }
+
+    // NEW
+    pub fn get_init_state(
+        &self,
+        governance_id: DigestIdentifier,
+        schema_id: String,
+        governance_version: u64,
+    ) -> Result<Result<Value, RequestError>, InternalError> {
+        if governance_id.digest.is_empty() {
+            // TODO: Devolver init state de gov
+            todo!();
+        }
+        let governance = match self.repo_access.get_subject(&governance_id) {
+            Ok(governance) => governance,
+            Err(DbError::EntryNotFound) => {
+                return Ok(Err(RequestError::GovernanceNotFound(
+                    governance_id.to_str(),
+                )))
+            }
+            Err(error) => return Err(InternalError::DatabaseError { source: error }),
+        };
+        let properties: Value = serde_json::from_str(&governance.properties)
+            .map_err(|_| InternalError::DeserializationError)?;
+        let schemas = get_as_array(&properties, "schemas")?;
+        for schema in schemas {
+            let tmp = get_as_str(schema, "id")?;
+            if tmp == &schema_id {
+                return Ok(Ok(schema.get("initial_value").unwrap().to_owned()));
+            }
+        }
+        return Ok(Err(RequestError::SchemaNotFound(schema_id)));
+    }
+
     // UPDATED
     pub fn get_schema(
         &self,
@@ -54,7 +126,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         for schema in schemas {
             let tmp = get_as_str(schema, "id")?;
             if tmp == &schema_id {
-                return Ok(Ok(schema.get("State-Schema").unwrap().to_owned()));
+                return Ok(Ok(schema.get("state_schema").unwrap().to_owned()));
             }
         }
         return Ok(Err(RequestError::SchemaNotFound(schema_id)));
@@ -264,7 +336,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         let schemas = get_as_array(&properties, "Schemas")?;
         let mut result = Vec::new();
         for schema in schemas {
-            let contract: Contract = serde_json::from_value(schema["Contract"])
+            let contract: Contract = serde_json::from_value(schema["Contract"].clone())
                 .map_err(|_| InternalError::InvalidGovernancePayload)?;
             result.push(contract);
         }
@@ -406,13 +478,49 @@ fn get_roles(
         if !namespace_contiene(&role_data.namespace, namespace) {
             continue;
         }
-        match role_data.schema {
+        match &role_data.schema {
             Schema::Id { id } => {
-                if &id == schema_id {
+                if &id == &schema_id {
                     roles.push(role_data)
                 }
             }
             Schema::AllSchemas => roles.push(role_data),
+        }
+    }
+    Ok(roles)
+}
+
+fn get_invokator_roles(
+    invokator: &KeyIdentifier,
+    members: &HashSet<KeyIdentifier>,
+    roles_schema: Vec<Role>,
+) -> Result<Vec<String>, InternalError> {
+    let mut roles = Vec::new();
+    let mut is_external = false;
+    if !members.contains(invokator) {
+        is_external = true;
+    }
+    let invokator_str = invokator.to_str();
+    for role in roles_schema {
+        match role.who {
+            crate::commons::schema_handler::gov_models::Who::Id { id } => {
+                if !is_external && &id == &invokator_str {
+                    roles.extend(role.roles.into_iter());
+                }
+            }
+            crate::commons::schema_handler::gov_models::Who::Members => {
+                if !is_external {
+                    roles.extend(role.roles.into_iter());
+                }
+            }
+            crate::commons::schema_handler::gov_models::Who::All => {
+                roles.extend(role.roles.into_iter());
+            }
+            crate::commons::schema_handler::gov_models::Who::External => {
+                if is_external {
+                    roles.extend(role.roles.into_iter());
+                }
+            }
         }
     }
     Ok(roles)

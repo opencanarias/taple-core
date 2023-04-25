@@ -1,6 +1,9 @@
 use crate::{
-    evaluator::{errors::ExecutorErrorResponses},
-    governance::GovernanceInterface, commons::models::{event_preevaluation::Context, Acceptance},
+    commons::models::{event_preevaluation::Context, Acceptance},
+    evaluator::errors::ExecutorErrorResponses,
+    event_content::Metadata,
+    governance::GovernanceInterface,
+    identifier::{DigestIdentifier, KeyIdentifier},
 };
 
 use super::context::MemoryManager;
@@ -35,19 +38,18 @@ impl<G: GovernanceInterface + Send> ContractExecutor<G> {
         &self,
         state: &str,
         event: &str,
+        invokator: &KeyIdentifier,
         context: &Context,
         governance_version: u64,
         compiled_contract: Vec<u8>,
+        subject_id: &DigestIdentifier,
     ) -> Result<ContractResult, ExecutorErrorResponses> {
         // Obtener Roles del usuario
         let roles = self
             .gov_api
             .get_roles_of_invokator(
-                &context.invokator,
-                &context.governance_id,
-                governance_version,
-                &context.schema_id,
-                &context.namespace,
+                invokator.clone(),
+                build_metadata(&context, governance_version, &subject_id),
             )
             .await
             .map_err(|_| ExecutorErrorResponses::RolesObtentionFailed)?;
@@ -97,14 +99,14 @@ impl<G: GovernanceInterface + Send> ContractExecutor<G> {
         pointer: u32,
     ) -> Result<ContractResult, ExecutorErrorResponses> {
         let bytes = store.data().read_data(pointer as usize)?;
-        let contract_result: WasmContractResult  = bincode::deserialize(bytes)
+        let contract_result: WasmContractResult = bincode::deserialize(bytes)
             .map_err(|_| ExecutorErrorResponses::CantGenerateContractResult)?;
         let result = ContractResult {
             final_state: contract_result.final_state,
             approval_required: contract_result.approval_required,
             success: match contract_result.success {
                 true => Acceptance::Ok,
-                false => Acceptance::Ko
+                false => Acceptance::Ko,
             },
         };
         Ok(result)
@@ -154,5 +156,21 @@ impl<G: GovernanceInterface + Send> ContractExecutor<G> {
             )
             .map_err(|_| ExecutorErrorResponses::FunctionLinkingFailed("read_byte".to_owned()))?;
         Ok(linker)
+    }
+}
+
+fn build_metadata(
+    context: &Context,
+    governance_version: u64,
+    subject_id: &DigestIdentifier,
+) -> Metadata {
+    Metadata {
+        namespace: context.namespace.clone(),
+        subject_id: subject_id.clone(),
+        governance_id: context.governance_id.clone(),
+        governance_version: governance_version,
+        schema_id: context.schema_id.clone(),
+        owner: context.owner.clone(),
+        creator: context.creator.clone(),
     }
 }

@@ -1,50 +1,28 @@
-use crate::commons::{
-    errors::{CryptoErrorEvent, SubjectError},
-    models::state::LedgerState,
-};
-use crate::governance::error::RequestError;
+use crate::{commons::errors::SubjectError, governance::error::RequestError};
 use thiserror::Error;
 
 #[derive(Error, Debug, Clone, PartialEq)]
-pub enum LedgerManagerError {
+pub enum LedgerError {
     #[error("A channel has been closed")]
     ChannelClosed,
-    #[error("Subject Not Found")]
-    SubjectNotFound,
-    #[error("Signatures not found")]
-    SignaturesNotFound,
-    #[error("Event Not Found")]
-    EventNotFound(LedgerState),
-    #[error("Event Not Needed")]
-    EventNotNeeded(LedgerState),
-    #[error("Event Already Exists")]
-    EventAlreadyExists,
-    #[error("Not Validable (We are not validator od subject)")]
-    NotValidable,
-    #[error("Cryptographic Error")]
-    CryptoError(CryptoError),
-    #[error("Head Candidate Not Validated")]
-    HeadCandidateNotValidated,
-    #[error("Multiple Events target in same bunch of signatures")]
-    MultipleTargets,
-    #[error("HashSet of Signatures is empty")]
-    EmptySignatures,
-    #[error("HashSet of Signatures has invalid validator")]
-    InvalidValidator,
-    #[error("Signatures not needed")]
-    SignaturesNotNeeded,
-    #[error("The error \"{0}\" has been generated during subject manipulation")]
-    SubjectError(SubjectError),
-    #[error("Error \"{0}\" detected with governance")]
-    GovernanceError(RequestError),
+    #[error("Subject Not Found: {0}")]
+    SubjectNotFound(String),
     #[error("A database error has ocurred at LedgerManager: \"{0}\"")]
-    DatabaseError(String)
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub enum CryptoError {
-    Conflict,
-    InvalidSignature,
-    InvalidHash,
-    Event(CryptoErrorEvent),
+    DatabaseError(String),
+    #[error("Error parsing json string: \"{0}\"")]
+    ErrorParsingJsonString(String),
+    #[error("Error applying patch: \"{0}\"")]
+    ErrorApplyingPatch(String),
+    #[error("State Event entered as Genesis")]
+    StateInGenesis,
+    #[error("Channel unnavaible")]
+    ChannelError(#[from] crate::commons::errors::ChannelErrors),
+    #[error("Subject Error")]
+    SubjectError(#[from] SubjectError),
+    #[error("Crypto Error: \"{0}\"")]
+    CryptoError(String),
+    #[error("Subject ALready Exists: \"{0}\"")]
+    SubjectAlreadyExists(String),
+    #[error("Governance Error")]
+    GovernanceError(#[from] RequestError),
 }

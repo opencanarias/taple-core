@@ -113,22 +113,6 @@ pub enum ChannelErrors {
     FullQueue,
 }
 
-#[derive(Error, Debug, Clone, PartialEq)]
-pub enum CryptoErrorEvent {
-    #[error("Request Signature is not valid")]
-    RequestSignatureInvalid,
-    #[error("Subject Signature is not valid")]
-    SubjectSignatureInvalid,
-    #[error("Error Hashing event content")]
-    EventContentHashingError,
-    #[error("Error Hashing event request")]
-    EventRequestHashingError,
-    #[error("Event content hash is not equal to signature hash")]
-    EventContentHashingConflict,
-    #[error("Event request hash is not equal to signature hash")]
-    EventRequestHashingConflict,
-}
-
 #[derive(Error, Debug, PartialEq, Clone)]
 pub enum SubjectError {
     #[error("Event request type is not Create")]
@@ -164,7 +148,7 @@ pub enum SubjectError {
     #[error("Schema does not compile")]
     SchemaDoesNotCompile,
     #[error("Error in criptography")]
-    CryptoError(CryptoErrorEvent),
+    CryptoError(String),
     #[error("InvalidPayload {0}")]
     InvalidPayload(String),
     #[error("Error parsing json string")]
@@ -185,6 +169,8 @@ pub enum SubjectError {
     InvalidUseOfJSONPATCH,
     #[error("Approvers is not subset of validators")]
     ApproversAreNotValidators,
+    #[error("Error creating subject id")]
+    ErrorCreatingSubjectId,
 }
 
 #[derive(Error, Debug, Clone, PartialEq)]

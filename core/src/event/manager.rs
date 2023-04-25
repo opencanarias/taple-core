@@ -1,7 +1,12 @@
+use async_trait::async_trait;
+
 use super::{errors::EventError, event_completer::EventCompleter, EventCommand, EventResponse};
+use crate::commons::self_signature_manager::SelfSignatureManager;
 use crate::database::{DatabaseManager, DB};
+use crate::event_request::EventRequest;
 use crate::governance::error::RequestError;
 use crate::identifier::KeyIdentifier;
+use crate::ledger::{LedgerCommand, LedgerResponse};
 use crate::protocol::protocol_message_manager::TapleMessages;
 use crate::{
     commons::channel::{ChannelData, MpscChannel, SenderEnd},
@@ -21,7 +26,22 @@ impl EventAPI {
     }
 }
 
-pub struct NotaryManager<D: DatabaseManager> {
+#[async_trait]
+pub trait EventAPIInterface {
+    async fn send_event_request(&self, event_request: EventRequest) -> EventResponse;
+}
+
+#[async_trait]
+impl EventAPIInterface for EventAPI {
+    async fn send_event_request(&self, event_request: EventRequest) -> EventResponse {
+        match self.sender.ask(EventCommand::Event { event_request }).await {
+            Ok(response) => response,
+            Err(error) => EventResponse::Event(Err(EventError::EventApiChannelNotAvailable)),
+        }
+    }
+}
+
+pub struct EventManager<D: DatabaseManager> {
     /// Communication channel for incoming petitions
     input_channel: MpscChannel<EventCommand, EventResponse>,
     /// Notarization functions
@@ -30,7 +50,7 @@ pub struct NotaryManager<D: DatabaseManager> {
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
 }
 
-impl<D: DatabaseManager> NotaryManager<D> {
+impl<D: DatabaseManager> EventManager<D> {
     pub fn new(
         input_channel: MpscChannel<EventCommand, EventResponse>,
         gov_api: GovernanceAPI,
@@ -39,8 +59,9 @@ impl<D: DatabaseManager> NotaryManager<D> {
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
         message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
         notification_sender: tokio::sync::broadcast::Sender<Notification>,
-        ledger_sender: SenderEnd<(), ()>,
+        ledger_sender: SenderEnd<LedgerCommand, LedgerResponse>,
         own_identifier: KeyIdentifier,
+        signature_manager: SelfSignatureManager,
     ) -> Self {
         Self {
             input_channel,
@@ -51,6 +72,7 @@ impl<D: DatabaseManager> NotaryManager<D> {
                 notification_sender,
                 ledger_sender,
                 own_identifier,
+                signature_manager,
             ),
             shutdown_receiver,
             shutdown_sender,

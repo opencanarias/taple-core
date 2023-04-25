@@ -5,11 +5,6 @@ use thiserror::Error;
 
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum ProtocolErrors {
-    #[error("Errors that can never happen")]
-    InfalibleError {
-        #[from]
-        source: Infallible,
-    },
     #[error("Secret Key not found")]
     SignatureError,
     #[error("Channel unavaible")]
@@ -21,11 +16,6 @@ pub enum ProtocolErrors {
     OneshotUnavailable,
     #[error("Ledger response not expected")]
     UnexpectedLedgerResponse,
-    #[error("Ledger error")]
-    LedgerError {
-        #[from]
-        source: LedgerManagerError,
-    },
     #[error("Not validator")]
     NotValidator,
     #[error("Governance error")]
@@ -41,11 +31,6 @@ pub enum EventCreationError {
     NoOwnerOfSubject,
     #[error("Event creation not possible")]
     EventCreationNotAvailable,
-    #[error("Event creation failed. {}", source)]
-    EventCreationFailed {
-        #[from]
-        source: LedgerManagerError
-    },
     #[error("Subject not available for new events")]
     SubjectNotAvailable,
 }
@@ -65,11 +50,6 @@ pub enum ResponseError {
     EventCreationError {
         #[from]
         source: EventCreationError,
-    },
-    #[error("Invalid operation detected in Ledger")]
-    InvalidOperation {
-        #[from]
-        source: LedgerManagerError,
     },
     #[error("Comunnication with Leyer closed")]
     LedgerChannelClosed,
@@ -115,25 +95,25 @@ pub enum ResponseError {
     CantCreateGovernance
 }
 
-#[derive(Error, Debug, Clone)]
-pub enum RequestManagerError {
-    #[error("Input Channel closed")]
-    ChannelClosed,
-    #[error("Channel with command Manager closed")]
-    ComunicationWithCommandManagerClosed,
-    #[error("Sign verification failed")]
-    SignVerificationFailed,
-    #[error("Event request signature was not possible")]
-    SignError,
-    #[error("Request Error")]
-    RequestError(RequestError),
-    #[error("Command Manager Error")]
-    CommandManagerError {
-        #[from]
-        source: ResponseError,
-    },
-    #[error("Database corrupted {0}")]
-    DatabaseCorrupted(String),
-    #[error("A database error has ocurred at request manager")]
-    DatabaseError(String)
-}
+// #[derive(Error, Debug, Clone)]
+// pub enum RequestManagerError {
+//     #[error("Input Channel closed")]
+//     ChannelClosed,
+//     #[error("Channel with command Manager closed")]
+//     ComunicationWithCommandManagerClosed,
+//     #[error("Sign verification failed")]
+//     SignVerificationFailed,
+//     #[error("Event request signature was not possible")]
+//     SignError,
+//     #[error("Request Error")]
+//     RequestError(RequestError),
+//     #[error("Command Manager Error")]
+//     CommandManagerError {
+//         #[from]
+//         source: ResponseError,
+//     },
+//     #[error("Database corrupted {0}")]
+//     DatabaseCorrupted(String),
+//     #[error("A database error has ocurred at request manager")]
+//     DatabaseError(String)
+// }

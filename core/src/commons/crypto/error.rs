@@ -79,3 +79,11 @@ pub enum Error {
     #[error("Subject not found")]
     SubjectNotFoundError,
 }*/
+
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum CryptoError{
+    #[error("Crypto Error: {0}")]
+    CryptoError(String)
+}

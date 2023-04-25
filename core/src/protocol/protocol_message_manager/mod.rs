@@ -3,17 +3,13 @@ use serde::{Deserialize, Serialize};
 use crate::{
     approval::{error::ApprovalErrorResponse, ApprovalMessages},
     commons::channel::{ChannelData, MpscChannel, SenderEnd},
-    distribution::{
-        error::DistributionErrorResponses, DistributionMessagesNew,
-        LedgerMessages,
-    },
+    distribution::{error::DistributionErrorResponses, DistributionMessagesNew, LedgerMessages},
     evaluator::{EvaluatorMessage, EvaluatorResponse},
     event::{EventCommand, EventResponse},
     message::{Message, TaskCommandContent},
     notary::{NotaryCommand, NotaryResponse},
     Event,
 };
-
 
 mod error;
 use error::ProtocolErrors;
@@ -22,7 +18,7 @@ use error::ProtocolErrors;
 pub enum TapleMessages {
     DistributionMessage(DistributionMessagesNew),
     EvaluationMessage(EvaluatorMessage),
-    ValidationMessage(Event),
+    ValidationMessage(NotaryCommand),
     EventMessage(EventCommand),
     ApprovalMessages(ApprovalMessages),
     LedgerMessages(LedgerMessages),
@@ -104,7 +100,11 @@ impl ProtocolManager {
                 .tell(data)
                 .await
                 .map_err(|_| ProtocolErrors::ChannelClosed)?,
-            TapleMessages::ApprovalMessages(data) => todo!(),
+            TapleMessages::ApprovalMessages(data) => self
+                .approval_sx
+                .tell(data)
+                .await
+                .map_err(|_| ProtocolErrors::ChannelClosed)?,
             TapleMessages::LedgerMessages(_) => todo!(),
         }
         Ok(())

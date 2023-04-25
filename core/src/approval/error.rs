@@ -18,6 +18,8 @@ pub enum ApprovalManagerError {
 
 #[derive(Error, Debug, Clone)]
 pub enum ApprovalErrorResponse {
+  #[error("API Channel not available")]
+  APIChannelNotAvailable,
   #[error("Request already known")]
   RequestAlreadyKnown,
   #[error("No Fact event")]

@@ -2,10 +2,8 @@ use std::collections::HashSet;
 
 use crate::commons::{
     identifier::{DigestIdentifier, KeyIdentifier},
-    models::{
-        event_content::Metadata,
-    },
-    schema_handler::gov_models::{Invoke, Contract},
+    models::event_content::Metadata,
+    schema_handler::gov_models::{Contract, Invoke},
 };
 pub mod error;
 pub mod governance;
@@ -43,6 +41,11 @@ pub struct SingleGovernance {
 
 #[derive(Debug, Clone)]
 pub enum GovernanceMessage {
+    GetInitState {
+        governance_id: DigestIdentifier,
+        schema_id: String,
+        governance_version: u64,
+    },
     GetSchema {
         governance_id: DigestIdentifier,
         schema_id: String,
@@ -70,10 +73,15 @@ pub enum GovernanceMessage {
     IsGovernance {
         subject_id: DigestIdentifier,
     },
+    GetRolesOfInvokator {
+        invokator: KeyIdentifier,
+        metadata: Metadata
+    }
 }
 
 #[derive(Debug, Clone)]
 pub enum GovernanceResponse {
+    GetInitState(Result<Value, RequestError>),
     GetSchema(Result<Value, RequestError>),
     GetSigners(Result<HashSet<KeyIdentifier>, RequestError>),
     GetQuorum(Result<u32, RequestError>),
@@ -81,4 +89,5 @@ pub enum GovernanceResponse {
     GetContracts(Result<Vec<Contract>, RequestError>),
     GetGovernanceVersion(Result<u64, RequestError>),
     IsGovernance(Result<bool, RequestError>),
+    GetRolesOfInvokator(Result<Vec<String>, RequestError>),
 }

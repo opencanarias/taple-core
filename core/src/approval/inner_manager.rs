@@ -19,7 +19,7 @@ use crate::{
 };
 
 use super::{
-    error::{ApprovalErrorResponse, ApprovalManagerError},
+    error::{ApprovalErrorResponse, ApprovalManagerError}, ApprovalPetitionData,
 };
 use crate::database::Error as DbError;
 use crate::governance::stage::ValidationStage;
@@ -63,16 +63,6 @@ impl NotifierInterface for RequestNotifier {
     }
 }
 
-#[derive(Clone, Debug)]
-struct ApprovalPetitionData {
-    subject_id: DigestIdentifier,
-    sn: u64,
-    governance_id: DigestIdentifier,
-    governance_version: u64,
-    hash_event_proporsal: DigestIdentifier,
-    sender: KeyIdentifier,
-}
-
 pub struct InnerApprovalManager<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface> {
     governance: G,
     database: DB<D>,
@@ -105,6 +95,17 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
         }
     }
 
+    pub fn get_single_request(&self, request_id: &DigestIdentifier) -> Result<ApprovalPetitionData, ApprovalErrorResponse> {
+        let Some(request) = self.request_table.get(request_id) else {
+            return Err(ApprovalErrorResponse::ApprovalRequestNotFound);
+        };
+        Ok(request.clone())
+    }
+
+    pub fn get_all_request(&self) -> Vec<ApprovalPetitionData> {
+        self.request_table.values().cloned().collect()
+    }
+
     pub fn change_pass_votation(&mut self, pass_votation: VotationType) {
         self.pass_votation = pass_votation;
     }
@@ -113,7 +114,7 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
         &self,
         governance_id: &DigestIdentifier,
     ) -> Result<Result<u64, ApprovalErrorResponse>, ApprovalManagerError> {
-        match self.governance.get_governance_version(&governance_id).await {
+        match self.governance.get_governance_version(governance_id.to_owned()).await {
             Ok(data) => Ok(Ok(data)),
             Err(RequestError::GovernanceNotFound(_str)) => {
                 Ok(Err(ApprovalErrorResponse::GovernanceNotFound))
@@ -122,7 +123,7 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
                 Ok(Err(ApprovalErrorResponse::InvalidGovernanceID))
             }
             Err(RequestError::ChannelClosed) => Err(ApprovalManagerError::GovernanceChannelFailed),
-            Err(error) => Err(ApprovalManagerError::UnexpectedError),
+            Err(_error) => Err(ApprovalManagerError::UnexpectedError),
         }
     }
 
@@ -177,7 +178,7 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
             .content
             .event_content_hash;
 
-        if let Some(data) = self.request_table.get(&id) {
+        if let Some(_data) = self.request_table.get(&id) {
             return Ok(Err(ApprovalErrorResponse::RequestAlreadyKnown));
         }
 
@@ -190,7 +191,7 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
         let subject_data = match self.database.get_subject(&state_request.subject_id) {
             Ok(subject) => subject,
             Err(DbError::EntryNotFound) => return Ok(Err(ApprovalErrorResponse::SubjectNotFound)),
-            Err(error) => return Err(ApprovalManagerError::DatabaseError),
+            Err(_error) => return Err(ApprovalManagerError::DatabaseError),
         };
 
         if approval_request.proposal.sn > subject_data.sn + 1 {
@@ -220,7 +221,9 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
             Err(error) => return Ok(Err(error)),
         };
 
-        if version != approval_request.proposal.evaluation.governance_version {
+        let evaluation = approval_request.proposal.evaluation.clone().expect("los genesis no se aprueban");
+
+        if version != evaluation.governance_version {
             return Ok(Err(ApprovalErrorResponse::InvalidGovernanceVersion));
         }
 
@@ -245,7 +248,7 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
 
         // Verificamos la firma
         let hash = event_proposal_hash_gen(&approval_request)?;
-        if let Err(error) = approval_request.subject_signature.content.signer.verify(
+        if let Err(_error) = approval_request.subject_signature.content.signer.verify(
             &hash.derivative(),
             approval_request.subject_signature.signature.clone(),
         ) {
@@ -282,7 +285,7 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
             .await
             .map_err(|_| ApprovalManagerError::GovernanceChannelFailed)?;
 
-        let hash = DigestIdentifier::from_serializable_borsh(&approval_request.proposal.evaluation)
+        let hash = DigestIdentifier::from_serializable_borsh(&evaluation)
             .map_err(|_| ApprovalManagerError::HashGenerationFailed)?;
 
         for signature in approval_request.proposal.evaluation_signatures.iter() {
@@ -308,7 +311,7 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
             .await
             .map_err(|_| ApprovalManagerError::GovernanceChannelFailed)?;
 
-        match approval_request.proposal.evaluation.acceptance {
+        match evaluation.acceptance {
             Acceptance::Ok => {
                 if !(approval_request.proposal.evaluation_signatures.len() as u32 >= evaluator_quorum) {
                     return Ok(Err(ApprovalErrorResponse::NoQuorumReached));
@@ -340,6 +343,7 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
                 .event_content_hash
                 .clone(),
             sender: subject_data.owner.clone(),
+            json_patch: approval_request.proposal.json_patch.clone()
         };
 
         self.subject_been_approved
@@ -433,12 +437,13 @@ fn event_proposal_hash_gen(
 
 fn create_metadata(subject_data: &Subject, governance_version: u64) -> Metadata {
     Metadata {
-        namespace: subject_data.namespace,
-        subject_id: subject_data.subject_id,
-        governance_id: subject_data.governance_id,
+        namespace: subject_data.namespace.clone(),
+        subject_id: subject_data.subject_id.clone(),
+        governance_id: subject_data.governance_id.clone(),
         governance_version,
-        schema_id: subject_data.schema_id,
-        owner: subject_data.owner,
+        schema_id: subject_data.schema_id.clone(),
+        owner: subject_data.owner.clone(),
+        creator: subject_data.creator.clone(),
     }
 }
 

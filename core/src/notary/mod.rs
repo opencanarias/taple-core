@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::{
     identifier::{DigestIdentifier, KeyIdentifier},
     signature::Signature, commons::models::notary::NotaryEventResponse,
@@ -9,7 +11,7 @@ pub mod errors;
 pub mod manager;
 pub mod notary;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum NotaryCommand {
     NotaryEvent(NotaryEvent),
 }
@@ -19,7 +21,7 @@ pub enum NotaryResponse {
     NotaryEventResponse(Result<NotaryEventResponse, NotaryError>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NotaryEvent {
     pub gov_id: DigestIdentifier,
     pub subject_id: DigestIdentifier,

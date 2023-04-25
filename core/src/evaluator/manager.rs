@@ -10,7 +10,7 @@ use crate::commons::self_signature_manager::{SelfSignatureInterface, SelfSignatu
 use crate::database::{DatabaseManager, DB};
 use crate::evaluator::errors::ExecutorErrorResponses;
 use crate::evaluator::runner::manager::TapleRunner;
-use crate::event_request::{EventRequestType, RequestPayload};
+use crate::event_request::{EventRequestType};
 use crate::governance::GovernanceInterface;
 use crate::message::{MessageConfig, MessageTaskCommand};
 use crate::protocol::protocol_message_manager::TapleMessages;
@@ -150,7 +150,7 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send + Clone + 'static> Evalua
                                 msg,
                                 vec![data.context.owner],
                                 MessageConfig::direct_response(),
-                            ));
+                            )).await.map_err(|_| EvaluatorError::ChannelNotAvailable)?;
                             EvaluatorResponse::AskForEvaluation(Ok(()))
                         }
                         Err(ExecutorErrorResponses::DatabaseError(error)) => {
@@ -178,13 +178,6 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send + Clone + 'static> Evalua
                 .map_err(|_| EvaluatorError::ChannelNotAvailable)?;
         }
         Ok(())
-    }
-}
-
-fn extract_data_from_payload(payload: &RequestPayload) -> String {
-    match payload {
-        RequestPayload::Json(data) => data.clone(),
-        RequestPayload::JsonPatch(data) => data.clone(),
     }
 }
 

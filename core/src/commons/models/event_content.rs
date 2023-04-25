@@ -21,6 +21,8 @@ pub struct Metadata {
     pub schema_id: String,
     #[schema(value_type = String)]
     pub owner: KeyIdentifier,
+    #[schema(value_type = String)]
+    pub creator: KeyIdentifier,
 }
 
 /// Content of a TAPLE event
