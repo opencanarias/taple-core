@@ -7,11 +7,13 @@ use crate::event_request::{EventRequestType};
 use crate::identifier::DigestIdentifier;
 
 mod api;
+
+pub use api::{NodeAPI, ApiModuleInterface};
+pub(crate) use api::API;
+pub use error::ApiError;
+
 mod error;
 mod inner_api;
-
-//pub use api::{ApiModuleInterface, NodeAPI, API};
-pub use error::ApiError;
 
 #[derive(Debug, Clone)]
 pub enum APICommands {
