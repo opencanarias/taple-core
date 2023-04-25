@@ -95,7 +95,7 @@ pub mod event;
 
 mod unitary_component;
 pub use api::{
-    ApiError, 
+    ApiError, ApiModuleInterface, NodeAPI
 };
 pub use commons::identifier;
 pub use commons::models::{
