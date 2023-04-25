@@ -83,32 +83,35 @@ pub(crate) mod governance;
 pub(crate) mod ledger;
 pub(crate) mod message;
 // pub(crate) mod network;
-pub(crate) mod database;
-pub(crate) mod notary;
-pub(crate) mod evaluator;
-pub(crate) mod distribution;
 pub(crate) mod approval;
+pub(crate) mod database;
+pub(crate) mod distribution;
+pub(crate) mod evaluator;
+pub(crate) mod notary;
 pub(crate) mod utils;
 
-pub mod protocol;
 pub mod event;
+pub mod protocol;
 
 mod unitary_component;
 pub use api::{
-    ApiError, ApiModuleInterface, NodeAPI
+    APICommands, ApiError, ApiModuleInterface, ApiResponses, GetAllSubjects, GetEventsOfSubject,
+    GetSingleSubject, NodeAPI,
 };
 pub use commons::identifier;
-pub use commons::models::{
-    event::Event,
-};
+pub use commons::identifier::{DigestIdentifier, KeyIdentifier};
+pub use commons::models::event::Event;
+pub use commons::models::event_request::EventRequestType;
+pub use commons::models::state::SubjectData;
+pub use commons::models::Acceptance;
 pub use commons::models::{event_content, event_request, signature};
 pub use commons::{
     config::{DatabaseSettings, NetworkSettings, NodeSettings, TapleSettings},
     identifier::derive::{digest::DigestDerivator, KeyDerivator},
-    models::timestamp::TimeStamp,
     models::notification::Notification,
+    models::timestamp::TimeStamp,
 };
 pub use error::Error;
 // pub use unitary_component::{NotificationHandler, Taple};
-pub use database::{DatabaseManager, MemoryManager, Error as DbError, DatabaseCollection};
 pub(crate) use database::DB;
+pub use database::{DatabaseCollection, DatabaseManager, Error as DbError, MemoryManager};
