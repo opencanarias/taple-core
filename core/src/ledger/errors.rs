@@ -44,4 +44,6 @@ pub enum LedgerError {
     UnexpectEventMissingInEventSourcing,
     #[error("Event Not Next")]
     EventNotNext,
+    #[error("Event Does Not Fit Hash")]
+    EventDoesNotFitHash,
 }

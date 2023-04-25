@@ -4,7 +4,7 @@ use json_patch::{patch, Patch};
 use serde_json::Value;
 
 use crate::{
-    commons::models::state::Subject,
+    commons::models::{approval::Approval, state::Subject},
     database::DB,
     event_content::Metadata,
     event_request::{EventRequest, EventRequestType},
@@ -292,17 +292,6 @@ impl<D: DatabaseManager> Ledger<D> {
                                 return Err(LedgerError::DatabaseError(error));
                             }
                         };
-                        // Comprobar que el invokator es válido
-                        let invoker = event
-                            .content
-                            .event_proposal
-                            .proposal
-                            .event_request
-                            .signature
-                            .content
-                            .signer
-                            .clone();
-                        // TODO: Pedir  invokadores válidos a la gov
                         // Comprobar que las firmas son válidas y suficientes
                         let metadata = Metadata {
                             namespace: subject.namespace.clone(),
@@ -313,6 +302,7 @@ impl<D: DatabaseManager> Ledger<D> {
                             owner: subject.owner.clone(),
                             creator: subject.creator.clone(),
                         };
+                        self.check_event(event.clone(), metadata.clone()).await?;
                         let (signers, quorum) = self
                             .get_signers_and_quorum(metadata, ValidationStage::Validate)
                             .await?;
@@ -426,10 +416,32 @@ impl<D: DatabaseManager> Ledger<D> {
                     Some(head) => {
                         match ledger_state.current_sn {
                             Some(current_sn) => {
+                                let mut subject = match self.database.get_subject(&subject_id) {
+                                    Ok(subject) => subject,
+                                    Err(crate::DbError::EntryNotFound) => {
+                                        return Err(LedgerError::SubjectNotFound("".into()));
+                                    }
+                                    Err(error) => {
+                                        return Err(LedgerError::DatabaseError(error));
+                                    }
+                                };
+                                let metadata = Metadata {
+                                    namespace: subject.namespace.clone(),
+                                    subject_id: subject.subject_id.clone(),
+                                    governance_id: subject.governance_id.clone(),
+                                    governance_version: event
+                                        .content
+                                        .event_proposal
+                                        .proposal
+                                        .gov_version,
+                                    schema_id: subject.schema_id.clone(),
+                                    owner: subject.owner.clone(),
+                                    creator: subject.creator.clone(),
+                                };
                                 // Comprobar que el evento es el siguiente
                                 if event.content.event_proposal.proposal.sn == current_sn + 1 {
                                     // Comprobar que el evento es el que necesito
-                                    self.check_event(event, subject_id.clone()).await?;
+                                    self.check_event(event, metadata).await?;
                                     // Hacer event sourcing del evento y actualizar subject
                                     self.event_sourcing(subject_id.clone(), current_sn + 1)?;
                                     if head == current_sn + 1 {
@@ -456,7 +468,7 @@ impl<D: DatabaseManager> Ledger<D> {
                                     // El evento no es el que necesito
                                     Err(LedgerError::EventNotNext)
                                 }
-                            },
+                            }
                             None => {
                                 // El siguiente es el evento 0
                                 if event.content.event_proposal.proposal.sn == 0 {
@@ -563,15 +575,15 @@ impl<D: DatabaseManager> Ledger<D> {
     }
 
     fn event_sourcing(&self, subject_id: DigestIdentifier, sn: u64) -> Result<(), LedgerError> {
-        let prev_event = self
-            .database
-            .get_event(&subject_id, sn - 1)
-            .map_err(|error| match error {
-                crate::database::Error::EntryNotFound => {
-                    LedgerError::UnexpectEventMissingInEventSourcing
-                }
-                _ => LedgerError::DatabaseError(error),
-            })?;
+        let prev_event =
+            self.database
+                .get_event(&subject_id, sn - 1)
+                .map_err(|error| match error {
+                    crate::database::Error::EntryNotFound => {
+                        LedgerError::UnexpectEventMissingInEventSourcing
+                    }
+                    _ => LedgerError::DatabaseError(error),
+                })?;
         let event = self
             .database
             .get_event(&subject_id, sn)
@@ -581,6 +593,10 @@ impl<D: DatabaseManager> Ledger<D> {
                 }
                 _ => LedgerError::DatabaseError(error),
             })?;
+            // Comprobar evento previo encaja
+            if event.content.event_proposal.proposal.hash_prev_event != event.signature.content.event_content_hash {
+                return Err(LedgerError::EventDoesNotFitHash);
+            }
         let mut subject = self.database.get_subject(&subject_id)?;
         subject.update_subject(
             &event.content.event_proposal.proposal.json_patch,
@@ -590,13 +606,96 @@ impl<D: DatabaseManager> Ledger<D> {
         Ok(())
     }
 
-    async fn check_event(
-        &self,
-        event: Event,
-        subject_id: DigestIdentifier,
-    ) -> Result<(), LedgerError> {
+    async fn check_event(&self, event: Event, metadata: Metadata) -> Result<(), LedgerError> {
+        // Comprobar que las firmas de evaluación y/o aprobación hacen quorum
+        let (signers, quorum) = self
+            .get_signers_and_quorum(metadata.clone(), ValidationStage::Evaluate)
+            .await?;
+        let evaluation_hash = DigestIdentifier::from_serializable_borsh(
+            &event
+                .content
+                .event_proposal
+                .proposal
+                .evaluation
+                .clone()
+                .unwrap(),
+        )
+        .map_err(|_| {
+            LedgerError::CryptoError(String::from(
+                "Error calculating the hash of the serializable evaluation",
+            ))
+        })?;
+        verify_signatures(
+            &event.content.event_proposal.proposal.evaluation_signatures,
+            &signers,
+            quorum,
+            &evaluation_hash,
+        )?;
+        if event
+            .content
+            .event_proposal
+            .proposal
+            .evaluation
+            .clone()
+            .unwrap()
+            .approval_required
+        {
+            let (signers, quorum) = self
+                .get_signers_and_quorum(metadata, ValidationStage::Approve)
+                .await?;
+            verify_approval_signatures(&event.content.approvals, &signers, quorum)?;
+        }
         todo!()
     }
+}
+
+fn verify_approval_signatures(
+    approvals: &HashSet<Approval>,
+    signers: &HashSet<KeyIdentifier>,
+    quorum_size: u32,
+) -> Result<(), LedgerError> {
+    let mut actual_signers = HashSet::new();
+    for approval in approvals.iter() {
+        let approval_hash =
+            DigestIdentifier::from_serializable_borsh(&approval.content).map_err(|_| {
+                LedgerError::CryptoError(String::from(
+                    "Error calculating the hash of the serializable approval",
+                ))
+            })?;
+        let signature = approval.signature.clone();
+        let signer = signature.content.signer.clone();
+        if &signature.content.event_content_hash != &approval_hash {
+            log::error!("Invalid Event Hash in Approval");
+            continue;
+        }
+        match signature.verify() {
+            Ok(_) => (),
+            Err(_) => {
+                log::error!("Invalid Signature Detected");
+                continue;
+            }
+        }
+        if !signers.contains(&signer) {
+            log::error!("Signer {} not allowed", signer.to_str());
+            continue;
+        }
+        if !actual_signers.insert(signer.clone()) {
+            log::error!(
+                "Signer {} in more than one validation signature",
+                signer.to_str()
+            );
+            continue;
+        }
+    }
+    if actual_signers.len() < quorum_size as usize {
+        log::error!(
+            "Not enough signatures. Expected: {}, Actual: {}",
+            quorum_size,
+            actual_signers.len()
+        );
+        return Err(LedgerError::NotEnoughSignatures("Approval failed".into()));
+    }
+    Ok(())
 }
 
 fn verify_signatures(

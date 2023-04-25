@@ -470,9 +470,20 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 })
                 .map(|signature| signature.signature.clone())
                 .collect();
+            let hash_prev_event = if subject.sn == 0 {
+                DigestIdentifier::default()
+            } else {
+                self.database
+                    .get_event(&subject.subject_id, subject.sn - 1)
+                    .map_err(|e| EventError::DatabaseError(e.to_string()))?
+                    .signature
+                    .content
+                    .event_content_hash
+            };
             let proposal = Proposal::new(
                 preevaluation_event.event_request.clone(),
                 preevaluation_event.sn,
+                hash_prev_event,
                 evaluation.governance_version,
                 Some(evaluation.clone()),
                 json_patch,
