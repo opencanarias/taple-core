@@ -28,7 +28,7 @@ pub enum ApprovalResponses {
     GetSingleRequest(Result<ApprovalPetitionData, ApprovalErrorResponse>),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ApprovalPetitionData {
     pub subject_id: DigestIdentifier,
     pub sn: u64,

@@ -95,7 +95,7 @@ pub trait ApiModuleInterface {
     /// • [ApiError::InvalidParameters] if the specified subject identifier does not match a valid [DigestIdentifier].
     async fn get_event_of_subject(
         &self,
-        subject_id: String,
+        subject_id: DigestIdentifier,
         from: Option<i64>,
         quantity: Option<i64>,
     ) -> Result<Vec<Event>, ApiError>;
@@ -117,7 +117,7 @@ pub trait ApiModuleInterface {
     /// # Possible errors
     /// • [ApiError::InvalidParameters] if the specified identifier does not match a valid [DigestIdentifier].<br />
     /// • [ApiError::NotFound] if the subject does not exist.
-    async fn get_subject(&self, subject_id: String) -> Result<SubjectData, ApiError>;
+    async fn get_subject(&self, subject_id: DigestIdentifier) -> Result<SubjectData, ApiError>;
     /// Method for creating governance in the system.
     /// # Possible errors
     /// • [ApiError::InternalError] if an internal error occurred during the execution of the operation.<br />
