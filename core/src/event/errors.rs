@@ -4,6 +4,8 @@ use crate::{governance::error::RequestError, commons::errors::SubjectError};
 
 #[derive(Error, Clone, Debug)]
 pub enum EventError {
+    #[error("Event API channel not available")]
+    EventApiChannelNotAvailable,
     #[error("A database error has ocurred at main component {0}")]
     DatabaseError(String),
     #[error("Governance Error")]

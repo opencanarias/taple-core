@@ -1,4 +1,3 @@
-use std::{collections::HashSet, str::FromStr};
 
 use crate::{
     commons::{
@@ -11,20 +10,13 @@ use crate::{
     },
     event_request::EventRequest,
 };
-use json_patch::patch;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use time::OffsetDateTime;
-use utoipa::{openapi::schema, ToSchema};
+use utoipa::{ToSchema};
 
 use super::{
     event::Event,
-    event_content::EventContent,
     event_request::EventRequestType,
-    signature::{Signature, SignatureContent},
-    timestamp::TimeStamp,
 };
-use borsh::{BorshDeserialize, BorshSerialize};
 
 #[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
 pub struct Subject {

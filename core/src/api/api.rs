@@ -1,24 +1,27 @@
+use super::GetEventsOfSubject;
 use super::{
     error::{APIInternalError, ApiError},
     inner_api::InnerAPI,
-    APICommands, APIResponses,
+    APICommands, ApiResponses,
 };
-use super::{CreateRequest, CreateType, ExternalEventRequest, GetEventsOfSubject};
-use async_trait::async_trait;
-use crate::{DB, DatabaseManager, commons::models::Acceptance};
+use crate::approval::manager::ApprovalAPI;
 use crate::commons::models::event::Event;
-use crate::commons::models::event_request::{EventRequest, RequestData, RequestPayload};
-use crate::commons::models::signature::Signature;
+use crate::commons::models::event_request::EventRequest;
 use crate::commons::models::state::SubjectData;
 use crate::commons::{
     channel::{ChannelData, MpscChannel, SenderEnd},
     config::TapleSettings,
     crypto::KeyPair,
 };
-use crate::protocol::command_head_manager::manager::CommandAPI;
-use crate::protocol::command_head_manager::{CommandManagerResponses, Commands};
-use crate::protocol::request_manager::manager::RequestManagerAPI;
-use crate::protocol::request_manager::{RequestManagerMessage, RequestManagerResponse};
+use crate::event::manager::EventAPI;
+use crate::{
+    approval::ApprovalPetitionData,
+    commons::models::Acceptance,
+    event_request::{CreateRequest, EventRequestType, StateRequest},
+    identifier::DigestIdentifier,
+    DatabaseManager, DB,
+};
+use async_trait::async_trait;
 use tokio::sync::watch::Sender;
 
 /// Trait that allows implementing the interface of a TAPLE node.
@@ -37,13 +40,13 @@ pub trait ApiModuleInterface {
     /// • [ApiError::InvalidParameters] if the specified request identifier does not match a valid [DigestIdentifier].<br />
     async fn create_request(
         &self,
-        request_type: super::CreateRequest,
-    ) -> Result<RequestData, ApiError>;
+        request_type: EventRequestType,
+    ) -> Result<DigestIdentifier, ApiError>;
     /// Allows to make a request to the node from an external Invoker
     async fn external_request(
         &self,
-        event_request: ExternalEventRequest,
-    ) -> Result<RequestData, ApiError>;
+        event_request: EventRequest,
+    ) -> Result<DigestIdentifier, ApiError>;
     /// Allows adding a new event to the chain of a subject previously existing
     /// in the node. The event identifier and its [payload](RequestPayload) are required.
     /// This method returns the enumerated [CreateRequestResponse], being the identifier
@@ -59,22 +62,9 @@ pub trait ApiModuleInterface {
     /// then [ApiError::SignError] will be obtained.
     async fn create_event(
         &self,
-        subject_id: String,
-        payload: RequestPayload,
-    ) -> Result<RequestData, ApiError>;
-    /// It allows to simulate the creation of an event, obtaining the state that would
-    /// result from the subject in case the event is actually created.
-    /// # Possible errors
-    /// • [ApiError::InvalidParameters] if the specified identifier does not match a valid [DigestIdentifier]. <br />
-    /// • [ApiError::SignError] if it has not been possible to create the signature that accompanies
-    /// the creation of the event with the identity of the node. <br />
-    /// • [ApiError::NotFound] if the specified subject is not registered in the node. <br />
-    /// • [ApiError::InternalError] if an error occurred during simulation execution.
-    async fn simulate_event(
-        &self,
-        subject_id: String,
-        payload: RequestPayload,
-    ) -> Result<SubjectData, ApiError>;
+        subject_id: DigestIdentifier,
+        payload: String,
+    ) -> Result<DigestIdentifier, ApiError>;
     /// Allows to get all subjects that are known to the current node, regardless of their governance.
     /// Paging can be performed using the optional arguments `from` and `quantity`.
     /// Regarding the first one, note that it admits negative values, in which case the paging is
@@ -119,11 +109,10 @@ pub trait ApiModuleInterface {
     /// • [ApiError::InvalidParameters] if the specified governance identifier does not match a valid [DigestIdentifier].
     async fn create_subject(
         &self,
-        governance_id: String,
+        governance_id: DigestIdentifier,
         schema_id: String,
         namespace: String,
-        payload: RequestPayload,
-    ) -> Result<RequestData, ApiError>;
+    ) -> Result<DigestIdentifier, ApiError>;
     /// Allows to obtain a specified subject by specifying its identifier.
     /// # Possible errors
     /// • [ApiError::InvalidParameters] if the specified identifier does not match a valid [DigestIdentifier].<br />
@@ -135,21 +124,7 @@ pub trait ApiModuleInterface {
     /// • [ApiError::SignError] if it has not been possible to create the signature that accompanies
     /// the creation of the event with the identity of the node.<br />
     /// • [ApiError::EventCreationError] if it has not been possible to create the governance.
-    async fn create_governance(&self, payload: RequestPayload) -> Result<RequestData, ApiError>;
-    /// Method to obtain the validation signatures of an event from a specified subject.
-    /// Paging can be performed using the optional arguments `from` and `quantity`.
-    /// Regarding the first one, it is worth mentioning that it admits negative values, in which case
-    /// the pagination is performed in the opposite direction starting from the end of the collection.
-    /// # Possible errors
-    /// • [ApiError::NotFound] if the specified subject or subject event does not exist.<br />
-    /// • [ApiError::InvalidParameters] if the specified subject identifier does not match a valid [DigestIdentifier].
-    async fn get_signatures(
-        &self,
-        subject_id: String,
-        sn: u64,
-        from: Option<usize>,
-        quantity: Option<usize>,
-    ) -> Result<Vec<Signature>, ApiError>;
+    async fn create_governance(&self, payload: String) -> Result<DigestIdentifier, ApiError>;
     /// Stops the node, consuming the instance on the fly. This implies that any previously created API
     /// or [NotificationHandler] instances will no longer be functional.
     async fn shutdown(self) -> Result<(), ApiError>;
@@ -163,16 +138,16 @@ pub trait ApiModuleInterface {
     /// This occurs when the acceptance of the changes proposed by the petition has already been resolved by the rest of the nodes in the network or when the node cannot participate in the voting process because it lacks the voting role.
     async fn approval_request(
         &self,
-        request_id: String,
+        request_id: DigestIdentifier,
         acceptance: Acceptance,
-    ) -> Result<(), ApiError>;
+    ) -> Result<DigestIdentifier, ApiError>;
     /// It allows to obtain all the voting requests pending to be resolved in the node.
     /// These requests are received from other nodes in the network when they try to update
     /// a governance subject. It is necessary to vote their agreement or disagreement with
     /// the proposed changes in order for the events to be implemented.
     /// # Possible errors
     /// • [ApiError::InternalError] if an internal error occurs during operation execution.
-    async fn get_pending_requests(&self) -> Result<Vec<EventRequest>, ApiError>;
+    async fn get_pending_requests(&self) -> Result<Vec<ApprovalPetitionData>, ApiError>;
     /// It allows to obtain a single voting request pending to be resolved in the node.
     /// This request is received from other nodes in the network when they try to update
     /// a governance subject. It is necessary to vote its agreement or disagreement with
@@ -180,7 +155,10 @@ pub trait ApiModuleInterface {
     /// # Possible errors
     /// • [ApiError::InternalError] if an internal error occurs during operation execution.
     /// • [ApiError::NotFound] if the requested request does not exist.
-    async fn get_single_request(self, id: String) -> Result<EventRequest, ApiError>;
+    async fn get_single_request(
+        self,
+        id: DigestIdentifier,
+    ) -> Result<ApprovalPetitionData, ApiError>;
 }
 
 /// Object that allows interaction with a TAPLE node.
@@ -192,7 +170,7 @@ pub trait ApiModuleInterface {
 /// the trait in order to properly use the object.
 #[derive(Clone, Debug)]
 pub struct NodeAPI {
-    pub(crate) sender: SenderEnd<APICommands, APIResponses>,
+    pub(crate) sender: SenderEnd<APICommands, ApiResponses>,
 }
 
 /// Feature that allows implementing the API Rest of an Taple node.
@@ -200,14 +178,14 @@ pub struct NodeAPI {
 impl ApiModuleInterface for NodeAPI {
     async fn create_request(
         &self,
-        request_type: super::CreateRequest,
-    ) -> Result<RequestData, ApiError> {
+        request_type: EventRequestType,
+    ) -> Result<DigestIdentifier, ApiError> {
         let response = self
             .sender
-            .ask(APICommands::CreateRequest(request_type))
+            .ask(APICommands::HandleRequest(request_type))
             .await
             .unwrap();
-        if let APIResponses::CreateRequest(data) = response {
+        if let ApiResponses::HandleRequest(data) = response {
             data
         } else {
             unreachable!()
@@ -216,40 +194,43 @@ impl ApiModuleInterface for NodeAPI {
 
     async fn external_request(
         &self,
-        event_request: ExternalEventRequest,
-    ) -> Result<RequestData, ApiError> {
+        event_request: EventRequest,
+    ) -> Result<DigestIdentifier, ApiError> {
         let response = self
             .sender
             .ask(APICommands::ExternalRequest(event_request))
             .await
             .unwrap();
-        if let APIResponses::ExternalRequest(data) = response {
+        if let ApiResponses::HandleExternalRequest(data) = response {
             data
         } else {
             unreachable!()
         }
     }
 
-    async fn get_pending_requests(&self) -> Result<Vec<EventRequest>, ApiError> {
+    async fn get_pending_requests(&self) -> Result<Vec<ApprovalPetitionData>, ApiError> {
         let response = self
             .sender
             .ask(APICommands::GetPendingRequests)
             .await
             .unwrap();
-        if let APIResponses::GetPendingRequests(data) = response {
+        if let ApiResponses::GetPendingRequests(data) = response {
             data
         } else {
             unreachable!()
         }
     }
 
-    async fn get_single_request(self, id: String) -> Result<EventRequest, ApiError> {
+    async fn get_single_request(
+        self,
+        id: DigestIdentifier,
+    ) -> Result<ApprovalPetitionData, ApiError> {
         let response = self
             .sender
             .ask(APICommands::GetSingleRequest(id))
             .await
             .unwrap();
-        if let APIResponses::GetSingleRequest(data) = response {
+        if let ApiResponses::GetSingleRequest(data) = response {
             data
         } else {
             unreachable!()
@@ -258,38 +239,19 @@ impl ApiModuleInterface for NodeAPI {
 
     async fn create_event(
         &self,
-        subject_id: String,
-        payload: RequestPayload,
-    ) -> Result<RequestData, ApiError> {
-        let request = CreateRequest::State(crate::api::StateType {
+        subject_id: DigestIdentifier,
+        payload: String,
+    ) -> Result<DigestIdentifier, ApiError> {
+        let request = EventRequestType::State(StateRequest {
             subject_id,
-            payload,
+            invokation: payload,
         });
         let response = self
             .sender
-            .ask(APICommands::CreateRequest(request))
+            .ask(APICommands::HandleRequest(request))
             .await
             .unwrap();
-        if let APIResponses::CreateRequest(data) = response {
-            data
-        } else {
-            unreachable!()
-        }
-    }
-    async fn simulate_event(
-        &self,
-        subject_id: String,
-        payload: RequestPayload,
-    ) -> Result<SubjectData, ApiError> {
-        let response = self
-            .sender
-            .ask(APICommands::SimulateEvent(super::CreateEvent {
-                subject_id,
-                payload,
-            }))
-            .await
-            .unwrap();
-        if let APIResponses::SimulateEvent(data) = response {
+        if let ApiResponses::HandleRequest(data) = response {
             data
         } else {
             unreachable!()
@@ -310,7 +272,7 @@ impl ApiModuleInterface for NodeAPI {
             }))
             .await
             .unwrap();
-        if let APIResponses::GetAllSubjects(data) = response {
+        if let ApiResponses::GetAllSubjects(data) = response {
             data
         } else {
             unreachable!()
@@ -331,7 +293,7 @@ impl ApiModuleInterface for NodeAPI {
             }))
             .await
             .unwrap();
-        if let APIResponses::GetAllGovernances(data) = response {
+        if let ApiResponses::GetAllGovernances(data) = response {
             data
         } else {
             unreachable!()
@@ -352,7 +314,7 @@ impl ApiModuleInterface for NodeAPI {
             }))
             .await
             .unwrap();
-        if let APIResponses::GetEventsOfSubject(data) = response {
+        if let ApiResponses::GetEventsOfSubject(data) = response {
             data
         } else {
             unreachable!()
@@ -360,23 +322,21 @@ impl ApiModuleInterface for NodeAPI {
     }
     async fn create_subject(
         &self,
-        governance_id: String,
+        governance_id: DigestIdentifier,
         schema_id: String,
         namespace: String,
-        payload: RequestPayload,
-    ) -> Result<RequestData, ApiError> {
-        let request = CreateRequest::Create(CreateType {
+    ) -> Result<DigestIdentifier, ApiError> {
+        let request = EventRequestType::Create(CreateRequest {
             governance_id,
             schema_id,
             namespace,
-            payload,
         });
         let response = self
             .sender
-            .ask(APICommands::CreateRequest(request))
+            .ask(APICommands::HandleRequest(request))
             .await
             .unwrap();
-        if let APIResponses::CreateRequest(data) = response {
+        if let ApiResponses::HandleRequest(data) = response {
             data
         } else {
             unreachable!()
@@ -390,48 +350,24 @@ impl ApiModuleInterface for NodeAPI {
             }))
             .await
             .unwrap();
-        if let APIResponses::GetSingleSubject(data) = response {
+        if let ApiResponses::GetSingleSubject(data) = response {
             data
         } else {
             unreachable!()
         }
     }
-    async fn create_governance(&self, payload: RequestPayload) -> Result<RequestData, ApiError> {
-        let request = CreateRequest::Create(CreateType {
-            governance_id: "".into(),
-            schema_id: "governance".into(),
+    async fn create_governance(&self, payload: String) -> Result<DigestIdentifier, ApiError> {
+        let request = EventRequestType::Create(CreateRequest {
+            governance_id: DigestIdentifier::default(),
+            schema_id: "".into(),
             namespace: "".into(),
-            payload,
         });
         let response = self
             .sender
-            .ask(APICommands::CreateRequest(request))
+            .ask(APICommands::HandleRequest(request))
             .await
             .unwrap();
-        if let APIResponses::CreateRequest(data) = response {
-            data
-        } else {
-            unreachable!()
-        }
-    }
-    async fn get_signatures(
-        &self,
-        subject_id: String,
-        sn: u64,
-        from: Option<usize>,
-        quantity: Option<usize>,
-    ) -> Result<Vec<Signature>, ApiError> {
-        let response = self
-            .sender
-            .ask(APICommands::GetSignatures(super::GetSignatures {
-                subject_id,
-                sn,
-                from,
-                quantity,
-            }))
-            .await
-            .unwrap();
-        if let APIResponses::GetSignatures(data) = response {
+        if let ApiResponses::HandleRequest(data) = response {
             data
         } else {
             unreachable!()
@@ -440,15 +376,15 @@ impl ApiModuleInterface for NodeAPI {
 
     async fn approval_request(
         &self,
-        request_id: String,
+        request_id: DigestIdentifier,
         acceptance: Acceptance,
-    ) -> Result<(), ApiError> {
+    ) -> Result<DigestIdentifier, ApiError> {
         let response = self
             .sender
             .ask(APICommands::VoteResolve(acceptance, request_id))
             .await
             .unwrap();
-        if let APIResponses::VoteResolve(data) = response {
+        if let ApiResponses::VoteResolve(data) = response {
             data
         } else {
             unreachable!()
@@ -457,7 +393,7 @@ impl ApiModuleInterface for NodeAPI {
 
     async fn shutdown(self) -> Result<(), ApiError> {
         let response = self.sender.ask(APICommands::Shutdown).await.unwrap();
-        if let APIResponses::ShutdownCompleted = response {
+        if let ApiResponses::ShutdownCompleted = response {
             Ok(())
         } else {
             unreachable!()
@@ -466,7 +402,7 @@ impl ApiModuleInterface for NodeAPI {
 }
 
 pub struct API<D: DatabaseManager> {
-    input: MpscChannel<APICommands, APIResponses>,
+    input: MpscChannel<APICommands, ApiResponses>,
     _settings_sender: Sender<TapleSettings>,
     inner_api: InnerAPI<D>,
     shutdown_sender: Option<tokio::sync::broadcast::Sender<()>>,
@@ -475,9 +411,9 @@ pub struct API<D: DatabaseManager> {
 
 impl<D: DatabaseManager> API<D> {
     pub fn new(
-        input: MpscChannel<APICommands, APIResponses>,
-        command_output: SenderEnd<Commands, CommandManagerResponses>,
-        request_output: SenderEnd<RequestManagerMessage, RequestManagerResponse>,
+        input: MpscChannel<APICommands, ApiResponses>,
+        event_api: EventAPI,
+        approval_api: ApprovalAPI,
         settings_sender: Sender<TapleSettings>,
         initial_settings: TapleSettings,
         keys: KeyPair,
@@ -488,13 +424,7 @@ impl<D: DatabaseManager> API<D> {
         Self {
             input,
             _settings_sender: settings_sender,
-            inner_api: InnerAPI::new(
-                keys,
-                &initial_settings,
-                CommandAPI::new(command_output),
-                db,
-                RequestManagerAPI::new(request_output),
-            ),
+            inner_api: InnerAPI::new(keys, &initial_settings, event_api, db, approval_api),
             shutdown_sender: Some(shutdown_sender),
             shutdown_receiver: shutdown_receiver,
         }
@@ -529,7 +459,7 @@ impl<D: DatabaseManager> API<D> {
                         _ = self.shutdown_receiver.recv().await;
                         if response_channel.is_some() {
                             let response_channel = response_channel.unwrap();
-                            let _ = response_channel.send(APIResponses::ShutdownCompleted);
+                            let _ = response_channel.send(ApiResponses::ShutdownCompleted);
                         }
                         break;
                     }
@@ -543,8 +473,8 @@ impl<D: DatabaseManager> API<D> {
 
     async fn process_input(
         &mut self,
-        input: ChannelData<APICommands, APIResponses>,
-    ) -> Result<Option<tokio::sync::oneshot::Sender<APIResponses>>, APIInternalError> {
+        input: ChannelData<APICommands, ApiResponses>,
+    ) -> Result<Option<tokio::sync::oneshot::Sender<ApiResponses>>, APIInternalError> {
         // TODO: API commands to change the configuration are missing
         match input {
             ChannelData::AskData(data) => {
@@ -554,26 +484,26 @@ impl<D: DatabaseManager> API<D> {
                         return Ok(Some(sx));
                     }
                     APICommands::GetAllSubjects(data) => self.inner_api.get_all_subjects(data),
-                    APICommands::GetAllGovernances(data) => self.inner_api.get_all_governances(data).await,
+                    APICommands::GetAllGovernances(data) => {
+                        self.inner_api.get_all_governances(data).await
+                    }
                     APICommands::GetEventsOfSubject(data) => {
                         self.inner_api.get_events_of_subject(data).await
                     }
-                    APICommands::GetSignatures(data) => self.inner_api.get_signatures(data).await,
                     APICommands::GetSingleSubject(data) => {
                         self.inner_api.get_single_subject(data).await
                     }
-                    APICommands::SimulateEvent(data) => self.inner_api.simulate_event(data).await,
                     APICommands::VoteResolve(acceptance, id) => {
-                        self.inner_api.approval_acceptance(acceptance, id).await
+                        self.inner_api.emit_vote(id, acceptance).await?
                     }
                     APICommands::GetPendingRequests => self.inner_api.get_pending_request().await,
                     APICommands::GetSingleRequest(data) => {
                         self.inner_api.get_single_request(data).await
                     }
-                    APICommands::CreateRequest(data) => self.inner_api.create_request(data).await,
+                    APICommands::HandleRequest(data) => self.inner_api.handle_request(data).await?,
                     APICommands::ExternalRequest(event_request) => {
-                        let response = self.inner_api.external_request(event_request).await;
-                        response
+                        let response = self.inner_api.handle_external_request(event_request).await;
+                        response?
                     }
                 };
                 sx.send(response)

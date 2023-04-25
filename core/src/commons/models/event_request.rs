@@ -1,11 +1,7 @@
 //! Contains the data structures related to event requests.
-use std::collections::HashSet;
-
 use borsh::{BorshDeserialize, BorshSerialize};
-use json_patch::patch;
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 use crate::commons::{
     crypto::{check_cryptography, Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair},
@@ -16,20 +12,18 @@ use crate::commons::{
 use utoipa::ToSchema;
 
 use super::{
-    event::Event,
-    event_content::{EventContent, Metadata},
     signature::Signature,
     state::Subject,
     timestamp::TimeStamp,
 };
 
-#[derive(
-    Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
-)]
-pub enum RequestPayload {
-    Json(String),
-    JsonPatch(String),
-}
+// #[derive(
+//     Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
+// )]
+// pub enum RequestPayload {
+//     Json(String),
+//     JsonPatch(String),
+// }
 
 // #[derive(
 //     Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
@@ -72,16 +66,16 @@ pub enum RequestPayload {
 //     pub approvals: HashSet<ApprovalResponse>,
 // }
 
-#[derive(
-    Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
-)]
-pub struct RequestData {
-    pub request: EventRequestType,
-    pub request_id: String,
-    pub timestamp: TimeStamp,
-    pub subject_id: Option<String>,
-    pub sn: Option<u64>,
-}
+// #[derive(
+//     Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
+// )]
+// pub struct RequestData {
+//     pub request: EventRequestType,
+//     pub request_id: String,
+//     pub timestamp: TimeStamp,
+//     pub subject_id: Option<String>,
+//     pub sn: Option<u64>,
+// }
 
 #[derive(
     Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,

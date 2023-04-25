@@ -1,6 +1,9 @@
+use async_trait::async_trait;
+
 use super::{errors::EventError, event_completer::EventCompleter, EventCommand, EventResponse};
 use crate::commons::self_signature_manager::SelfSignatureManager;
 use crate::database::{DatabaseManager, DB};
+use crate::event_request::EventRequest;
 use crate::governance::error::RequestError;
 use crate::identifier::KeyIdentifier;
 use crate::ledger::{LedgerCommand, LedgerResponse};
@@ -43,7 +46,7 @@ impl<D: DatabaseManager> EventManager<D> {
         notification_sender: tokio::sync::broadcast::Sender<Notification>,
         ledger_sender: SenderEnd<LedgerCommand, LedgerResponse>,
         own_identifier: KeyIdentifier,
-        signature_manager: SelfSignatureManager
+        signature_manager: SelfSignatureManager,
     ) -> Self {
         Self {
             input_channel,
@@ -54,7 +57,7 @@ impl<D: DatabaseManager> EventManager<D> {
                 notification_sender,
                 ledger_sender,
                 own_identifier,
-                signature_manager
+                signature_manager,
             ),
             shutdown_receiver,
             shutdown_sender,

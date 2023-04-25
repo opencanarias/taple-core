@@ -364,10 +364,8 @@ impl<D: DatabaseManager> EventCompleter<D> {
         //     unreachable!("Unwraped before")
         // }
         // Add the event to the hashset to not complete two at the same time for the same subject
-        self.subjects_completing_event.insert(
-            subject_id.clone(),
-            (stage, signers, quorum_size),
-        );
+        self.subjects_completing_event
+            .insert(subject_id.clone(), (stage, signers, quorum_size));
         self.subjects_by_governance
             .entry(subject.governance_id)
             .or_insert_with(HashSet::new)
