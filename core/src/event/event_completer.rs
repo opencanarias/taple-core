@@ -262,7 +262,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
                     let creators = self
                         .gov_api
                         .get_signers(
-                            &Metadata {
+                            Metadata {
                                 namespace: create_request.namespace.clone(),
                                 subject_id: DigestIdentifier::default(), // Not necessary for this method
                                 governance_id: create_request.governance_id.clone(),
@@ -794,6 +794,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
         }
     }
 
+    // TODO: Cambiar Vec por HashSet, no se por que puse vec
     async fn get_signers_and_quorum(
         &self,
         metadata: Metadata,
@@ -801,14 +802,14 @@ impl<D: DatabaseManager> EventCompleter<D> {
     ) -> Result<(Vec<KeyIdentifier>, u32), EventError> {
         let signers = self
             .gov_api
-            .get_signers(&metadata, stage.clone())
+            .get_signers(metadata.clone(), stage.clone())
             .await
             .map_err(EventError::GovernanceError)?
             .into_iter()
             .collect();
         let quorum_size = self
             .gov_api
-            .get_quorum(&metadata, stage)
+            .get_quorum(metadata, stage)
             .await
             .map_err(EventError::GovernanceError)?;
         Ok((signers, quorum_size))

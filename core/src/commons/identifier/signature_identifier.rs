@@ -93,7 +93,7 @@ mod tests {
         let si = SignatureIdentifier::from_str(&si_str).unwrap();
         let key_str = "EYS8MQAh_m740mHnjPMm9IgY9RGojzFak6ELaTsQQZx8";
         let ki = KeyIdentifier::from_str(&key_str).unwrap();
-        assert!(ki.verify(message, si).is_ok());
+        assert!(ki.verify(message, &si).is_ok());
         // ECDSAsecp256k1
         let sig_str = "SSRFbutVG3-KHv_Fuexdx24aukwvj_RqN9jiPt9EQyDYRWsMJ-kpcLfX7\
         CHmERmULScNSiG2l4_DDQF1qui8rEjQ";
@@ -101,7 +101,7 @@ mod tests {
         let key_str = "SBKR60N9QMBPtFhwELb4XV1MIoAoZyYpdcvracq1wEW4UfrFBNh1wYajlGe\
         07VddYGgB2YbOp4aUBWkISPgu2JkQ";
         let ki = KeyIdentifier::from_str(&key_str).unwrap();
-        assert!(ki.verify(message, si).is_ok());
+        assert!(ki.verify(message, &si).is_ok());
     }
 
     #[test]

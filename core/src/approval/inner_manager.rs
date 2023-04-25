@@ -231,7 +231,7 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
         // Comprobar si somos aprobadores. Esto antes incluso que la firma del sujeto
         let approvers_list = self
             .governance
-            .get_signers(&metadata, ValidationStage::Approve)
+            .get_signers(metadata.clone(), ValidationStage::Approve)
             .await
             .map_err(|_| ApprovalManagerError::GovernanceChannelFailed)?;
         let current_node = self.signature_manager.get_own_identifier();
@@ -249,7 +249,7 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
         let hash = event_proposal_hash_gen(&approval_request)?;
         if let Err(_error) = approval_request.subject_signature.content.signer.verify(
             &hash.derivative(),
-            approval_request.subject_signature.signature.clone(),
+            &approval_request.subject_signature.signature,
         ) {
             return Ok(Err(ApprovalErrorResponse::InvalidSubjectSignature));
         }
@@ -280,7 +280,7 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
         // Se tiene que verificar tanto las firmas como que los firmantes sean evaluadores válidos para la versión de la gobernanza
         let evaluators = self
             .governance
-            .get_signers(&metadata, ValidationStage::Evaluate)
+            .get_signers(metadata.clone(), ValidationStage::Evaluate)
             .await
             .map_err(|_| ApprovalManagerError::GovernanceChannelFailed)?;
 
@@ -296,7 +296,7 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
             if signature
                 .content
                 .signer
-                .verify(&hash.derivative(), signature.signature.clone())
+                .verify(&hash.derivative(), &signature.signature)
                 .is_err()
             {
                 return Ok(Err(ApprovalErrorResponse::InvalidEvaluatorSignature));
@@ -306,7 +306,7 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
         // Comprobamos Quorum de evaluación
         let evaluator_quorum = self
             .governance
-            .get_quorum(&metadata, ValidationStage::Evaluate)
+            .get_quorum(metadata, ValidationStage::Evaluate)
             .await
             .map_err(|_| ApprovalManagerError::GovernanceChannelFailed)?;
 
@@ -386,7 +386,7 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
         // Check that the signature matches the hash
         match event_request.signature.content.signer.verify(
             &hash_request.derivative(),
-            event_request.signature.signature.clone(),
+            &event_request.signature.signature,
         ) {
             Ok(_) => return Ok(Ok(())),
             Err(_) => {

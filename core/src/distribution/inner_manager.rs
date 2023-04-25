@@ -82,7 +82,7 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
             .map_err(|_| DistributionManagerError::GovernanceChannelNotAvailable)?;
         // Empezamos la distribución
         let metadata = build_metadata(&subject, governance_version);
-        let mut targets = self.get_targets(&metadata).await?;
+        let mut targets = self.get_targets(metadata).await?;
         targets.remove(&self.signature_manager.get_own_identifier());
         self.send_signature_request(&subject.subject_id, msg.sn, targets.clone(), &targets)
             .await?;
@@ -123,10 +123,10 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
 
     async fn get_targets(
         &self,
-        metadata: &Metadata,
+        metadata: Metadata,
     ) -> Result<HashSet<KeyIdentifier>, DistributionManagerError> {
         self.governance
-            .get_signers(&metadata, ValidationStage::Witness)
+            .get_signers(metadata, ValidationStage::Witness)
             .await
             .map_err(|_| DistributionManagerError::GovernanceChannelNotAvailable)
     }
@@ -230,7 +230,7 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
                     .await
                     .map_err(|_| DistributionManagerError::GovernanceChannelNotAvailable)?;
                 let metadata = build_metadata(&subject, governance_version);
-                let mut targets = self.get_targets(&metadata).await?;
+                let mut targets = self.get_targets(metadata).await?;
                 let hash_signed = DigestIdentifier::from_serializable_borsh(&event)
                     .map_err(|_| DistributionManagerError::HashGenerationFailed)?;
                 for signature in msg.signatures.iter() {
@@ -242,7 +242,7 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
                     if let Err(_error) = signature
                         .content
                         .signer
-                        .verify(&hash_signed.derivative(), signature.signature.clone())
+                        .verify(&hash_signed.derivative(), &signature.signature)
                     {
                         return Ok(Err(DistributionErrorResponses::InvalidSignature));
                     }

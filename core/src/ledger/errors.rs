@@ -26,4 +26,14 @@ pub enum LedgerError {
     GovernanceError(#[from] RequestError),
     #[error("Database Error")]
     DatabaseError(#[from] DbError),
+    #[error("Event Already Exists")]
+    EventAlreadyExists,
+    #[error("Unauthorized: {0}")]
+    Unauthorized(String),
+    #[error("Not Enough Signatures: {0}")]
+    NotEnoughSignatures(String),
+    #[error("0 events for subject: {0}")]
+    ZeroEventsSubject(String),
+    #[error("Wrong SN in Subject: {0}")]
+    WrongSnInSubject(String),
 }
