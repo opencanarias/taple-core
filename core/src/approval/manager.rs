@@ -1,32 +1,111 @@
+use async_trait::async_trait;
+
 use crate::{
-    commons::{channel::{ChannelData, MpscChannel, SenderEnd}, self_signature_manager::SelfSignatureManager},
+    commons::{
+        channel::{ChannelData, MpscChannel, SenderEnd},
+        models::{event_proposal::EventProposal, Acceptance},
+        self_signature_manager::SelfSignatureManager,
+    },
     database::DB,
     governance::GovernanceAPI,
+    identifier::DigestIdentifier,
     message::{MessageConfig, MessageTaskCommand},
-    protocol::{
-        protocol_message_manager::TapleMessages,
-    },
-    DatabaseManager, Notification, TapleSettings, utils::message::event::create_approver_response,
+    protocol::protocol_message_manager::TapleMessages,
+    utils::message::event::create_approver_response,
+    DatabaseManager, Notification, TapleSettings,
 };
 
 use super::{
     error::{ApprovalErrorResponse, ApprovalManagerError},
     inner_manager::{InnerApprovalManager, RequestNotifier},
-    ApprovalMessages,
+    ApprovalMessages, ApprovalPetitionData, ApprovalResponses, EmitVote,
 };
 
 struct ApprovalManager<D: DatabaseManager> {
-    input_channel: MpscChannel<ApprovalMessages, Result<(), ApprovalErrorResponse>>,
+    input_channel: MpscChannel<ApprovalMessages, ApprovalResponses>,
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
     messenger_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
     inner_manager: InnerApprovalManager<GovernanceAPI, D, RequestNotifier>,
 }
 
+pub struct ApprovalAPI {
+    input_channel: SenderEnd<ApprovalMessages, ApprovalResponses>,
+}
+
+#[async_trait]
+pub trait ApprovalAPIInterface {
+    async fn request_approval(&self, data: EventProposal) -> Result<(), ApprovalErrorResponse>;
+    async fn emit_vote(
+        &self,
+        request_id: DigestIdentifier,
+        acceptance: Acceptance,
+    ) -> Result<(), ApprovalErrorResponse>;
+    async fn get_all_requests(&self) -> Result<Vec<ApprovalPetitionData>, ApprovalErrorResponse>;
+    async fn get_single_request(
+        &self,
+        request_id: DigestIdentifier,
+    ) -> Result<ApprovalPetitionData, ApprovalErrorResponse>;
+}
+
+#[async_trait]
+impl ApprovalAPIInterface for ApprovalAPI {
+    async fn request_approval(&self, data: EventProposal) -> Result<(), ApprovalErrorResponse> {
+        self.input_channel
+            .tell(ApprovalMessages::RequestApproval(data))
+            .await
+            .map_err(|_| ApprovalErrorResponse::APIChannelNotAvailable)?;
+        Ok(())
+    }
+    async fn emit_vote(
+        &self,
+        request_id: DigestIdentifier,
+        acceptance: Acceptance,
+    ) -> Result<(), ApprovalErrorResponse> {
+        let result = self
+            .input_channel
+            .ask(ApprovalMessages::EmitVote(EmitVote {
+                request_id,
+                acceptance,
+            }))
+            .await
+            .map_err(|_| ApprovalErrorResponse::APIChannelNotAvailable)?;
+        match result {
+            ApprovalResponses::EmitVote(data) => data,
+            _ => unreachable!(),
+        }
+    }
+    async fn get_all_requests(&self) -> Result<Vec<ApprovalPetitionData>, ApprovalErrorResponse> {
+        let result = self
+            .input_channel
+            .ask(ApprovalMessages::GetAllRequest)
+            .await
+            .map_err(|_| ApprovalErrorResponse::APIChannelNotAvailable)?;
+        match result {
+            ApprovalResponses::GetAllRequest(data) => Ok(data),
+            _ => unreachable!(),
+        }
+    }
+    async fn get_single_request(
+        &self,
+        request_id: DigestIdentifier,
+    ) -> Result<ApprovalPetitionData, ApprovalErrorResponse> {
+        let result = self
+            .input_channel
+            .ask(ApprovalMessages::GetSingleRequest(request_id))
+            .await
+            .map_err(|_| ApprovalErrorResponse::APIChannelNotAvailable)?;
+        match result {
+            ApprovalResponses::GetSingleRequest(data) => data,
+            _ => unreachable!(),
+        }
+    }
+}
+
 impl<D: DatabaseManager> ApprovalManager<D> {
     pub fn new(
         gov_api: GovernanceAPI,
-        input_channel: MpscChannel<ApprovalMessages, Result<(), ApprovalErrorResponse>>,
+        input_channel: MpscChannel<ApprovalMessages, ApprovalResponses>,
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
         messenger_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
@@ -76,7 +155,7 @@ impl<D: DatabaseManager> ApprovalManager<D> {
 
     async fn process_command(
         &mut self,
-        command: ChannelData<ApprovalMessages, Result<(), ApprovalErrorResponse>>,
+        command: ChannelData<ApprovalMessages, ApprovalResponses>,
     ) -> Result<(), ApprovalManagerError> {
         let (sender, data) = match command {
             ChannelData::AskData(data) => {
@@ -124,14 +203,32 @@ impl<D: DatabaseManager> ApprovalManager<D> {
                             ))
                             .await;
                         if sender.is_some() {
-                            sender.unwrap().send(Ok(()));
+                            sender.unwrap().send(ApprovalResponses::EmitVote(Ok(())));
                         }
                     }
                     Err(error) => {
                         if sender.is_some() {
-                            sender.unwrap().send(Err(error));
+                            sender
+                                .unwrap()
+                                .send(ApprovalResponses::EmitVote(Err(error)));
                         }
                     }
+                }
+            }
+            ApprovalMessages::GetAllRequest => {
+                let result = self.inner_manager.get_all_request();
+                if sender.is_some() {
+                    sender
+                        .unwrap()
+                        .send(ApprovalResponses::GetAllRequest(result));
+                }
+            }
+            ApprovalMessages::GetSingleRequest(request_id) => {
+                let result = self.inner_manager.get_single_request(&request_id);
+                if sender.is_some() {
+                    sender
+                        .unwrap()
+                        .send(ApprovalResponses::GetSingleRequest(result));
                 }
             }
         };

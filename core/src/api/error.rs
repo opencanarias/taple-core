@@ -1,23 +1,31 @@
 //! Errors that may occur when interacting with a TAPLE node through its API
 
-use crate::protocol::errors::{ResponseError};
+use crate::{event::errors::EventError, approval::error::ApprovalErrorResponse};
 pub use crate::protocol::errors::EventCreationError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub(crate) enum APIInternalError {
     #[error("Channel unavailable")]
-    ChannelError {
-        #[from]
-        source: crate::commons::errors::ChannelErrors,
-    },
+    ChannelError,
     #[error("Oneshot channel not available")]
     OneshotUnavailable,
+    #[error("An error has ocurred during sign process")]
+    SignError,
+    #[error("Unexpect response received after manager request")]
+    UnexpectedManagerResponse
 }
 
 /// Errors that may occur when using the TAPLE API
 #[derive(Error, Debug, Clone)]
 pub enum ApiError {
+    #[error("{}", source)]
+    EventCreationError {
+        #[from]
+        source: EventError,
+    },
+    
+    // OLD
     /// An item of the protocol has not been found, for example, a subject
     #[error("{0} not found")]
     NotFound(String),
@@ -25,16 +33,16 @@ pub enum ApiError {
     #[error("Unexpected Response")]
     UnexpectedError,
     /// An error has occurred in the process of creating an event.
-    #[error("{}", source)]
-    EventCreationError {
-        #[from]
-        source: EventCreationError,
-    },
+    // #[error("{}", source)]
+    // EventCreationError {
+    //     #[from]
+    //     source: EventCreationError,
+    // },
     /// An internal error has occurred
-    #[error("An error has ocurred during request execution. {}", source)]
-    InternalError {
+    #[error("An error has ocurred during approval execution. {}", source)]
+    ApprovalInternalError {
         #[from]
-        source: ResponseError,
+        source: ApprovalErrorResponse,
     },
     /// Invalid parameters have been entered, usually identifiers.
     #[error("Invalid parameters: {0}")]

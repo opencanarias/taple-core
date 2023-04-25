@@ -19,7 +19,7 @@ use crate::{
 };
 
 use super::{
-    error::{ApprovalErrorResponse, ApprovalManagerError},
+    error::{ApprovalErrorResponse, ApprovalManagerError}, ApprovalPetitionData,
 };
 use crate::database::Error as DbError;
 use crate::governance::stage::ValidationStage;
@@ -63,16 +63,6 @@ impl NotifierInterface for RequestNotifier {
     }
 }
 
-#[derive(Clone, Debug)]
-struct ApprovalPetitionData {
-    subject_id: DigestIdentifier,
-    sn: u64,
-    governance_id: DigestIdentifier,
-    governance_version: u64,
-    hash_event_proporsal: DigestIdentifier,
-    sender: KeyIdentifier,
-}
-
 pub struct InnerApprovalManager<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface> {
     governance: G,
     database: DB<D>,
@@ -103,6 +93,17 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
             request_table: HashMap::new(),
             pass_votation,
         }
+    }
+
+    pub fn get_single_request(&self, request_id: &DigestIdentifier) -> Result<ApprovalPetitionData, ApprovalErrorResponse> {
+        let Some(request) = self.request_table.get(request_id) else {
+            return Err(ApprovalErrorResponse::ApprovalRequestNotFound);
+        };
+        Ok(request.clone())
+    }
+
+    pub fn get_all_request(&self) -> Vec<ApprovalPetitionData> {
+        self.request_table.values().cloned().collect()
     }
 
     pub fn change_pass_votation(&mut self, pass_votation: VotationType) {
@@ -342,6 +343,7 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
                 .event_content_hash
                 .clone(),
             sender: subject_data.owner.clone(),
+            json_patch: approval_request.proposal.json_patch.clone()
         };
 
         self.subject_been_approved
