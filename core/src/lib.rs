@@ -94,11 +94,9 @@ pub mod protocol;
 pub mod event;
 
 mod unitary_component;
-// pub use api::{
-//     ApiError, ApiModuleInterface, CreateRequest, CreateType, ExternalEventRequest,
-//     ExternalEventRequestBody, NodeAPI, SignatureRequest, SignatureRequestContent, StateRequestBody,
-//     StateRequestBodyUpper, StateType,
-// };
+pub use api::{
+    ApiError, 
+};
 pub use commons::identifier;
 pub use commons::models::{
     event::Event,
