@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{hash_map::Entry, HashMap, HashSet};
 
 use json_patch::{patch, Patch};
 use serde_json::Value;
@@ -17,7 +17,7 @@ use crate::{
 use super::errors::LedgerError;
 
 pub struct LedgerState {
-    pub current_sn: u64,
+    pub current_sn: Option<u64>,
     pub head: Option<u64>,
 }
 
@@ -69,7 +69,7 @@ impl<D: DatabaseManager> Ledger<D> {
                     self.ledger_state.insert(
                         subject.subject_id,
                         LedgerState {
-                            current_sn: 0,
+                            current_sn: Some(0),
                             head: None,
                         },
                     );
@@ -85,7 +85,7 @@ impl<D: DatabaseManager> Ledger<D> {
                 self.ledger_state.insert(
                     subject.subject_id,
                     LedgerState {
-                        current_sn: last_event.content.event_proposal.proposal.sn,
+                        current_sn: Some(last_event.content.event_proposal.proposal.sn),
                         head: None,
                     },
                 );
@@ -96,7 +96,7 @@ impl<D: DatabaseManager> Ledger<D> {
                 self.ledger_state.insert(
                     subject.subject_id,
                     LedgerState {
-                        current_sn: pre_last_event.content.event_proposal.proposal.sn,
+                        current_sn: Some(pre_last_event.content.event_proposal.proposal.sn),
                         head: Some(last_event.content.event_proposal.proposal.sn),
                     },
                 );
@@ -145,6 +145,19 @@ impl<D: DatabaseManager> Ledger<D> {
         }
         self.database.set_subject(&subject_id, subject)?;
         self.database.set_event(&subject_id, event)?;
+        // Actualizar Ledger State
+        match self.ledger_state.entry(subject_id) {
+            Entry::Occupied(mut ledger_state) => {
+                let ledger_state = ledger_state.get_mut();
+                ledger_state.current_sn = Some(0);
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(LedgerState {
+                    current_sn: Some(0),
+                    head: None,
+                });
+            }
+        }
         // Mandar subject_id y evento en mensaje
         // TODO
         todo!()
@@ -198,18 +211,33 @@ impl<D: DatabaseManager> Ledger<D> {
             None => {
                 // Si no está en el mapa, añadirlo y enviar mensaje a gov de subject updated con el id y el sn
                 if self.gov_api.is_governance(subject_id.clone()).await? {
-                    self.subject_is_gov.insert(subject_id, true);
+                    self.subject_is_gov.insert(subject_id.clone(), true);
                     // Enviar mensaje a gov de governance updated con el id y el sn
                 } else {
-                    self.subject_is_gov.insert(subject_id, false);
+                    self.subject_is_gov.insert(subject_id.clone(), false);
                 }
             }
         }
+        // Actualizar Ledger State
+        match self.ledger_state.entry(subject_id) {
+            Entry::Occupied(mut ledger_state) => {
+                let ledger_state = ledger_state.get_mut();
+                let current_sn = ledger_state.current_sn.as_mut().unwrap();
+                *current_sn = *current_sn + 1;
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(LedgerState {
+                    current_sn: Some(0),
+                    head: None,
+                });
+            }
+        }
+        // Enviar a Distribution info del nuevo event y que lo distribuya
         todo!()
     }
 
     pub async fn external_event(
-        &self,
+        &mut self,
         event: Event,
         signatures: HashSet<Signature>,
     ) -> Result<(), LedgerError> {
@@ -302,6 +330,13 @@ impl<D: DatabaseManager> Ledger<D> {
                     .map_err(|_| LedgerError::ErrorParsingJsonString("Init state".to_owned()))?;
                 let subject = Subject::from_genesis_event(event, init_state)?;
                 self.database.set_subject(&subject_id, subject)?;
+                self.ledger_state.insert(
+                    subject_id,
+                    LedgerState {
+                        current_sn: Some(0),
+                        head: None,
+                    },
+                );
                 // Enviar mensaje a distribution manager
                 todo!();
             }
@@ -330,7 +365,7 @@ impl<D: DatabaseManager> Ledger<D> {
                 // Comprobar que las firmas son válidas y suficientes
                 let metadata = Metadata {
                     namespace: subject.namespace,
-                    subject_id: subject.subject_id,
+                    subject_id: subject.subject_id.clone(),
                     governance_id: subject.governance_id,
                     governance_version: event.content.event_proposal.proposal.gov_version,
                     schema_id: subject.schema_id,
@@ -347,6 +382,10 @@ impl<D: DatabaseManager> Ledger<D> {
                     &event.signature.content.event_content_hash,
                 )?;
                 // Comprobar si es evento siguiente o LCE
+                let ledger_state = self
+                    .ledger_state
+                    .get_mut(&subject.subject_id)
+                    .expect("Tiene que estar");
                 if event.content.event_proposal.proposal.sn == subject.sn + 1 {
                     // Caso Evento Siguiente
                 } else if event.content.event_proposal.proposal.sn > subject.sn + 1 {
