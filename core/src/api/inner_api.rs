@@ -189,15 +189,13 @@ impl<D: DatabaseManager> InnerAPI<D> {
     }
 
     pub async fn get_single_subject(&self, data: GetSingleSubjectAPI) -> ApiResponses {
-        let Ok(id) = DigestIdentifier::from_str(&data.subject_id) else {
-            return ApiResponses::GetSingleSubject(Err(ApiError::InvalidParameters(format!("SubjectID {}", data.subject_id))));
-        };
-        let subject = match self.db.get_subject(&id) {
+        let id = &data.subject_id;
+        let subject = match self.db.get_subject(id) {
             Ok(subject) => subject,
             Err(DbError::EntryNotFound) => {
                 return ApiResponses::GetSingleSubject(Err(ApiError::NotFound(format!(
                     "Subject {}",
-                    data.subject_id
+                    data.subject_id.to_str()
                 ))))
             }
             Err(error) => {
@@ -215,10 +213,8 @@ impl<D: DatabaseManager> InnerAPI<D> {
         } else {
             (data.quantity.unwrap() as isize).min(MAX_QUANTITY)
         };
-        let Ok(id) = DigestIdentifier::from_str(&data.subject_id) else {
-            return ApiResponses::GetEventsOfSubject(Err(ApiError::InvalidParameters(format!("SubjectID {}", data.subject_id))));
-        };
-        match self.db.get_events_by_range(&id, data.from, quantity) {
+        let id = &data.subject_id;
+        match self.db.get_events_by_range(id, data.from, quantity) {
             Ok(events) => ApiResponses::GetEventsOfSubject(Ok(events)),
             Err(error) => {
                 ApiResponses::GetEventsOfSubject(Err(ApiError::DatabaseError(error.to_string())))
