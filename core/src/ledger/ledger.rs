@@ -4,12 +4,18 @@ use json_patch::{patch, Patch};
 use serde_json::Value;
 
 use crate::{
-    commons::models::{approval::Approval, state::Subject},
+    commons::{
+        channel::SenderEnd,
+        models::{approval::Approval, state::Subject},
+    },
     database::DB,
+    distribution::DistributionMessagesNew,
     event_content::Metadata,
     event_request::{EventRequest, EventRequestType},
     governance::{stage::ValidationStage, GovernanceAPI, GovernanceInterface},
     identifier::{Derivable, DigestIdentifier, KeyIdentifier},
+    message::MessageTaskCommand,
+    protocol::protocol_message_manager::TapleMessages,
     signature::Signature,
     DatabaseManager, Event,
 };
@@ -26,15 +32,24 @@ pub struct Ledger<D: DatabaseManager> {
     database: DB<D>,
     subject_is_gov: HashMap<DigestIdentifier, bool>,
     ledger_state: HashMap<DigestIdentifier, LedgerState>,
+    message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
+    distribution_channel: SenderEnd<DistributionMessagesNew, ()>,
 }
 
 impl<D: DatabaseManager> Ledger<D> {
-    pub fn new(gov_api: GovernanceAPI, database: DB<D>) -> Self {
+    pub fn new(
+        gov_api: GovernanceAPI,
+        database: DB<D>,
+        message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
+        distribution_channel: SenderEnd<DistributionMessagesNew, ()>,
+    ) -> Self {
         Self {
             gov_api,
             database,
             subject_is_gov: HashMap::new(),
             ledger_state: HashMap::new(),
+            message_channel,
+            distribution_channel,
         }
     }
 
@@ -165,10 +180,14 @@ impl<D: DatabaseManager> Ledger<D> {
 
     pub async fn event_validated(
         &mut self,
-        subject_id: DigestIdentifier,
         event: Event,
         signatures: HashSet<Signature>,
     ) -> Result<(), LedgerError> {
+        let EventRequestType::State(state_request) = &event.content.event_proposal.proposal.event_request.request
+            else {
+                return Err(LedgerError::StateInGenesis)
+            };
+        let subject_id = state_request.subject_id.clone();
         self.database.set_signatures(
             &subject_id,
             event.content.event_proposal.proposal.sn,
@@ -276,7 +295,9 @@ impl<D: DatabaseManager> Ledger<D> {
                     }
                 }
                 // Enviar mensaje a distribution manager
-                todo!();
+                self.distribution_channel
+                    .tell(DistributionMessagesNew::ProvideSignatures(()))
+                    .await?;
             }
             EventRequestType::State(state_request) => {
                 // Comprobaciones criptográficas
@@ -340,6 +361,9 @@ impl<D: DatabaseManager> Ledger<D> {
                             );
                             // Mandar firma de testificacion a distribution manager o el evento en sí
                             // TODO
+                            self.distribution_channel
+                                .tell(DistributionMessagesNew::ProvideSignatures(()))
+                                .await?;
                         } else if event.content.event_proposal.proposal.sn > subject.sn + 1 {
                             // Caso LCE
                             // Comprobar que LCE es mayor y quedarnos con el mas peque si tenemos otro
@@ -369,7 +393,9 @@ impl<D: DatabaseManager> Ledger<D> {
                                 },
                             );
                             // Pedir evento siguiente a current_sn
-                            // TODO
+                            self.message_channel
+                                .tell(MessageTaskCommand::Request((), (), (), ()))
+                                .await?;
                         } else {
                             // Caso evento repetido
                             return Err(LedgerError::EventAlreadyExists);
@@ -389,7 +415,9 @@ impl<D: DatabaseManager> Ledger<D> {
                             },
                         );
                         // Pedir evento 0
-                        // TODO
+                        self.message_channel
+                            .tell(MessageTaskCommand::Request((), (), (), ()))
+                            .await?;
                     }
                 };
             }
@@ -456,6 +484,11 @@ impl<D: DatabaseManager> Ledger<D> {
                                                 head: None,
                                             },
                                         );
+                                        // Se llega hasta el LCE con el event sourcing
+                                        // Pedir firmas de testificación
+                                        self.distribution_channel
+                                            .tell(DistributionMessagesNew::ProvideSignatures(()))
+                                            .await?;
                                     } else {
                                         self.ledger_state.insert(
                                             subject_id,
@@ -464,6 +497,11 @@ impl<D: DatabaseManager> Ledger<D> {
                                                 head: Some(head),
                                             },
                                         );
+                                        // No se llega hasta el LCE con el event sourcing
+                                        // Pedir siguiente evento
+                                        self.message_channel
+                                            .tell(MessageTaskCommand::Request((), (), (), ()))
+                                            .await?;
                                     }
                                     Ok(())
                                 } else {
@@ -486,6 +524,11 @@ impl<D: DatabaseManager> Ledger<D> {
                                                 head: None,
                                             },
                                         );
+                                        // Se llega hasta el LCE con el event sourcing
+                                        // Pedir firmas de testificación
+                                        self.distribution_channel
+                                            .tell(DistributionMessagesNew::ProvideSignatures(()))
+                                            .await?;
                                     } else {
                                         self.ledger_state.insert(
                                             subject_id,
@@ -494,6 +537,11 @@ impl<D: DatabaseManager> Ledger<D> {
                                                 head: Some(head),
                                             },
                                         );
+                                        // No se llega hasta el LCE con el event sourcing
+                                        // Pedir siguiente evento
+                                        self.message_channel
+                                            .tell(MessageTaskCommand::Request((), (), (), ()))
+                                            .await?;
                                     }
                                     Ok(())
                                 } else {
