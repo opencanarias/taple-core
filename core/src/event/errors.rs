@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::{governance::error::RequestError, commons::errors::SubjectError};
+use crate::{commons::errors::SubjectError, governance::error::RequestError};
 
 #[derive(Error, Clone, Debug)]
 pub enum EventError {
@@ -40,4 +40,6 @@ pub enum EventError {
     ExternalGenesisEvent,
     #[error("Creating Permission Denied")]
     CreatingPermissionDenied,
+    #[error("Genesis In Gov Update:")]
+    GenesisInGovUpdate,
 }
