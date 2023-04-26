@@ -676,7 +676,7 @@ pub fn get_governance_schema() -> Value {
             "type": "object",
             "additionalProperties": false,
             "required": [
-              "id", "approve", "evaluate", "validate", "create", "witness", "close", "invoke"
+              "id", "approve", "evaluate", "validate", "create", "witness", "close"
             ],
             "properties": {
               "id": {
@@ -699,27 +699,6 @@ pub fn get_governance_schema() -> Value {
               },
               "close": {
                 "$ref": "#/$defs/roles"
-              },
-              "invoke": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "fact": {
-                      "type": "string"
-                    },
-                    "approval_required": {
-                      "type": "boolean"
-                    },
-                    "roles": {
-                      "$ref": "#/$defs/roles"
-                    }
-                  },
-                  "additionalProperties": false,
-                  "required": [
-                    "fact", "approval_required", "roles"
-                  ]
-                }
               }
             }
           }

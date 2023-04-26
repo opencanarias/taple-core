@@ -152,9 +152,9 @@ pub enum SubjectError {
     #[error("InvalidPayload {0}")]
     InvalidPayload(String),
     #[error("Error parsing json string")]
-    ErrorParsingJsonString,
+    ErrorParsingJsonString(String),
     #[error("Error applying patch")]
-    ErrorApplyingPatch,
+    ErrorApplyingPatch(String),
     #[error("Duplicated schema or member")]
     DuplicatedSchemaOrMember,
     #[error("Policies Missing for Some Schema")]
@@ -171,6 +171,8 @@ pub enum SubjectError {
     ApproversAreNotValidators,
     #[error("Error creating subject id")]
     ErrorCreatingSubjectId,
+    #[error("Invalid Signature")]
+    InvalidSignature,
 }
 
 #[derive(Error, Debug, Clone, PartialEq)]

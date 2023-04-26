@@ -1,8 +1,14 @@
 //! Define the data structures related to signatures
-use crate::identifier::{DigestIdentifier, KeyIdentifier, SignatureIdentifier};
+use crate::{
+    commons::errors::SubjectError,
+    identifier::{DigestIdentifier, KeyIdentifier, SignatureIdentifier},
+};
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
-use std::{hash::{Hash, Hasher}, collections::HashSet};
+use std::{
+    collections::HashSet,
+    hash::{Hash, Hasher},
+};
 use utoipa::ToSchema;
 
 use super::timestamp::TimeStamp;
@@ -32,15 +38,7 @@ pub struct SignatureContent {
 /// information, namely the signer's identifier, the signature timestamp
 /// and the hash of the signed contents.
 #[derive(
-    Debug,
-    Clone,
-    Serialize,
-    Deserialize,
-    Eq,
-    BorshSerialize,
-    BorshDeserialize,
-    ToSchema,
-    PartialOrd,
+    Debug, Clone, Serialize, Deserialize, Eq, BorshSerialize, BorshDeserialize, ToSchema, PartialOrd,
 )]
 pub struct Signature {
     pub content: SignatureContent,
@@ -59,6 +57,15 @@ impl Hash for Signature {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.content.signer.hash(state);
         self.content.event_content_hash.hash(state);
+    }
+}
+
+impl Signature {
+    pub fn verify(&self) -> Result<(), SubjectError> {
+        self.content
+            .signer
+            .verify(&self.content.event_content_hash.digest, &self.signature)
+            .map_err(|_| SubjectError::InvalidSignature)
     }
 }
 

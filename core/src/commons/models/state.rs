@@ -1,21 +1,20 @@
-
 use crate::{
     commons::{
-        crypto::{Ed25519KeyPair, KeyMaterial, KeyPair, KeyGenerator},
+        crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair, Payload, DSA},
         errors::SubjectError,
         identifier::{
-            DigestIdentifier, KeyIdentifier,
+            derive::KeyDerivator, Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier,
         },
+        schema_handler::{get_governance_schema, Schema},
     },
     event_request::EventRequest,
 };
+use json_patch::{patch, Patch};
 use serde::{Deserialize, Serialize};
-use utoipa::{ToSchema};
+use serde_json::Value;
+use utoipa::ToSchema;
 
-use super::{
-    event::Event,
-    event_request::EventRequestType,
-};
+use super::{event::Event, event_request::EventRequestType};
 
 #[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
 pub struct Subject {
@@ -97,8 +96,8 @@ impl Subject {
         // TODO: Pasar que tipo de esquema criptográfico se quiere usar por parametros
         let keys = KeyPair::Ed25519(Ed25519KeyPair::new());
         let subject_id = match DigestIdentifier::from_serializable_borsh((
-            event_request.signature.content.event_content_hash,
-            keys.public_key_bytes(),
+            &event_request.signature.content.event_content_hash,
+            &keys.public_key_bytes(),
         )) {
             Ok(subject_id) => subject_id,
             Err(_) => return Err(SubjectError::ErrorCreatingSubjectId),
@@ -164,6 +163,25 @@ impl Subject {
                 .clone(),
             properties: init_state,
         })
+    }
+
+    pub fn update_subject(&mut self, json_patch: &str, new_sn: u64) -> Result<(), SubjectError> {
+        let prev_properties = self.properties.as_str();
+        let Ok(patch_json) = serde_json::from_str::<Patch>(json_patch) else {
+                    return Err(SubjectError::ErrorParsingJsonString(json_patch.to_owned()));
+                };
+        let Ok(mut state) = serde_json::from_str::<Value>(prev_properties) else {
+                    return Err(SubjectError::ErrorParsingJsonString(prev_properties.to_owned()));
+                };
+        let Ok(()) = patch(&mut state, &patch_json) else {
+                    return Err(SubjectError::ErrorApplyingPatch(json_patch.to_owned()));
+                };
+        let state = serde_json::to_string(&state).map_err(|_| {
+            SubjectError::ErrorParsingJsonString("New State after patch".to_owned())
+        })?;
+        self.sn = new_sn;
+        self.properties = state;
+        Ok(())
     }
 }
 

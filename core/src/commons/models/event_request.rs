@@ -4,14 +4,16 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 
 use crate::commons::{
-    crypto::{check_cryptography},
+    crypto::{check_cryptography, Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair},
     errors::SubjectError,
-    identifier::DigestIdentifier
+    identifier::{Derivable, DigestIdentifier, KeyIdentifier},
+    schema_handler::Schema,
 };
 use utoipa::ToSchema;
 
 use super::{
     signature::Signature,
+    state::Subject,
     timestamp::TimeStamp,
 };
 

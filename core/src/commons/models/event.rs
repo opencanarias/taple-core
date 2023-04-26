@@ -255,6 +255,7 @@ impl Event {
         let proposal = Proposal {
             event_request,
             sn: 0,
+            hash_prev_event: DigestIdentifier::default(),
             gov_version,
             evaluation: None,
             json_patch,
@@ -314,6 +315,7 @@ impl Event {
     pub fn check_signatures(&self) -> Result<(), SubjectError> {
         check_cryptography(&self.content, &self.signature)
             .map_err(|error| SubjectError::CryptoError(error.to_string()))?;
+        self.content.event_proposal.check_signatures()?;
         Ok(())
     }
 }
