@@ -105,6 +105,7 @@ pub use commons::models::event::{Event, EventContent};
 pub use commons::models::event_proposal::{EventProposal, Evaluation, Proposal};
 pub use commons::models::event_request::EventRequestType;
 pub use commons::models::Acceptance;
+pub use commons::models::state::SubjectData;
 pub use commons::models::{event_content, event_request, signature};
 pub use commons::{
     config::{DatabaseSettings, NetworkSettings, NodeSettings, TapleSettings},
