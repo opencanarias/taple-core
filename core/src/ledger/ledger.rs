@@ -9,7 +9,7 @@ use crate::{
         models::{approval::Approval, state::Subject},
     },
     database::DB,
-    distribution::DistributionMessagesNew,
+    distribution::{DistributionMessagesNew, AskForSignatures},
     event_content::Metadata,
     event_request::{EventRequest, EventRequestType},
     governance::{stage::ValidationStage, GovernanceAPI, GovernanceInterface},
@@ -161,7 +161,7 @@ impl<D: DatabaseManager> Ledger<D> {
         self.database.set_subject(&subject_id, subject)?;
         self.database.set_event(&subject_id, event)?;
         // Actualizar Ledger State
-        match self.ledger_state.entry(subject_id) {
+        match self.ledger_state.entry(subject_id.clone()) {
             Entry::Occupied(mut ledger_state) => {
                 let ledger_state = ledger_state.get_mut();
                 ledger_state.current_sn = Some(0);
@@ -175,7 +175,12 @@ impl<D: DatabaseManager> Ledger<D> {
         }
         // Mandar subject_id y evento en mensaje a distribution manager
         self.distribution_channel
-            .tell(DistributionMessagesNew::ProvideSignatures(()))
+            .tell(DistributionMessagesNew::ProvideSignatures(AskForSignatures {
+                subject_id,
+                sn: 0,
+                signatures_requested: todo!(),
+                sender_id: todo!(),
+            }))
             .await?;
         Ok(())
     }
@@ -185,6 +190,7 @@ impl<D: DatabaseManager> Ledger<D> {
         event: Event,
         signatures: HashSet<Signature>,
     ) -> Result<(), LedgerError> {
+        let sn = event.content.event_proposal.proposal.sn;
         let EventRequestType::State(state_request) = &event.content.event_proposal.proposal.event_request.request
             else {
                 return Err(LedgerError::StateInGenesis)
@@ -228,7 +234,7 @@ impl<D: DatabaseManager> Ledger<D> {
             }
         }
         // Actualizar Ledger State
-        match self.ledger_state.entry(subject_id) {
+        match self.ledger_state.entry(subject_id.clone()) {
             Entry::Occupied(mut ledger_state) => {
                 let ledger_state = ledger_state.get_mut();
                 let current_sn = ledger_state.current_sn.as_mut().unwrap();
@@ -243,7 +249,12 @@ impl<D: DatabaseManager> Ledger<D> {
         }
         // Enviar a Distribution info del nuevo event y que lo distribuya
         self.distribution_channel
-            .tell(DistributionMessagesNew::ProvideSignatures(()))
+            .tell(DistributionMessagesNew::ProvideSignatures(AskForSignatures {
+                subject_id,
+                sn,
+                signatures_requested: todo!(),
+                sender_id: todo!(),
+            }))
             .await?;
         Ok(())
     }
@@ -301,7 +312,12 @@ impl<D: DatabaseManager> Ledger<D> {
                 }
                 // Enviar mensaje a distribution manager
                 self.distribution_channel
-                    .tell(DistributionMessagesNew::ProvideSignatures(()))
+                    .tell(DistributionMessagesNew::ProvideSignatures(AskForSignatures {
+                        subject_id,
+                        sn: 0,
+                        signatures_requested: todo!(),
+                        sender_id: todo!(),
+                    }))
                     .await?;
             }
             EventRequestType::State(state_request) => {
@@ -366,7 +382,12 @@ impl<D: DatabaseManager> Ledger<D> {
                             );
                             // Mandar firma de testificacion a distribution manager o el evento en sí
                             self.distribution_channel
-                                .tell(DistributionMessagesNew::ProvideSignatures(()))
+                                .tell(DistributionMessagesNew::ProvideSignatures(AskForSignatures {
+                                    subject_id: state_request.subject_id,
+                                    sn,
+                                    signatures_requested: todo!(),
+                                    sender_id: todo!(),
+                                }))
                                 .await?;
                         } else if event.content.event_proposal.proposal.sn > subject.sn + 1 {
                             // Caso LCE

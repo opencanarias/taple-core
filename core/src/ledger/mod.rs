@@ -24,9 +24,18 @@ pub enum LedgerCommand {
     ExternalIntermediateEvent {
         event: Event,
     },
+    GetEvent {
+        subject_id: DigestIdentifier,
+        sn: u64,
+    },
+    GetLCE {
+        subject_id: DigestIdentifier,
+    },
 }
 
 #[derive(Debug, Clone)]
 pub enum LedgerResponse {
+    GetEvent(Result<Event, errors::LedgerError>),
+    GetLCE(Result<(Event, HashSet<Signature>), errors::LedgerError>),
     NoResponse,
 }
