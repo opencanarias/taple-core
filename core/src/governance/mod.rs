@@ -75,8 +75,12 @@ pub enum GovernanceMessage {
     },
     GetRolesOfInvokator {
         invokator: KeyIdentifier,
-        metadata: Metadata
-    }
+        metadata: Metadata,
+    },
+    GovernanceUpdated {
+        governance_id: DigestIdentifier,
+        governance_version: u64,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -90,4 +94,13 @@ pub enum GovernanceResponse {
     GetGovernanceVersion(Result<u64, RequestError>),
     IsGovernance(Result<bool, RequestError>),
     GetRolesOfInvokator(Result<Vec<String>, RequestError>),
+    NoResponse,
+}
+
+#[derive(Debug, Clone)]
+pub enum GovernanceUpdatedMessage {
+    GovernanceUpdated {
+        governance_id: DigestIdentifier,
+        governance_version: u64,
+    },
 }

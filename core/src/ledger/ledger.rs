@@ -174,8 +174,10 @@ impl<D: DatabaseManager> Ledger<D> {
             }
         }
         // Mandar subject_id y evento en mensaje a distribution manager
-        // TODO
-        todo!()
+        self.distribution_channel
+            .tell(DistributionMessagesNew::ProvideSignatures(()))
+            .await?;
+        Ok(())
     }
 
     pub async fn event_validated(
@@ -240,7 +242,10 @@ impl<D: DatabaseManager> Ledger<D> {
             }
         }
         // Enviar a Distribution info del nuevo event y que lo distribuya
-        todo!()
+        self.distribution_channel
+            .tell(DistributionMessagesNew::ProvideSignatures(()))
+            .await?;
+        Ok(())
     }
 
     pub async fn external_event(
@@ -360,7 +365,6 @@ impl<D: DatabaseManager> Ledger<D> {
                                 },
                             );
                             // Mandar firma de testificacion a distribution manager o el evento en sí
-                            // TODO
                             self.distribution_channel
                                 .tell(DistributionMessagesNew::ProvideSignatures(()))
                                 .await?;
@@ -422,7 +426,7 @@ impl<D: DatabaseManager> Ledger<D> {
                 };
             }
         }
-        todo!();
+        Ok(())
     }
 
     pub async fn external_intermediate_event(&mut self, event: Event) -> Result<(), LedgerError> {
@@ -697,7 +701,7 @@ impl<D: DatabaseManager> Ledger<D> {
                 .await?;
             verify_approval_signatures(&event.content.approvals, &signers, quorum)?;
         }
-        todo!()
+        Ok(())
     }
 }
 

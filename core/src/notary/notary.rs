@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
 use crate::{
-    commons::{errors::ChannelErrors, self_signature_manager::{SelfSignatureManager, SelfSignatureInterface}},
+    commons::{
+        errors::ChannelErrors,
+        self_signature_manager::{SelfSignatureInterface, SelfSignatureManager},
+    },
     governance::{GovernanceAPI, GovernanceInterface},
     identifier::DigestIdentifier,
 };
@@ -107,6 +110,7 @@ impl<D: DatabaseManager> Notary<D> {
 mod tests {
     use crate::commons::self_signature_manager::SelfSignatureManager;
     use crate::database::{MemoryManager, DB};
+    use crate::governance::GovernanceUpdatedMessage;
     use crate::{
         commons::{
             channel::MpscChannel,
@@ -250,7 +254,9 @@ mod tests {
         // Shutdown channel
         let (bsx, _brx) = tokio::sync::broadcast::channel::<()>(10);
         let (a, b) = MpscChannel::<GovernanceMessage, GovernanceResponse>::new(100);
-        let gov_manager = Governance::new(a, bsx, _brx, db);
+        let (c, d) = MpscChannel::<GovernanceUpdatedMessage, ()>::new(100);
+        let (e, f) = MpscChannel::<GovernanceUpdatedMessage, ()>::new(100);
+        let gov_manager = Governance::new(a, bsx, _brx, db, f, f);
         let db = DB::new(manager);
         let notary = Notary::new(
             GovernanceAPI::new(b),

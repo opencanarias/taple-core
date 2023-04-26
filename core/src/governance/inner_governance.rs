@@ -2,6 +2,7 @@ use std::{collections::HashSet, str::FromStr};
 
 use crate::{
     commons::{
+        channel::SenderEnd,
         identifier::{Derivable, DigestIdentifier, KeyIdentifier},
         models::event_content::Metadata,
         schema_handler::gov_models::{Contract, Invoke, Quorum, Role, Schema},
@@ -13,6 +14,7 @@ use serde_json::Value;
 use super::{
     error::{InternalError, RequestError},
     stage::ValidationStage,
+    GovernanceUpdatedMessage,
 };
 
 use crate::database::{DatabaseManager, DB};
@@ -20,13 +22,22 @@ use crate::database::{DatabaseManager, DB};
 pub struct InnerGovernance<D: DatabaseManager> {
     repo_access: DB<D>,
     governance_schema: Value,
+    update_channel_event: SenderEnd<GovernanceUpdatedMessage, ()>,
+    update_channel_evaluator: SenderEnd<GovernanceUpdatedMessage, ()>,
 }
 
 impl<D: DatabaseManager> InnerGovernance<D> {
-    pub fn new(repo_access: DB<D>, governance_schema: Value) -> InnerGovernance<D> {
+    pub fn new(
+        repo_access: DB<D>,
+        governance_schema: Value,
+        update_channel_event: SenderEnd<GovernanceUpdatedMessage, ()>,
+        update_channel_evaluator: SenderEnd<GovernanceUpdatedMessage, ()>,
+    ) -> InnerGovernance<D> {
         Self {
             repo_access,
             governance_schema,
+            update_channel_evaluator,
+            update_channel_event,
         }
     }
 
@@ -377,6 +388,26 @@ impl<D: DatabaseManager> InnerGovernance<D> {
             Err(error) => return Err(InternalError::DatabaseError { source: error }),
         };
         Ok(Ok(subject.governance_id.digest.is_empty()))
+    }
+
+    pub async fn governance_updated(
+        &self,
+        governance_id: DigestIdentifier,
+        governance_version: u64,
+    ) -> Result<Result<(), RequestError>, InternalError> {
+        self.update_channel_event
+            .tell(GovernanceUpdatedMessage::GovernanceUpdated {
+                governance_id: governance_id.clone(),
+                governance_version,
+            })
+            .await?;
+        self.update_channel_evaluator
+            .tell(GovernanceUpdatedMessage::GovernanceUpdated {
+                governance_id,
+                governance_version,
+            })
+            .await?;
+        Ok(Ok(()))
     }
 }
 
