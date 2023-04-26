@@ -52,12 +52,12 @@ pub struct GetAllSubjects {
 
 #[derive(Debug, Clone)]
 pub struct GetSingleSubject {
-    pub subject_id: String,
+    pub subject_id: DigestIdentifier,
 }
 
 #[derive(Debug, Clone)]
 pub struct GetEventsOfSubject {
-    pub subject_id: String,
+    pub subject_id: DigestIdentifier,
     pub from: Option<i64>,
     pub quantity: Option<i64>,
 }

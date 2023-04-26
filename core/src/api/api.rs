@@ -301,7 +301,7 @@ impl ApiModuleInterface for NodeAPI {
     }
     async fn get_event_of_subject(
         &self,
-        subject_id: String,
+        subject_id: DigestIdentifier,
         from: Option<i64>,
         quantity: Option<i64>,
     ) -> Result<Vec<Event>, ApiError> {
@@ -342,7 +342,7 @@ impl ApiModuleInterface for NodeAPI {
             unreachable!()
         }
     }
-    async fn get_subject(&self, subject_id: String) -> Result<SubjectData, ApiError> {
+    async fn get_subject(&self, subject_id: DigestIdentifier) -> Result<SubjectData, ApiError> {
         let response = self
             .sender
             .ask(APICommands::GetSingleSubject(super::GetSingleSubject {
