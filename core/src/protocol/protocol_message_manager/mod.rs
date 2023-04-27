@@ -53,8 +53,8 @@ impl ProtocolManager {
             validation_sx,
             event_sx,
             approval_sx,
-            shutdown_sender,
             shutdown_receiver: shutdown_sender.subscribe(),
+            shutdown_sender,
         }
     }
 

@@ -177,7 +177,6 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
                     // No veo necesario un mensaje para el caso de MSG.SN = SN + 1
                     let request = request_lce(
                         msg.subject_id.clone(),
-                        self.signature_manager.get_own_identifier(),
                     );
                     self.messenger_channel
                         .tell(MessageTaskCommand::Request(
@@ -194,7 +193,6 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
                 // El sujeto no tiene firmas de testificación.
                 let request = request_lce(
                     msg.subject_id.clone(),
-                    self.signature_manager.get_own_identifier(),
                 );
                 self.messenger_channel
                     .tell(MessageTaskCommand::Request(
