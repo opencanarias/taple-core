@@ -439,14 +439,16 @@ impl<D: DatabaseManager> Ledger<D> {
                         } else if event.content.event_proposal.proposal.sn > subject.sn {
                             // Caso LCE
                             // Comprobar que LCE es mayor y quedarnos con el mas peque si tenemos otro
-                            match ledger_state.head {
+                            let last_lce = match ledger_state.head {
                                 Some(head) => {
                                     if event.content.event_proposal.proposal.sn > head {
                                         return Err(LedgerError::LCEBiggerSN);
                                     }
+                                    Some(head)
                                 }
                                 None => {
                                     // Va a ser el nuevo LCE
+                                    None
                                 }
                             };
                             // Si hemos llegado aquí es porque va a ser nuevo LCE
@@ -457,6 +459,13 @@ impl<D: DatabaseManager> Ledger<D> {
                                 signatures,
                             )?;
                             self.database.set_event(&state_request.subject_id, event)?;
+                            if last_lce.is_some() {
+                                let last_lce_sn = last_lce.unwrap();
+                                self.database
+                                    .del_signatures(&state_request.subject_id, last_lce_sn)?;
+                                self.database
+                                    .del_event(&state_request.subject_id, last_lce_sn)?;
+                            }
                             self.ledger_state.insert(
                                 state_request.subject_id.clone(),
                                 LedgerState {
