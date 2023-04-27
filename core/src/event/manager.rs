@@ -45,7 +45,7 @@ impl EventAPIInterface for EventAPI {
 pub struct EventManager<D: DatabaseManager> {
     /// Communication channel for incoming petitions
     input_channel: MpscChannel<EventCommand, EventResponse>,
-    input_channel_updated_gov: MpscChannel<GovernanceUpdatedMessage, ()>,
+    input_channel_updated_gov: tokio::sync::broadcast::Receiver<GovernanceUpdatedMessage>,
     /// Notarization functions
     event_completer: EventCompleter<D>,
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
@@ -55,7 +55,7 @@ pub struct EventManager<D: DatabaseManager> {
 impl<D: DatabaseManager> EventManager<D> {
     pub fn new(
         input_channel: MpscChannel<EventCommand, EventResponse>,
-        input_channel_updated_gov: MpscChannel<GovernanceUpdatedMessage, ()>,
+        input_channel_updated_gov: tokio::sync::broadcast::Receiver<GovernanceUpdatedMessage>,
         gov_api: GovernanceAPI,
         database: DB<D>,
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
@@ -109,23 +109,20 @@ impl<D: DatabaseManager> EventManager<D> {
                         },
                     }
                 },
-                gov_updated = self.input_channel_updated_gov.receive() => {
+                gov_updated = self.input_channel_updated_gov.recv() => {
                     match gov_updated {
-                        Some(gov_updated) => {
+                        Ok(gov_updated) => {
                             match gov_updated {
-                                ChannelData::AskData(_) => unreachable!(),
-                                ChannelData::TellData(data) => match data.get() {
-                                    GovernanceUpdatedMessage::GovernanceUpdated { governance_id, governance_version } => {
-                                        let result = self.event_completer.new_governance_version(governance_id, governance_version).await;
-                                        if result.is_err() {
-                                            self.shutdown_sender.send(()).expect("Channel Closed");
-                                            break;
-                                        }
-                                    },
+                                GovernanceUpdatedMessage::GovernanceUpdated { governance_id, governance_version } => {
+                                    let result = self.event_completer.new_governance_version(governance_id, governance_version).await;
+                                    if result.is_err() {
+                                        self.shutdown_sender.send(()).expect("Channel Closed");
+                                        break;
+                                    }
                                 },
                             }
-                        }
-                        None => {
+                        },
+                        Err(_) => {
                             self.shutdown_sender.send(()).expect("Channel Closed");
                             break;
                         },
@@ -245,34 +242,6 @@ impl<D: DatabaseManager> EventManager<D> {
                         },
                         _ => {}
                     }
-                    EventResponse::NoResponse
-                }
-                EventCommand::NewGovVersion(new_gov_version) => {
-                    match self
-                        .event_completer
-                        .new_governance_version(
-                            new_gov_version.governance_id,
-                            new_gov_version.governance_version,
-                        )
-                        .await
-                    {
-                        Err(error) => match error {
-                            EventError::ChannelClosed => {
-                                log::error!("Channel Closed");
-                                self.shutdown_sender.send(()).expect("Channel Closed");
-                                return Err(EventError::ChannelClosed);
-                            }
-                            EventError::GovernanceError(inner_error)
-                                if inner_error == RequestError::ChannelClosed =>
-                            {
-                                log::error!("Channel Closed");
-                                self.shutdown_sender.send(()).expect("Channel Closed");
-                                return Err(EventError::ChannelClosed);
-                            }
-                            _ => {}
-                        },
-                        _ => {}
-                    };
                     EventResponse::NoResponse
                 }
             }

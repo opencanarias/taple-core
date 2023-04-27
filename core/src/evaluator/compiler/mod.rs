@@ -8,17 +8,6 @@ mod gov_contract;
 pub(crate) mod manager;
 
 #[derive(Clone, Debug)]
-pub enum CompilerMessages {
-    NewGovVersion(NewGovVersion),
-}
-
-#[derive(Clone, Debug)]
-pub enum CompilerResponses {
-    CompileContract(Result<(), CompilerErrorResponses>),
-    Shutdown,
-}
-
-#[derive(Clone, Debug)]
 pub enum ContractType {
     String(String),
     Base64(String),
@@ -60,8 +49,3 @@ impl ContractType {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct NewGovVersion {
-    pub governance_id: DigestIdentifier,
-    pub governance_version: u64,
-}

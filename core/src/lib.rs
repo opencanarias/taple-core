@@ -82,7 +82,7 @@ pub mod error;
 pub(crate) mod governance;
 pub(crate) mod ledger;
 pub(crate) mod message;
-// pub(crate) mod network;
+pub(crate) mod network;
 pub(crate) mod approval;
 pub(crate) mod database;
 pub(crate) mod distribution;
@@ -112,6 +112,6 @@ pub use commons::{
     models::timestamp::TimeStamp,
 };
 pub use error::Error;
-// pub use unitary_component::{NotificationHandler, Taple};
+pub use unitary_component::{NotificationHandler, Taple};
 pub(crate) use database::DB;
 pub use database::{DatabaseCollection, DatabaseManager, Error as DbError, MemoryManager};

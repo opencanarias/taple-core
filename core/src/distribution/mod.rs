@@ -3,19 +3,13 @@ use std::collections::HashSet;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    commons::models::notary::NotaryEventResponse,
     identifier::{DigestIdentifier, KeyIdentifier},
     signature::Signature,
-    Event,
 };
 
 pub(crate) mod error;
-// mod inner_manager;
-// mod manager;
-// mod resolutor;
-
-mod manager;
-mod inner_manager;
+pub(crate) mod inner_manager;
+pub(crate) mod manager;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum DistributionMessagesNew {
@@ -46,14 +40,6 @@ pub struct StartDistribution {
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-pub enum DistributionMessages {
-    SetEvent(SetEventMessage),
-    RequestEvent(RequestEventMessage),
-    RequestSignature(RequestSignatureMessage),
-    SignaturesReceived(SignaturesReceivedMessage),
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum LedgerMessages {
     LceRequested(LceRequested),
     EventRequested(EventRequested)
@@ -69,36 +55,4 @@ pub struct LceRequested {
 pub struct EventRequested {
     pub subject_id: DigestIdentifier,
     pub sn: u64
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct SetEventMessage {
-    pub event: Event,
-    pub notaries_signatures: Option<HashSet<NotaryEventResponse>>,
-    pub sender: KeyIdentifier,
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct RequestEventMessage {
-    pub subject_id: DigestIdentifier,
-    pub sn: u64,
-    pub sender: KeyIdentifier,
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct RequestSignatureMessage {
-    pub subject_id: DigestIdentifier,
-    // pub governance_id: DigestIdentifier,
-    pub namespace: String,
-    // pub schema_id: String,
-    pub sn: u64,
-    pub sender: KeyIdentifier,
-    pub requested_signatures: HashSet<KeyIdentifier>,
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct SignaturesReceivedMessage {
-    pub subject_id: DigestIdentifier,
-    pub sn: u64,
-    pub signatures: HashSet<Signature>,
 }

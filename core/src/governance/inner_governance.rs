@@ -2,7 +2,7 @@ use std::{collections::HashSet, str::FromStr};
 
 use crate::{
     commons::{
-        channel::SenderEnd,
+        errors::ChannelErrors,
         identifier::{Derivable, DigestIdentifier, KeyIdentifier},
         models::event_content::Metadata,
         schema_handler::gov_models::{Contract, Invoke, Quorum, Role, Schema},
@@ -22,22 +22,19 @@ use crate::database::{DatabaseManager, DB};
 pub struct InnerGovernance<D: DatabaseManager> {
     repo_access: DB<D>,
     governance_schema: Value,
-    update_channel_event: SenderEnd<GovernanceUpdatedMessage, ()>,
-    update_channel_evaluator: SenderEnd<GovernanceUpdatedMessage, ()>,
+    update_channel: tokio::sync::broadcast::Sender<GovernanceUpdatedMessage>,
 }
 
 impl<D: DatabaseManager> InnerGovernance<D> {
     pub fn new(
         repo_access: DB<D>,
         governance_schema: Value,
-        update_channel_event: SenderEnd<GovernanceUpdatedMessage, ()>,
-        update_channel_evaluator: SenderEnd<GovernanceUpdatedMessage, ()>,
+        update_channel: tokio::sync::broadcast::Sender<GovernanceUpdatedMessage>,
     ) -> InnerGovernance<D> {
         Self {
             repo_access,
             governance_schema,
-            update_channel_evaluator,
-            update_channel_event,
+            update_channel,
         }
     }
 
@@ -395,18 +392,14 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         governance_id: DigestIdentifier,
         governance_version: u64,
     ) -> Result<Result<(), RequestError>, InternalError> {
-        self.update_channel_event
-            .tell(GovernanceUpdatedMessage::GovernanceUpdated {
+        self.update_channel
+            .send(GovernanceUpdatedMessage::GovernanceUpdated {
                 governance_id: governance_id.clone(),
                 governance_version,
             })
-            .await?;
-        self.update_channel_evaluator
-            .tell(GovernanceUpdatedMessage::GovernanceUpdated {
-                governance_id,
-                governance_version,
-            })
-            .await?;
+            .map_err(|e| InternalError::ChannelError {
+                source: ChannelErrors::ChannelClosed,
+            })?;
         Ok(Ok(()))
     }
 }

@@ -1,7 +1,7 @@
 use crate::{
     commons::channel::{ChannelData, MpscChannel, SenderEnd},
     database::DB,
-    distribution::DistributionMessagesNew,
+    distribution::{DistributionMessagesNew, error::DistributionErrorResponses},
     governance::{error::RequestError, GovernanceAPI},
     message::MessageTaskCommand,
     protocol::protocol_message_manager::TapleMessages,
@@ -28,7 +28,7 @@ impl<D: DatabaseManager> EventManager<D> {
         gov_api: GovernanceAPI,
         database: DB<D>,
         message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
-        distribution_channel: SenderEnd<DistributionMessagesNew, ()>,
+        distribution_channel: SenderEnd<DistributionMessagesNew, Result<(), DistributionErrorResponses>>,
     ) -> Self {
         Self {
             input_channel,
