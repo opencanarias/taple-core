@@ -1,11 +1,11 @@
 use crate::{
     commons::channel::{ChannelData, MpscChannel, SenderEnd},
     database::DB,
-    distribution::{DistributionMessagesNew, error::DistributionErrorResponses},
+    distribution::{error::DistributionErrorResponses, DistributionMessagesNew},
     governance::{error::RequestError, GovernanceAPI},
     message::MessageTaskCommand,
     protocol::protocol_message_manager::TapleMessages,
-    DatabaseManager, Notification,
+    DatabaseManager, Notification, KeyIdentifier,
 };
 
 use super::{errors::LedgerError, ledger::Ledger, LedgerCommand, LedgerResponse};
@@ -28,11 +28,21 @@ impl<D: DatabaseManager> EventManager<D> {
         gov_api: GovernanceAPI,
         database: DB<D>,
         message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
-        distribution_channel: SenderEnd<DistributionMessagesNew, Result<(), DistributionErrorResponses>>,
+        distribution_channel: SenderEnd<
+            DistributionMessagesNew,
+            Result<(), DistributionErrorResponses>,
+        >,
+        our_id: KeyIdentifier,
     ) -> Self {
         Self {
             input_channel,
-            inner_ledger: Ledger::new(gov_api, database, message_channel, distribution_channel),
+            inner_ledger: Ledger::new(
+                gov_api,
+                database,
+                message_channel,
+                distribution_channel,
+                our_id,
+            ),
             shutdown_receiver,
             shutdown_sender,
             notification_sender,
@@ -132,8 +142,15 @@ impl<D: DatabaseManager> EventManager<D> {
                     }
                     LedgerResponse::NoResponse
                 }
-                LedgerCommand::ExternalEvent { event, signatures } => {
-                    let response = self.inner_ledger.external_event(event, signatures).await;
+                LedgerCommand::ExternalEvent {
+                    sender,
+                    event,
+                    signatures,
+                } => {
+                    let response = self
+                        .inner_ledger
+                        .external_event(event, signatures, sender)
+                        .await;
                     match response {
                         Err(error) => match error {
                             LedgerError::ChannelClosed => {
@@ -176,6 +193,8 @@ impl<D: DatabaseManager> EventManager<D> {
                     }
                     LedgerResponse::NoResponse
                 }
+                LedgerCommand::GetEvent { subject_id, sn } => todo!(),
+                LedgerCommand::GetLCE { subject_id } => todo!(),
             }
         };
         if sender.is_some() {

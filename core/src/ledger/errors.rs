@@ -46,4 +46,6 @@ pub enum LedgerError {
     EventNotNext,
     #[error("Event Does Not Fit Hash")]
     EventDoesNotFitHash,
+    #[error("We are not witnesses: {0}")]
+    WeAreNotWitnesses(String),
 }

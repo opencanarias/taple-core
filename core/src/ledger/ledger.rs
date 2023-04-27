@@ -9,7 +9,7 @@ use crate::{
         models::{approval::Approval, state::Subject},
     },
     database::DB,
-    distribution::{DistributionMessagesNew, error::DistributionErrorResponses},
+    distribution::{error::DistributionErrorResponses, DistributionMessagesNew},
     event_content::Metadata,
     event_request::{EventRequest, EventRequestType},
     governance::{stage::ValidationStage, GovernanceAPI, GovernanceInterface},
@@ -33,7 +33,9 @@ pub struct Ledger<D: DatabaseManager> {
     subject_is_gov: HashMap<DigestIdentifier, bool>,
     ledger_state: HashMap<DigestIdentifier, LedgerState>,
     message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
-    distribution_channel: SenderEnd<DistributionMessagesNew, Result<(), DistributionErrorResponses>>,
+    distribution_channel:
+        SenderEnd<DistributionMessagesNew, Result<(), DistributionErrorResponses>>,
+    our_id: KeyIdentifier,
 }
 
 impl<D: DatabaseManager> Ledger<D> {
@@ -41,7 +43,11 @@ impl<D: DatabaseManager> Ledger<D> {
         gov_api: GovernanceAPI,
         database: DB<D>,
         message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
-        distribution_channel: SenderEnd<DistributionMessagesNew, Result<(), DistributionErrorResponses>>,
+        distribution_channel: SenderEnd<
+            DistributionMessagesNew,
+            Result<(), DistributionErrorResponses>,
+        >,
+        our_id: KeyIdentifier,
     ) -> Self {
         Self {
             gov_api,
@@ -50,6 +56,7 @@ impl<D: DatabaseManager> Ledger<D> {
             ledger_state: HashMap::new(),
             message_channel,
             distribution_channel,
+            our_id,
         }
     }
 
@@ -253,6 +260,7 @@ impl<D: DatabaseManager> Ledger<D> {
         &mut self,
         event: Event,
         signatures: HashSet<Signature>,
+        sender: KeyIdentifier,
     ) -> Result<(), LedgerError> {
         // Comprobaciones criptográficas
         event.check_signatures()?;
@@ -285,6 +293,35 @@ impl<D: DatabaseManager> Ledger<D> {
                         return Err(LedgerError::DatabaseError(error));
                     }
                 };
+                let metadata = Metadata {
+                    namespace: create_request.namespace,
+                    subject_id,
+                    governance_id: create_request.governance_id,
+                    governance_version: event.content.event_proposal.proposal.gov_version,
+                    schema_id: create_request.schema_id,
+                    owner: event
+                        .content
+                        .event_proposal
+                        .proposal
+                        .event_request
+                        .signature
+                        .content
+                        .signer
+                        .clone(),
+                    creator: event
+                        .content
+                        .event_proposal
+                        .proposal
+                        .event_request
+                        .signature
+                        .content
+                        .signer
+                        .clone(),
+                };
+                let mut witnesses = self.get_witnesses(metadata).await?;
+                if !witnesses.contains(&self.our_id) {
+                    return Err(LedgerError::WeAreNotWitnesses(subject_id.to_str()));
+                }
                 self.check_genesis(event, subject_id.clone()).await?;
                 match self.ledger_state.get_mut(&subject_id) {
                     Some(ledger_state) => {
@@ -333,6 +370,10 @@ impl<D: DatabaseManager> Ledger<D> {
                             owner: subject.owner.clone(),
                             creator: subject.creator.clone(),
                         };
+                        let mut witnesses = self.get_witnesses(metadata.clone()).await?;
+                        if !witnesses.contains(&self.our_id) {
+                            return Err(LedgerError::WeAreNotWitnesses(state_request.subject_id.to_str()));
+                        }
                         self.check_event(event.clone(), metadata.clone()).await?;
                         let (signers, quorum) = self
                             .get_signers_and_quorum(metadata, ValidationStage::Validate)
@@ -514,7 +555,8 @@ impl<D: DatabaseManager> Ledger<D> {
                                         );
                                         // No se llega hasta el LCE con el event sourcing
                                         // Pedir siguiente evento
-                                        let signers = self.get_witnesses_and_owner_list(metadata).await?;
+                                        let mut witnesses = self.get_witnesses(metadata.clone()).await?;
+                                        witnesses.insert(metadata.owner);
                                         self.message_channel
                                             .tell(MessageTaskCommand::Request((), (), (), ()))
                                             .await?;
@@ -578,16 +620,14 @@ impl<D: DatabaseManager> Ledger<D> {
         }
     }
 
-    async fn get_witnesses_and_owner_list(
+    async fn get_witnesses(
         &self,
         metadata: Metadata,
     ) -> Result<HashSet<KeyIdentifier>, LedgerError> {
-        let owner = metadata.owner.clone();
-        let mut signers = self
+        let signers = self
             .gov_api
             .get_signers(metadata, ValidationStage::Witness)
             .await?;
-        signers.insert(owner);
         Ok(signers)
     }
 

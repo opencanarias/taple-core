@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use crate::{
-    event_request::EventRequest, identifier::DigestIdentifier, signature::Signature, Event,
+    event_request::EventRequest, identifier::DigestIdentifier, signature::Signature, Event, KeyIdentifier,
 };
 
 pub mod errors;
@@ -18,6 +18,7 @@ pub enum LedgerCommand {
         event_request: EventRequest,
     },
     ExternalEvent {
+        sender: KeyIdentifier,
         event: Event,
         signatures: HashSet<Signature>,
     },
