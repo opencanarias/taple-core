@@ -52,7 +52,6 @@ pub enum LedgerMessages {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct LceRequested {
     pub subject_id: DigestIdentifier,
-    pub sender_id: KeyIdentifier,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

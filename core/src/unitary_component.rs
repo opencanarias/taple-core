@@ -412,6 +412,7 @@ impl<D: DatabaseManager + 'static> Taple<D> {
             DB::new(db.clone()),
             task_sender.clone(),
             distribution_sender,
+            key_identifier.clone(),
         );
         // Creation API module
         let api = API::new(
