@@ -100,7 +100,8 @@ pub use api::{
 };
 pub use approval::ApprovalPetitionData;
 pub use commons::identifier;
-pub use commons::identifier::{DigestIdentifier, KeyIdentifier};
+pub use commons::crypto;
+pub use commons::identifier::{DigestIdentifier, KeyIdentifier, Derivable, SignatureIdentifier};
 pub use commons::models::approval::{Approval, ApprovalContent};
 pub use commons::models::event::{Event, EventContent};
 pub use commons::models::event_proposal::{EventProposal, Evaluation, Proposal};
