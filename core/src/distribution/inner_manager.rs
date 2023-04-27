@@ -92,6 +92,21 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
         Ok(Ok(()))
     }
 
+    async fn cancel_signature_request(
+        &self,
+        subject_id: &DigestIdentifier,
+    ) -> Result<(), DistributionManagerError> {
+        let subject_id_str = subject_id.to_str();
+        self.messenger_channel
+            .tell(MessageTaskCommand::Cancel(format!(
+                "WITNESS/{}",
+                subject_id_str
+            )))
+            .await
+            .map_err(|_| DistributionManagerError::MessageChannelNotAvailable)?;
+        Ok(())
+    }
+
     async fn send_signature_request(
         &self,
         subject_id: &DigestIdentifier,
@@ -264,13 +279,17 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
                 self.db
                     .set_witness_signatures(&msg.subject_id, msg.sn, current_signatures)
                     .map_err(|error| DistributionManagerError::DatabaseError(error.to_string()))?;
-                self.send_signature_request(
-                    &subject.subject_id,
-                    msg.sn,
-                    targets,
-                    &remaining_signatures,
-                )
-                .await?;
+                if remaining_signatures.len() == 0 {
+                    self.cancel_signature_request(&subject.subject_id).await?;
+                } else {
+                    self.send_signature_request(
+                        &subject.subject_id,
+                        msg.sn,
+                        targets,
+                        &remaining_signatures,
+                    )
+                    .await?;
+                }
                 Ok(Ok(()))
             }
             Err(DbError::EntryNotFound) => {

@@ -1,14 +1,13 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    approval::{error::ApprovalErrorResponse, ApprovalMessages},
+    approval::{error::ApprovalErrorResponse, ApprovalMessages, ApprovalResponses},
     commons::channel::{ChannelData, MpscChannel, SenderEnd},
     distribution::{error::DistributionErrorResponses, DistributionMessagesNew, LedgerMessages},
     evaluator::{EvaluatorMessage, EvaluatorResponse},
     event::{EventCommand, EventResponse},
     message::{Message, TaskCommandContent},
     notary::{NotaryCommand, NotaryResponse},
-    Event,
 };
 
 mod error;
@@ -32,12 +31,33 @@ pub struct ProtocolManager {
     evaluation_sx: SenderEnd<EvaluatorMessage, EvaluatorResponse>,
     validation_sx: SenderEnd<NotaryCommand, NotaryResponse>,
     event_sx: SenderEnd<EventCommand, EventResponse>,
-    approval_sx: SenderEnd<ApprovalMessages, Result<(), ApprovalErrorResponse>>,
+    approval_sx: SenderEnd<ApprovalMessages, ApprovalResponses>,
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
 }
 
 impl ProtocolManager {
+    pub fn new(
+        input: MpscChannel<Message<TapleMessages>, ()>,
+        distribution_sx: SenderEnd<DistributionMessagesNew, Result<(), DistributionErrorResponses>>,
+        evaluation_sx: SenderEnd<EvaluatorMessage, EvaluatorResponse>,
+        validation_sx: SenderEnd<NotaryCommand, NotaryResponse>,
+        event_sx: SenderEnd<EventCommand, EventResponse>,
+        approval_sx: SenderEnd<ApprovalMessages, ApprovalResponses>,
+        shutdown_sender: tokio::sync::broadcast::Sender<()>,
+    ) -> Self {
+        Self {
+            input,
+            distribution_sx,
+            evaluation_sx,
+            validation_sx,
+            event_sx,
+            approval_sx,
+            shutdown_sender,
+            shutdown_receiver: shutdown_sender.subscribe(),
+        }
+    }
+
     pub async fn start(mut self) {
         loop {
             tokio::select! {

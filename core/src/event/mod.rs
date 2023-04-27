@@ -8,7 +8,7 @@ use crate::{
     event_request::EventRequest,
     identifier::DigestIdentifier,
     signature::Signature,
-    Event, evaluator::compiler::NewGovVersion,
+    Event,
 };
 
 use self::errors::EventError;
@@ -33,7 +33,6 @@ pub enum EventCommand {
     ValidatorResponse {
         signature: Signature,
     },
-    NewGovVersion(NewGovVersion),
 }
 
 #[derive(Debug, Clone)]

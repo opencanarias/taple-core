@@ -16,7 +16,7 @@ use super::{
     DistributionMessagesNew,
 };
 
-struct DistributionManager<D: DatabaseManager> {
+pub struct DistributionManager<D: DatabaseManager> {
     input_channel: MpscChannel<DistributionMessagesNew, Result<(), DistributionErrorResponses>>,
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
@@ -24,7 +24,7 @@ struct DistributionManager<D: DatabaseManager> {
 }
 
 impl<D: DatabaseManager> DistributionManager<D> {
-    fn new(
+    pub fn new(
         input_channel: MpscChannel<DistributionMessagesNew, Result<(), DistributionErrorResponses>>,
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,

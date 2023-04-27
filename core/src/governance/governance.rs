@@ -36,8 +36,7 @@ impl<D: DatabaseManager> Governance<D> {
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
         repo_access: DB<D>,
-        update_channel_event: SenderEnd<GovernanceUpdatedMessage, ()>,
-        update_channel_evaluator: SenderEnd<GovernanceUpdatedMessage, ()>,
+        update_channel: tokio::sync::broadcast::Sender<GovernanceUpdatedMessage>,
     ) -> Self {
         Self {
             input,
@@ -46,8 +45,7 @@ impl<D: DatabaseManager> Governance<D> {
             inner_governance: InnerGovernance::new(
                 repo_access,
                 get_governance_schema(),
-                update_channel_event,
-                update_channel_evaluator,
+                update_channel
             ),
         }
     }

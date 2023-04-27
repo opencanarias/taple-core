@@ -21,6 +21,7 @@ pub enum ApprovalMessages {
     GetSingleRequest(DigestIdentifier),
 }
 
+#[derive(Clone, Debug)]
 pub enum ApprovalResponses {
     RequestApproval(Result<(), ApprovalErrorResponse>),
     EmitVote(Result<(), ApprovalErrorResponse>),

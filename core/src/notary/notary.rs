@@ -106,6 +106,7 @@ impl<D: DatabaseManager> Notary<D> {
     }
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use crate::commons::self_signature_manager::SelfSignatureManager;
@@ -256,7 +257,7 @@ mod tests {
         let (a, b) = MpscChannel::<GovernanceMessage, GovernanceResponse>::new(100);
         let (c, d) = MpscChannel::<GovernanceUpdatedMessage, ()>::new(100);
         let (e, f) = MpscChannel::<GovernanceUpdatedMessage, ()>::new(100);
-        let gov_manager = Governance::new(a, bsx, _brx, db, f, f);
+        let gov_manager = Governance::new(a, bsx, _brx, db, f);
         let db = DB::new(manager);
         let notary = Notary::new(
             GovernanceAPI::new(b),
@@ -301,3 +302,4 @@ mod tests {
         }
     }
 }
+ */

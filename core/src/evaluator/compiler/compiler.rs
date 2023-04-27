@@ -1,7 +1,7 @@
 use crate::database::Error as DbError;
 use crate::evaluator::errors::CompilerError;
 use crate::governance::GovernanceInterface;
-use crate::identifier::{Derivable, DigestIdentifier};
+use crate::identifier::{DigestIdentifier, Derivable};
 use crate::{database::DB, evaluator::errors::CompilerErrorResponses, DatabaseManager};
 use async_std::fs;
 use std::collections::HashSet;
@@ -9,8 +9,6 @@ use std::path::Path;
 use std::process::Command;
 use wasm_gc::garbage_collect_file;
 use wasmtime::{Engine, ExternType};
-
-use super::NewGovVersion;
 
 pub struct Compiler<D: DatabaseManager, G: GovernanceInterface> {
     database: DB<D>,
@@ -60,19 +58,20 @@ impl<D: DatabaseManager, G: GovernanceInterface> Compiler<D, G> {
 
     pub async fn update_contracts(
         &self,
-        compile_info: NewGovVersion,
+        governance_id: DigestIdentifier,
+        governance_version: u64,
     ) -> Result<(), CompilerErrorResponses> {
         // TODO: Pillar contrato de base de datos, comprobar si el hash cambia y compilar, si no cambia no compilar
         // Read the contract from database
         let contracts = self
             .gov_api
-            .get_contracts(compile_info.governance_id.clone())
+            .get_contracts(governance_id.clone())
             .await
             .map_err(CompilerErrorResponses::GovernanceError)?;
         for contract_info in contracts {
             let contract_data = match self
                 .database
-                .get_contract(&compile_info.governance_id, &contract_info.name)
+                .get_contract(&governance_id, &contract_info.name)
             {
                 Ok((contract, hash, contract_gov_version)) => {
                     Some((contract, hash, contract_gov_version))
@@ -87,17 +86,17 @@ impl<D: DatabaseManager, G: GovernanceInterface> Compiler<D, G> {
                 DigestIdentifier::from_serializable_borsh(&contract_info.content)
                     .map_err(|_| CompilerErrorResponses::BorshSerializeContractError)?;
             if let Some(contract_data) = contract_data {
-                if compile_info.governance_version == contract_data.2 {
+                if governance_version == contract_data.2 {
                     continue;
                 }
                 if contract_data.1 == new_contract_hash {
                     self.database
                         .put_contract(
-                            &compile_info.governance_id,
+                            &governance_id,
                             &contract_info.name,
                             contract_data.0,
                             new_contract_hash,
-                            compile_info.governance_version,
+                            governance_version,
                         )
                         .map_err(|error| {
                             CompilerErrorResponses::DatabaseError(error.to_string())
@@ -107,20 +106,20 @@ impl<D: DatabaseManager, G: GovernanceInterface> Compiler<D, G> {
             }
             self.compile(
                 contract_info.content,
-                &compile_info.governance_id.to_str(),
+                &governance_id.to_str(),
                 &contract_info.name,
             )
             .await?;
             let compiled_contract = self
-                .add_contract(&compile_info.governance_id.to_str(), &contract_info.name)
+                .add_contract(&governance_id.to_str(), &contract_info.name)
                 .await?;
             self.database
                 .put_contract(
-                    &compile_info.governance_id,
+                    &governance_id,
                     &contract_info.name,
                     compiled_contract,
                     new_contract_hash,
-                    compile_info.governance_version,
+                    governance_version,
                 )
                 .map_err(|error| CompilerErrorResponses::DatabaseError(error.to_string()))?;
         }

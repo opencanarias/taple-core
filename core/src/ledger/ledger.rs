@@ -9,7 +9,7 @@ use crate::{
         models::{approval::Approval, state::Subject},
     },
     database::DB,
-    distribution::{AskForSignatures, DistributionMessagesNew},
+    distribution::{DistributionMessagesNew, error::DistributionErrorResponses},
     event_content::Metadata,
     event_request::{EventRequest, EventRequestType},
     governance::{stage::ValidationStage, GovernanceAPI, GovernanceInterface},
@@ -33,7 +33,7 @@ pub struct Ledger<D: DatabaseManager> {
     subject_is_gov: HashMap<DigestIdentifier, bool>,
     ledger_state: HashMap<DigestIdentifier, LedgerState>,
     message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
-    distribution_channel: SenderEnd<DistributionMessagesNew, ()>,
+    distribution_channel: SenderEnd<DistributionMessagesNew, Result<(), DistributionErrorResponses>>,
 }
 
 impl<D: DatabaseManager> Ledger<D> {
@@ -41,7 +41,7 @@ impl<D: DatabaseManager> Ledger<D> {
         gov_api: GovernanceAPI,
         database: DB<D>,
         message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
-        distribution_channel: SenderEnd<DistributionMessagesNew, ()>,
+        distribution_channel: SenderEnd<DistributionMessagesNew, Result<(), DistributionErrorResponses>>,
     ) -> Self {
         Self {
             gov_api,

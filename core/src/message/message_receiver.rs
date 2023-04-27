@@ -5,6 +5,8 @@ use std::io::Cursor;
 use tokio::sync::mpsc::{self};
 use tokio_stream::wrappers::ReceiverStream;
 
+use crate::commons::channel::SenderEnd;
+
 use super::{Message, TaskCommandContent};
 
 #[derive(Debug)]
@@ -17,14 +19,14 @@ where
     T: TaskCommandContent + Serialize + DeserializeOwned,
 {
     receiver: ReceiverStream<NetworkEvent>,
-    sender: mpsc::Sender<Message<T>>,
+    sender: SenderEnd<Message<T>, ()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
 }
 
 impl<T: TaskCommandContent + Serialize + DeserializeOwned + 'static> MessageReceiver<T> {
     pub fn new(
         receiver: mpsc::Receiver<NetworkEvent>,
-        sender: mpsc::Sender<Message<T>>,
+        sender: SenderEnd<Message<T>, ()>,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
     ) -> Self {
         let receiver = ReceiverStream::new(receiver);
@@ -45,7 +47,7 @@ impl<T: TaskCommandContent + Serialize + DeserializeOwned + 'static> MessageRece
                         let cur = Cursor::new(message);
                         let mut de = Deserializer::new(cur);
                         let message: Message<T> = Deserialize::deserialize(&mut de).expect("Fallo de deserialización");
-                        self.sender.send(message).await.expect("Channel Error");
+                        self.sender.tell(message).await.expect("Channel Error");
                     },
                     None => {}
                 },

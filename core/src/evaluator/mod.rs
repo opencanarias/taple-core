@@ -10,6 +10,7 @@ use self::errors::EvaluatorErrorResponses;
 pub mod compiler;
 mod errors;
 mod manager;
+pub use manager::{EvaluatorAPI, EvaluatorManager};
 mod runner;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

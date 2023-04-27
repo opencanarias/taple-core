@@ -7,7 +7,7 @@ use crate::{
         self_signature_manager::SelfSignatureManager,
     },
     database::DB,
-    governance::GovernanceAPI,
+    governance::{GovernanceAPI, GovernanceUpdatedMessage},
     identifier::DigestIdentifier,
     message::{MessageConfig, MessageTaskCommand},
     protocol::protocol_message_manager::TapleMessages,
@@ -21,16 +21,25 @@ use super::{
     ApprovalMessages, ApprovalPetitionData, ApprovalResponses, EmitVote,
 };
 
-struct ApprovalManager<D: DatabaseManager> {
+pub struct ApprovalManager<D: DatabaseManager> {
     input_channel: MpscChannel<ApprovalMessages, ApprovalResponses>,
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+    governance_update_channel: tokio::sync::broadcast::Receiver<GovernanceUpdatedMessage>,
     messenger_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
     inner_manager: InnerApprovalManager<GovernanceAPI, D, RequestNotifier>,
 }
 
 pub struct ApprovalAPI {
     input_channel: SenderEnd<ApprovalMessages, ApprovalResponses>,
+}
+
+impl ApprovalAPI {
+    pub fn new(input_channel: SenderEnd<ApprovalMessages, ApprovalResponses>) -> Self {
+        Self {
+            input_channel
+        }
+    }
 }
 
 #[async_trait]
@@ -109,6 +118,7 @@ impl<D: DatabaseManager> ApprovalManager<D> {
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
         messenger_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
+        governance_update_channel: tokio::sync::broadcast::Receiver<GovernanceUpdatedMessage>,
         signature_manager: SelfSignatureManager,
         notification_sender: tokio::sync::broadcast::Sender<Notification>,
         settings: TapleSettings,
@@ -120,6 +130,7 @@ impl<D: DatabaseManager> ApprovalManager<D> {
             shutdown_sender,
             shutdown_receiver,
             messenger_channel,
+            governance_update_channel,
             inner_manager: InnerApprovalManager::new(
                 gov_api,
                 database,
@@ -143,11 +154,27 @@ impl<D: DatabaseManager> ApprovalManager<D> {
                         }
                         None => {
                             self.shutdown_sender.send(()).expect("Channel Closed");
+                            break;
                         },
                     }
                 },
                 _ = self.shutdown_receiver.recv() => {
                     break;
+                },
+                update = self.governance_update_channel.recv() => {
+                    match update {
+                        Ok(data) => {
+                            match data {
+                                GovernanceUpdatedMessage::GovernanceUpdated { governance_id, governance_version } => {
+                                    self.inner_manager.new_governance_version(&governance_id, governance_version);
+                                }
+                            }
+                        },
+                        Err(_) => {
+                            self.shutdown_sender.send(()).expect("Channel Closed");
+                            break;
+                        }
+                    }
                 }
             }
         }
