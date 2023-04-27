@@ -157,11 +157,6 @@ pub fn get_gov_contract() -> String {
   }
   
   #[derive(Serialize, Deserialize, Clone)]
-  pub struct Invoke {
-      roles: Vec<String>,
-  }
-  
-  #[derive(Serialize, Deserialize, Clone)]
   pub struct Policy {
       id: String,
       approve: Validation,
@@ -170,7 +165,7 @@ pub fn get_gov_contract() -> String {
       create: Vec<String>,
       witness: Vec<String>,
       close: Vec<String>,
-      invoke: Vec<Invoke>,
+      invoke: Vec<String>,
   }
   
   #[derive(Serialize, Deserialize, Clone)]

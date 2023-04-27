@@ -155,6 +155,7 @@ pub struct NetworkProcessor {
         futures::stream::futures_unordered::FuturesUnordered<tokio::time::Sleep>,
     open_requests: HashMap<PeerId, VecDeque<ResponseChannel<Vec<u8>>>>,
     send_mode: SendMode,
+    node_public_key: Vec<u8>,
 }
 
 impl NetworkProcessor {
@@ -166,6 +167,7 @@ impl NetworkProcessor {
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
         send_mode: SendMode,
     ) -> Result<Self, Box<dyn Error>> {
+        let public_key = controller_mc.public_key_bytes();
         let local_key = {
             let sk = ed25519::SecretKey::from_bytes(controller_mc.secret_key_bytes())
                 .expect("we always pass 32 bytes");
@@ -243,6 +245,7 @@ impl NetworkProcessor {
         // let peer_to_controller: HashMap<PeerId, Vec<u8>> = HashMap::new();
         let active_get_querys: HashSet<PeerId> = HashSet::new();
         Ok(Self {
+            node_public_key: public_key,
             addr,
             swarm,
             command_sender,
@@ -639,6 +642,15 @@ impl NetworkProcessor {
                 }
             }
             Command::SendMessage { receptor, message } => {
+                // Check if we are the receptor
+                if receptor == self.node_public_key {
+                    // It is not needed to send the message
+                    self.event_sender
+                        .send(NetworkEvent::MessageReceived { message })
+                        .await
+                        .expect("Event receiver not to be dropped.");
+                    return;
+                }
                 debug!("{}: Sending Message", LOG_TARGET);
                 // Check if we have the peerId of the controller in cache
                 let peer_id = match libp2p::identity::ed25519::PublicKey::decode(&receptor) {

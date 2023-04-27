@@ -498,6 +498,9 @@ impl<D: DatabaseManager + 'static> Taple<D> {
         tokio::spawn(async move {
             distribution_manager.start().await;
         });
+        tokio::spawn(async move {
+            approval_manager.start().await;
+        });
         tokio::spawn(network_manager.run());
         // API Initialization
         tokio::spawn(async move {

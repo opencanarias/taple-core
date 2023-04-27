@@ -95,7 +95,9 @@ impl<D: DatabaseManager> DistributionManager<D> {
             DistributionMessagesNew::SignaturesReceived(data) => {
                 self.inner_manager.signatures_received(data).await?
             }
-            DistributionMessagesNew::SignaturesNeeded { subject_id, sn } => todo!(),
+            DistributionMessagesNew::SignaturesNeeded { subject_id, sn } => {
+                self.inner_manager.start_distribution(super::StartDistribution { subject_id, sn }).await?
+            },
         };
         if sender.is_some() {
             sender
