@@ -9,7 +9,7 @@ use crate::{
         models::{approval::Approval, state::Subject},
     },
     database::DB,
-    distribution::{DistributionMessagesNew, AskForSignatures},
+    distribution::{AskForSignatures, DistributionMessagesNew},
     event_content::Metadata,
     event_request::{EventRequest, EventRequestType},
     governance::{stage::ValidationStage, GovernanceAPI, GovernanceInterface},
@@ -175,12 +175,7 @@ impl<D: DatabaseManager> Ledger<D> {
         }
         // Mandar subject_id y evento en mensaje a distribution manager
         self.distribution_channel
-            .tell(DistributionMessagesNew::ProvideSignatures(AskForSignatures {
-                subject_id,
-                sn: 0,
-                signatures_requested: todo!(),
-                sender_id: todo!(),
-            }))
+            .tell(DistributionMessagesNew::SignaturesNeeded { subject_id, sn: 0 })
             .await?;
         Ok(())
     }
@@ -249,12 +244,7 @@ impl<D: DatabaseManager> Ledger<D> {
         }
         // Enviar a Distribution info del nuevo event y que lo distribuya
         self.distribution_channel
-            .tell(DistributionMessagesNew::ProvideSignatures(AskForSignatures {
-                subject_id,
-                sn,
-                signatures_requested: todo!(),
-                sender_id: todo!(),
-            }))
+            .tell(DistributionMessagesNew::SignaturesNeeded { subject_id, sn })
             .await?;
         Ok(())
     }
@@ -312,12 +302,7 @@ impl<D: DatabaseManager> Ledger<D> {
                 }
                 // Enviar mensaje a distribution manager
                 self.distribution_channel
-                    .tell(DistributionMessagesNew::ProvideSignatures(AskForSignatures {
-                        subject_id,
-                        sn: 0,
-                        signatures_requested: todo!(),
-                        sender_id: todo!(),
-                    }))
+                    .tell(DistributionMessagesNew::SignaturesNeeded { subject_id, sn: 0 })
                     .await?;
             }
             EventRequestType::State(state_request) => {
@@ -328,6 +313,10 @@ impl<D: DatabaseManager> Ledger<D> {
                         {
                             Ok(subject) => subject,
                             Err(crate::DbError::EntryNotFound) => {
+                                // Pedir génesis
+                                self.message_channel
+                                    .tell(MessageTaskCommand::Request((), (), (), ()))
+                                    .await?;
                                 return Err(LedgerError::SubjectNotFound("".into()));
                             }
                             Err(error) => {
@@ -355,7 +344,9 @@ impl<D: DatabaseManager> Ledger<D> {
                             &event.signature.content.event_content_hash,
                         )?;
                         // Comprobar si es evento siguiente o LCE
-                        if event.content.event_proposal.proposal.sn == subject.sn + 1 {
+                        if event.content.event_proposal.proposal.sn == subject.sn + 1
+                            && ledger_state.head.is_none()
+                        {
                             // Caso Evento Siguiente
                             let sn = event.content.event_proposal.proposal.sn;
                             let json_patch =
@@ -364,6 +355,7 @@ impl<D: DatabaseManager> Ledger<D> {
                                 json_patch,
                                 event.content.event_proposal.proposal.sn,
                             )?;
+                            // TODO: No guardar firmas si hay un head con mayor sn
                             self.database.set_signatures(
                                 &state_request.subject_id,
                                 sn,
@@ -382,14 +374,9 @@ impl<D: DatabaseManager> Ledger<D> {
                             );
                             // Mandar firma de testificacion a distribution manager o el evento en sí
                             self.distribution_channel
-                                .tell(DistributionMessagesNew::ProvideSignatures(AskForSignatures {
-                                    subject_id: state_request.subject_id,
-                                    sn,
-                                    signatures_requested: todo!(),
-                                    sender_id: todo!(),
-                                }))
+                                .tell(DistributionMessagesNew::SignaturesNeeded { subject_id, sn })
                                 .await?;
-                        } else if event.content.event_proposal.proposal.sn > subject.sn + 1 {
+                        } else if event.content.event_proposal.proposal.sn > subject.sn {
                             // Caso LCE
                             // Comprobar que LCE es mayor y quedarnos con el mas peque si tenemos otro
                             match ledger_state.head {
@@ -512,7 +499,10 @@ impl<D: DatabaseManager> Ledger<D> {
                                         // Se llega hasta el LCE con el event sourcing
                                         // Pedir firmas de testificación
                                         self.distribution_channel
-                                            .tell(DistributionMessagesNew::ProvideSignatures(()))
+                                            .tell(DistributionMessagesNew::SignaturesNeeded {
+                                                subject_id,
+                                                sn: head,
+                                            })
                                             .await?;
                                     } else {
                                         self.ledger_state.insert(
@@ -524,6 +514,7 @@ impl<D: DatabaseManager> Ledger<D> {
                                         );
                                         // No se llega hasta el LCE con el event sourcing
                                         // Pedir siguiente evento
+                                        let signers = self.get_witnesses_and_owner_list(metadata).await?;
                                         self.message_channel
                                             .tell(MessageTaskCommand::Request((), (), (), ()))
                                             .await?;
@@ -552,7 +543,10 @@ impl<D: DatabaseManager> Ledger<D> {
                                         // Se llega hasta el LCE con el event sourcing
                                         // Pedir firmas de testificación
                                         self.distribution_channel
-                                            .tell(DistributionMessagesNew::ProvideSignatures(()))
+                                            .tell(DistributionMessagesNew::SignaturesNeeded {
+                                                subject_id,
+                                                sn: 1,
+                                            })
                                             .await?;
                                     } else {
                                         self.ledger_state.insert(
@@ -564,6 +558,7 @@ impl<D: DatabaseManager> Ledger<D> {
                                         );
                                         // No se llega hasta el LCE con el event sourcing
                                         // Pedir siguiente evento
+                                        // TODO
                                         self.message_channel
                                             .tell(MessageTaskCommand::Request((), (), (), ()))
                                             .await?;
@@ -581,6 +576,19 @@ impl<D: DatabaseManager> Ledger<D> {
             }
             None => Err(LedgerError::UnsignedUnknowEvent),
         }
+    }
+
+    async fn get_witnesses_and_owner_list(
+        &self,
+        metadata: Metadata,
+    ) -> Result<HashSet<KeyIdentifier>, LedgerError> {
+        let owner = metadata.owner.clone();
+        let mut signers = self
+            .gov_api
+            .get_signers(metadata, ValidationStage::Witness)
+            .await?;
+        signers.insert(owner);
+        Ok(signers)
     }
 
     // TODO Existe otra igual en event manager, unificar en una sola y poner en utils

@@ -14,13 +14,17 @@ pub(crate) mod error;
 // mod manager;
 // mod resolutor;
 
-mod manager;
 mod inner_manager;
+mod manager;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum DistributionMessagesNew {
     ProvideSignatures(AskForSignatures),
     SignaturesReceived(SignaturesReceived),
+    SignaturesNeeded {
+        subject_id: DigestIdentifier,
+        sn: u64,
+    },
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -28,21 +32,21 @@ pub struct AskForSignatures {
     pub subject_id: DigestIdentifier,
     pub sn: u64,
     pub signatures_requested: HashSet<KeyIdentifier>,
-    pub sender_id: KeyIdentifier
+    pub sender_id: KeyIdentifier,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct SignaturesReceived {
     pub subject_id: DigestIdentifier,
     pub sn: u64,
-    pub signatures: HashSet<Signature>
+    pub signatures: HashSet<Signature>,
 }
 
 // Message Recieved from Ledger
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct StartDistribution {
     subject_id: DigestIdentifier,
-    sn: u64
+    sn: u64,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -56,7 +60,7 @@ pub enum DistributionMessages {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum LedgerMessages {
     LceRequested(LceRequested),
-    EventRequested(EventRequested)
+    EventRequested(EventRequested),
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -68,7 +72,7 @@ pub struct LceRequested {
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct EventRequested {
     pub subject_id: DigestIdentifier,
-    pub sn: u64
+    pub sn: u64,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
