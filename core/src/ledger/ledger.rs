@@ -818,7 +818,7 @@ impl<D: DatabaseManager> Ledger<D> {
             })?;
         // Comprobar evento previo encaja
         if event.content.event_proposal.proposal.hash_prev_event
-            != event.signature.content.event_content_hash
+            != prev_event.signature.content.event_content_hash
         {
             return Err(LedgerError::EventDoesNotFitHash);
         }
