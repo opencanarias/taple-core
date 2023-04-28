@@ -30,7 +30,7 @@ use crate::{
         approval::create_approval_request, evaluator::create_evaluator_request,
         validation::create_validator_request,
     },
-    Event, Notification, TimeStamp,
+    Event, EventRequestType, Notification, TimeStamp,
 };
 use std::hash::Hash;
 
@@ -224,6 +224,11 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 for subject_id in subjects_affected.iter() {
                     match self.database.get_request(subject_id) {
                         Ok(event_request) => {
+                            let EventRequestType::State(state_request) = &event_request.request else {
+                                return Err(EventError::GenesisInGovUpdate)
+                            };
+                            let subject_id = state_request.subject_id.clone();
+                            self.subjects_completing_event.remove(&subject_id);
                             self.new_event(event_request).await?;
                         }
                         Err(error) => match error {

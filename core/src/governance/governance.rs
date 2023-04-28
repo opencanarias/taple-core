@@ -20,7 +20,7 @@ use super::{
     error::{InternalError, RequestError},
     inner_governance::InnerGovernance,
     stage::ValidationStage,
-    GovernanceMessage, GovernanceResponse,
+    GovernanceMessage, GovernanceResponse, GovernanceUpdatedMessage,
 };
 
 pub struct Governance<D: DatabaseManager> {
@@ -36,12 +36,17 @@ impl<D: DatabaseManager> Governance<D> {
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
         repo_access: DB<D>,
+        update_channel: tokio::sync::broadcast::Sender<GovernanceUpdatedMessage>,
     ) -> Self {
         Self {
             input,
             shutdown_sender,
             shutdown_receiver,
-            inner_governance: InnerGovernance::new(repo_access, get_governance_schema()),
+            inner_governance: InnerGovernance::new(
+                repo_access,
+                get_governance_schema(),
+                update_channel
+            ),
         }
     }
 
@@ -143,6 +148,15 @@ impl<D: DatabaseManager> Governance<D> {
                         .send(GovernanceResponse::GetRolesOfInvokator(to_send))
                         .map_err(|_| InternalError::OneshotClosed)?)
                 }
+                GovernanceMessage::GovernanceUpdated {
+                    governance_id,
+                    governance_version,
+                } => {
+                    self.inner_governance
+                        .governance_updated(governance_id, governance_version)
+                        .await?;
+                    Ok(())
+                }
             }
         } else {
             Err(InternalError::ChannelError {
@@ -201,6 +215,12 @@ pub trait GovernanceInterface: Sync + Send {
         invokator: KeyIdentifier,
         metadata: Metadata,
     ) -> Result<Vec<String>, RequestError>;
+
+    async fn governance_updated(
+        &self,
+        governance_id: DigestIdentifier,
+        governance_version: u64,
+    ) -> Result<(), RequestError>;
 }
 
 #[derive(Debug, Clone)]
@@ -378,5 +398,19 @@ impl GovernanceInterface for GovernanceAPI {
         } else {
             Err(RequestError::UnexpectedResponse)
         }
+    }
+
+    async fn governance_updated(
+        &self,
+        governance_id: DigestIdentifier,
+        governance_version: u64,
+    ) -> Result<(), RequestError> {
+        self.sender
+            .tell(GovernanceMessage::GovernanceUpdated {
+                governance_id,
+                governance_version,
+            })
+            .await
+            .map_err(|_| RequestError::ChannelClosed)
     }
 }

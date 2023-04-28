@@ -1,20 +1,19 @@
 use wasmtime::Engine;
 
 use crate::{
-    commons::channel::{ChannelData, MpscChannel},
     database::DB,
-    evaluator::{errors::{CompilerError}, EvaluatorResponse},
-    governance::{GovernanceInterface},
+    evaluator::errors::CompilerError,
+    governance::{GovernanceInterface, GovernanceUpdatedMessage},
     DatabaseManager,
 };
 
-use super::{compiler::Compiler, CompilerMessages, CompilerResponses};
+use super::compiler::Compiler;
 
 pub struct TapleCompiler<D: DatabaseManager, G: GovernanceInterface> {
-    input_channel: MpscChannel<CompilerMessages, CompilerResponses>,
+    input_channel: tokio::sync::broadcast::Receiver<GovernanceUpdatedMessage>,
     inner_compiler: Compiler<D, G>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
-    shutdown_sender: tokio::sync::broadcast::Sender<()>
+    shutdown_sender: tokio::sync::broadcast::Sender<()>,
 }
 
 #[derive(Clone, Debug)]
@@ -25,19 +24,19 @@ enum CompilerCodes {
 
 impl<D: DatabaseManager, G: GovernanceInterface + Send> TapleCompiler<D, G> {
     pub fn new(
-        input_channel: MpscChannel<CompilerMessages, CompilerResponses>,
+        input_channel: tokio::sync::broadcast::Receiver<GovernanceUpdatedMessage>,
         database: DB<D>,
         gov_api: G,
         contracts_path: String,
         engine: Engine,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
-        shutdown_sender: tokio::sync::broadcast::Sender<()>
+        shutdown_sender: tokio::sync::broadcast::Sender<()>,
     ) -> Self {
         Self {
             input_channel,
             inner_compiler: Compiler::<D, G>::new(database, gov_api, engine, contracts_path),
             shutdown_receiver,
-            shutdown_sender
+            shutdown_sender,
         }
     }
 
@@ -50,9 +49,9 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send> TapleCompiler<D, G> {
         }
         loop {
             tokio::select! {
-                command = self.input_channel.receive() => {
+                command = self.input_channel.recv() => {
                     match command {
-                        Some(command) => {
+                        Ok(command) => {
                             let result = self.process_command(command).await;
                             if result.is_err() {
                                 match result.unwrap_err() {
@@ -77,7 +76,7 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send> TapleCompiler<D, G> {
                                 return;
                             }
                         }
-                        None => {
+                        Err(_) => {
                             return;
                         }
                     }
@@ -91,26 +90,17 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send> TapleCompiler<D, G> {
 
     async fn process_command(
         &mut self,
-        command: ChannelData<CompilerMessages, CompilerResponses>,
+        command: GovernanceUpdatedMessage,
     ) -> Result<CompilerCodes, CompilerError> {
-        let (sender, data) = match command {
-            ChannelData::AskData(data) => {
-                let (sender, data) = data.get();
-                (Some(sender), data)
+        let response = match command {
+            GovernanceUpdatedMessage::GovernanceUpdated {
+                governance_id,
+                governance_version,
+            } => {
+                self.inner_compiler
+                    .update_contracts(governance_id, governance_version)
+                    .await
             }
-            ChannelData::TellData(data) => {
-                let data = data.get();
-                (None, data)
-            }
-        };
-
-        let response = match data {
-            CompilerMessages::NewGovVersion(data) => {
-                CompilerResponses::CompileContract(self.inner_compiler.update_contracts(data).await)
-            }
-        };
-        let Ok(_) = sender.unwrap().send(response) else {
-            return Err(CompilerError::ChannelNotAvailable)
         };
         Ok(CompilerCodes::Ok)
     }

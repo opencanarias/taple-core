@@ -3,7 +3,6 @@ use std::sync::Arc;
 use wasmtime::Engine;
 
 use super::compiler::manager::TapleCompiler;
-use super::compiler::{CompilerMessages, CompilerResponses};
 use super::errors::EvaluatorError;
 use super::{EvaluatorMessage, EvaluatorResponse};
 use crate::commons::self_signature_manager::{SelfSignatureInterface, SelfSignatureManager};
@@ -11,7 +10,7 @@ use crate::database::{DatabaseManager, DB};
 use crate::evaluator::errors::ExecutorErrorResponses;
 use crate::evaluator::runner::manager::TapleRunner;
 use crate::event_request::{EventRequestType};
-use crate::governance::GovernanceInterface;
+use crate::governance::{GovernanceInterface, GovernanceUpdatedMessage};
 use crate::message::{MessageConfig, MessageTaskCommand};
 use crate::protocol::protocol_message_manager::TapleMessages;
 use crate::utils::message::event::create_evaluator_response;
@@ -49,7 +48,7 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send + Clone + 'static> Evalua
         input_channel: MpscChannel<EvaluatorMessage, EvaluatorResponse>,
         database: Arc<D>,
         signature_manager: SelfSignatureManager,
-        compiler_channel: MpscChannel<CompilerMessages, CompilerResponses>,
+        compiler_channel: tokio::sync::broadcast::Receiver<GovernanceUpdatedMessage>,
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
         gov_api: G,

@@ -149,6 +149,13 @@ impl<M: DatabaseManager> DB<M> {
         events_by_subject.put(&sn, event)
     }
 
+    pub fn del_event(&self, subject_id: &DigestIdentifier, sn: u64) -> Result<(), Error> {
+        let id = subject_id.to_str();
+        let events_by_subject = self.event_db.partition(&id);
+        let sn = sn.to_string();
+        events_by_subject.del(&sn)
+    }
+
     pub fn get_prevalidated_event(&self, subject_id: &DigestIdentifier) -> Result<Event, Error> {
         let id = subject_id.to_str();
         self.prevalidated_event_db.get(&id)
@@ -209,7 +216,7 @@ impl<M: DatabaseManager> DB<M> {
         let id = subject_id.to_str();
         let signatures_by_subject = self.signature_db.partition(&id);
         let sn = sn.to_string();
-        let total_signatures = match signatures_by_subject.get(&sn.to_string()) {
+        let total_signatures = match signatures_by_subject.get(&sn) {
             Ok(other) => signatures.union(&other).cloned().collect(),
             Err(Error::EntryNotFound) => signatures,
             Err(error) => {
@@ -218,6 +225,13 @@ impl<M: DatabaseManager> DB<M> {
             }
         };
         signatures_by_subject.put(&sn.to_string(), total_signatures)
+    }
+
+    pub fn del_signatures(&self, subject_id: &DigestIdentifier, sn: u64) -> Result<(), Error> {
+        let id = subject_id.to_str();
+        let signatures_by_subject = self.signature_db.partition(&id);
+        let sn = sn.to_string();
+        signatures_by_subject.del(&sn)
     }
 
     pub fn set_notary_signatures(

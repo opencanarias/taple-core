@@ -4,13 +4,20 @@ use json_patch::{patch, Patch};
 use serde_json::Value;
 
 use crate::{
-    commons::models::{approval::Approval, state::Subject},
+    commons::{
+        channel::SenderEnd,
+        models::{approval::Approval, state::Subject},
+    },
     database::DB,
+    distribution::{error::DistributionErrorResponses, DistributionMessagesNew},
     event_content::Metadata,
     event_request::{EventRequest, EventRequestType},
     governance::{stage::ValidationStage, GovernanceAPI, GovernanceInterface},
     identifier::{Derivable, DigestIdentifier, KeyIdentifier},
+    message::{MessageConfig, MessageTaskCommand},
+    protocol::protocol_message_manager::TapleMessages,
     signature::Signature,
+    utils::message::ledger::request_event,
     DatabaseManager, Event,
 };
 
@@ -26,15 +33,31 @@ pub struct Ledger<D: DatabaseManager> {
     database: DB<D>,
     subject_is_gov: HashMap<DigestIdentifier, bool>,
     ledger_state: HashMap<DigestIdentifier, LedgerState>,
+    message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
+    distribution_channel:
+        SenderEnd<DistributionMessagesNew, Result<(), DistributionErrorResponses>>,
+    our_id: KeyIdentifier,
 }
 
 impl<D: DatabaseManager> Ledger<D> {
-    pub fn new(gov_api: GovernanceAPI, database: DB<D>) -> Self {
+    pub fn new(
+        gov_api: GovernanceAPI,
+        database: DB<D>,
+        message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
+        distribution_channel: SenderEnd<
+            DistributionMessagesNew,
+            Result<(), DistributionErrorResponses>,
+        >,
+        our_id: KeyIdentifier,
+    ) -> Self {
         Self {
             gov_api,
             database,
             subject_is_gov: HashMap::new(),
             ledger_state: HashMap::new(),
+            message_channel,
+            distribution_channel,
+            our_id,
         }
     }
 
@@ -146,7 +169,7 @@ impl<D: DatabaseManager> Ledger<D> {
         self.database.set_subject(&subject_id, subject)?;
         self.database.set_event(&subject_id, event)?;
         // Actualizar Ledger State
-        match self.ledger_state.entry(subject_id) {
+        match self.ledger_state.entry(subject_id.clone()) {
             Entry::Occupied(mut ledger_state) => {
                 let ledger_state = ledger_state.get_mut();
                 ledger_state.current_sn = Some(0);
@@ -159,16 +182,23 @@ impl<D: DatabaseManager> Ledger<D> {
             }
         }
         // Mandar subject_id y evento en mensaje a distribution manager
-        // TODO
-        todo!()
+        self.distribution_channel
+            .tell(DistributionMessagesNew::SignaturesNeeded { subject_id, sn: 0 })
+            .await?;
+        Ok(())
     }
 
     pub async fn event_validated(
         &mut self,
-        subject_id: DigestIdentifier,
         event: Event,
         signatures: HashSet<Signature>,
     ) -> Result<(), LedgerError> {
+        let sn = event.content.event_proposal.proposal.sn;
+        let EventRequestType::State(state_request) = &event.content.event_proposal.proposal.event_request.request
+            else {
+                return Err(LedgerError::StateInGenesis)
+            };
+        let subject_id = state_request.subject_id.clone();
         self.database.set_signatures(
             &subject_id,
             event.content.event_proposal.proposal.sn,
@@ -207,7 +237,7 @@ impl<D: DatabaseManager> Ledger<D> {
             }
         }
         // Actualizar Ledger State
-        match self.ledger_state.entry(subject_id) {
+        match self.ledger_state.entry(subject_id.clone()) {
             Entry::Occupied(mut ledger_state) => {
                 let ledger_state = ledger_state.get_mut();
                 let current_sn = ledger_state.current_sn.as_mut().unwrap();
@@ -221,13 +251,17 @@ impl<D: DatabaseManager> Ledger<D> {
             }
         }
         // Enviar a Distribution info del nuevo event y que lo distribuya
-        todo!()
+        self.distribution_channel
+            .tell(DistributionMessagesNew::SignaturesNeeded { subject_id, sn })
+            .await?;
+        Ok(())
     }
 
     pub async fn external_event(
         &mut self,
         event: Event,
         signatures: HashSet<Signature>,
+        sender: KeyIdentifier,
     ) -> Result<(), LedgerError> {
         // Comprobaciones criptográficas
         event.check_signatures()?;
@@ -260,6 +294,39 @@ impl<D: DatabaseManager> Ledger<D> {
                         return Err(LedgerError::DatabaseError(error));
                     }
                 };
+                let our_gov_version = self
+                    .gov_api
+                    .get_governance_version(create_request.governance_id.clone())
+                    .await?;
+                let metadata = Metadata {
+                    namespace: create_request.namespace,
+                    subject_id: subject_id.clone(),
+                    governance_id: create_request.governance_id,
+                    governance_version: our_gov_version,
+                    schema_id: create_request.schema_id,
+                    owner: event
+                        .content
+                        .event_proposal
+                        .proposal
+                        .event_request
+                        .signature
+                        .content
+                        .signer
+                        .clone(),
+                    creator: event
+                        .content
+                        .event_proposal
+                        .proposal
+                        .event_request
+                        .signature
+                        .content
+                        .signer
+                        .clone(),
+                };
+                let mut witnesses = self.get_witnesses(metadata).await?;
+                if !witnesses.contains(&self.our_id) {
+                    return Err(LedgerError::WeAreNotWitnesses(subject_id.to_str()));
+                }
                 self.check_genesis(event, subject_id.clone()).await?;
                 match self.ledger_state.get_mut(&subject_id) {
                     Some(ledger_state) => {
@@ -267,7 +334,7 @@ impl<D: DatabaseManager> Ledger<D> {
                     }
                     None => {
                         self.ledger_state.insert(
-                            subject_id,
+                            subject_id.clone(),
                             LedgerState {
                                 current_sn: Some(0),
                                 head: None,
@@ -276,7 +343,9 @@ impl<D: DatabaseManager> Ledger<D> {
                     }
                 }
                 // Enviar mensaje a distribution manager
-                todo!();
+                self.distribution_channel
+                    .tell(DistributionMessagesNew::SignaturesNeeded { subject_id, sn: 0 })
+                    .await?;
             }
             EventRequestType::State(state_request) => {
                 // Comprobaciones criptográficas
@@ -286,6 +355,19 @@ impl<D: DatabaseManager> Ledger<D> {
                         {
                             Ok(subject) => subject,
                             Err(crate::DbError::EntryNotFound) => {
+                                // Pedir génesis
+                                let msg = request_event(state_request.subject_id, 0);
+                                self.message_channel
+                                    .tell(MessageTaskCommand::Request(
+                                        None,
+                                        msg,
+                                        vec![sender],
+                                        MessageConfig {
+                                            timeout: 2000,
+                                            replication_factor: 1.0,
+                                        },
+                                    ))
+                                    .await?;
                                 return Err(LedgerError::SubjectNotFound("".into()));
                             }
                             Err(error) => {
@@ -302,6 +384,12 @@ impl<D: DatabaseManager> Ledger<D> {
                             owner: subject.owner.clone(),
                             creator: subject.creator.clone(),
                         };
+                        let mut witnesses = self.get_witnesses(metadata.clone()).await?;
+                        if !witnesses.contains(&self.our_id) {
+                            return Err(LedgerError::WeAreNotWitnesses(
+                                state_request.subject_id.to_str(),
+                            ));
+                        }
                         self.check_event(event.clone(), metadata.clone()).await?;
                         let (signers, quorum) = self
                             .get_signers_and_quorum(metadata, ValidationStage::Validate)
@@ -313,7 +401,9 @@ impl<D: DatabaseManager> Ledger<D> {
                             &event.signature.content.event_content_hash,
                         )?;
                         // Comprobar si es evento siguiente o LCE
-                        if event.content.event_proposal.proposal.sn == subject.sn + 1 {
+                        if event.content.event_proposal.proposal.sn == subject.sn + 1
+                            && ledger_state.head.is_none()
+                        {
                             // Caso Evento Siguiente
                             let sn = event.content.event_proposal.proposal.sn;
                             let json_patch =
@@ -322,6 +412,7 @@ impl<D: DatabaseManager> Ledger<D> {
                                 json_patch,
                                 event.content.event_proposal.proposal.sn,
                             )?;
+                            // TODO: No guardar firmas si hay un head con mayor sn
                             self.database.set_signatures(
                                 &state_request.subject_id,
                                 sn,
@@ -332,25 +423,32 @@ impl<D: DatabaseManager> Ledger<D> {
                                 .set_subject(&state_request.subject_id, subject)
                                 .map_err(|error| LedgerError::DatabaseError(error))?;
                             self.ledger_state.insert(
-                                state_request.subject_id,
+                                state_request.subject_id.clone(),
                                 LedgerState {
                                     current_sn: Some(sn),
                                     head: ledger_state.head,
                                 },
                             );
                             // Mandar firma de testificacion a distribution manager o el evento en sí
-                            // TODO
-                        } else if event.content.event_proposal.proposal.sn > subject.sn + 1 {
+                            self.distribution_channel
+                                .tell(DistributionMessagesNew::SignaturesNeeded {
+                                    subject_id: state_request.subject_id,
+                                    sn,
+                                })
+                                .await?;
+                        } else if event.content.event_proposal.proposal.sn > subject.sn {
                             // Caso LCE
                             // Comprobar que LCE es mayor y quedarnos con el mas peque si tenemos otro
-                            match ledger_state.head {
+                            let last_lce = match ledger_state.head {
                                 Some(head) => {
                                     if event.content.event_proposal.proposal.sn > head {
                                         return Err(LedgerError::LCEBiggerSN);
                                     }
+                                    Some(head)
                                 }
                                 None => {
                                     // Va a ser el nuevo LCE
+                                    None
                                 }
                             };
                             // Si hemos llegado aquí es porque va a ser nuevo LCE
@@ -361,15 +459,34 @@ impl<D: DatabaseManager> Ledger<D> {
                                 signatures,
                             )?;
                             self.database.set_event(&state_request.subject_id, event)?;
+                            if last_lce.is_some() {
+                                let last_lce_sn = last_lce.unwrap();
+                                self.database
+                                    .del_signatures(&state_request.subject_id, last_lce_sn)?;
+                                self.database
+                                    .del_event(&state_request.subject_id, last_lce_sn)?;
+                            }
                             self.ledger_state.insert(
-                                state_request.subject_id,
+                                state_request.subject_id.clone(),
                                 LedgerState {
                                     current_sn: ledger_state.current_sn,
                                     head: Some(sn),
                                 },
                             );
                             // Pedir evento siguiente a current_sn
-                            // TODO
+                            witnesses.insert(subject.owner);
+                            let msg = request_event(state_request.subject_id, 0);
+                            self.message_channel
+                                .tell(MessageTaskCommand::Request(
+                                    None,
+                                    msg,
+                                    witnesses.into_iter().collect(),
+                                    MessageConfig {
+                                        timeout: 2000,
+                                        replication_factor: 0.8,
+                                    },
+                                ))
+                                .await?;
                         } else {
                             // Caso evento repetido
                             return Err(LedgerError::EventAlreadyExists);
@@ -382,19 +499,30 @@ impl<D: DatabaseManager> Ledger<D> {
                             .set_signatures(&state_request.subject_id, sn, signatures)?;
                         self.database.set_event(&state_request.subject_id, event)?;
                         self.ledger_state.insert(
-                            state_request.subject_id,
+                            state_request.subject_id.clone(),
                             LedgerState {
                                 current_sn: None,
                                 head: Some(sn),
                             },
                         );
                         // Pedir evento 0
-                        // TODO
+                        let msg = request_event(state_request.subject_id, 0);
+                        self.message_channel
+                            .tell(MessageTaskCommand::Request(
+                                None,
+                                msg,
+                                vec![sender],
+                                MessageConfig {
+                                    timeout: 2000,
+                                    replication_factor: 1.0,
+                                },
+                            ))
+                            .await?;
                     }
                 };
             }
         }
-        todo!();
+        Ok(())
     }
 
     pub async fn external_intermediate_event(&mut self, event: Event) -> Result<(), LedgerError> {
@@ -441,7 +569,7 @@ impl<D: DatabaseManager> Ledger<D> {
                                 // Comprobar que el evento es el siguiente
                                 if event.content.event_proposal.proposal.sn == current_sn + 1 {
                                     // Comprobar que el evento es el que necesito
-                                    self.check_event(event.clone(), metadata).await?;
+                                    self.check_event(event.clone(), metadata.clone()).await?;
                                     // Guardar Evento
                                     self.database.set_event(&subject_id, event)?;
                                     // Hacer event sourcing del evento y actualizar subject
@@ -450,20 +578,45 @@ impl<D: DatabaseManager> Ledger<D> {
                                         // Hacer event sourcing del LCE tambien y actualizar subject
                                         self.event_sourcing(subject_id.clone(), head)?;
                                         self.ledger_state.insert(
-                                            subject_id,
+                                            subject_id.clone(),
                                             LedgerState {
                                                 current_sn: Some(head),
                                                 head: None,
                                             },
                                         );
+                                        // Se llega hasta el LCE con el event sourcing
+                                        // Pedir firmas de testificación
+                                        self.distribution_channel
+                                            .tell(DistributionMessagesNew::SignaturesNeeded {
+                                                subject_id: subject_id.clone(),
+                                                sn: head,
+                                            })
+                                            .await?;
                                     } else {
                                         self.ledger_state.insert(
-                                            subject_id,
+                                            subject_id.clone(),
                                             LedgerState {
                                                 current_sn: Some(current_sn + 1),
                                                 head: Some(head),
                                             },
                                         );
+                                        // No se llega hasta el LCE con el event sourcing
+                                        // Pedir siguiente evento
+                                        let mut witnesses =
+                                            self.get_witnesses(metadata.clone()).await?;
+                                        witnesses.insert(metadata.owner);
+                                        let msg = request_event(subject_id, current_sn + 2);
+                                        self.message_channel
+                                            .tell(MessageTaskCommand::Request(
+                                                None,
+                                                msg,
+                                                witnesses.into_iter().collect(),
+                                                MessageConfig {
+                                                    timeout: 2000,
+                                                    replication_factor: 0.8,
+                                                },
+                                            ))
+                                            .await?;
                                     }
                                     Ok(())
                                 } else {
@@ -475,25 +628,91 @@ impl<D: DatabaseManager> Ledger<D> {
                                 // El siguiente es el evento 0
                                 if event.content.event_proposal.proposal.sn == 0 {
                                     // Comprobar que el evento 0 es el que necesito
-                                    self.check_genesis(event, subject_id.clone()).await?;
+                                    self.check_genesis(event.clone(), subject_id.clone())
+                                        .await?;
+                                    // Guardar Evento
+                                    self.database.set_event(&subject_id, event.clone())?;
+
+                                    // Guardar sujeto
+                                    let EventRequestType::Create(create_request) = &event
+                                        .content
+                                        .event_proposal
+                                        .proposal
+                                        .event_request
+                                        .request else {
+                                        return Err(LedgerError::StateInGenesis);
+                                        };
+                                    let init_state = self
+                                        .gov_api
+                                        .get_init_state(
+                                            create_request.governance_id.clone(),
+                                            create_request.schema_id.clone(),
+                                            event.content.event_proposal.proposal.gov_version,
+                                        )
+                                        .await?;
+                                    let init_state_string = serde_json::to_string(&init_state)
+                                        .map_err(|_| {
+                                            LedgerError::ErrorParsingJsonString(
+                                                "Init State".to_owned(),
+                                            )
+                                        })?;
+                                    let governance_version =
+                                        event.content.event_proposal.proposal.gov_version;
+                                    let subject =
+                                        Subject::from_genesis_event(event, init_state_string)?;
+                                    let metadata = Metadata {
+                                        namespace: subject.namespace.clone(),
+                                        subject_id: subject.subject_id.clone(),
+                                        governance_id: subject.governance_id.clone(),
+                                        governance_version,
+                                        schema_id: subject.schema_id.clone(),
+                                        owner: subject.owner.clone(),
+                                        creator: subject.creator.clone(),
+                                    };
+                                    self.database.set_subject(&subject_id, subject)?;
                                     if head == 1 {
                                         // Hacer event sourcing del evento 1 tambien y actualizar subject
                                         self.event_sourcing(subject_id.clone(), 1)?;
                                         self.ledger_state.insert(
-                                            subject_id,
+                                            subject_id.clone(),
                                             LedgerState {
                                                 current_sn: Some(1),
                                                 head: None,
                                             },
                                         );
+                                        // Se llega hasta el LCE con el event sourcing
+                                        // Pedir firmas de testificación
+                                        self.distribution_channel
+                                            .tell(DistributionMessagesNew::SignaturesNeeded {
+                                                subject_id: subject_id.clone(),
+                                                sn: 1,
+                                            })
+                                            .await?;
                                     } else {
                                         self.ledger_state.insert(
-                                            subject_id,
+                                            subject_id.clone(),
                                             LedgerState {
                                                 current_sn: Some(0),
                                                 head: Some(head),
                                             },
                                         );
+                                        // No se llega hasta el LCE con el event sourcing
+                                        // Pedir siguiente evento
+                                        let mut witnesses =
+                                            self.get_witnesses(metadata.clone()).await?;
+                                        witnesses.insert(metadata.owner);
+                                        let msg = request_event(subject_id, 1);
+                                        self.message_channel
+                                            .tell(MessageTaskCommand::Request(
+                                                None,
+                                                msg,
+                                                witnesses.into_iter().collect(),
+                                                MessageConfig {
+                                                    timeout: 2000,
+                                                    replication_factor: 0.8,
+                                                },
+                                            ))
+                                            .await?;
                                     }
                                     Ok(())
                                 } else {
@@ -508,6 +727,17 @@ impl<D: DatabaseManager> Ledger<D> {
             }
             None => Err(LedgerError::UnsignedUnknowEvent),
         }
+    }
+
+    async fn get_witnesses(
+        &self,
+        metadata: Metadata,
+    ) -> Result<HashSet<KeyIdentifier>, LedgerError> {
+        let signers = self
+            .gov_api
+            .get_signers(metadata, ValidationStage::Witness)
+            .await?;
+        Ok(signers)
     }
 
     // TODO Existe otra igual en event manager, unificar en una sola y poner en utils
@@ -597,7 +827,7 @@ impl<D: DatabaseManager> Ledger<D> {
             })?;
         // Comprobar evento previo encaja
         if event.content.event_proposal.proposal.hash_prev_event
-            != event.signature.content.event_content_hash
+            != prev_event.signature.content.event_content_hash
         {
             return Err(LedgerError::EventDoesNotFitHash);
         }
@@ -649,7 +879,7 @@ impl<D: DatabaseManager> Ledger<D> {
                 .await?;
             verify_approval_signatures(&event.content.approvals, &signers, quorum)?;
         }
-        todo!()
+        Ok(())
     }
 }
 

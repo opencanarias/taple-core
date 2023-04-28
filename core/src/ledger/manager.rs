@@ -1,8 +1,11 @@
 use crate::{
-    commons::channel::{ChannelData, MpscChannel},
+    commons::channel::{ChannelData, MpscChannel, SenderEnd},
     database::DB,
-    governance::GovernanceAPI,
-    DatabaseManager, Notification,
+    distribution::{error::DistributionErrorResponses, DistributionMessagesNew},
+    governance::{error::RequestError, GovernanceAPI},
+    message::MessageTaskCommand,
+    protocol::protocol_message_manager::TapleMessages,
+    DatabaseManager, Notification, KeyIdentifier,
 };
 
 use super::{errors::LedgerError, ledger::Ledger, LedgerCommand, LedgerResponse};
@@ -24,10 +27,22 @@ impl<D: DatabaseManager> EventManager<D> {
         notification_sender: tokio::sync::broadcast::Sender<Notification>,
         gov_api: GovernanceAPI,
         database: DB<D>,
+        message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
+        distribution_channel: SenderEnd<
+            DistributionMessagesNew,
+            Result<(), DistributionErrorResponses>,
+        >,
+        our_id: KeyIdentifier,
     ) -> Self {
         Self {
             input_channel,
-            inner_ledger: Ledger::new(gov_api, database),
+            inner_ledger: Ledger::new(
+                gov_api,
+                database,
+                message_channel,
+                distribution_channel,
+                our_id,
+            ),
             shutdown_receiver,
             shutdown_sender,
             notification_sender,
@@ -83,13 +98,103 @@ impl<D: DatabaseManager> EventManager<D> {
         };
         let response = {
             match data {
-                LedgerCommand::OwnEvent {
+                LedgerCommand::OwnEvent { event, signatures } => {
+                    let response = self.inner_ledger.event_validated(event, signatures).await;
+                    match response {
+                        Err(error) => match error {
+                            LedgerError::ChannelClosed => {
+                                log::error!("Channel Closed");
+                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                return Err(LedgerError::ChannelClosed);
+                            }
+                            LedgerError::GovernanceError(inner_error)
+                                if inner_error == RequestError::ChannelClosed =>
+                            {
+                                log::error!("Channel Closed");
+                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                return Err(LedgerError::ChannelClosed);
+                            }
+                            _ => {}
+                        },
+                        _ => {}
+                    }
+                    LedgerResponse::NoResponse
+                }
+                LedgerCommand::Genesis { event_request } => {
+                    let response = self.inner_ledger.genesis(event_request).await;
+                    match response {
+                        Err(error) => match error {
+                            LedgerError::ChannelClosed => {
+                                log::error!("Channel Closed");
+                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                return Err(LedgerError::ChannelClosed);
+                            }
+                            LedgerError::GovernanceError(inner_error)
+                                if inner_error == RequestError::ChannelClosed =>
+                            {
+                                log::error!("Channel Closed");
+                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                return Err(LedgerError::ChannelClosed);
+                            }
+                            _ => {}
+                        },
+                        _ => {}
+                    }
+                    LedgerResponse::NoResponse
+                }
+                LedgerCommand::ExternalEvent {
+                    sender,
                     event,
                     signatures,
-                } => todo!(),
-                LedgerCommand::Genesis { event_request } => todo!(),
-                LedgerCommand::ExternalEvent { event, signatures } => todo!(),
-                LedgerCommand::ExternalIntermediateEvent { event } => todo!(),
+                } => {
+                    let response = self
+                        .inner_ledger
+                        .external_event(event, signatures, sender)
+                        .await;
+                    match response {
+                        Err(error) => match error {
+                            LedgerError::ChannelClosed => {
+                                log::error!("Channel Closed");
+                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                return Err(LedgerError::ChannelClosed);
+                            }
+                            LedgerError::GovernanceError(inner_error)
+                                if inner_error == RequestError::ChannelClosed =>
+                            {
+                                log::error!("Channel Closed");
+                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                return Err(LedgerError::ChannelClosed);
+                            }
+                            _ => {}
+                        },
+                        _ => {}
+                    }
+                    LedgerResponse::NoResponse
+                }
+                LedgerCommand::ExternalIntermediateEvent { event } => {
+                    let response = self.inner_ledger.external_intermediate_event(event).await;
+                    match response {
+                        Err(error) => match error {
+                            LedgerError::ChannelClosed => {
+                                log::error!("Channel Closed");
+                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                return Err(LedgerError::ChannelClosed);
+                            }
+                            LedgerError::GovernanceError(inner_error)
+                                if inner_error == RequestError::ChannelClosed =>
+                            {
+                                log::error!("Channel Closed");
+                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                return Err(LedgerError::ChannelClosed);
+                            }
+                            _ => {}
+                        },
+                        _ => {}
+                    }
+                    LedgerResponse::NoResponse
+                }
+                LedgerCommand::GetEvent { subject_id, sn } => todo!(),
+                LedgerCommand::GetLCE { subject_id } => todo!(),
             }
         };
         if sender.is_some() {
