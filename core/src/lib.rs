@@ -98,12 +98,16 @@ pub use api::{
     APICommands, ApiError, ApiModuleInterface, ApiResponses, GetAllSubjects, GetEventsOfSubject,
     GetSingleSubject, NodeAPI,
 };
+pub use approval::ApprovalPetitionData;
 pub use commons::identifier;
-pub use commons::identifier::{DigestIdentifier, KeyIdentifier};
-pub use commons::models::event::Event;
+pub use commons::crypto;
+pub use commons::identifier::{DigestIdentifier, KeyIdentifier, Derivable, SignatureIdentifier};
+pub use commons::models::approval::{Approval, ApprovalContent};
+pub use commons::models::event::{Event, EventContent};
+pub use commons::models::event_proposal::{EventProposal, Evaluation, Proposal};
 pub use commons::models::event_request::EventRequestType;
-pub use commons::models::state::SubjectData;
 pub use commons::models::Acceptance;
+pub use commons::models::state::SubjectData;
 pub use commons::models::{event_content, event_request, signature};
 pub use commons::{
     config::{DatabaseSettings, NetworkSettings, NodeSettings, TapleSettings},
