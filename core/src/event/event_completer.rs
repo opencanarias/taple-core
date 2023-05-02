@@ -150,6 +150,10 @@ impl<D: DatabaseManager> EventCompleter<D> {
                     let stage = ValidationStage::Validate;
                     let (signers, quorum_size) =
                         self.get_signers_and_quorum(metadata, stage.clone()).await?;
+                    for signer in signers.iter() {
+                        log::error!("Signer: {}", signer.to_str());
+                    }
+                    log::error!("Quorum sixze: {}", quorum_size);
                     let event_message = create_validator_request(self.create_notary_event(
                         subject,
                         &last_event,
@@ -179,6 +183,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
             match self.database.get_request(&subject.subject_id) {
                 // TODO: Quitar request_id de este método
                 Ok(event_request) => {
+                    log::error!("PROBLEMAS, subject: {}", subject.subject_id.to_str());
                     self.new_event(event_request).await?;
                 }
                 Err(error) => match error {
@@ -369,6 +374,10 @@ impl<D: DatabaseManager> EventCompleter<D> {
                     "Error calculating the hash of the event pre-evaluation",
                 ))
             })?;
+        let er_hash = event_request.signature.content.event_content_hash.clone();
+        self.database
+            .set_request(&subject.subject_id, event_request)
+            .map_err(|error| EventError::DatabaseError(error.to_string()))?;
         self.event_pre_evaluations
             .insert(event_preevaluation_hash, event_preevaluation);
         // if let Some(sn) = self.actual_sn.get_mut(&subject_id) {
@@ -383,7 +392,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
             .entry(subject.governance_id)
             .or_insert_with(HashSet::new)
             .insert(subject_id);
-        Ok(event_request.signature.content.event_content_hash)
+        Ok(er_hash)
     }
 
     pub async fn evaluator_signatures(
@@ -392,7 +401,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
         json_patch: String,
         signature: Signature,
     ) -> Result<(), EventError> {
-        log::warn!("evanluation: {:?}",evaluation);
+        log::warn!("evanluation: {:?}", evaluation);
         log::warn!("json patch: {}", json_patch);
         // Comprobar que el hash devuelto coincide con el hash de la preevaluación
         let preevaluation_event = match self
@@ -472,7 +481,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
         let num_signatures_hash =
             count_signatures_with_event_content_hash(&signatures_set, &evaluation_hash) as u32;
         // Comprobar si llegamos a Quorum
-        log::warn!("num_signatures_hash: {}",num_signatures_hash);
+        log::warn!("num_signatures_hash: {}", num_signatures_hash);
         log::warn!("quorum_size: {}", quorum_size);
         if num_signatures_hash < *quorum_size {
             return Ok(()); // No llegamos a quorum, no hacemos nada
@@ -728,11 +737,12 @@ impl<D: DatabaseManager> EventCompleter<D> {
         }
     }
 
-    pub async fn validation_signatures(&mut self, signature: Signature) -> Result<(), EventError> {
+    pub async fn validation_signatures(&mut self, event_hash: DigestIdentifier, signature: Signature) -> Result<(), EventError> {
+        log::error!("LLEGA VALIDATION: {:?}", signature);
         // Mirar en que estado está el evento, si está en notarización o no
         let event = match self
             .events_to_validate
-            .get(&signature.content.event_content_hash)
+            .get(&event_hash)
         {
             Some(event) => event,
             None => {
@@ -759,17 +769,27 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 "The signer is not in the list of approvers",
             )));
         }
-        // Comprobar que todo es correcto criptográficamente
-        let event_hash = check_cryptography(&event.content, &signature)
-            .map_err(|error| EventError::CryptoError(error.to_string()))?;
         // Obtener sujeto para saber si lo tenemos y los metadatos del mismo
-        let _subject = self
+        let subject = self
             .database
             .get_subject(&subject_id)
             .map_err(|error| match error {
                 crate::DbError::EntryNotFound => EventError::SubjectNotFound(subject_id.to_str()),
                 _ => EventError::DatabaseError(error.to_string()),
             })?;
+        // Comprobar que todo es correcto criptográficamente
+        let event_hash = check_cryptography(
+            (
+                &subject.governance_id,
+                &subject.subject_id,
+                &subject.owner,
+                &event.signature.content.event_content_hash,
+                &event.content.event_proposal.proposal.sn,
+                &event.content.event_proposal.proposal.gov_version,
+            ),
+            &signature,
+        )
+        .map_err(|error| EventError::CryptoError(error.to_string()))?;
         // Guardar validación
         let validation_set = match self.event_validations.get_mut(&event_hash) {
             Some(validation_set) => {

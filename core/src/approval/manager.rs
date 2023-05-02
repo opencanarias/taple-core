@@ -36,9 +36,7 @@ pub struct ApprovalAPI {
 
 impl ApprovalAPI {
     pub fn new(input_channel: SenderEnd<ApprovalMessages, ApprovalResponses>) -> Self {
-        Self {
-            input_channel
-        }
+        Self { input_channel }
     }
 }
 
@@ -201,6 +199,7 @@ impl<D: DatabaseManager> ApprovalManager<D> {
                     return Err(ApprovalManagerError::AskNoAllowed);
                 }
                 let result = self.inner_manager.process_approval_request(message).await?;
+                log::error!("Result: {:?}", result);
                 if let Ok(Some((approval, sender))) = result {
                     let msg = create_approver_response(approval);
                     self.messenger_channel
