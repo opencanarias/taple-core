@@ -250,6 +250,8 @@ impl<D: DatabaseManager> EventCompleter<D> {
         &mut self,
         event_request: EventRequest,
     ) -> Result<DigestIdentifier, EventError> {
+        log::info!("PASA POR NEW EVENT - AL PRINCIPIO");
+        log::info!("{:?}", event_request);
         let subject_id;
         let subject;
         // Check if the content is correct (signature, invoker, etc)
@@ -257,6 +259,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
         event_request
             .check_signatures()
             .map_err(EventError::SubjectError)?;
+        log::warn!("PASA POR EL check signatures");
         match &event_request.request {
             crate::event_request::EventRequestType::Create(create_request) => {
                 // Comprobar si es governance, entonces vale todo, si no comprobar que el invoker soy yo y puedo hacerlo
@@ -264,6 +267,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
                     return Err(EventError::ExternalGenesisEvent);
                 }
                 if &create_request.schema_id != "governance" {
+                    log::warn!("PASA POR EL IF");
                     let creators = self
                         .gov_api
                         .get_signers(
@@ -284,6 +288,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
                         return Err(EventError::CreatingPermissionDenied);
                     }
                 }
+                log::info!("PASA POR NEW EVENT - AFTER IF");
                 let request_hash = event_request.signature.content.event_content_hash.clone();
                 self.ledger_sender
                     .tell(LedgerCommand::Genesis { event_request })
@@ -314,11 +319,13 @@ impl<D: DatabaseManager> EventCompleter<D> {
         }
         // Request evaluation signatures, sending request, sn and signature of everything about the subject
         // Get the list of evaluators
+        log::info!("PASA POR NEW EVENT - ANTES GOV VERSION");
         let governance_version = self
             .gov_api
             .get_governance_version(subject.governance_id.clone())
             .await
             .map_err(EventError::GovernanceError)?;
+        log::info!("PASA POR NEW EVENT - AFTER GOV VERSION");
         let (metadata, stage) = (
             Metadata {
                 namespace: subject.namespace,
@@ -355,6 +362,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
             quorum_size,
         )
         .await?;
+        log::info!("PASA POR NEW EVENT - EVENT PRE EVALUATION");
         let event_preevaluation_hash =
             DigestIdentifier::from_serializable_borsh(&event_preevaluation).map_err(|_| {
                 EventError::CryptoError(String::from(
@@ -384,6 +392,8 @@ impl<D: DatabaseManager> EventCompleter<D> {
         json_patch: String,
         signature: Signature,
     ) -> Result<(), EventError> {
+        log::warn!("evanluation: {:?}",evaluation);
+        log::warn!("json patch: {}", json_patch);
         // Comprobar que el hash devuelto coincide con el hash de la preevaluación
         let preevaluation_event = match self
             .event_pre_evaluations
@@ -462,6 +472,8 @@ impl<D: DatabaseManager> EventCompleter<D> {
         let num_signatures_hash =
             count_signatures_with_event_content_hash(&signatures_set, &evaluation_hash) as u32;
         // Comprobar si llegamos a Quorum
+        log::warn!("num_signatures_hash: {}",num_signatures_hash);
+        log::warn!("quorum_size: {}", quorum_size);
         if num_signatures_hash < *quorum_size {
             return Ok(()); // No llegamos a quorum, no hacemos nada
         } else {

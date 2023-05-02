@@ -1,4 +1,5 @@
 use json_patch::diff;
+use serde_json::Value;
 use wasmtime::Engine;
 
 use crate::{
@@ -38,33 +39,67 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send> TapleRunner<D, G> {
         execute_contract: &EventPreEvaluation,
         state_data: &StateRequest,
     ) -> Result<ExecuteContractResponse, ExecutorErrorResponses> {
+        log::info!("PASA EVALUATOR - EXECEUTE CONTRACT");
         let context_hash = Self::generate_context_hash(execute_contract)?;
-        let (contract, governance_version) = match self.database.get_contract(
-            &execute_contract.context.governance_id,
-            &execute_contract.context.schema_id,
-        ) {
-            Ok((contract, _, governance_version)) => (contract, governance_version),
-            Err(DbError::EntryNotFound) => {
-                let governance_version = match self
-                    .database
-                    .get_subject(&execute_contract.context.governance_id)
-                {
-                    Ok(governance) => governance.sn,
-                    Err(DbError::EntryNotFound) => 0,
-                    Err(error) => {
-                        return Err(ExecutorErrorResponses::DatabaseError(error.to_string()))
-                    }
-                };
-                return Ok(ExecuteContractResponse {
-                    json_patch: String::from(""),
-                    hash_new_state: DigestIdentifier::default(),
-                    governance_version,
-                    context_hash,
-                    success: Acceptance::Ko,
-                    approval_required: false,
-                });
+        log::info!("PASA EVALUATOR - GENERATE HASH");
+        let (contract, governance_version) = if execute_contract.context.schema_id == "governance"
+            && execute_contract.context.governance_id.digest.is_empty()
+        {
+            match self.database.get_governance_contract() {
+                // TODO: Gestionar versión gobernanza
+                Ok(contract) => (contract, execute_contract.context.governance_version),
+                Err(DbError::EntryNotFound) => {
+                    log::info!("PASA EVALUATOR - NOT FOUND");
+                    let governance_version = match self
+                        .database
+                        .get_subject(&execute_contract.context.governance_id)
+                    {
+                        Ok(governance) => governance.sn,
+                        Err(DbError::EntryNotFound) => 0,
+                        Err(error) => {
+                            return Err(ExecutorErrorResponses::DatabaseError(error.to_string()))
+                        }
+                    };
+                    return Ok(ExecuteContractResponse {
+                        json_patch: String::from(""),
+                        hash_new_state: DigestIdentifier::default(),
+                        governance_version,
+                        context_hash,
+                        success: Acceptance::Ko,
+                        approval_required: false,
+                    });
+                }
+                Err(error) => return Err(ExecutorErrorResponses::DatabaseError(error.to_string())),
             }
-            Err(error) => return Err(ExecutorErrorResponses::DatabaseError(error.to_string())),
+        } else {
+            match self.database.get_contract(
+                &execute_contract.context.governance_id,
+                &execute_contract.context.schema_id,
+            ) {
+                Ok((contract, _, governance_version)) => (contract, governance_version),
+                Err(DbError::EntryNotFound) => {
+                    log::info!("PASA EVALUATOR - NOT FOUND");
+                    let governance_version = match self
+                        .database
+                        .get_subject(&execute_contract.context.governance_id)
+                    {
+                        Ok(governance) => governance.sn,
+                        Err(DbError::EntryNotFound) => 0,
+                        Err(error) => {
+                            return Err(ExecutorErrorResponses::DatabaseError(error.to_string()))
+                        }
+                    };
+                    return Ok(ExecuteContractResponse {
+                        json_patch: String::from(""),
+                        hash_new_state: DigestIdentifier::default(),
+                        governance_version,
+                        context_hash,
+                        success: Acceptance::Ko,
+                        approval_required: false,
+                    });
+                }
+                Err(error) => return Err(ExecutorErrorResponses::DatabaseError(error.to_string())),
+            }
         };
         let previous_state = execute_contract.context.actual_state.clone();
         let contract_result = self
@@ -76,17 +111,30 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send> TapleRunner<D, G> {
                 &execute_contract.context,
                 governance_version,
                 contract,
-                &state_data.subject_id
+                &state_data.subject_id,
             )
             .await?;
+        // log::info!("PASA EVALUATOR - AFTER CONTRACT RESULT");
+        // log::info!("PASA EVALUATOR - contract_result: {:?}", contract_result);
+        // log::error!("INITIAL_STATE: {}", previous_state);
+        log::error!(
+            "contract_result.final_state: {}",
+            contract_result.final_state
+        );
         let (patch, hash) = match contract_result.success {
             Acceptance::Ok => (
                 generate_json_patch(&previous_state, &contract_result.final_state)?,
-                generera_state_hash(&contract_result.final_state)?,
+                DigestIdentifier::from_serializable_borsh(
+                    serde_json::from_str::<Value>(&contract_result.final_state)
+                        .unwrap()
+                        .to_string(),
+                )
+                .map_err(|_| ExecutorErrorResponses::StateHashGenerationFailed)?,
             ),
             Acceptance::Ko => (String::from(""), DigestIdentifier::default()),
             Acceptance::Error => unreachable!(),
         };
+        log::error!("PATCH: {}", patch);
         Ok(ExecuteContractResponse {
             json_patch: patch,
             hash_new_state: hash,
@@ -102,10 +150,13 @@ fn generate_json_patch(
     prev_state: &str,
     new_state: &str,
 ) -> Result<String, ExecutorErrorResponses> {
-    let prev_state = serde_json::to_value(prev_state)
+    let prev_state: Value = serde_json::from_str(prev_state)
         .map_err(|_| ExecutorErrorResponses::StateJSONDeserializationFailed)?;
-    let new_state = serde_json::to_value(new_state)
+    log::error!("prev state {}", prev_state);
+    log::error!("is string {}", prev_state.is_string());
+    let new_state: Value = serde_json::from_str(new_state)
         .map_err(|_| ExecutorErrorResponses::StateJSONDeserializationFailed)?;
+    log::error!("end state {}", new_state);
     let patch = diff(&prev_state, &new_state);
     Ok(serde_json::to_string(&patch)
         .map_err(|_| ExecutorErrorResponses::JSONPATCHDeserializationFailed)?)

@@ -43,8 +43,8 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send> TapleCompiler<D, G> {
     pub async fn start(mut self) {
         let init = self.inner_compiler.init().await;
         if let Err(error) = init {
-            // log::error!("{}", error);
-            self.shutdown_sender.send(());
+            log::error!("Evaluator Compiler error: {}", error);
+            self.shutdown_sender.send(()).unwrap();
             return;
         }
         loop {

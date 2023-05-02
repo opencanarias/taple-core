@@ -11,12 +11,12 @@ pub enum ValidationStage {
 impl ValidationStage {
     pub fn to_str(&self) -> &str {
         match self {
-            ValidationStage::Approve => "Approve",
-            ValidationStage::Evaluate => "Evaluate",
-            ValidationStage::Validate => "Validate",
-            ValidationStage::Witness => "Witness",
-            ValidationStage::Create => "Create",
-            ValidationStage::Close => "Close",
+            ValidationStage::Approve => "approve",
+            ValidationStage::Evaluate => "evaluate",
+            ValidationStage::Validate => "validate",
+            ValidationStage::Witness => "witness",
+            ValidationStage::Create => "create",
+            ValidationStage::Close => "close",
         }
     }
 }

@@ -80,15 +80,19 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
             .get_governance_version(subject.governance_id.clone())
             .await
             .map_err(|_| DistributionManagerError::GovernanceChannelNotAvailable)?;
+        log::info!("GET GOVERNANCE AT DISTRIBUTION");
         // Empezamos la distribución
         let metadata = build_metadata(&subject, governance_version);
         let mut targets = self.get_targets(metadata).await?;
+        log::info!("GET TARGETS AT DISTRIBUTION {:?}", targets);
         targets.remove(&self.signature_manager.get_own_identifier());
-        self.send_signature_request(&subject.subject_id, msg.sn, targets.clone(), &targets)
-            .await?;
         self.db
             .del_witness_signatures(&msg.subject_id)
             .map_err(|error| DistributionManagerError::DatabaseError(error.to_string()))?;
+        if !targets.is_empty() {
+            self.send_signature_request(&subject.subject_id, msg.sn, targets.clone(), &targets)
+                .await?;
+        }
         Ok(Ok(()))
     }
 
@@ -175,9 +179,7 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
                         .map_err(|_| DistributionManagerError::MessageChannelNotAvailable)?;
                 } else if msg.sn > sn {
                     // No veo necesario un mensaje para el caso de MSG.SN = SN + 1
-                    let request = request_lce(
-                        msg.subject_id.clone(),
-                    );
+                    let request = request_lce(msg.subject_id.clone());
                     self.messenger_channel
                         .tell(MessageTaskCommand::Request(
                             None,
@@ -191,9 +193,7 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
             }
             Err(DbError::EntryNotFound) => {
                 // El sujeto no tiene firmas de testificación.
-                let request = request_lce(
-                    msg.subject_id.clone(),
-                );
+                let request = request_lce(msg.subject_id.clone());
                 self.messenger_channel
                     .tell(MessageTaskCommand::Request(
                         None,

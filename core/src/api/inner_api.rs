@@ -98,16 +98,17 @@ impl<D: DatabaseManager> InnerAPI<D> {
         request: EventRequest,
     ) -> Result<ApiResponses, APIInternalError> {
         // Me llega una event request ya firmada. No debería ser de tipo Create. Hacemos esa comprobación y se la pasamos al manager
-        if let EventRequestType::Create(_) = request.request {
-            return Ok(ApiResponses::HandleExternalRequest(Err(
-                ApiError::InvalidParameters(String::from(
-                    " Event requests of type \"Create\" are not allowed",
-                )),
-            )));
-        }
+        // if let EventRequestType::Create(_) = request.request {
+        //     return Ok(ApiResponses::HandleExternalRequest(Err(
+        //         ApiError::InvalidParameters(String::from(
+        //             " Event requests of type \"Create\" are not allowed",
+        //         )),
+        //     )));
+        // }
         let EventResponse::Event(response) = self.event_api.send_event_request(request).await else {
             return Err(APIInternalError::UnexpectedManagerResponse);
         };
+        log::error!("COMPLETA SEND EVENT REQUEST");
         Ok(ApiResponses::HandleExternalRequest(
             response.map_err(|e| ApiError::EventCreationError { source: e }),
         ))

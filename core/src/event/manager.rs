@@ -153,6 +153,7 @@ impl<D: DatabaseManager> EventManager<D> {
             match data {
                 EventCommand::Event { event_request } => {
                     let response = self.event_completer.new_event(event_request).await;
+                    log::error!("COMPLETA NEW EVENT DE EVENT COMPLETER");
                     match response.clone() {
                         Err(error) => match error {
                             EventError::ChannelClosed => {
@@ -196,7 +197,9 @@ impl<D: DatabaseManager> EventManager<D> {
                                 self.shutdown_sender.send(()).expect("Channel Closed");
                                 return Err(EventError::ChannelClosed);
                             }
-                            _ => {}
+                            _ => {
+                                log::warn!("{:?}", error);
+                            }
                         },
                         _ => {}
                     }

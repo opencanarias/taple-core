@@ -81,7 +81,7 @@ impl<D: DatabaseManager> Ledger<D> {
             // Actualizar ledger_state para ese subject
             let mut last_two_events =
                 self.database
-                    .get_events_by_range(&subject.subject_id, Some(-1), 2)?;
+                    .get_events_by_range(&subject.subject_id, None, -2)?;
             let last_event = match last_two_events.pop() {
                 Some(event) => event,
                 None => return Err(LedgerError::ZeroEventsSubject(subject.subject_id.to_str())),
@@ -137,6 +137,7 @@ impl<D: DatabaseManager> Ledger<D> {
             .gov_api
             .get_governance_version(create_request.governance_id.clone())
             .await?;
+        log::info!("GOVERNANCE VERSION: {}", governance_version);
         let init_state = self
             .gov_api
             .get_init_state(
@@ -145,11 +146,13 @@ impl<D: DatabaseManager> Ledger<D> {
                 governance_version,
             )
             .await?;
+        log::info!("AFTER INIT STATE EN GENESIS LEDGER");
         let init_state_string = serde_json::to_string(&init_state)
             .map_err(|_| LedgerError::ErrorParsingJsonString("Init State".to_owned()))?;
         // Crear sujeto a partir de genesis y evento
         let subject = Subject::from_genesis_request(event_request.clone(), init_state_string)
             .map_err(LedgerError::SubjectError)?;
+        log::info!("SUJETO CREADO FROM GENESIS");
         // Crear evento a partir de event_request
         let event = Event::from_genesis_request(
             event_request,
@@ -158,6 +161,7 @@ impl<D: DatabaseManager> Ledger<D> {
             &init_state,
         )
         .map_err(LedgerError::SubjectError)?;
+        log::info!("EVENTO CREADO FROM GENESIS");
         // Añadir sujeto y evento a base de datos
         let subject_id = subject.subject_id.clone();
         if &create_request.schema_id == "governance" {

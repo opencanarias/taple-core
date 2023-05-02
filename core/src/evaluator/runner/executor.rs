@@ -17,7 +17,7 @@ struct WasmContractResult {
     pub success: bool,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ContractResult {
     pub final_state: String,
     pub approval_required: bool,
@@ -44,6 +44,8 @@ impl<G: GovernanceInterface + Send> ContractExecutor<G> {
         compiled_contract: Vec<u8>,
         subject_id: &DigestIdentifier,
     ) -> Result<ContractResult, ExecutorErrorResponses> {
+        log::warn!("INITIAL STATE: {}", state);
+        log::warn!("EVENT {}", event);
         // Obtener Roles del usuario
         let roles = self
             .gov_api
@@ -53,6 +55,7 @@ impl<G: GovernanceInterface + Send> ContractExecutor<G> {
             )
             .await
             .map_err(|_| ExecutorErrorResponses::RolesObtentionFailed)?;
+        log::info!("EVALUATOR - ROLES OBTAINED: {:?}", roles);
         // Cargar wasm
         let module = unsafe { Module::deserialize(&self.engine, compiled_contract).unwrap() };
         // Generar contexto
@@ -155,6 +158,15 @@ impl<G: GovernanceInterface + Send> ContractExecutor<G> {
                 },
             )
             .map_err(|_| ExecutorErrorResponses::FunctionLinkingFailed("read_byte".to_owned()))?;
+        linker
+            .func_wrap(
+                "env",
+                "cout",
+                |mut caller: Caller<'_, MemoryManager>, ptr: u32| {
+                    println!("{}", ptr);
+                },
+            )
+            .expect("Failed write_byte link");
         Ok(linker)
     }
 }
