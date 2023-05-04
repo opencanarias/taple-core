@@ -23,6 +23,7 @@ use crate::{
 
 use super::errors::LedgerError;
 
+#[derive(Debug, Clone)]
 pub struct LedgerState {
     pub current_sn: Option<u64>,
     pub head: Option<u64>,
@@ -545,6 +546,7 @@ impl<D: DatabaseManager> Ledger<D> {
             EventRequestType::State(state_request) => state_request.subject_id.clone(),
         };
         let ledger_state = self.ledger_state.get(&subject_id);
+        log::warn!("Ledger STATE {:?}", ledger_state);
         match ledger_state {
             Some(ledger_state) => {
                 // Comprobar que tengo firmas de un evento mayor y que es el evento siguiente que necesito para este subject
