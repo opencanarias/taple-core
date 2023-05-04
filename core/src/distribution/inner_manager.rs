@@ -179,7 +179,10 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
                         .map_err(|_| DistributionManagerError::MessageChannelNotAvailable)?;
                 } else if msg.sn > sn {
                     // No veo necesario un mensaje para el caso de MSG.SN = SN + 1
-                    let request = request_lce(msg.subject_id.clone());
+                    let request = request_lce(
+                        self.signature_manager.get_own_identifier(),
+                        msg.subject_id.clone(),
+                    );
                     self.messenger_channel
                         .tell(MessageTaskCommand::Request(
                             None,
@@ -193,7 +196,10 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
             }
             Err(DbError::EntryNotFound) => {
                 // El sujeto no tiene firmas de testificación.
-                let request = request_lce(msg.subject_id.clone());
+                let request = request_lce(
+                    self.signature_manager.get_own_identifier(),
+                    msg.subject_id.clone(),
+                );
                 self.messenger_channel
                     .tell(MessageTaskCommand::Request(
                         None,

@@ -194,8 +194,12 @@ impl<D: DatabaseManager> EventManager<D> {
                     }
                     LedgerResponse::NoResponse
                 }
-                LedgerCommand::GetEvent { subject_id, sn } => {
-                    let response = self.inner_ledger.get_event(subject_id, sn);
+                LedgerCommand::GetEvent {
+                    who_asked,
+                    subject_id,
+                    sn,
+                } => {
+                    let response = self.inner_ledger.get_event(who_asked, subject_id, sn).await;
                     let response = match response {
                         Err(error) => match error.clone() {
                             LedgerError::ChannelClosed => {
@@ -213,8 +217,11 @@ impl<D: DatabaseManager> EventManager<D> {
                     };
                     LedgerResponse::GetEvent(response)
                 }
-                LedgerCommand::GetLCE { subject_id } => {
-                    let response = self.inner_ledger.get_lce(subject_id);
+                LedgerCommand::GetLCE {
+                    who_asked,
+                    subject_id,
+                } => {
+                    let response = self.inner_ledger.get_lce(who_asked, subject_id).await;
                     let response = match response {
                         Err(error) => match error.clone() {
                             LedgerError::ChannelClosed => {

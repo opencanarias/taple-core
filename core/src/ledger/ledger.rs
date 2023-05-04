@@ -362,7 +362,8 @@ impl<D: DatabaseManager> Ledger<D> {
                             Ok(subject) => subject,
                             Err(crate::DbError::EntryNotFound) => {
                                 // Pedir génesis
-                                let msg = request_event(state_request.subject_id, 0);
+                                let msg =
+                                    request_event(self.our_id.clone(), state_request.subject_id, 0);
                                 self.message_channel
                                     .tell(MessageTaskCommand::Request(
                                         None,
@@ -481,7 +482,8 @@ impl<D: DatabaseManager> Ledger<D> {
                             );
                             // Pedir evento siguiente a current_sn
                             witnesses.insert(subject.owner);
-                            let msg = request_event(state_request.subject_id, 0);
+                            let msg =
+                                request_event(self.our_id.clone(), state_request.subject_id, 0);
                             self.message_channel
                                 .tell(MessageTaskCommand::Request(
                                     None,
@@ -512,7 +514,7 @@ impl<D: DatabaseManager> Ledger<D> {
                             },
                         );
                         // Pedir evento 0
-                        let msg = request_event(state_request.subject_id, 0);
+                        let msg = request_event(self.our_id.clone(), state_request.subject_id, 0);
                         self.message_channel
                             .tell(MessageTaskCommand::Request(
                                 None,
@@ -611,7 +613,11 @@ impl<D: DatabaseManager> Ledger<D> {
                                         let mut witnesses =
                                             self.get_witnesses(metadata.clone()).await?;
                                         witnesses.insert(metadata.owner);
-                                        let msg = request_event(subject_id, current_sn + 2);
+                                        let msg = request_event(
+                                            self.our_id.clone(),
+                                            subject_id,
+                                            current_sn + 2,
+                                        );
                                         self.message_channel
                                             .tell(MessageTaskCommand::Request(
                                                 None,
@@ -707,7 +713,7 @@ impl<D: DatabaseManager> Ledger<D> {
                                         let mut witnesses =
                                             self.get_witnesses(metadata.clone()).await?;
                                         witnesses.insert(metadata.owner);
-                                        let msg = request_event(subject_id, 1);
+                                        let msg = request_event(self.our_id.clone(), subject_id, 1);
                                         self.message_channel
                                             .tell(MessageTaskCommand::Request(
                                                 None,
@@ -735,17 +741,46 @@ impl<D: DatabaseManager> Ledger<D> {
         }
     }
 
-    pub fn get_event(&self, subject_id: DigestIdentifier, sn: u64) -> Result<Event, LedgerError> {
-        Ok(self.database.get_event(&subject_id, sn)?)
+    pub async fn get_event(
+        &self,
+        who_asked: KeyIdentifier,
+        subject_id: DigestIdentifier,
+        sn: u64,
+    ) -> Result<Event, LedgerError> {
+        let event = self.database.get_event(&subject_id, sn)?;
+        self.message_channel
+            .tell(MessageTaskCommand::Request(
+                None,
+                TapleMessages::LedgerMessages(super::LedgerCommand::ExternalIntermediateEvent {
+                    event: event.clone(),
+                }),
+                vec![who_asked],
+                MessageConfig::direct_response(),
+            ))
+            .await?;
+        Ok(event)
     }
 
-    pub fn get_lce(
+    pub async fn get_lce(
         &self,
+        who_asked: KeyIdentifier,
         subject_id: DigestIdentifier,
     ) -> Result<(Event, HashSet<Signature>), LedgerError> {
         let subject = self.database.get_subject(&subject_id)?;
         let event = self.database.get_event(&subject_id, subject.sn)?;
         let signatures = self.database.get_signatures(&subject_id, subject.sn)?;
+        self.message_channel
+            .tell(MessageTaskCommand::Request(
+                None,
+                TapleMessages::LedgerMessages(super::LedgerCommand::ExternalEvent {
+                    sender: self.our_id.clone(),
+                    event: event.clone(),
+                    signatures: signatures.clone(),
+                }),
+                vec![who_asked],
+                MessageConfig::direct_response(),
+            ))
+            .await?;
         Ok((event, signatures))
     }
 

@@ -1,5 +1,7 @@
 use std::collections::HashSet;
 
+use serde::{Deserialize, Serialize};
+
 use crate::{
     event_request::EventRequest, identifier::DigestIdentifier, signature::Signature, Event, KeyIdentifier,
 };
@@ -8,7 +10,7 @@ pub mod errors;
 pub mod ledger;
 pub mod manager;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum LedgerCommand {
     OwnEvent {
         event: Event,
@@ -26,10 +28,12 @@ pub enum LedgerCommand {
         event: Event,
     },
     GetEvent {
+        who_asked: KeyIdentifier,
         subject_id: DigestIdentifier,
         sn: u64,
     },
     GetLCE {
+        who_asked: KeyIdentifier,
         subject_id: DigestIdentifier,
     },
 }

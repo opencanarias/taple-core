@@ -378,6 +378,7 @@ impl<D: DatabaseManager + 'static> Taple<D> {
             validation_sender.clone(),
             event_sender.clone(),
             approval_sender.clone(),
+            ledger_sender.clone(),
             bsx.clone(),
         );
         // Creation Governance
