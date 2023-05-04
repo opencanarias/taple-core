@@ -136,7 +136,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 Ok(last_event) => {
                     let gov_version = self
                         .gov_api
-                        .get_governance_version(subject.subject_id.clone())
+                        .get_governance_version(subject.governance_id.clone())
                         .await?;
                     let metadata = Metadata {
                         namespace: subject.namespace.clone(),
@@ -567,7 +567,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 };
                 let gov_version = self
                     .gov_api
-                    .get_governance_version(subject.subject_id.clone())
+                    .get_governance_version(subject.governance_id.clone())
                     .await?;
                 let event = &self.create_event_prevalidated(
                     event_proposal,
@@ -714,7 +714,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
 
             let gov_version = self
                 .gov_api
-                .get_governance_version(subject.subject_id.clone())
+                .get_governance_version(subject.governance_id.clone())
                 .await?;
             let event =
                 &self.create_event_prevalidated(event_proposal, approvals, &subject, execution)?;
@@ -737,13 +737,14 @@ impl<D: DatabaseManager> EventCompleter<D> {
         }
     }
 
-    pub async fn validation_signatures(&mut self, event_hash: DigestIdentifier, signature: Signature) -> Result<(), EventError> {
+    pub async fn validation_signatures(
+        &mut self,
+        event_hash: DigestIdentifier,
+        signature: Signature,
+    ) -> Result<(), EventError> {
         log::error!("LLEGA VALIDATION: {:?}", signature);
         // Mirar en que estado está el evento, si está en notarización o no
-        let event = match self
-            .events_to_validate
-            .get(&event_hash)
-        {
+        let event = match self.events_to_validate.get(&event_hash) {
             Some(event) => event,
             None => {
                 return Err(EventError::CryptoError(String::from(

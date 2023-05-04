@@ -735,6 +735,20 @@ impl<D: DatabaseManager> Ledger<D> {
         }
     }
 
+    pub fn get_event(&self, subject_id: DigestIdentifier, sn: u64) -> Result<Event, LedgerError> {
+        Ok(self.database.get_event(&subject_id, sn)?)
+    }
+
+    pub fn get_lce(
+        &self,
+        subject_id: DigestIdentifier,
+    ) -> Result<(Event, HashSet<Signature>), LedgerError> {
+        let subject = self.database.get_subject(&subject_id)?;
+        let event = self.database.get_event(&subject_id, subject.sn)?;
+        let signatures = self.database.get_signatures(&subject_id, subject.sn)?;
+        Ok((event, signatures))
+    }
+
     async fn get_witnesses(
         &self,
         metadata: Metadata,

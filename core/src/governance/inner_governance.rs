@@ -204,7 +204,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
                         .into_iter()
                         .map(|role| {
                             role.as_str()
-                                .ok_or(InternalError::InvalidGovernancePayload)
+                                .ok_or(InternalError::InvalidGovernancePayload("0".into()))
                                 .map(|s| s.to_owned())
                                 .expect("Invalid Governance Payload")
                         })
@@ -221,7 +221,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
                         .map(|role| {
                             let a = role
                                 .as_str()
-                                .ok_or(InternalError::InvalidGovernancePayload)
+                                .ok_or(InternalError::InvalidGovernancePayload("1".into()))
                                 .map(|s| s.to_owned());
                             a.expect("Invalid Governance Payload")
                         })
@@ -237,7 +237,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
                 .map(|role| {
                     let a = role
                         .as_str()
-                        .ok_or(InternalError::InvalidGovernancePayload)
+                        .ok_or(InternalError::InvalidGovernancePayload("2".into()))
                         .map(|s| s.to_owned());
                     a.expect("Invalid Governance Payload")
                 })
@@ -256,7 +256,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
                     .into_iter()
                     .map(|role| {
                         role.as_str()
-                            .ok_or(InternalError::InvalidGovernancePayload)
+                            .ok_or(InternalError::InvalidGovernancePayload("3".into()))
                             .map(|s| s.to_owned())
                             .expect("Invalid Governance Payload")
                     })
@@ -300,7 +300,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
                 .map(|role| {
                     let a = role
                         .as_str()
-                        .ok_or(InternalError::InvalidGovernancePayload)
+                        .ok_or(InternalError::InvalidGovernancePayload("4".into()))
                         .map(|s| s.to_owned());
                     a.expect("Invalid Governance Payload")
                 })
@@ -376,7 +376,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         let mut result = Vec::new();
         for schema in schemas {
             let contract: Contract = serde_json::from_value(schema["Contract"].clone())
-                .map_err(|_| InternalError::InvalidGovernancePayload)?;
+                .map_err(|_| InternalError::InvalidGovernancePayload("5".into()))?;
             result.push(contract);
         }
         Ok(Ok(result))
@@ -437,17 +437,17 @@ impl<D: DatabaseManager> InnerGovernance<D> {
 
 fn get_as_str<'a>(data: &'a Value, key: &str) -> Result<&'a str, InternalError> {
     data.get(key)
-        .ok_or(InternalError::InvalidGovernancePayload)?
+        .ok_or(InternalError::InvalidGovernancePayload("6".into()))?
         .as_str()
-        .ok_or(InternalError::InvalidGovernancePayload)
+        .ok_or(InternalError::InvalidGovernancePayload("7".into()))
 }
 
 fn get_as_array<'a>(data: &'a Value, key: &str) -> Result<&'a Vec<Value>, InternalError> {
     log::info!("{:?}", data);
     data.get(key)
-        .ok_or(InternalError::InvalidGovernancePayload)?
+        .ok_or(InternalError::InvalidGovernancePayload("8".into()))?
         .as_array()
-        .ok_or(InternalError::InvalidGovernancePayload)
+        .ok_or(InternalError::InvalidGovernancePayload("9".into()))
 }
 
 fn get_schema_from_policies<'a>(
@@ -465,9 +465,9 @@ fn get_schema_from_policies<'a>(
 fn get_quorum<'a>(data: &'a Value, key: &str) -> Result<Quorum, InternalError> {
     let json_data = data
         .get(key)
-        .ok_or(InternalError::InvalidGovernancePayload)?
+        .ok_or(InternalError::InvalidGovernancePayload("10".into()))?
         .get("quorum")
-        .ok_or(InternalError::InvalidGovernancePayload)?;
+        .ok_or(InternalError::InvalidGovernancePayload("11".into()))?;
     let quorum: Quorum = serde_json::from_value(json_data["quorum"].clone()).unwrap();
     Ok(quorum)
 }
@@ -489,9 +489,9 @@ fn get_members_from_governance(
             .as_str()
             .expect("Hay id y es str");
         let member_id = KeyIdentifier::from_str(member_id)
-            .map_err(|_| InternalError::InvalidGovernancePayload)?;
+            .map_err(|_| InternalError::InvalidGovernancePayload("12".into()))?;
         let true = member_ids.insert(member_id) else {
-            return Err(InternalError::InvalidGovernancePayload);
+            return Err(InternalError::InvalidGovernancePayload("13".into()));
         };
     }
     Ok(member_ids)
@@ -509,7 +509,7 @@ fn get_signers_from_roles(
         if contains_common_element(&role.roles, roles) {
             match role.who {
                 crate::commons::schema_handler::gov_models::Who::Id { id } => {
-                    signers.insert(KeyIdentifier::from_str(&id).map_err(|_| InternalError::InvalidGovernancePayload)?);
+                    signers.insert(KeyIdentifier::from_str(&id).map_err(|_| InternalError::InvalidGovernancePayload("14".into()))?);
                     log::info!("SE EJECUTA ID");
                 }
                 crate::commons::schema_handler::gov_models::Who::Members => {
@@ -538,7 +538,7 @@ fn get_roles(
     let mut roles = Vec::new();
     for role in roles_prop {
         let role_data: Role =
-            serde_json::from_value(role).map_err(|_| InternalError::InvalidGovernancePayload)?;
+            serde_json::from_value(role).map_err(|_| InternalError::InvalidGovernancePayload("15".into()))?;
         if !namespace_contiene(&role_data.namespace, namespace) {
             continue;
         }
@@ -598,7 +598,7 @@ fn get_invoke_from_policy(policy: &Value, fact: &str) -> Result<Option<Invoke>, 
     let invokes = policy["Invoke"].as_array().expect("Invoke Exists");
     for invoke in invokes {
         let invoke: Invoke = serde_json::from_value(invoke.to_owned())
-            .map_err(|_| InternalError::InvalidGovernancePayload)?;
+            .map_err(|_| InternalError::InvalidGovernancePayload("16".into()))?;
         if &invoke.fact == fact {
             return Ok(Some(invoke));
         }
