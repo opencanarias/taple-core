@@ -197,6 +197,7 @@ impl<D: DatabaseManager> Ledger<D> {
         event: Event,
         signatures: HashSet<Signature>,
     ) -> Result<(), LedgerError> {
+        log::error!("Event: {:?}", event);
         let sn = event.content.event_proposal.proposal.sn;
         let EventRequestType::State(state_request) = &event.content.event_proposal.proposal.event_request.request
             else {
@@ -218,6 +219,7 @@ impl<D: DatabaseManager> Ledger<D> {
             })?;
         let json_patch = event.content.event_proposal.proposal.json_patch.as_str();
         subject.update_subject(json_patch, event.content.event_proposal.proposal.sn)?;
+        log::error!("SUbject after Update: {:?}", subject);
         self.database.set_event(&subject_id, event)?;
         self.database
             .set_subject(&subject_id, subject)

@@ -356,7 +356,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 namespace: metadata.namespace.clone(),
                 governance_version,
             },
-            sn: subject.sn,
+            sn: subject.sn + 1,
             // self.actual_sn.get(&subject_id).unwrap().to_owned() + 1, // Must be Some, filled in init function
         };
         let (signers, quorum_size) = self.get_signers_and_quorum(metadata, stage.clone()).await?;

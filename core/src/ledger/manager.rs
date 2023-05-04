@@ -100,6 +100,7 @@ impl<D: DatabaseManager> EventManager<D> {
             match data {
                 LedgerCommand::OwnEvent { event, signatures } => {
                     let response = self.inner_ledger.event_validated(event, signatures).await;
+                    log::error!("RESPONSE EV_VALIDATED: {:?}", response);
                     match response {
                         Err(error) => match error {
                             LedgerError::ChannelClosed => {
