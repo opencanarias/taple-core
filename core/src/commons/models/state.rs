@@ -130,7 +130,7 @@ impl Subject {
                 .signature
                 .content
                 .event_content_hash,
-            &event.signature.content.signer,
+            &event.signature.content.signer.public_key,
         )) {
             Ok(subject_id) => subject_id,
             Err(_) => return Err(SubjectError::ErrorCreatingSubjectId),

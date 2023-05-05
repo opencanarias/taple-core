@@ -205,7 +205,7 @@ impl<D: DatabaseManager> Ledger<D> {
         event: Event,
         signatures: HashSet<Signature>,
     ) -> Result<(), LedgerError> {
-        log::error!("Event: {:?}", event);
+        log::warn!("Signatures: {:?}", signatures.len());
         let sn = event.content.event_proposal.proposal.sn;
         let EventRequestType::State(state_request) = &event.content.event_proposal.proposal.event_request.request
             else {
@@ -227,7 +227,6 @@ impl<D: DatabaseManager> Ledger<D> {
             })?;
         let json_patch = event.content.event_proposal.proposal.json_patch.as_str();
         subject.update_subject(json_patch, event.content.event_proposal.proposal.sn)?;
-        log::error!("SUbject after Update: {:?}", subject);
         self.database.set_event(&subject_id, event)?;
         self.database
             .set_subject(&subject_id, subject)
@@ -369,8 +368,20 @@ impl<D: DatabaseManager> Ledger<D> {
             EventRequestType::State(state_request) => {
                 log::warn!("STATE en external event");
                 // Comprobaciones criptográficas
-                match self.ledger_state.get(&state_request.subject_id) {
+                let ledger_state = self.ledger_state.get(&state_request.subject_id);
+                match ledger_state {
                     Some(ledger_state) => {
+                        match ledger_state.current_sn {
+                            Some(current_sn) => {
+                                if event.content.event_proposal.proposal.sn <= current_sn {
+                                    return Err(LedgerError::EventAlreadyExists);
+                                }
+                            }
+                            None => {
+                                // Es LCE y tenemos otro LCE ... TODO:
+                                return Err(LedgerError::LCEBiggerSN);
+                            }
+                        }
                         let mut subject = match self.database.get_subject(&state_request.subject_id)
                         {
                             Ok(subject) => subject,
@@ -662,7 +673,8 @@ impl<D: DatabaseManager> Ledger<D> {
                                 // El siguiente es el evento 0
                                 if event.content.event_proposal.proposal.sn == 0 {
                                     // Comprobar que el evento 0 es el que necesito
-                                    let metadata = self.check_genesis(event.clone(), subject_id.clone())
+                                    let metadata = self
+                                        .check_genesis(event.clone(), subject_id.clone())
                                         .await?;
                                     if head == 1 {
                                         // Hacer event sourcing del evento 1 tambien y actualizar subject
@@ -965,7 +977,7 @@ fn verify_approval_signatures(
     }
     if actual_signers.len() < quorum_size as usize {
         log::error!(
-            "Not enough signatures. Expected: {}, Actual: {}",
+            "Not enough signatures Approval. Expected: {}, Actual: {}",
             quorum_size,
             actual_signers.len()
         );
@@ -1000,7 +1012,7 @@ fn verify_signatures(
         }
         if !actual_signers.insert(signer.clone()) {
             log::error!(
-                "Signer {} in more than one validation signature",
+                "Signer {} in more than one validation/Evaluation signature",
                 signer.to_str()
             );
             continue;
@@ -1008,7 +1020,7 @@ fn verify_signatures(
     }
     if actual_signers.len() < quorum_size as usize {
         log::error!(
-            "Not enough signatures. Expected: {}, Actual: {}",
+            "Not enough signatures Validation/Evaluation. Expected: {}, Actual: {}",
             quorum_size,
             actual_signers.len()
         );

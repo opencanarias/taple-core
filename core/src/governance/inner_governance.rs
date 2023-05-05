@@ -153,16 +153,12 @@ impl<D: DatabaseManager> InnerGovernance<D> {
             .as_array()
             .expect("Existe roles")
             .to_owned();
-        log::info!("GET SIGNERS AUX 1");
-        log::info!("{:?}", roles_prop);
         let roles = get_roles(&schema_id, roles_prop, &metadata.namespace)?;
-        log::info!("GET SIGNERS AUX 2");
         let mut signers = get_signers_from_roles(&members, signers_roles, roles)?;
         if signers_roles.contains(&String::from("Owner")) {
             // Añadimos al owner
             signers.insert(metadata.owner.clone());
         }
-        log::info!("GET SIGNERS AUX 3");
         Ok(Ok(signers))
     }
 
@@ -172,7 +168,6 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         metadata: Metadata,
         stage: ValidationStage,
     ) -> Result<Result<HashSet<KeyIdentifier>, RequestError>, InternalError> {
-        log::info!("GOVERNANCE GET SIGNERS");
         let mut governance_id = metadata.governance_id.clone();
         if governance_id.digest.is_empty() {
             governance_id = metadata.subject_id.clone();
@@ -189,13 +184,11 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         };
         let properties: Value = serde_json::from_str(&governance.properties)
             .map_err(|_| InternalError::DeserializationError)?;
-        log::info!("GOVERNANCE PROPERTIES");
         let policies = get_as_array(&properties, "policies")?;
         let schema_policy = get_schema_from_policies(policies, &schema_id);
         let Ok(schema_policy) = schema_policy else {
             return Ok(Err(schema_policy.unwrap_err()));
         }; // El return dentro de otro return es una **** que obliga a hacer cosas como esta
-        log::info!("GOVERNANCE SCHEMA POLICY");
         match stage {
             ValidationStage::Approve | ValidationStage::Evaluate | ValidationStage::Validate => {
                 let stage_str = stage.to_str();
@@ -212,7 +205,6 @@ impl<D: DatabaseManager> InnerGovernance<D> {
                 Self::get_signers_aux(&properties, &schema_id, &metadata, &roles)
             }
             ValidationStage::Witness => {
-                log::info!("GET SIGNERS WITNESS");
                 // Todos los aprobadores son también testigos, así que deben traerse sus roles también
                 let stage_str = stage.to_str();
                 let approvers_roles: Vec<String> =
@@ -226,7 +218,6 @@ impl<D: DatabaseManager> InnerGovernance<D> {
                             a.expect("Invalid Governance Payload")
                         })
                         .collect();
-                log::info!("APPROVERS ROLES {:?}", approvers_roles);
                 let witness_roles: Vec<String> = get_as_array(
                     &schema_policy
                         .get(ValidationStage::Approve.to_str())
@@ -242,7 +233,6 @@ impl<D: DatabaseManager> InnerGovernance<D> {
                     a.expect("Invalid Governance Payload")
                 })
                 .collect();
-                log::info!("WITNESS ROLES {:?}", witness_roles);
                 let mut set: HashSet<String> = HashSet::new();
                 for s in approvers_roles.into_iter().chain(witness_roles.into_iter()) {
                     set.insert(s);
@@ -443,7 +433,6 @@ fn get_as_str<'a>(data: &'a Value, key: &str) -> Result<&'a str, InternalError> 
 }
 
 fn get_as_array<'a>(data: &'a Value, key: &str) -> Result<&'a Vec<Value>, InternalError> {
-    log::info!("{:?}", data);
     data.get(key)
         .ok_or(InternalError::InvalidGovernancePayload("8".into()))?
         .as_array()
@@ -504,27 +493,20 @@ fn get_signers_from_roles(
 ) -> Result<HashSet<KeyIdentifier>, InternalError> {
     let mut signers: HashSet<KeyIdentifier> = HashSet::new();
     for role in roles_schema {
-        log::info!("FOR ITERATION");
-        log::info!("{:?}", role);
         if contains_common_element(&role.roles, roles) {
             match role.who {
                 crate::commons::schema_handler::gov_models::Who::Id { id } => {
                     signers.insert(KeyIdentifier::from_str(&id).map_err(|_| InternalError::InvalidGovernancePayload("14".into()))?);
-                    log::info!("SE EJECUTA ID");
                 }
                 crate::commons::schema_handler::gov_models::Who::Members => {
-                    log::info!("SE EJECUTA MEMBERS");
                     return Ok(members.clone())
                 }
                 _ => {
-                    log::info!("SE EJECUTA DEFAULT");
                 }
                 // Entiendo que con esto no se hace nada de cara a validación
                 // crate::commons::schema_handler::gov_models::Who::All => todo!(),
                 // crate::commons::schema_handler::gov_models::Who::External => todo!(),
             }
-        } else {
-            log::info!("SE EJECUTA ELSE");
         }
     }
     Ok(signers)
