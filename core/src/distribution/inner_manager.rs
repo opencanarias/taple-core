@@ -56,6 +56,7 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
     ) -> Result<Result<(), DistributionErrorResponses>, DistributionManagerError> {
         // El ledger nos ha pedido que empecemos el proceso de distribución
         // Primero deberíamos empezar generando la firma del evento a distribuir
+        log::error!("COMIENZA DISTRIBUCIÓN DE {}", msg.subject_id.to_str());
         let event = match self.db.get_event(&msg.subject_id, msg.sn) {
             Ok(event) => event,
             Err(error) => return Err(DistributionManagerError::DatabaseError(error.to_string())), // No debería ocurrir
@@ -69,7 +70,7 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
             .del_witness_signatures(&msg.subject_id)
             .map_err(|_| DistributionManagerError::SignGenerarionFailed)?;
         self.db
-            .set_signatures(&msg.subject_id, msg.sn, HashSet::from_iter(vec![signature]))
+            .set_witness_signatures(&msg.subject_id, msg.sn, HashSet::from_iter(vec![signature]))
             .map_err(|error| DistributionManagerError::DatabaseError(error.to_string()))?;
         let subject = self
             .db
@@ -86,9 +87,6 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
         let mut targets = self.get_targets(metadata).await?;
         log::info!("GET TARGETS AT DISTRIBUTION {:?}", targets);
         targets.remove(&self.signature_manager.get_own_identifier());
-        self.db
-            .del_witness_signatures(&msg.subject_id)
-            .map_err(|error| DistributionManagerError::DatabaseError(error.to_string()))?;
         if !targets.is_empty() {
             self.send_signature_request(&subject.subject_id, msg.sn, targets.clone(), &targets)
                 .await?;
@@ -156,10 +154,14 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
     ) -> Result<Result<(), DistributionErrorResponses>, DistributionManagerError> {
         // Se solicitan firmas
         // Comprobamos si las tenemos
+        log::error!("ME PIDEN FIRMAS DE {}", msg.subject_id.to_str());
         match self.db.get_witness_signatures(&msg.subject_id) {
             Ok((sn, signatures)) => {
+                log::error!("SE EJECUTA EL OK DE PROVIDE SIGNATURE");
+                log::error!("ME PIDEN EL SN {}", msg.sn);
                 // Comprobamos SN
                 if sn == msg.sn {
+                    log::error!("SN == MSG.SN");
                     // Damos las firmas
                     let requested = &msg.signatures_requested;
                     let result = signatures
@@ -178,6 +180,7 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
                         .await
                         .map_err(|_| DistributionManagerError::MessageChannelNotAvailable)?;
                 } else if msg.sn > sn {
+                    log::error!("MSG.SN > SN");
                     // No veo necesario un mensaje para el caso de MSG.SN = SN + 1
                     let request = request_lce(
                         self.signature_manager.get_own_identifier(),

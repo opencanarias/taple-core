@@ -152,7 +152,6 @@ impl<D: DatabaseManager> EventManager<D> {
                         .inner_ledger
                         .external_event(event, signatures, sender)
                         .await;
-                    log::warn!("RESPONSE EXTERNAL EVENT: {:?}", response);
                     match response {
                         Err(error) => match error {
                             LedgerError::ChannelClosed => {
@@ -175,7 +174,6 @@ impl<D: DatabaseManager> EventManager<D> {
                 }
                 LedgerCommand::ExternalIntermediateEvent { event } => {
                     let response = self.inner_ledger.external_intermediate_event(event).await;
-                    log::warn!("RESPONSE INTERMEDIATE EVENT: {:?}", response);
                     match response {
                         Err(error) => match error {
                             LedgerError::ChannelClosed => {
