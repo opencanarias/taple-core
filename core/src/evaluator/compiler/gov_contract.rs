@@ -173,7 +173,7 @@ impl<'de> Deserialize<'de> for Who {
       id: String,
       state_schema: serde_json::Value, // TODO: QUIZÁS STRING
       // #[serde(rename = "Initial-Value")]
-      // Initial_Value:
+      initial_value: serde_json::Value,
       contract: Contract,
       facts: Vec<Fact>,
   }

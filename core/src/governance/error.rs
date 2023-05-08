@@ -45,5 +45,7 @@ pub enum InternalError {
     DatabaseError {
         #[from]
         source: DbError
-    }
+    },
+    #[error("Base 64 decode error")]
+    Base64DecodingError
 }
