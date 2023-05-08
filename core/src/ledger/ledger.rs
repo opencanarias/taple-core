@@ -431,11 +431,24 @@ impl<D: DatabaseManager> Ledger<D> {
                         let (signers, quorum) = self
                             .get_signers_and_quorum(metadata, ValidationStage::Validate)
                             .await?;
+                        let notary_hash = DigestIdentifier::from_serializable_borsh(&(
+                            &subject.governance_id,
+                            &subject.subject_id,
+                            &subject.owner,
+                            &event.signature.content.event_content_hash,
+                            &event.content.event_proposal.proposal.sn,
+                            &event.content.event_proposal.proposal.gov_version,
+                        ))
+                        .map_err(|_| {
+                            LedgerError::CryptoError(String::from(
+                                "Error calculating the hash of the serializable",
+                            ))
+                        })?;
                         verify_signatures(
                             &signatures,
                             &signers,
                             quorum,
-                            &event.signature.content.event_content_hash,
+                            &notary_hash,
                         )?;
                         // Comprobar si es evento siguiente o LCE
                         if event.content.event_proposal.proposal.sn == subject.sn + 1
