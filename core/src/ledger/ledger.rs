@@ -169,12 +169,16 @@ impl<D: DatabaseManager> Ledger<D> {
             &init_state,
         )
         .map_err(LedgerError::SubjectError)?;
+        let sn = event.content.event_proposal.proposal.sn;
         log::info!("EVENTO CREADO FROM GENESIS");
         // Añadir sujeto y evento a base de datos
         let subject_id = subject.subject_id.clone();
         if &create_request.schema_id == "governance" {
             self.subject_is_gov.insert(subject_id.clone(), true);
             // Enviar mensaje a gov de governance updated con el id y el sn
+            self.gov_api
+                .governance_updated(subject_id.clone(), sn)
+                .await?;
         } else {
             self.subject_is_gov.insert(subject_id.clone(), false);
         }
@@ -236,7 +240,9 @@ impl<D: DatabaseManager> Ledger<D> {
         match is_gov {
             Some(true) => {
                 // Enviar mensaje a gov de governance updated con el id y el sn
-                // TODO
+                self.gov_api
+                    .governance_updated(subject_id.clone(), sn)
+                    .await?;
             }
             Some(false) => {}
             None => {
@@ -244,6 +250,9 @@ impl<D: DatabaseManager> Ledger<D> {
                 if self.gov_api.is_governance(subject_id.clone()).await? {
                     self.subject_is_gov.insert(subject_id.clone(), true);
                     // Enviar mensaje a gov de governance updated con el id y el sn
+                    self.gov_api
+                        .governance_updated(subject_id.clone(), sn)
+                        .await?;
                 } else {
                     self.subject_is_gov.insert(subject_id.clone(), false);
                 }
@@ -321,7 +330,7 @@ impl<D: DatabaseManager> Ledger<D> {
                     subject_id: subject_id.clone(),
                     governance_id: create_request.governance_id,
                     governance_version: our_gov_version,
-                    schema_id: create_request.schema_id,
+                    schema_id: create_request.schema_id.clone(),
                     owner: event
                         .content
                         .event_proposal
@@ -346,6 +355,15 @@ impl<D: DatabaseManager> Ledger<D> {
                     return Err(LedgerError::WeAreNotWitnesses(subject_id.to_str()));
                 }
                 self.check_genesis(event, subject_id.clone()).await?;
+                if &create_request.schema_id == "governance" {
+                    self.subject_is_gov.insert(subject_id.clone(), true);
+                    // Enviar mensaje a gov de governance updated con el id y el sn
+                    self.gov_api
+                        .governance_updated(subject_id.clone(), 0)
+                        .await?;
+                } else {
+                    self.subject_is_gov.insert(subject_id.clone(), false);
+                }
                 match self.ledger_state.get_mut(&subject_id) {
                     Some(ledger_state) => {
                         ledger_state.current_sn = Some(0);
@@ -427,7 +445,19 @@ impl<D: DatabaseManager> Ledger<D> {
                                 state_request.subject_id.to_str(),
                             ));
                         }
+                        let sn = event.content.event_proposal.proposal.sn;
                         self.check_event(event.clone(), metadata.clone()).await?;
+                        // Si no está en el mapa, añadirlo y enviar mensaje a gov de subject updated con el id y el sn
+                        let subject_id = state_request.subject_id.clone();
+                        if self.gov_api.is_governance(subject_id.clone()).await? {
+                            self.subject_is_gov.insert(subject_id.clone(), true);
+                            // Enviar mensaje a gov de governance updated con el id y el sn
+                            self.gov_api
+                                .governance_updated(subject_id.clone(), sn)
+                                .await?;
+                        } else {
+                            self.subject_is_gov.insert(subject_id.clone(), false);
+                        }
                         let (signers, quorum) = self
                             .get_signers_and_quorum(metadata, ValidationStage::Validate)
                             .await?;
@@ -444,17 +474,12 @@ impl<D: DatabaseManager> Ledger<D> {
                                 "Error calculating the hash of the serializable",
                             ))
                         })?;
-                        verify_signatures(
-                            &signatures,
-                            &signers,
-                            quorum,
-                            &notary_hash,
-                        )?;
+                        verify_signatures(&signatures, &signers, quorum, &notary_hash)?;
                         // Comprobar si es evento siguiente o LCE
                         if event.content.event_proposal.proposal.sn == subject.sn + 1
                             && ledger_state.head.is_none()
                         {
-                            // Caso Evento Siguiente
+                            // Caso Evento Siguientesn
                             let sn = event.content.event_proposal.proposal.sn;
                             let json_patch =
                                 event.content.event_proposal.proposal.json_patch.as_str();
