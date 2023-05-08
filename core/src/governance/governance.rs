@@ -45,7 +45,7 @@ impl<D: DatabaseManager> Governance<D> {
             inner_governance: InnerGovernance::new(
                 repo_access,
                 get_governance_schema(),
-                update_channel
+                update_channel,
             ),
         }
     }
@@ -72,90 +72,108 @@ impl<D: DatabaseManager> Governance<D> {
         input: Option<ChannelData<GovernanceMessage, GovernanceResponse>>,
     ) -> Result<(), InternalError> {
         if let Some(data) = input {
-            let (sender, message) = if let ChannelData::AskData(data) = data {
-                data.get()
-            } else {
-                panic!("Expected AskData, but we got TellData")
+            let (sender, data) = match data {
+                ChannelData::AskData(data) => {
+                    let (sender, data) = data.get();
+                    (Some(sender), data)
+                }
+                ChannelData::TellData(data) => {
+                    let data = data.get();
+                    (None, data)
+                }
             };
-            match message {
-                GovernanceMessage::GetSchema {
-                    governance_id,
-                    schema_id,
-                } => {
-                    let to_send = self.inner_governance.get_schema(governance_id, schema_id)?;
-                    Ok(sender
-                        .send(GovernanceResponse::GetSchema(to_send))
-                        .map_err(|_| InternalError::OneshotClosed)?)
-                }
-                GovernanceMessage::GetSigners { metadata, stage } => {
-                    let to_send = self.inner_governance.get_signers(metadata, stage)?;
-                    Ok(sender
-                        .send(GovernanceResponse::GetSigners(to_send))
-                        .map_err(|_| InternalError::OneshotClosed)?)
-                }
-                GovernanceMessage::GetQuorum { metadata, stage } => {
-                    let to_send = self.inner_governance.get_quorum(metadata, stage)?;
-                    Ok(sender.send(GovernanceResponse::GetQuorum(to_send)).unwrap())
-                }
-                GovernanceMessage::GetGovernanceVersion { governance_id } => {
-                    let version = self
-                        .inner_governance
-                        .get_governance_version(governance_id)?;
-                    Ok(sender
-                        .send(GovernanceResponse::GetGovernanceVersion(version))
-                        .map_err(|_| InternalError::OneshotClosed)?)
-                }
-                GovernanceMessage::IsGovernance { subject_id } => {
-                    let to_send = self.inner_governance.is_governance(&subject_id)?;
-                    Ok(sender
-                        .send(GovernanceResponse::IsGovernance(to_send))
-                        .map_err(|_| InternalError::OneshotClosed)?)
-                }
-                GovernanceMessage::GetInvokeInfo { fact, metadata } => {
-                    let to_send = self.inner_governance.get_invoke_info(metadata, &fact)?;
-                    Ok(sender
-                        .send(GovernanceResponse::GetInvokeInfo(to_send))
-                        .map_err(|_| InternalError::OneshotClosed)?)
-                }
-                GovernanceMessage::GetContracts { governance_id } => {
-                    let to_send = self.inner_governance.get_contracts(governance_id)?;
-                    Ok(sender
-                        .send(GovernanceResponse::GetContracts(to_send))
-                        .map_err(|_| InternalError::OneshotClosed)?)
-                }
-                GovernanceMessage::GetInitState {
-                    governance_id,
-                    schema_id,
-                    governance_version,
-                } => {
-                    let to_send = self.inner_governance.get_init_state(
+            if let Some(sender) = sender {
+                match data {
+                    GovernanceMessage::GetSchema {
+                        governance_id,
+                        schema_id,
+                    } => {
+                        let to_send = self.inner_governance.get_schema(governance_id, schema_id)?;
+                        Ok(sender
+                            .send(GovernanceResponse::GetSchema(to_send))
+                            .map_err(|_| InternalError::OneshotClosed)?)
+                    }
+                    GovernanceMessage::GetSigners { metadata, stage } => {
+                        let to_send = self.inner_governance.get_signers(metadata, stage)?;
+                        Ok(sender
+                            .send(GovernanceResponse::GetSigners(to_send))
+                            .map_err(|_| InternalError::OneshotClosed)?)
+                    }
+                    GovernanceMessage::GetQuorum { metadata, stage } => {
+                        let to_send = self.inner_governance.get_quorum(metadata, stage)?;
+                        Ok(sender.send(GovernanceResponse::GetQuorum(to_send)).unwrap())
+                    }
+                    GovernanceMessage::GetGovernanceVersion { governance_id } => {
+                        let version = self
+                            .inner_governance
+                            .get_governance_version(governance_id)?;
+                        Ok(sender
+                            .send(GovernanceResponse::GetGovernanceVersion(version))
+                            .map_err(|_| InternalError::OneshotClosed)?)
+                    }
+                    GovernanceMessage::IsGovernance { subject_id } => {
+                        let to_send = self.inner_governance.is_governance(&subject_id)?;
+                        Ok(sender
+                            .send(GovernanceResponse::IsGovernance(to_send))
+                            .map_err(|_| InternalError::OneshotClosed)?)
+                    }
+                    GovernanceMessage::GetInvokeInfo { fact, metadata } => {
+                        let to_send = self.inner_governance.get_invoke_info(metadata, &fact)?;
+                        Ok(sender
+                            .send(GovernanceResponse::GetInvokeInfo(to_send))
+                            .map_err(|_| InternalError::OneshotClosed)?)
+                    }
+                    GovernanceMessage::GetContracts { governance_id } => {
+                        let to_send = self.inner_governance.get_contracts(governance_id)?;
+                        Ok(sender
+                            .send(GovernanceResponse::GetContracts(to_send))
+                            .map_err(|_| InternalError::OneshotClosed)?)
+                    }
+                    GovernanceMessage::GetInitState {
                         governance_id,
                         schema_id,
                         governance_version,
-                    )?;
-                    Ok(sender
-                        .send(GovernanceResponse::GetInitState(to_send))
-                        .map_err(|_| InternalError::OneshotClosed)?)
+                    } => {
+                        let to_send = self.inner_governance.get_init_state(
+                            governance_id,
+                            schema_id,
+                            governance_version,
+                        )?;
+                        Ok(sender
+                            .send(GovernanceResponse::GetInitState(to_send))
+                            .map_err(|_| InternalError::OneshotClosed)?)
+                    }
+                    GovernanceMessage::GetRolesOfInvokator {
+                        invokator,
+                        metadata,
+                    } => {
+                        let to_send = self
+                            .inner_governance
+                            .get_roles_of_invokator(invokator, metadata)?;
+                        Ok(sender
+                            .send(GovernanceResponse::GetRolesOfInvokator(to_send))
+                            .map_err(|_| InternalError::OneshotClosed)?)
+                    }
+                    _ => unreachable!(),
                 }
-                GovernanceMessage::GetRolesOfInvokator {
-                    invokator,
-                    metadata,
-                } => {
-                    let to_send = self
-                        .inner_governance
-                        .get_roles_of_invokator(invokator, metadata)?;
-                    Ok(sender
-                        .send(GovernanceResponse::GetRolesOfInvokator(to_send))
-                        .map_err(|_| InternalError::OneshotClosed)?)
-                }
-                GovernanceMessage::GovernanceUpdated {
-                    governance_id,
-                    governance_version,
-                } => {
-                    self.inner_governance
-                        .governance_updated(governance_id, governance_version)
-                        .await?;
-                    Ok(())
+            } else {
+                match data {
+                    GovernanceMessage::GovernanceUpdated {
+                        governance_id,
+                        governance_version,
+                    } => {
+                        let result = self
+                            .inner_governance
+                            .governance_updated(governance_id, governance_version)
+                            .await?;
+                        // TODO: Revisar si hace falta tratar errores aquí
+                        match result {
+                            Ok(_) => {}
+                            Err(_) => {}
+                        }
+                        Ok(())
+                    }
+                    _ => unreachable!(),
                 }
             }
         } else {

@@ -153,7 +153,7 @@ impl<D: DatabaseManager> EventManager<D> {
             match data {
                 EventCommand::Event { event_request } => {
                     let response = self.event_completer.new_event(event_request).await;
-                    log::error!("COMPLETA NEW EVENT DE EVENT COMPLETER");
+                    log::error!("COMPLETA NEW EVENT DE EVENT COMPLETER: response: {:?}", response);
                     match response.clone() {
                         Err(error) => match error {
                             EventError::ChannelClosed => {
