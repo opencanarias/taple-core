@@ -1,5 +1,5 @@
 <div align="center">
-<p>⚠️ <b>TAPLE is in early development and <a href="https://www.taple.es/docs/community/disclaimer">should not be used in production</a></b> ⚠️</p>
+<p>⚠️ <b>TAPLE is in early development and <a href="https://www.taple.es/community/DISCLAIMER">should not be used in production</a></b> ⚠️</p>
 <br/>
 <p><img src="https://raw.githubusercontent.com/opencanarias/public-resources/master/images/taple-logo-readme.png"></p>
 </div>
