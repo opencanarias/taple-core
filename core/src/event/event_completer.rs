@@ -407,7 +407,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
             }
         };
         // Mirar en que estado está el evento, si está en evaluación o no
-        let Some((ValidationStage::Evaluate, signers, quorum_size)) = self.subjects_completing_event.get_mut(&subject_id) else {
+        let Some((ValidationStage::Evaluate, signers, quorum_size)) = self.subjects_completing_event.get(&subject_id) else {
             return Err(EventError::WrongEventPhase);
         };
         let signer = signature.content.signer.clone();
@@ -465,9 +465,24 @@ impl<D: DatabaseManager> EventCompleter<D> {
         };
         let num_signatures_hash =
             count_signatures_with_event_content_hash(&signatures_set, &evaluation_hash) as u32;
+        let quorum_size = quorum_size.to_owned();
         // Comprobar si llegamos a Quorum
-        if num_signatures_hash < *quorum_size {
-            signers.remove(&signer);
+        if num_signatures_hash < quorum_size {
+            let mut new_signers: HashSet<KeyIdentifier> =
+                signers.into_iter().map(|s| s.clone()).collect();
+            new_signers.remove(&signer);
+            self.ask_signatures(
+                &subject_id,
+                create_evaluator_request(preevaluation_event.clone()),
+                new_signers.clone(),
+                quorum_size,
+            )
+            .await?;
+            // Hacer update de fase por la que va el evento
+            self.subjects_completing_event.insert(
+                subject_id,
+                (ValidationStage::Evaluate, new_signers, quorum_size),
+            );
             return Ok(()); // No llegamos a quorum, no hacemos nada
         } else {
             // Si es así comprobar que json patch aplicado al evento parar la petición de firmas y empezar a pedir las approves con el evento completo con lo nuevo obtenido en esta fase si se requieren approves, si no informar a validator
@@ -604,7 +619,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 state_request.subject_id.clone()
             }
         };
-        let Some((ValidationStage::Approve, signers, quorum_size)) = self.subjects_completing_event.get_mut(&subject_id) else {
+        let Some((ValidationStage::Approve, signers, quorum_size)) = self.subjects_completing_event.get(&subject_id) else {
             return Err(EventError::WrongEventPhase);
         };
         let signer = approval.signature.content.signer.clone();
@@ -665,11 +680,24 @@ impl<D: DatabaseManager> EventCompleter<D> {
             crate::commons::models::Acceptance::Ko => {
                 (((signers.len() as u32) - *quorum_size) + 1, false)
             }
-
             crate::commons::models::Acceptance::Error => unreachable!(),
         };
         if num_approvals_with_same_acceptance < quorum_size {
-            signers.remove(&signer);
+            let mut new_signers: HashSet<KeyIdentifier> =
+                signers.into_iter().map(|s| s.clone()).collect();
+            new_signers.remove(&signer);
+            self.ask_signatures(
+                &subject_id,
+                create_approval_request(event_proposal.to_owned()),
+                signers.clone(),
+                quorum_size,
+            )
+            .await?;
+            // Hacer update de fase por la que va el evento
+            self.subjects_completing_event.insert(
+                subject_id,
+                (ValidationStage::Evaluate, new_signers, quorum_size),
+            );
             Ok(()) // No llegamos a quorum, no hacemos nada
         } else {
             // Si se llega a Quorum dejamos de pedir approves y empezamos a pedir notarizaciones con el evento completo incluyendo lo nuevo de las approves
@@ -743,7 +771,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
             }
         };
         // CHeck phase
-        let Some((ValidationStage::Validate, signers, quorum_size)) = self.subjects_completing_event.get_mut(&subject_id) else {
+        let Some((ValidationStage::Validate, signers, quorum_size)) = self.subjects_completing_event.get(&subject_id) else {
             return Err(EventError::WrongEventPhase);
         };
         let signer = signature.content.signer.clone();
@@ -761,6 +789,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 crate::DbError::EntryNotFound => EventError::SubjectNotFound(subject_id.to_str()),
                 _ => EventError::DatabaseError(error.to_string()),
             })?;
+        let gov_version = event.content.event_proposal.proposal.gov_version.to_owned();
         // Comprobar que todo es correcto criptográficamente
         let event_hash = check_cryptography(
             (
@@ -790,9 +819,21 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 )
             }
         };
+        let quorum_size = quorum_size.to_owned();
         // Comprobar si llegamos a Quorum y si es así dejar de pedir firmas
-        if (validation_set.len() as u32) < *quorum_size {
-            signers.remove(&signer);
+        if (validation_set.len() as u32) < quorum_size {
+            let event_message =
+                create_validator_request(self.create_notary_event(&subject, event, gov_version)?);
+            let mut new_signers: HashSet<KeyIdentifier> =
+                signers.into_iter().map(|s| s.clone()).collect();
+            new_signers.remove(&signer);
+            self.ask_signatures(&subject_id, event_message, new_signers.clone(), quorum_size)
+                .await?;
+            // Hacer update de fase por la que va el evento
+            self.subjects_completing_event.insert(
+                subject_id,
+                (ValidationStage::Evaluate, new_signers, quorum_size),
+            );
             Ok(())
         } else {
             let validation_signatures: HashSet<Signature> = validation_set
