@@ -44,8 +44,6 @@ impl<G: GovernanceInterface + Send> ContractExecutor<G> {
         compiled_contract: Vec<u8>,
         subject_id: &DigestIdentifier,
     ) -> Result<ContractResult, ExecutorErrorResponses> {
-        log::warn!("INITIAL STATE: {}", state);
-        log::warn!("EVENT {}", event);
         // Obtener Roles del usuario
         let roles = self
             .gov_api
@@ -55,7 +53,6 @@ impl<G: GovernanceInterface + Send> ContractExecutor<G> {
             )
             .await
             .map_err(|_| ExecutorErrorResponses::RolesObtentionFailed)?;
-        log::info!("EVALUATOR - ROLES OBTAINED: {:?}", roles);
         // Cargar wasm
         let module = unsafe { Module::deserialize(&self.engine, compiled_contract).unwrap() };
         // Generar contexto

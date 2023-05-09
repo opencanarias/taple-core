@@ -89,7 +89,6 @@ impl<D: DatabaseManager> NotaryManager<D> {
             match data {
                 NotaryCommand::NotaryEvent(notary_event) => {
                     let result = self.inner_notary.notary_event(notary_event).await;
-                    log::error!("NOTARY RESULT: {:?}", result);
                     match result {
                         Err(NotaryError::ChannelError(_)) => return result.map(|_| ()),
                         _ => NotaryResponse::NotaryEventResponse(result),

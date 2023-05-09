@@ -108,7 +108,6 @@ impl<D: DatabaseManager> InnerAPI<D> {
         let EventResponse::Event(response) = self.event_api.send_event_request(request).await else {
             return Err(APIInternalError::UnexpectedManagerResponse);
         };
-        log::error!("COMPLETA SEND EVENT REQUEST");
         Ok(ApiResponses::HandleExternalRequest(
             response.map_err(|e| ApiError::EventCreationError { source: e }),
         ))

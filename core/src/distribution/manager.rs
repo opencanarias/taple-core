@@ -88,8 +88,6 @@ impl<D: DatabaseManager> DistributionManager<D> {
             }
         };
 
-        log::warn!("DISTRIBUTION MSG {:?}", data);
-
         let response = match data {
             DistributionMessagesNew::ProvideSignatures(data) => {
                 self.inner_manager.provide_signatures(&data).await?

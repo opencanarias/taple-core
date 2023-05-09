@@ -44,7 +44,6 @@ impl<D: DatabaseManager> Notary<D> {
         &self,
         notary_event: NotaryEvent,
     ) -> Result<NotaryEventResponse, NotaryError> {
-        log::error!("NOTARY EVENT: {:?}", notary_event);
         let actual_gov_version = match self
             .gov_api
             .get_governance_version(notary_event.gov_id.clone())
@@ -63,7 +62,6 @@ impl<D: DatabaseManager> Notary<D> {
                 _ => return Err(NotaryError::GovApiUnexpectedResponse),
             },
         };
-        log::warn!("ACTUAL GOV VERSION: {:?}", actual_gov_version);
         if actual_gov_version < notary_event.gov_version {
             return Err(NotaryError::GovernanceVersionTooHigh);
         }

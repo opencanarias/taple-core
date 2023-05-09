@@ -53,7 +53,7 @@ impl<D: DatabaseManager> EventManager<D> {
         match self.inner_ledger.init().await {
             Ok(_) => {}
             Err(error) => {
-                log::error!("Problemas con Init de Ledger Manager: {:?}", error);
+                log::error!("Ledger Manager Init fails: {:?}", error);
                 self.shutdown_sender.send(()).expect("Channel Closed");
                 return;
             }
@@ -100,7 +100,6 @@ impl<D: DatabaseManager> EventManager<D> {
             match data {
                 LedgerCommand::OwnEvent { event, signatures } => {
                     let response = self.inner_ledger.event_validated(event, signatures).await;
-                    log::error!("RESPONSE EV_VALIDATED: {:?}", response);
                     match response {
                         Err(error) => match error {
                             LedgerError::ChannelClosed => {

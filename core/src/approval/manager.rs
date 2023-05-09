@@ -199,7 +199,6 @@ impl<D: DatabaseManager> ApprovalManager<D> {
                     return Err(ApprovalManagerError::AskNoAllowed);
                 }
                 let result = self.inner_manager.process_approval_request(message).await?;
-                log::error!("Result: {:?}", result);
                 if let Ok(Some((approval, sender))) = result {
                     let msg = create_approver_response(approval);
                     self.messenger_channel

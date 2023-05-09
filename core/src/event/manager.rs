@@ -87,7 +87,6 @@ impl<D: DatabaseManager> EventManager<D> {
         match self.event_completer.init().await {
             Ok(_) => {}
             Err(error) => {
-                log::error!("Problemas con Init de Event Manager: {:?}", error);
                 self.shutdown_sender.send(()).expect("Channel Closed");
                 return;
             }
@@ -153,7 +152,6 @@ impl<D: DatabaseManager> EventManager<D> {
             match data {
                 EventCommand::Event { event_request } => {
                     let response = self.event_completer.new_event(event_request).await;
-                    log::error!("COMPLETA NEW EVENT DE EVENT COMPLETER: response: {:?}", response);
                     match response.clone() {
                         Err(error) => match error {
                             EventError::ChannelClosed => {
@@ -198,7 +196,7 @@ impl<D: DatabaseManager> EventManager<D> {
                                 return Err(EventError::ChannelClosed);
                             }
                             _ => {
-                                log::warn!("{:?}", error);
+                                log::error!("{:?}", error);
                             }
                         },
                         _ => {}

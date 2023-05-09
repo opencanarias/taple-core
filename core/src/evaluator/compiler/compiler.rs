@@ -135,7 +135,6 @@ impl<D: DatabaseManager, G: GovernanceInterface> Compiler<D, G> {
     ) -> Result<(), CompilerErrorResponses> {
         let a = format!("{}/src/lib.rs", self.contracts_path);
         let path = Path::new(&a);
-        log::error!("{:?}", path);
         fs::write(format!("{}/src/lib.rs", self.contracts_path), contract)
             .await
             .map_err(|_| CompilerErrorResponses::WriteFileError)?;

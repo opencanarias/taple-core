@@ -150,10 +150,6 @@ impl<D: DatabaseManager> EventCompleter<D> {
                     let stage = ValidationStage::Validate;
                     let (signers, quorum_size) =
                         self.get_signers_and_quorum(metadata, stage.clone()).await?;
-                    for signer in signers.iter() {
-                        log::error!("Signer: {}", signer.to_str());
-                    }
-                    log::error!("Quorum sixze: {}", quorum_size);
                     let event_message = create_validator_request(self.create_notary_event(
                         subject,
                         &last_event,
@@ -183,7 +179,6 @@ impl<D: DatabaseManager> EventCompleter<D> {
             match self.database.get_request(&subject.subject_id) {
                 // TODO: Quitar request_id de este método
                 Ok(event_request) => {
-                    log::error!("PROBLEMAS, subject: {}", subject.subject_id.to_str());
                     self.new_event(event_request).await?;
                 }
                 Err(error) => match error {
@@ -255,8 +250,6 @@ impl<D: DatabaseManager> EventCompleter<D> {
         &mut self,
         event_request: EventRequest,
     ) -> Result<DigestIdentifier, EventError> {
-        log::info!("PASA POR NEW EVENT - AL PRINCIPIO");
-        log::info!("{:?}", event_request);
         let subject_id;
         let subject;
         // Check if the content is correct (signature, invoker, etc)
@@ -264,7 +257,6 @@ impl<D: DatabaseManager> EventCompleter<D> {
         event_request
             .check_signatures()
             .map_err(EventError::SubjectError)?;
-        log::warn!("PASA POR EL check signatures");
         match &event_request.request {
             crate::event_request::EventRequestType::Create(create_request) => {
                 // Comprobar si es governance, entonces vale todo, si no comprobar que el invoker soy yo y puedo hacerlo
@@ -272,7 +264,6 @@ impl<D: DatabaseManager> EventCompleter<D> {
                     return Err(EventError::ExternalGenesisEvent);
                 }
                 if &create_request.schema_id != "governance" {
-                    log::warn!("PASA POR EL IF");
                     let creators = self
                         .gov_api
                         .get_signers(
@@ -293,7 +284,6 @@ impl<D: DatabaseManager> EventCompleter<D> {
                         return Err(EventError::CreatingPermissionDenied);
                     }
                 }
-                log::info!("PASA POR NEW EVENT - AFTER IF");
                 let request_hash = event_request.signature.content.event_content_hash.clone();
                 self.ledger_sender
                     .tell(LedgerCommand::Genesis { event_request })
@@ -324,13 +314,11 @@ impl<D: DatabaseManager> EventCompleter<D> {
         }
         // Request evaluation signatures, sending request, sn and signature of everything about the subject
         // Get the list of evaluators
-        log::info!("PASA POR NEW EVENT - ANTES GOV VERSION");
         let governance_version = self
             .gov_api
             .get_governance_version(subject.governance_id.clone())
             .await
             .map_err(EventError::GovernanceError)?;
-        log::info!("PASA POR NEW EVENT - AFTER GOV VERSION");
         let (metadata, stage) = (
             Metadata {
                 namespace: subject.namespace,
@@ -367,7 +355,6 @@ impl<D: DatabaseManager> EventCompleter<D> {
             quorum_size,
         )
         .await?;
-        log::info!("PASA POR NEW EVENT - EVENT PRE EVALUATION");
         let event_preevaluation_hash =
             DigestIdentifier::from_serializable_borsh(&event_preevaluation).map_err(|_| {
                 EventError::CryptoError(String::from(
@@ -401,8 +388,6 @@ impl<D: DatabaseManager> EventCompleter<D> {
         json_patch: String,
         signature: Signature,
     ) -> Result<(), EventError> {
-        log::warn!("evanluation: {:?}", evaluation);
-        log::warn!("json patch: {}", json_patch);
         // Comprobar que el hash devuelto coincide con el hash de la preevaluación
         let preevaluation_event = match self
             .event_pre_evaluations
@@ -481,8 +466,6 @@ impl<D: DatabaseManager> EventCompleter<D> {
         let num_signatures_hash =
             count_signatures_with_event_content_hash(&signatures_set, &evaluation_hash) as u32;
         // Comprobar si llegamos a Quorum
-        log::warn!("num_signatures_hash: {}", num_signatures_hash);
-        log::warn!("quorum_size: {}", quorum_size);
         if num_signatures_hash < *quorum_size {
             return Ok(()); // No llegamos a quorum, no hacemos nada
         } else {
@@ -739,7 +722,6 @@ impl<D: DatabaseManager> EventCompleter<D> {
         event_hash: DigestIdentifier,
         signature: Signature,
     ) -> Result<(), EventError> {
-        log::error!("LLEGA VALIDATION: {:?}", signature);
         // Mirar en que estado está el evento, si está en notarización o no
         let event = match self.events_to_validate.get(&event_hash) {
             Some(event) => event,
