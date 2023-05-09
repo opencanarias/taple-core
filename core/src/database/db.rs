@@ -317,7 +317,7 @@ impl<M: DatabaseManager> DB<M> {
 
     pub fn get_all_subjects(&self) -> Vec<Subject> {
         let mut result = Vec::new();
-        for (_, subject) in self.subject_db.iter() {
+        for (a, subject) in self.subject_db.iter() {
             result.push(subject);
         }
         result

@@ -95,14 +95,14 @@ impl Subject {
         };
         // TODO: Pasar que tipo de esquema criptográfico se quiere usar por parametros
         let keys = KeyPair::Ed25519(Ed25519KeyPair::new());
+        let public_key = KeyIdentifier::new(keys.get_key_derivator(), &keys.public_key_bytes());
         let subject_id = match DigestIdentifier::from_serializable_borsh((
             &event_request.signature.content.event_content_hash,
-            &keys.public_key_bytes(),
+            &public_key.public_key,
         )) {
             Ok(subject_id) => subject_id,
             Err(_) => return Err(SubjectError::ErrorCreatingSubjectId),
         };
-        let public_key = KeyIdentifier::new(keys.get_key_derivator(), &keys.public_key_bytes());
         Ok(Subject {
             keys: Some(keys),
             subject_id,
@@ -130,7 +130,7 @@ impl Subject {
                 .signature
                 .content
                 .event_content_hash,
-            &event.signature.content.signer,
+            &event.signature.content.signer.public_key,
         )) {
             Ok(subject_id) => subject_id,
             Err(_) => return Err(SubjectError::ErrorCreatingSubjectId),

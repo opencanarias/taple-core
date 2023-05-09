@@ -2,10 +2,14 @@ use std::{collections::HashSet, str::FromStr};
 
 use crate::{
     commons::{
+        self,
         errors::ChannelErrors,
         identifier::{Derivable, DigestIdentifier, KeyIdentifier},
         models::event_content::Metadata,
-        schema_handler::gov_models::{Contract, Invoke, Quorum, Role, Schema},
+        schema_handler::{
+            gov_models::{Contract, Invoke, Quorum, Role, Schema},
+            initial_state::get_governance_initial_state,
+        },
     },
     database::Error as DbError,
 };
@@ -60,11 +64,11 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         };
         let properties: Value = serde_json::from_str(&governance.properties)
             .map_err(|_| InternalError::DeserializationError)?;
-        let policies = get_as_array(&properties, "Policies")?;
+        let policies = get_as_array(&properties, "policies")?;
         let schema_policy = get_schema_from_policies(policies, &schema_id);
-        let roles_prop = properties["Roles"]
+        let roles_prop = properties["roles"]
             .as_array()
-            .expect("Existe Roles")
+            .expect("Existe roles")
             .to_owned();
         let roles = get_roles(&schema_id, roles_prop, &metadata.namespace)?;
         let members = get_members_from_governance(&properties)?;
@@ -86,8 +90,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         governance_version: u64,
     ) -> Result<Result<Value, RequestError>, InternalError> {
         if governance_id.digest.is_empty() {
-            // TODO: Devolver init state de gov
-            todo!();
+            return Ok(Ok(get_governance_initial_state()));
         }
         let governance = match self.repo_access.get_subject(&governance_id) {
             Ok(governance) => governance,
@@ -140,17 +143,37 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         return Ok(Err(RequestError::SchemaNotFound(schema_id)));
     }
 
+    fn get_signers_aux(
+        properties: &Value,
+        schema_id: &str,
+        metadata: &Metadata,
+        signers_roles: &Vec<String>,
+    ) -> Result<Result<HashSet<KeyIdentifier>, RequestError>, InternalError> {
+        let members = get_members_from_governance(&properties)?;
+        let roles_prop = properties["roles"]
+            .as_array()
+            .expect("Existe roles")
+            .to_owned();
+        let roles = get_roles(&schema_id, roles_prop, &metadata.namespace)?;
+        let mut signers = get_signers_from_roles(&members, signers_roles, roles)?;
+        if signers_roles.contains(&String::from("Owner")) {
+            // Añadimos al owner
+            signers.insert(metadata.owner.clone());
+        }
+        Ok(Ok(signers))
+    }
+
     // NEW
     pub fn get_signers(
         &self,
         metadata: Metadata,
         stage: ValidationStage,
     ) -> Result<Result<HashSet<KeyIdentifier>, RequestError>, InternalError> {
-        let mut governance_id = metadata.governance_id;
+        let mut governance_id = metadata.governance_id.clone();
         if governance_id.digest.is_empty() {
-            governance_id = metadata.subject_id;
+            governance_id = metadata.subject_id.clone();
         }
-        let schema_id = metadata.schema_id;
+        let schema_id = metadata.schema_id.clone();
         let governance = match self.repo_access.get_subject(&governance_id) {
             Ok(governance) => governance,
             Err(DbError::EntryNotFound) => {
@@ -162,36 +185,50 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         };
         let properties: Value = serde_json::from_str(&governance.properties)
             .map_err(|_| InternalError::DeserializationError)?;
-        let policies = get_as_array(&properties, "Policies")?;
+        let policies = get_as_array(&properties, "policies")?;
         let schema_policy = get_schema_from_policies(policies, &schema_id);
         let Ok(schema_policy) = schema_policy else {
             return Ok(Err(schema_policy.unwrap_err()));
         }; // El return dentro de otro return es una **** que obliga a hacer cosas como esta
         match stage {
-            ValidationStage::Approve => {
+            ValidationStage::Approve | ValidationStage::Evaluate | ValidationStage::Validate => {
                 let stage_str = stage.to_str();
-                let approvers_roles: Vec<String> =
-                    get_as_array(&schema_policy.get(stage_str).unwrap(), "Roles")?
+                let roles: Vec<String> =
+                    get_as_array(&schema_policy.get(stage_str).unwrap(), "roles")?
                         .into_iter()
                         .map(|role| {
-                            let a = role
-                                .as_str()
-                                .ok_or(InternalError::InvalidGovernancePayload)
-                                .map(|s| s.to_owned());
-                            a.expect("Invalid Governance Payload")
+                            role.as_str()
+                                .ok_or(InternalError::InvalidGovernancePayload("0".into()))
+                                .map(|s| s.to_owned())
+                                .expect("Invalid Governance Payload")
                         })
                         .collect();
+                Self::get_signers_aux(&properties, &schema_id, &metadata, &roles)
+            }
+            ValidationStage::Witness => {
+                // Todos los aprobadores son también testigos, así que deben traerse sus roles también
+                let stage_str = stage.to_str();
+                let approvers_roles: Vec<String> = get_as_array(&schema_policy, stage_str)?
+                    .into_iter()
+                    .map(|role| {
+                        let a = role
+                            .as_str()
+                            .ok_or(InternalError::InvalidGovernancePayload("1".into()))
+                            .map(|s| s.to_owned());
+                        a.expect("Invalid Governance Payload")
+                    })
+                    .collect();
                 let witness_roles: Vec<String> = get_as_array(
                     &schema_policy
-                        .get(ValidationStage::Witness.to_str())
+                        .get(ValidationStage::Approve.to_str())
                         .unwrap(),
-                    "Roles",
+                    "roles",
                 )?
                 .into_iter()
                 .map(|role| {
                     let a = role
                         .as_str()
-                        .ok_or(InternalError::InvalidGovernancePayload)
+                        .ok_or(InternalError::InvalidGovernancePayload("2".into()))
                         .map(|s| s.to_owned());
                     a.expect("Invalid Governance Payload")
                 })
@@ -201,36 +238,20 @@ impl<D: DatabaseManager> InnerGovernance<D> {
                     set.insert(s);
                 }
                 let signers_roles: Vec<String> = set.into_iter().collect();
-                let members = get_members_from_governance(&properties)?;
-                let roles_prop = properties["Roles"]
-                    .as_array()
-                    .expect("Existe Roles")
-                    .to_owned();
-                let roles = get_roles(&schema_id, roles_prop, &metadata.namespace)?;
-                let signers = get_signers_from_roles(&members, &signers_roles, roles)?;
-                Ok(Ok(signers))
+                Self::get_signers_aux(&properties, &schema_id, &metadata, &signers_roles)
             }
-            _ => {
+            ValidationStage::Close | ValidationStage::Create => {
                 let stage_str = stage.to_str();
-                let signers_roles: Vec<String> =
-                    get_as_array(&schema_policy.get(stage_str).unwrap(), "Roles")?
-                        .into_iter()
-                        .map(|role| {
-                            let a = role
-                                .as_str()
-                                .ok_or(InternalError::InvalidGovernancePayload)
-                                .map(|s| s.to_owned());
-                            a.expect("Invalid Governance Payload")
-                        })
-                        .collect();
-                let members = get_members_from_governance(&properties)?;
-                let roles_prop = properties["Roles"]
-                    .as_array()
-                    .expect("Existe Roles")
-                    .to_owned();
-                let roles = get_roles(&schema_id, roles_prop, &metadata.namespace)?;
-                let signers = get_signers_from_roles(&members, &signers_roles, roles)?;
-                Ok(Ok(signers))
+                let roles: Vec<String> = get_as_array(&schema_policy, stage_str)?
+                    .into_iter()
+                    .map(|role| {
+                        role.as_str()
+                            .ok_or(InternalError::InvalidGovernancePayload("3".into()))
+                            .map(|s| s.to_owned())
+                            .expect("Invalid Governance Payload")
+                    })
+                    .collect();
+                Self::get_signers_aux(&properties, &schema_id, &metadata, &roles)
             }
         }
     }
@@ -257,27 +278,27 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         };
         let properties: Value = serde_json::from_str(&governance.properties)
             .map_err(|_| InternalError::DeserializationError)?;
-        let policies = get_as_array(&properties, "Policies")?;
+        let policies = get_as_array(&properties, "policies")?;
         let schema_policy = get_schema_from_policies(policies, &schema_id);
         let Ok(schema_policy) = schema_policy else {
             return Ok(Err(schema_policy.unwrap_err()));
         }; // El return dentro de otro return es una **** que obliga a hacer cosas como esta
         let stage_str = stage.to_str();
         let signers_roles: Vec<String> =
-            get_as_array(&schema_policy.get(stage_str).unwrap(), "Roles")?
+            get_as_array(&schema_policy.get(stage_str).unwrap(), "roles")?
                 .into_iter()
                 .map(|role| {
                     let a = role
                         .as_str()
-                        .ok_or(InternalError::InvalidGovernancePayload)
+                        .ok_or(InternalError::InvalidGovernancePayload("4".into()))
                         .map(|s| s.to_owned());
                     a.expect("Invalid Governance Payload")
                 })
                 .collect();
         let members = get_members_from_governance(&properties)?;
-        let roles_prop = properties["Roles"]
+        let roles_prop = properties["roles"]
             .as_array()
-            .expect("Existe Roles")
+            .expect("Existe roles")
             .to_owned();
         let roles = get_roles(&schema_id, roles_prop, &metadata.namespace)?;
         let signers = get_signers_from_roles(&members, &signers_roles, roles)?;
@@ -315,7 +336,7 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         };
         let properties: Value = serde_json::from_str(&governance.properties)
             .map_err(|_| InternalError::DeserializationError)?;
-        let policies = get_as_array(&properties, "Policies")?;
+        let policies = get_as_array(&properties, "policies")?;
         let schema_policy = get_schema_from_policies(policies, &schema_id);
         let Ok(schema_policy) = schema_policy else {
             return Ok(Err(schema_policy.unwrap_err()));
@@ -341,11 +362,15 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         };
         let properties: Value = serde_json::from_str(&governance.properties)
             .map_err(|_| InternalError::DeserializationError)?;
-        let schemas = get_as_array(&properties, "Schemas")?;
+        let schemas = get_as_array(&properties, "schemas")?;
         let mut result = Vec::new();
         for schema in schemas {
-            let contract: Contract = serde_json::from_value(schema["Contract"].clone())
-                .map_err(|_| InternalError::InvalidGovernancePayload)?;
+            let mut contract: Contract = serde_json::from_value(schema["contract"].clone())
+                .map_err(|_| InternalError::InvalidGovernancePayload("5".into()))?;
+            let decoded_bytes = base64::decode(contract.content)
+                .map_err(|_| InternalError::Base64DecodingError)?;
+            contract.content =
+                String::from_utf8(decoded_bytes).map_err(|_| InternalError::Base64DecodingError)?;
             result.push(contract);
         }
         Ok(Ok(result))
@@ -406,16 +431,16 @@ impl<D: DatabaseManager> InnerGovernance<D> {
 
 fn get_as_str<'a>(data: &'a Value, key: &str) -> Result<&'a str, InternalError> {
     data.get(key)
-        .ok_or(InternalError::InvalidGovernancePayload)?
+        .ok_or(InternalError::InvalidGovernancePayload("6".into()))?
         .as_str()
-        .ok_or(InternalError::InvalidGovernancePayload)
+        .ok_or(InternalError::InvalidGovernancePayload("7".into()))
 }
 
 fn get_as_array<'a>(data: &'a Value, key: &str) -> Result<&'a Vec<Value>, InternalError> {
     data.get(key)
-        .ok_or(InternalError::InvalidGovernancePayload)?
+        .ok_or(InternalError::InvalidGovernancePayload("8".into()))?
         .as_array()
-        .ok_or(InternalError::InvalidGovernancePayload)
+        .ok_or(InternalError::InvalidGovernancePayload("9".into()))
 }
 
 fn get_schema_from_policies<'a>(
@@ -424,7 +449,7 @@ fn get_schema_from_policies<'a>(
 ) -> Result<&'a Value, RequestError> {
     data.iter()
         .find(|&policy| {
-            let id = policy.get("Id").unwrap().as_str().unwrap();
+            let id = policy.get("id").unwrap().as_str().unwrap();
             id == key
         })
         .ok_or(RequestError::SchemaNotFoundInPolicies)
@@ -433,10 +458,10 @@ fn get_schema_from_policies<'a>(
 fn get_quorum<'a>(data: &'a Value, key: &str) -> Result<Quorum, InternalError> {
     let json_data = data
         .get(key)
-        .ok_or(InternalError::InvalidGovernancePayload)?
-        .get("Quorum")
-        .ok_or(InternalError::InvalidGovernancePayload)?;
-    let quorum: Quorum = serde_json::from_value(json_data["Quorum"].clone()).unwrap();
+        .ok_or(InternalError::InvalidGovernancePayload("10".into()))?
+        .get("quorum")
+        .ok_or(InternalError::InvalidGovernancePayload("11".into()))?;
+    let quorum: Quorum = serde_json::from_value(json_data["quorum"].clone()).unwrap();
     Ok(quorum)
 }
 
@@ -445,7 +470,7 @@ fn get_members_from_governance(
 ) -> Result<HashSet<KeyIdentifier>, InternalError> {
     let mut member_ids: HashSet<KeyIdentifier> = HashSet::new();
     let members = properties
-        .get("Members")
+        .get("members")
         .unwrap()
         .as_array()
         .unwrap()
@@ -457,9 +482,9 @@ fn get_members_from_governance(
             .as_str()
             .expect("Hay id y es str");
         let member_id = KeyIdentifier::from_str(member_id)
-            .map_err(|_| InternalError::InvalidGovernancePayload)?;
+            .map_err(|_| InternalError::InvalidGovernancePayload("12".into()))?;
         let true = member_ids.insert(member_id) else {
-            return Err(InternalError::InvalidGovernancePayload);
+            return Err(InternalError::InvalidGovernancePayload("13".into()));
         };
     }
     Ok(member_ids)
@@ -475,12 +500,13 @@ fn get_signers_from_roles(
         if contains_common_element(&role.roles, roles) {
             match role.who {
                 crate::commons::schema_handler::gov_models::Who::Id { id } => {
-                    signers.insert(KeyIdentifier::from_str(&id).map_err(|_| InternalError::InvalidGovernancePayload)?);
+                    signers.insert(KeyIdentifier::from_str(&id).map_err(|_| InternalError::InvalidGovernancePayload("14".into()))?);
                 }
                 crate::commons::schema_handler::gov_models::Who::Members => {
                     return Ok(members.clone())
                 }
-                _ => {}
+                _ => {
+                }
                 // Entiendo que con esto no se hace nada de cara a validación
                 // crate::commons::schema_handler::gov_models::Who::All => todo!(),
                 // crate::commons::schema_handler::gov_models::Who::External => todo!(),
@@ -497,8 +523,8 @@ fn get_roles(
 ) -> Result<Vec<Role>, InternalError> {
     let mut roles = Vec::new();
     for role in roles_prop {
-        let role_data: Role =
-            serde_json::from_value(role).map_err(|_| InternalError::InvalidGovernancePayload)?;
+        let role_data: Role = serde_json::from_value(role)
+            .map_err(|_| InternalError::InvalidGovernancePayload("15".into()))?;
         if !namespace_contiene(&role_data.namespace, namespace) {
             continue;
         }
@@ -558,7 +584,7 @@ fn get_invoke_from_policy(policy: &Value, fact: &str) -> Result<Option<Invoke>, 
     let invokes = policy["Invoke"].as_array().expect("Invoke Exists");
     for invoke in invokes {
         let invoke: Invoke = serde_json::from_value(invoke.to_owned())
-            .map_err(|_| InternalError::InvalidGovernancePayload)?;
+            .map_err(|_| InternalError::InvalidGovernancePayload("16".into()))?;
         if &invoke.fact == fact {
             return Ok(Some(invoke));
         }

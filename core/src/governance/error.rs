@@ -39,11 +39,13 @@ pub enum InternalError {
     OneshotClosed,
     #[error("Deserialization error")]
     DeserializationError,
-    #[error("Invalid KeyIdentifier")]
-    InvalidGovernancePayload,
+    #[error("Invalid KeyIdentifier: {0}")]
+    InvalidGovernancePayload(String),
     #[error("Database error: {}", source)]
     DatabaseError {
         #[from]
         source: DbError
-    }
+    },
+    #[error("Base 64 decode error")]
+    Base64DecodingError
 }

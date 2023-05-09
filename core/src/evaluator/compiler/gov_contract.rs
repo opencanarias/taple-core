@@ -4,67 +4,67 @@ pub fn get_gov_contract() -> String {
   
   #[derive(Clone)]
   pub enum Who {
-      Who(String), // TODO: QUIZÁS DEBERÍA SER UNA STRUCT ANÓNIMA CON STRING, YA QUE EN EL SCHEMA SE PONE COMO OBJECT
+      Id { id: String }, // TODO: QUIZÁS DEBERÍA SER UNA STRUCT ANÓNIMA CON STRING, YA QUE EN EL SCHEMA SE PONE COMO OBJECT
       Members,
       All,
       External,
   }
   
   impl Serialize for Who {
-      fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-      where
-          S: serde::Serializer,
-      {
-          match self {
-              Who::Who(s) => serializer.serialize_str(&s),
-              Who::Members => serializer.serialize_str("Members"),
-              Who::All => serializer.serialize_str("All"),
-              Who::External => serializer.serialize_str("External"),
-          }
-      }
-  }
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            Who::Id{ id } => serializer.serialize_str(&id),
+            Who::Members => serializer.serialize_str("Members"),
+            Who::All => serializer.serialize_str("All"),
+            Who::External => serializer.serialize_str("External"),
+        }
+    }
+}
   
-  impl<'de> Deserialize<'de> for Who {
-      fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-      where
-          D: serde::Deserializer<'de>,
-      {
-          struct SchemaEnumVisitor;
-          impl<'de> serde::de::Visitor<'de> for SchemaEnumVisitor {
-              fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                  formatter.write_str("Who")
-              }
-              type Value = Who;
-              fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
-              where
-                  E: serde::de::Error,
-              {
-                  match v.as_str() {
-                      "Members" => Ok(Who::Members),
-                      "All" => Ok(Who::All),
-                      "External" => Ok(Who::External),
-                      &_ => Ok(Self::Value::Who(v)),
-                  }
-              }
-              fn visit_borrowed_str<E>(self, v: &'de str) -> Result<Self::Value, E>
-              where
-                  E: serde::de::Error,
-              {
-                  match v {
-                      "Members" => Ok(Who::Members),
-                      "All" => Ok(Who::All),
-                      "External" => Ok(Who::External),
-                      &_ => Ok(Self::Value::Who(v.to_string())),
-                  }
-              }
-          }
-          deserializer.deserialize_str(SchemaEnumVisitor {})
-      }
-  }
+impl<'de> Deserialize<'de> for Who {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct WhoVisitor;
+        impl<'de> serde::de::Visitor<'de> for WhoVisitor {
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("Who")
+            }
+            type Value = Who;
+            fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                match v.as_str() {
+                    "Members" => Ok(Who::Members),
+                    "All" => Ok(Who::All),
+                    "External" => Ok(Who::External),
+                    &_ => Ok(Self::Value::Id{ id: v }),
+                }
+            }
+            fn visit_borrowed_str<E>(self, v: &'de str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                match v {
+                    "Members" => Ok(Who::Members),
+                    "All" => Ok(Who::All),
+                    "External" => Ok(Who::External),
+                    &_ => Ok(Self::Value::Id { id: v.to_string() }),
+                }
+            }
+        }
+        deserializer.deserialize_str(WhoVisitor {})
+    }
+}
   
   #[derive(Clone)]
   pub enum SchemaEnum {
-      Schema(String), // TODO: QUIZÁS DEBERÍA SER UNA STRUCT ANÓNIMA CON STRING, YA QUE EN EL SCHEMA SE PONE COMO OBJECT
+      Id { id: String }, // TODO: QUIZÁS DEBERÍA SER UNA STRUCT ANÓNIMA CON STRING, YA QUE EN EL SCHEMA SE PONE COMO OBJECT
       AllSchemas,
   }
   
@@ -74,8 +74,8 @@ pub fn get_gov_contract() -> String {
           S: serde::Serializer,
       {
           match self {
-              SchemaEnum::Schema(s) => serializer.serialize_str(&s),
-              SchemaEnum::AllSchemas => serializer.serialize_str("All_Schemas"),
+              SchemaEnum::Id{ id } => serializer.serialize_str(&id),
+              SchemaEnum::AllSchemas => serializer.serialize_str("all_schemas"),
           }
       }
   }
@@ -96,8 +96,8 @@ pub fn get_gov_contract() -> String {
                   E: serde::de::Error,
               {
                   match v.as_str() {
-                      "All_Schemas" => Ok(Self::Value::AllSchemas),
-                      &_ => Ok(Self::Value::Schema(v)),
+                      "all_schemas" => Ok(Self::Value::AllSchemas),
+                      &_ => Ok(Self::Value::Id{id: v}),
                   }
               }
               fn visit_borrowed_str<E>(self, v: &'de str) -> Result<Self::Value, E>
@@ -105,8 +105,8 @@ pub fn get_gov_contract() -> String {
                   E: serde::de::Error,
               {
                   match v {
-                      "All_Schemas" => Ok(Self::Value::AllSchemas),
-                      &_ => Ok(Self::Value::Schema(v.to_string())),
+                      "all_schemas" => Ok(Self::Value::AllSchemas),
+                      &_ => Ok(Self::Value::Id{id: v.to_string()}),
                   }
               }
           }
@@ -173,7 +173,7 @@ pub fn get_gov_contract() -> String {
       id: String,
       state_schema: serde_json::Value, // TODO: QUIZÁS STRING
       // #[serde(rename = "Initial-Value")]
-      // Initial_Value:
+      initial_value: serde_json::Value,
       contract: Contract,
       facts: Vec<Fact>,
   }

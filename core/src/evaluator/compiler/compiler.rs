@@ -35,7 +35,6 @@ impl<D: DatabaseManager, G: GovernanceInterface> Compiler<D, G> {
         // Si no existe, lo compila y lo guarda
         match self.database.get_governance_contract() {
             Ok(_) => return Ok(()),
-            Err(error) => return Err(CompilerError::DatabaseError(error.to_string())),
             Err(DbError::EntryNotFound) => {
                 self.compile(
                     super::gov_contract::get_gov_contract(),
@@ -43,7 +42,7 @@ impl<D: DatabaseManager, G: GovernanceInterface> Compiler<D, G> {
                     "governance",
                 )
                 .await
-                .map_err(|e| CompilerError::InitError(e.to_string()));
+                .map_err(|e| CompilerError::InitError(e.to_string()))?;
                 let compiled_contract = self
                     .add_contract("taple", "governance")
                     .await
@@ -51,7 +50,8 @@ impl<D: DatabaseManager, G: GovernanceInterface> Compiler<D, G> {
                 self.database
                     .put_governance_contract(compiled_contract)
                     .map_err(|error| CompilerError::DatabaseError(error.to_string()))?;
-            }
+            },
+            Err(error) => return Err(CompilerError::DatabaseError(error.to_string())),
         }
         Ok(())
     }
@@ -68,6 +68,7 @@ impl<D: DatabaseManager, G: GovernanceInterface> Compiler<D, G> {
             .get_contracts(governance_id.clone())
             .await
             .map_err(CompilerErrorResponses::GovernanceError)?;
+        log::info!("UPDATE CONTRACTS - CONTRACTS ARRAY LENGTH: {}", contracts.len());
         for contract_info in contracts {
             let contract_data = match self
                 .database
@@ -149,6 +150,7 @@ impl<D: DatabaseManager, G: GovernanceInterface> Compiler<D, G> {
             .output()
             // No muestra stdout. Genera proceso hijo y espera
             .map_err(|_| CompilerErrorResponses::CargoExecError)?;
+        println!("status {:?}", status);
         if !status.status.success() {
             return Err(CompilerErrorResponses::CargoExecError);
         }
@@ -220,6 +222,7 @@ fn get_sdk_functions_identifier() -> HashSet<String> {
             "write_byte".to_owned(),
             "pointer_len".to_owned(),
             "read_byte".to_owned(),
+            "cout".to_owned(),
         ]
         .into_iter(),
     )

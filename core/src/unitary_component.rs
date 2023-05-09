@@ -378,6 +378,7 @@ impl<D: DatabaseManager + 'static> Taple<D> {
             validation_sender.clone(),
             event_sender.clone(),
             approval_sender.clone(),
+            ledger_sender.clone(),
             bsx.clone(),
         );
         // Creation Governance
@@ -456,7 +457,7 @@ impl<D: DatabaseManager + 'static> Taple<D> {
             distribution_receiver,
             bsx.clone(),
             bsx.subscribe(),
-            task_sender,
+            task_sender.clone(),
             GovernanceAPI::new(governance_sender.clone()),
             signature_manager.clone(),
             self.settings.clone(),
@@ -469,6 +470,7 @@ impl<D: DatabaseManager + 'static> Taple<D> {
             signature_manager,
             bsx.clone(),
             bsx.subscribe(),
+            task_sender,
         );
         // Module initialization
         tokio::spawn(async move {

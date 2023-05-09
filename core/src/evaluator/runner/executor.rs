@@ -17,7 +17,7 @@ struct WasmContractResult {
     pub success: bool,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ContractResult {
     pub final_state: String,
     pub approval_required: bool,
@@ -155,6 +155,15 @@ impl<G: GovernanceInterface + Send> ContractExecutor<G> {
                 },
             )
             .map_err(|_| ExecutorErrorResponses::FunctionLinkingFailed("read_byte".to_owned()))?;
+        linker
+            .func_wrap(
+                "env",
+                "cout",
+                |mut caller: Caller<'_, MemoryManager>, ptr: u32| {
+                    println!("{}", ptr);
+                },
+            )
+            .expect("Failed write_byte link");
         Ok(linker)
     }
 }

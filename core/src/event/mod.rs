@@ -31,6 +31,7 @@ pub enum EventCommand {
         approval: Approval,
     },
     ValidatorResponse {
+        event_hash: DigestIdentifier,
         signature: Signature,
     },
 }

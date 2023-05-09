@@ -172,9 +172,7 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
         */
 
         let id = &approval_request
-            .proposal
-            .event_request
-            .signature
+            .subject_signature
             .content
             .event_content_hash;
 
@@ -247,22 +245,24 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
         }
 
         // Verificamos la firma
-        let hash = event_proposal_hash_gen(&approval_request)?;
-        if let Err(_error) = approval_request.subject_signature.content.signer.verify(
-            &hash.derivative(),
-            &approval_request.subject_signature.signature,
-        ) {
+        // let hash = event_proposal_hash_gen(&approval_request)?;
+        // if let Err(_error) = approval_request.subject_signature.content.signer.verify(
+        //     &hash.derivative(),
+        //     &approval_request.subject_signature.signature,
+        // ) {
+        //     return Ok(Err(ApprovalErrorResponse::InvalidSubjectSignature));
+        // }
+
+        let Ok(()) = approval_request.check_signatures() else {
             return Ok(Err(ApprovalErrorResponse::InvalidSubjectSignature));
         }
-
-        // Verificamos que el invocador es váĺido
         ;
-        if self
-            .check_event_request_signatures(&approval_request.proposal.event_request)?
-            .is_err()
-        {
-            return Ok(Err(ApprovalErrorResponse::InvalidInvokator));
-        }
+        // if self
+        //     .check_event_request_signatures(&approval_request.proposal.event_request)?
+        //     .is_err()
+        // {
+        //     return Ok(Err(ApprovalErrorResponse::InvalidInvokator));
+        // }
 
         // if !self
         //     .governance
@@ -431,7 +431,7 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
 fn event_proposal_hash_gen(
     approval_request: &EventProposal,
 ) -> Result<DigestIdentifier, ApprovalManagerError> {
-    Ok(DigestIdentifier::from_serializable_borsh(&approval_request)
+    Ok(DigestIdentifier::from_serializable_borsh(approval_request)
         .map_err(|_| ApprovalManagerError::HashGenerationFailed)?)
 }
 

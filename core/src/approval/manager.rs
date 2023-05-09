@@ -36,9 +36,7 @@ pub struct ApprovalAPI {
 
 impl ApprovalAPI {
     pub fn new(input_channel: SenderEnd<ApprovalMessages, ApprovalResponses>) -> Self {
-        Self {
-            input_channel
-        }
+        Self { input_channel }
     }
 }
 

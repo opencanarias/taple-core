@@ -87,7 +87,6 @@ impl<D: DatabaseManager> EventManager<D> {
         match self.event_completer.init().await {
             Ok(_) => {}
             Err(error) => {
-                log::error!("Problemas con Init de Event Manager: {:?}", error);
                 self.shutdown_sender.send(()).expect("Channel Closed");
                 return;
             }
@@ -196,7 +195,9 @@ impl<D: DatabaseManager> EventManager<D> {
                                 self.shutdown_sender.send(()).expect("Channel Closed");
                                 return Err(EventError::ChannelClosed);
                             }
-                            _ => {}
+                            _ => {
+                                log::error!("{:?}", error);
+                            }
                         },
                         _ => {}
                     }
@@ -223,8 +224,8 @@ impl<D: DatabaseManager> EventManager<D> {
                     }
                     EventResponse::NoResponse
                 }
-                EventCommand::ValidatorResponse { signature } => {
-                    match self.event_completer.validation_signatures(signature).await {
+                EventCommand::ValidatorResponse { event_hash, signature } => {
+                    match self.event_completer.validation_signatures(event_hash, signature).await {
                         Err(error) => match error {
                             EventError::ChannelClosed => {
                                 log::error!("Channel Closed");
@@ -238,7 +239,9 @@ impl<D: DatabaseManager> EventManager<D> {
                                 self.shutdown_sender.send(()).expect("Channel Closed");
                                 return Err(EventError::ChannelClosed);
                             }
-                            _ => {}
+                            _ => {
+                                log::error!("VALIDATION ERROR: {:?}", error);
+                            }
                         },
                         _ => {}
                     }
