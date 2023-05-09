@@ -820,6 +820,28 @@ impl<D: DatabaseManager> EventCompleter<D> {
         }
     }
 
+    pub async fn higher_governance_expected(
+        &self,
+        governance_id: DigestIdentifier,
+        who_asked: KeyIdentifier,
+    ) -> Result<(), EventError> {
+        self.message_channel
+            .tell(MessageTaskCommand::Request(
+                None,
+                TapleMessages::LedgerMessages(LedgerCommand::GetLCE {
+                    who_asked: self.own_identifier.clone(),
+                    subject_id: governance_id,
+                }),
+                vec![who_asked],
+                MessageConfig {
+                    timeout: TIMEOUT,
+                    replication_factor: 1.0,
+                },
+            ))
+            .await
+            .map_err(EventError::ChannelError)
+    }
+
     // TODO: Cambiar Vec por HashSet, no se por que puse vec
     async fn get_signers_and_quorum(
         &self,
