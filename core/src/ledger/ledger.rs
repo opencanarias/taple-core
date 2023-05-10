@@ -221,9 +221,8 @@ impl<D: DatabaseManager> Ledger<D> {
         let json_patch = event.content.event_proposal.proposal.json_patch.as_str();
         subject.update_subject(json_patch, event.content.event_proposal.proposal.sn)?;
         self.database.set_event(&subject_id, event)?;
-        self.database
-            .set_subject(&subject_id, subject)
-            .map_err(|error| LedgerError::DatabaseError(error))?;
+        self.database.set_subject(&subject_id, subject)?;
+        self.database.del_signatures(&subject_id, sn - 1)?;
         // Comprobar is_gov
         let is_gov = self.subject_is_gov.get(&subject_id);
         match is_gov {
@@ -334,7 +333,7 @@ impl<D: DatabaseManager> Ledger<D> {
                         .signer
                         .clone(),
                 };
-                let mut witnesses = self.get_witnesses(metadata).await?;
+                let witnesses = self.get_witnesses(metadata).await?;
                 if !witnesses.contains(&self.our_id) {
                     return Err(LedgerError::WeAreNotWitnesses(subject_id.to_str()));
                 }
@@ -379,7 +378,7 @@ impl<D: DatabaseManager> Ledger<D> {
                                 }
                             }
                             None => {
-                                // Es LCE y tenemos otro LCE ... TODO:
+                                // Es LCE y tenemos otro LCE para un sujeto en el que no tenemos génesis ... TODO:
                                 return Err(LedgerError::LCEBiggerSN);
                             }
                         }
@@ -457,7 +456,7 @@ impl<D: DatabaseManager> Ledger<D> {
                         if event.content.event_proposal.proposal.sn == subject.sn + 1
                             && ledger_state.head.is_none()
                         {
-                            // Caso Evento Siguientesn
+                            // Caso Evento Siguiente
                             let sn = event.content.event_proposal.proposal.sn;
                             let json_patch =
                                 event.content.event_proposal.proposal.json_patch.as_str();
@@ -473,8 +472,9 @@ impl<D: DatabaseManager> Ledger<D> {
                             )?;
                             self.database.set_event(&state_request.subject_id, event)?;
                             self.database
-                                .set_subject(&state_request.subject_id, subject)
-                                .map_err(|error| LedgerError::DatabaseError(error))?;
+                                .set_subject(&state_request.subject_id, subject)?;
+                            self.database
+                                .del_signatures(&state_request.subject_id, sn - 1)?;
                             self.ledger_state.insert(
                                 state_request.subject_id.clone(),
                                 LedgerState {
@@ -489,6 +489,9 @@ impl<D: DatabaseManager> Ledger<D> {
                                     sn,
                                 })
                                 .await?;
+                        } else if event.content.event_proposal.proposal.sn == subject.sn + 1 {
+                            // Caso en el que el LCE es S + 1
+                            // TODO:
                         } else if event.content.event_proposal.proposal.sn > subject.sn {
                             // Caso LCE
                             // Comprobar que LCE es mayor y quedarnos con el mas peque si tenemos otro
