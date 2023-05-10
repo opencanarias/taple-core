@@ -23,6 +23,8 @@ pub enum RequestError {
     UnexpectedResponse,
     #[error("Channel Closed")]
     ChannelClosed,
+    #[error("Governance version too high: {0}, {1}")]
+    GovernanceVersionTooHigh(String, u64),
     #[error("Invalid Request Type")]
     InvalidRequestType,
     #[error("Schema Not Found in policies")]

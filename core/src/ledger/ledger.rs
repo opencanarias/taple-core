@@ -692,6 +692,7 @@ impl<D: DatabaseManager> Ledger<D> {
                                     let metadata = self
                                         .check_genesis(event.clone(), subject_id.clone())
                                         .await?;
+                                    // TODO: Ahora que tengo el sujeto y el evento 0 tengo que comprobar el LCE, si está mal borrar genesis sujeto y lce y denunciar al creador
                                     if head == 1 {
                                         // Hacer event sourcing del evento 1 tambien y actualizar subject
                                         self.event_sourcing(subject_id.clone(), 1)?;

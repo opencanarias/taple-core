@@ -47,21 +47,21 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         invokator: KeyIdentifier,
         metadata: Metadata,
     ) -> Result<Result<Vec<String>, RequestError>, InternalError> {
-        // TODO: lo de governance version
         let mut governance_id = metadata.governance_id;
         if governance_id.digest.is_empty() {
             governance_id = metadata.subject_id;
         }
         let schema_id = metadata.schema_id;
-        let governance = match self.repo_access.get_subject(&governance_id) {
-            Ok(governance) => governance,
-            Err(DbError::EntryNotFound) => {
-                return Ok(Err(RequestError::GovernanceNotFound(
-                    governance_id.to_str(),
-                )))
-            }
-            Err(error) => return Err(InternalError::DatabaseError { source: error }),
-        };
+        let governance =
+            match self.governance_event_sourcing(&governance_id, metadata.governance_version) {
+                Ok(subject) => subject,
+                Err(error) => match error {
+                    RequestError::DatabaseError(err) => {
+                        return Err(InternalError::DatabaseError { source: err })
+                    }
+                    err => return Ok(Err(err)),
+                },
+            };
         let properties: Value = serde_json::from_str(&governance.properties)
             .map_err(|_| InternalError::DeserializationError)?;
         let policies = get_as_array(&properties, "policies")?;
@@ -92,15 +92,16 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         if governance_id.digest.is_empty() {
             return Ok(Ok(get_governance_initial_state()));
         }
-        let governance = match self.repo_access.get_subject(&governance_id) {
-            Ok(governance) => governance,
-            Err(DbError::EntryNotFound) => {
-                return Ok(Err(RequestError::GovernanceNotFound(
-                    governance_id.to_str(),
-                )))
-            }
-            Err(error) => return Err(InternalError::DatabaseError { source: error }),
-        };
+        let governance =
+            match self.governance_event_sourcing(&governance_id, metadata.governance_version) {
+                Ok(subject) => subject,
+                Err(error) => match error {
+                    RequestError::DatabaseError(err) => {
+                        return Err(InternalError::DatabaseError { source: err })
+                    }
+                    err => return Ok(Err(err)),
+                },
+            };
         let properties: Value = serde_json::from_str(&governance.properties)
             .map_err(|_| InternalError::DeserializationError)?;
         let schemas = get_as_array(&properties, "schemas")?;
@@ -122,15 +123,16 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         if governance_id.digest.is_empty() {
             return Ok(Ok(self.governance_schema.clone()));
         }
-        let governance = match self.repo_access.get_subject(&governance_id) {
-            Ok(governance) => governance,
-            Err(DbError::EntryNotFound) => {
-                return Ok(Err(RequestError::GovernanceNotFound(
-                    governance_id.to_str(),
-                )))
-            }
-            Err(error) => return Err(InternalError::DatabaseError { source: error }),
-        };
+        let governance =
+            match self.governance_event_sourcing(&governance_id, metadata.governance_version) {
+                Ok(subject) => subject,
+                Err(error) => match error {
+                    RequestError::DatabaseError(err) => {
+                        return Err(InternalError::DatabaseError { source: err })
+                    }
+                    err => return Ok(Err(err)),
+                },
+            };
         let properties: Value = serde_json::from_str(&governance.properties)
             .map_err(|_| InternalError::DeserializationError)?;
         let schemas = get_as_array(&properties, "schemas")?;
@@ -174,15 +176,16 @@ impl<D: DatabaseManager> InnerGovernance<D> {
             governance_id = metadata.subject_id.clone();
         }
         let schema_id = metadata.schema_id.clone();
-        let governance = match self.repo_access.get_subject(&governance_id) {
-            Ok(governance) => governance,
-            Err(DbError::EntryNotFound) => {
-                return Ok(Err(RequestError::GovernanceNotFound(
-                    governance_id.to_str(),
-                )))
-            }
-            Err(error) => return Err(InternalError::DatabaseError { source: error }),
-        };
+        let governance =
+            match self.governance_event_sourcing(&governance_id, metadata.governance_version) {
+                Ok(subject) => subject,
+                Err(error) => match error {
+                    RequestError::DatabaseError(err) => {
+                        return Err(InternalError::DatabaseError { source: err })
+                    }
+                    err => return Ok(Err(err)),
+                },
+            };
         let properties: Value = serde_json::from_str(&governance.properties)
             .map_err(|_| InternalError::DeserializationError)?;
         let policies = get_as_array(&properties, "policies")?;
@@ -267,15 +270,16 @@ impl<D: DatabaseManager> InnerGovernance<D> {
             governance_id = metadata.subject_id;
         }
         let schema_id = metadata.schema_id;
-        let governance = match self.repo_access.get_subject(&governance_id) {
-            Ok(governance) => governance,
-            Err(DbError::EntryNotFound) => {
-                return Ok(Err(RequestError::GovernanceNotFound(
-                    governance_id.to_str(),
-                )))
-            }
-            Err(error) => return Err(InternalError::DatabaseError { source: error }),
-        };
+        let governance =
+            match self.governance_event_sourcing(&governance_id, metadata.governance_version) {
+                Ok(subject) => subject,
+                Err(error) => match error {
+                    RequestError::DatabaseError(err) => {
+                        return Err(InternalError::DatabaseError { source: err })
+                    }
+                    err => return Ok(Err(err)),
+                },
+            };
         let properties: Value = serde_json::from_str(&governance.properties)
             .map_err(|_| InternalError::DeserializationError)?;
         let policies = get_as_array(&properties, "policies")?;
@@ -325,15 +329,16 @@ impl<D: DatabaseManager> InnerGovernance<D> {
             governance_id = metadata.subject_id;
         }
         let schema_id = metadata.schema_id;
-        let governance = match self.repo_access.get_subject(&governance_id) {
-            Ok(governance) => governance,
-            Err(DbError::EntryNotFound) => {
-                return Ok(Err(RequestError::GovernanceNotFound(
-                    governance_id.to_str(),
-                )))
-            }
-            Err(error) => return Err(InternalError::DatabaseError { source: error }),
-        };
+        let governance =
+            match self.governance_event_sourcing(&governance_id, metadata.governance_version) {
+                Ok(subject) => subject,
+                Err(error) => match error {
+                    RequestError::DatabaseError(err) => {
+                        return Err(InternalError::DatabaseError { source: err })
+                    }
+                    err => return Ok(Err(err)),
+                },
+            };
         let properties: Value = serde_json::from_str(&governance.properties)
             .map_err(|_| InternalError::DeserializationError)?;
         let policies = get_as_array(&properties, "policies")?;
@@ -351,15 +356,16 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         &self,
         governance_id: DigestIdentifier,
     ) -> Result<Result<Vec<Contract>, RequestError>, InternalError> {
-        let governance = match self.repo_access.get_subject(&governance_id) {
-            Ok(governance) => governance,
-            Err(DbError::EntryNotFound) => {
-                return Ok(Err(RequestError::GovernanceNotFound(
-                    governance_id.to_str(),
-                )))
-            }
-            Err(error) => return Err(InternalError::DatabaseError { source: error }),
-        };
+        let governance =
+            match self.governance_event_sourcing(&governance_id, metadata.governance_version) {
+                Ok(subject) => subject,
+                Err(error) => match error {
+                    RequestError::DatabaseError(err) => {
+                        return Err(InternalError::DatabaseError { source: err })
+                    }
+                    err => return Ok(Err(err)),
+                },
+            };
         let properties: Value = serde_json::from_str(&governance.properties)
             .map_err(|_| InternalError::DeserializationError)?;
         let schemas = get_as_array(&properties, "schemas")?;
@@ -430,19 +436,35 @@ impl<D: DatabaseManager> InnerGovernance<D> {
 
     fn governance_event_sourcing(
         &self,
-        governance_id: DigestIdentifier,
+        governance_id: &DigestIdentifier,
         governance_version: u64,
     ) -> Result<Subject, RequestError> {
-        let gov_genesis = self.repo_access.get_event(&governance_id, 0)?;
-        let init_state = get_governance_initial_state();
-        let init_state = serde_json::to_string(&init_state)
-            .map_err(|_| RequestError::ErrorParsingJsonString("Init state".to_owned()))?;
-        let mut gov_subject = Subject::from_genesis_event(gov_genesis, init_state)?;
-        for i in 1..=governance_version {
-            let event = self.repo_access.get_event(&governance_id, i)?;
-            gov_subject.update_subject(&event.content.event_proposal.proposal.json_patch, i)?;
+        let gov_subject = match self.repo_access.get_subject(governance_id) {
+            Ok(governance) => governance,
+            Err(DbError::EntryNotFound) => {
+                return Err(RequestError::GovernanceNotFound(governance_id.to_str()))
+            }
+            Err(error) => return Err(RequestError::DatabaseError(error)),
+        };
+        if gov_subject.sn == governance_version {
+            Ok(gov_subject)
+        } else if gov_subject.sn > governance_version {
+            let gov_genesis = self.repo_access.get_event(governance_id, 0)?;
+            let init_state = get_governance_initial_state();
+            let init_state = serde_json::to_string(&init_state)
+                .map_err(|_| RequestError::ErrorParsingJsonString("Init state".to_owned()))?;
+            let mut gov_subject = Subject::from_genesis_event(gov_genesis, init_state)?;
+            for i in 1..=governance_version {
+                let event = self.repo_access.get_event(governance_id, i)?;
+                gov_subject.update_subject(&event.content.event_proposal.proposal.json_patch, i)?;
+            }
+            Ok(gov_subject)
+        } else {
+            Err(RequestError::GovernanceVersionTooHigh(
+                governance_id.to_str(),
+                governance_version,
+            ))
         }
-        Ok(gov_subject)
     }
 }
 
