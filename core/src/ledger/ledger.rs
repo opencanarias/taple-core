@@ -464,7 +464,6 @@ impl<D: DatabaseManager> Ledger<D> {
                                 json_patch,
                                 event.content.event_proposal.proposal.sn,
                             )?;
-                            // TODO: No guardar firmas si hay un head con mayor sn
                             self.database.set_signatures(
                                 &state_request.subject_id,
                                 sn,
@@ -489,7 +488,7 @@ impl<D: DatabaseManager> Ledger<D> {
                                     sn,
                                 })
                                 .await?;
-                        } else if event.content.event_proposal.proposal.sn == subject.sn + 1 {
+                        // } else if event.content.event_proposal.proposal.sn == subject.sn + 1 {
                             // Caso en el que el LCE es S + 1
                             // TODO:
                         } else if event.content.event_proposal.proposal.sn > subject.sn {

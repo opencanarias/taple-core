@@ -92,16 +92,15 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         if governance_id.digest.is_empty() {
             return Ok(Ok(get_governance_initial_state()));
         }
-        let governance =
-            match self.governance_event_sourcing(&governance_id, metadata.governance_version) {
-                Ok(subject) => subject,
-                Err(error) => match error {
-                    RequestError::DatabaseError(err) => {
-                        return Err(InternalError::DatabaseError { source: err })
-                    }
-                    err => return Ok(Err(err)),
-                },
-            };
+        let governance = match self.governance_event_sourcing(&governance_id, governance_version) {
+            Ok(subject) => subject,
+            Err(error) => match error {
+                RequestError::DatabaseError(err) => {
+                    return Err(InternalError::DatabaseError { source: err })
+                }
+                err => return Ok(Err(err)),
+            },
+        };
         let properties: Value = serde_json::from_str(&governance.properties)
             .map_err(|_| InternalError::DeserializationError)?;
         let schemas = get_as_array(&properties, "schemas")?;
@@ -119,20 +118,20 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         &self,
         governance_id: DigestIdentifier,
         schema_id: String,
+        governance_version: u64,
     ) -> Result<Result<Value, RequestError>, InternalError> {
         if governance_id.digest.is_empty() {
             return Ok(Ok(self.governance_schema.clone()));
         }
-        let governance =
-            match self.governance_event_sourcing(&governance_id, metadata.governance_version) {
-                Ok(subject) => subject,
-                Err(error) => match error {
-                    RequestError::DatabaseError(err) => {
-                        return Err(InternalError::DatabaseError { source: err })
-                    }
-                    err => return Ok(Err(err)),
-                },
-            };
+        let governance = match self.governance_event_sourcing(&governance_id, governance_version) {
+            Ok(subject) => subject,
+            Err(error) => match error {
+                RequestError::DatabaseError(err) => {
+                    return Err(InternalError::DatabaseError { source: err })
+                }
+                err => return Ok(Err(err)),
+            },
+        };
         let properties: Value = serde_json::from_str(&governance.properties)
             .map_err(|_| InternalError::DeserializationError)?;
         let schemas = get_as_array(&properties, "schemas")?;
@@ -355,17 +354,17 @@ impl<D: DatabaseManager> InnerGovernance<D> {
     pub fn get_contracts(
         &self,
         governance_id: DigestIdentifier,
+        governance_version: u64,
     ) -> Result<Result<Vec<Contract>, RequestError>, InternalError> {
-        let governance =
-            match self.governance_event_sourcing(&governance_id, metadata.governance_version) {
-                Ok(subject) => subject,
-                Err(error) => match error {
-                    RequestError::DatabaseError(err) => {
-                        return Err(InternalError::DatabaseError { source: err })
-                    }
-                    err => return Ok(Err(err)),
-                },
-            };
+        let governance = match self.governance_event_sourcing(&governance_id, governance_version) {
+            Ok(subject) => subject,
+            Err(error) => match error {
+                RequestError::DatabaseError(err) => {
+                    return Err(InternalError::DatabaseError { source: err })
+                }
+                err => return Ok(Err(err)),
+            },
+        };
         let properties: Value = serde_json::from_str(&governance.properties)
             .map_err(|_| InternalError::DeserializationError)?;
         let schemas = get_as_array(&properties, "schemas")?;
