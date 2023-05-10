@@ -5,7 +5,7 @@ use crate::{
         self,
         errors::ChannelErrors,
         identifier::{Derivable, DigestIdentifier, KeyIdentifier},
-        models::event_content::Metadata,
+        models::{event_content::Metadata, state::Subject},
         schema_handler::{
             gov_models::{Contract, Invoke, Quorum, Role, Schema},
             initial_state::get_governance_initial_state,
@@ -367,8 +367,8 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         for schema in schemas {
             let mut contract: Contract = serde_json::from_value(schema["contract"].clone())
                 .map_err(|_| InternalError::InvalidGovernancePayload("5".into()))?;
-            let decoded_bytes = base64::decode(contract.content)
-                .map_err(|_| InternalError::Base64DecodingError)?;
+            let decoded_bytes =
+                base64::decode(contract.content).map_err(|_| InternalError::Base64DecodingError)?;
             contract.content =
                 String::from_utf8(decoded_bytes).map_err(|_| InternalError::Base64DecodingError)?;
             result.push(contract);
@@ -426,6 +426,23 @@ impl<D: DatabaseManager> InnerGovernance<D> {
                 source: ChannelErrors::ChannelClosed,
             })?;
         Ok(Ok(()))
+    }
+
+    fn governance_event_sourcing(
+        &self,
+        governance_id: DigestIdentifier,
+        governance_version: u64,
+    ) -> Result<Subject, RequestError> {
+        let gov_genesis = self.repo_access.get_event(&governance_id, 0)?;
+        let init_state = get_governance_initial_state();
+        let init_state = serde_json::to_string(&init_state)
+            .map_err(|_| RequestError::ErrorParsingJsonString("Init state".to_owned()))?;
+        let mut gov_subject = Subject::from_genesis_event(gov_genesis, init_state)?;
+        for i in 1..=governance_version {
+            let event = self.repo_access.get_event(&governance_id, i)?;
+            gov_subject.update_subject(&event.content.event_proposal.proposal.json_patch, i)?;
+        }
+        Ok(gov_subject)
     }
 }
 

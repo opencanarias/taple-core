@@ -1,9 +1,12 @@
+use crate::{commons::errors::SubjectError, database::Error as DbError};
 use thiserror::Error;
-
-use crate::database::Error as DbError;
 
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum RequestError {
+    #[error("Database Error")]
+    DatabaseError(#[from] DbError),
+    #[error("Subject Error")]
+    SubjectError(#[from] SubjectError),
     #[error("Governance requested not found")]
     GovernanceNotFound(String),
     #[error("Subject requested not found")]
@@ -12,6 +15,8 @@ pub enum RequestError {
     SchemaNotFound(String),
     #[error("JSON Schema compile error")]
     JSONCompileError,
+    #[error("Error Parsing Json String")]
+    ErrorParsingJsonString(String),
     #[error("Invalid KeyIdentifier {0}")]
     InvalidKeyIdentifier(String),
     #[error("Unexpected response")]
@@ -25,7 +30,7 @@ pub enum RequestError {
     #[error("The specified governance ID is of a subject")]
     InvalidGovernanceID,
     #[error("Unexpect Payload")]
-    UnexpectedPayloadType
+    UnexpectedPayloadType,
 }
 
 #[derive(Error, Debug)]
@@ -44,8 +49,8 @@ pub enum InternalError {
     #[error("Database error: {}", source)]
     DatabaseError {
         #[from]
-        source: DbError
+        source: DbError,
     },
     #[error("Base 64 decode error")]
-    Base64DecodingError
+    Base64DecodingError,
 }
