@@ -288,6 +288,11 @@ impl<M: DatabaseManager> DB<M> {
         self.subject_db.put(&id, subject)
     }
 
+    pub fn del_subject(&self, subject_id: &DigestIdentifier) -> Result<(), Error> {
+        let id = subject_id.to_str();
+        self.subject_db.del(&id)
+    }
+
     // pub fn apply_event_sourcing(&self, event_content: &EventContent) -> Result<(), Error> {
     //     // TODO: Consultar sobre si este método debería existir
     //     let subject_id = &event_content.subject_id;

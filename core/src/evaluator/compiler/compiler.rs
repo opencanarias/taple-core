@@ -65,7 +65,7 @@ impl<D: DatabaseManager, G: GovernanceInterface> Compiler<D, G> {
         // Read the contract from database
         let contracts = self
             .gov_api
-            .get_contracts(governance_id.clone())
+            .get_contracts(governance_id.clone(), governance_version)
             .await
             .map_err(CompilerErrorResponses::GovernanceError)?;
         log::info!("UPDATE CONTRACTS - CONTRACTS ARRAY LENGTH: {}", contracts.len());

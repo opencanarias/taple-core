@@ -49,8 +49,7 @@ pub enum GovernanceMessage {
     GetSchema {
         governance_id: DigestIdentifier,
         schema_id: String,
-        // TODO: Consider the version. The Event Sourcing of the events must be taken into account.
-        // governance_version: u64,
+        governance_version: u64,
     },
     GetSigners {
         metadata: Metadata,
@@ -66,6 +65,7 @@ pub enum GovernanceMessage {
     },
     GetContracts {
         governance_id: DigestIdentifier,
+        governance_version: u64,
     },
     GetGovernanceVersion {
         governance_id: DigestIdentifier,
