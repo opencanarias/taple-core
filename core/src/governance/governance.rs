@@ -87,8 +87,13 @@ impl<D: DatabaseManager> Governance<D> {
                     GovernanceMessage::GetSchema {
                         governance_id,
                         schema_id,
+                        governance_version,
                     } => {
-                        let to_send = self.inner_governance.get_schema(governance_id, schema_id)?;
+                        let to_send = self.inner_governance.get_schema(
+                            governance_id,
+                            schema_id,
+                            governance_version,
+                        )?;
                         Ok(sender
                             .send(GovernanceResponse::GetSchema(to_send))
                             .map_err(|_| InternalError::OneshotClosed)?)
@@ -123,8 +128,13 @@ impl<D: DatabaseManager> Governance<D> {
                             .send(GovernanceResponse::GetInvokeInfo(to_send))
                             .map_err(|_| InternalError::OneshotClosed)?)
                     }
-                    GovernanceMessage::GetContracts { governance_id } => {
-                        let to_send = self.inner_governance.get_contracts(governance_id)?;
+                    GovernanceMessage::GetContracts {
+                        governance_id,
+                        governance_version,
+                    } => {
+                        let to_send = self
+                            .inner_governance
+                            .get_contracts(governance_id, governance_version)?;
                         Ok(sender
                             .send(GovernanceResponse::GetContracts(to_send))
                             .map_err(|_| InternalError::OneshotClosed)?)
@@ -196,6 +206,7 @@ pub trait GovernanceInterface: Sync + Send {
         &self,
         governance_id: DigestIdentifier,
         schema_id: String,
+        governance_version: u64,
     ) -> Result<serde_json::Value, RequestError>;
 
     async fn get_signers(
@@ -219,6 +230,7 @@ pub trait GovernanceInterface: Sync + Send {
     async fn get_contracts(
         &self,
         governance_id: DigestIdentifier,
+        governance_version: u64,
     ) -> Result<Vec<Contract>, RequestError>;
 
     async fn get_governance_version(
@@ -280,12 +292,14 @@ impl GovernanceInterface for GovernanceAPI {
         &self,
         governance_id: DigestIdentifier,
         schema_id: String,
+        governance_version: u64,
     ) -> Result<serde_json::Value, RequestError> {
         let response = self
             .sender
             .ask(GovernanceMessage::GetSchema {
                 governance_id: governance_id.clone(),
                 schema_id,
+                governance_version,
             })
             .await
             .map_err(|_| RequestError::ChannelClosed)?;
@@ -356,10 +370,14 @@ impl GovernanceInterface for GovernanceAPI {
     async fn get_contracts(
         &self,
         governance_id: DigestIdentifier,
+        governance_version: u64,
     ) -> Result<Vec<Contract>, RequestError> {
         let response = self
             .sender
-            .ask(GovernanceMessage::GetContracts { governance_id })
+            .ask(GovernanceMessage::GetContracts {
+                governance_id,
+                governance_version,
+            })
             .await
             .map_err(|_| RequestError::ChannelClosed)?;
         if let GovernanceResponse::GetContracts(contracts) = response {

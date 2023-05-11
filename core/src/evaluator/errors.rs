@@ -51,7 +51,11 @@ pub enum ExecutorErrorResponses {
     #[error("Can't get roles of invokator")]
     RolesObtentionFailed,
     #[error("Cant genererate Contract Result")]
-    CantGenerateContractResult
+    CantGenerateContractResult,
+    #[error("Our Gov Version is Lower than sender")]
+    OurGovIsLower,
+    #[error("Our Gov Version is Higher than sender")]
+    OurGovIsHigher,
 }
 
 #[derive(Error, Debug, Clone)]
