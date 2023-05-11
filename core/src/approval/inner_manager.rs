@@ -2,13 +2,14 @@ use std::collections::HashMap;
 
 use crate::{
     commons::{
+        config::VotationType,
         models::{
             approval::{Approval, ApprovalContent},
             event_proposal::EventProposal,
-            state::{Subject},
+            state::Subject,
             Acceptance,
         },
-        self_signature_manager::{SelfSignatureInterface, SelfSignatureManager}, config::VotationType,
+        self_signature_manager::{SelfSignatureInterface, SelfSignatureManager},
     },
     database::DB,
     event_content::Metadata,
@@ -19,7 +20,8 @@ use crate::{
 };
 
 use super::{
-    error::{ApprovalErrorResponse, ApprovalManagerError}, ApprovalPetitionData,
+    error::{ApprovalErrorResponse, ApprovalManagerError},
+    ApprovalPetitionData,
 };
 use crate::database::Error as DbError;
 use crate::governance::stage::ValidationStage;
@@ -95,7 +97,10 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
         }
     }
 
-    pub fn get_single_request(&self, request_id: &DigestIdentifier) -> Result<ApprovalPetitionData, ApprovalErrorResponse> {
+    pub fn get_single_request(
+        &self,
+        request_id: &DigestIdentifier,
+    ) -> Result<ApprovalPetitionData, ApprovalErrorResponse> {
         let Some(request) = self.request_table.get(request_id) else {
             return Err(ApprovalErrorResponse::ApprovalRequestNotFound);
         };
@@ -114,7 +119,11 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
         &self,
         governance_id: &DigestIdentifier,
     ) -> Result<Result<u64, ApprovalErrorResponse>, ApprovalManagerError> {
-        match self.governance.get_governance_version(governance_id.to_owned()).await {
+        match self
+            .governance
+            .get_governance_version(governance_id.to_owned())
+            .await
+        {
             Ok(data) => Ok(Ok(data)),
             Err(RequestError::GovernanceNotFound(_str)) => {
                 Ok(Err(ApprovalErrorResponse::GovernanceNotFound))
@@ -170,7 +179,6 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
          intervención. En ese caso es precisar eliminar la petición y actualizar a la nueva.
          Debemos comprobar siempre si ya tenemos la petición que nos envían.
         */
-
         let id = &approval_request
             .subject_signature
             .content
@@ -219,10 +227,26 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
             Err(error) => return Ok(Err(error)),
         };
 
-        let evaluation = approval_request.proposal.evaluation.clone().expect("los genesis no se aprueban");
+        let evaluation = approval_request
+            .proposal
+            .evaluation
+            .clone()
+            .expect("los genesis no se aprueban");
 
-        if version != evaluation.governance_version {
-            return Ok(Err(ApprovalErrorResponse::InvalidGovernanceVersion));
+        if version > evaluation.governance_version {
+            // Nuestra gov es mayor: mandamos mensaje para que actualice el emisor
+            return Ok(Err(ApprovalErrorResponse::OurGovIsHigher {
+                our_id: self.signature_manager.get_own_identifier(),
+                sender: subject_data.owner.clone(),
+                gov_id: subject_data.governance_id.clone(),
+            }));
+        } else if version < evaluation.governance_version {
+            // Nuestra gov es menor: no podemos hacer nada. Pedimos LCE al que nos lo envió
+            return Ok(Err(ApprovalErrorResponse::OurGovIsLower {
+                our_id: self.signature_manager.get_own_identifier(),
+                sender: subject_data.owner.clone(),
+                gov_id: subject_data.governance_id.clone(),
+            }));
         }
 
         let metadata = create_metadata(&subject_data, version);
@@ -313,13 +337,17 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
 
         match evaluation.acceptance {
             Acceptance::Ok => {
-                if !(approval_request.proposal.evaluation_signatures.len() as u32 >= evaluator_quorum) {
+                if !(approval_request.proposal.evaluation_signatures.len() as u32
+                    >= evaluator_quorum)
+                {
                     return Ok(Err(ApprovalErrorResponse::NoQuorumReached));
                 }
             }
             Acceptance::Ko => {
                 let negativate_quorum = evaluators.len() as u32 - evaluator_quorum;
-                if !(approval_request.proposal.evaluation_signatures.len() as u32 > negativate_quorum) {
+                if !(approval_request.proposal.evaluation_signatures.len() as u32
+                    > negativate_quorum)
+                {
                     return Ok(Err(ApprovalErrorResponse::NoQuorumReached));
                 }
             }
@@ -343,7 +371,7 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
                 .event_content_hash
                 .clone(),
             sender: subject_data.owner.clone(),
-            json_patch: approval_request.proposal.json_patch.clone()
+            json_patch: approval_request.proposal.json_patch.clone(),
         };
 
         self.subject_been_approved
