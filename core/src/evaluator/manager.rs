@@ -152,6 +152,15 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send + Clone + 'static> Evalua
                             )).await.map_err(|_| EvaluatorError::ChannelNotAvailable)?;
                             EvaluatorResponse::AskForEvaluation(Ok(()))
                         }
+                        Err(ExecutorErrorResponses::OurGovIsHigher) => {
+                            // Mandar mensaje de actualización pendiente
+                            self.messenger_channel.tell(MessageTaskCommand::Request(None, TapleMessages::EventMessage(crate::event::EventCommand::HigherGovernanceExpected { governance_id: data.context.governance_id, who_asked: self.signature_manager.get_own_identifier() }), vec![data.context.owner], MessageConfig::direct_response())).await.map_err(|_| EvaluatorError::ChannelNotAvailable)?;
+                            EvaluatorResponse::AskForEvaluation(Ok(()))
+                        }
+                        Err(ExecutorErrorResponses::OurGovIsLower) => {
+                            // No podemos evaluar porque nos la van a rechazar
+                            EvaluatorResponse::AskForEvaluation(Ok(()))
+                        }
                         Err(ExecutorErrorResponses::DatabaseError(error)) => {
                             return Err(EvaluatorError::DatabaseError(error))
                         }

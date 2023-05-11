@@ -39,6 +39,18 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send> TapleRunner<D, G> {
         execute_contract: &EventPreEvaluation,
         state_data: &StateRequest,
     ) -> Result<ExecuteContractResponse, ExecutorErrorResponses> {
+        // Check governance version
+        let governance = self
+            .database
+            .get_subject(&execute_contract.context.governance_id)
+            .map_err(|db_err| ExecutorErrorResponses::DatabaseError(db_err.to_string()))?;
+        if governance.sn > execute_contract.context.governance_version {
+            // Nuestra gov es mayor: mandamos mensaje para que actualice el emisor
+            return Err(ExecutorErrorResponses::OurGovIsHigher)
+        } else if governance.sn < execute_contract.context.governance_version {
+            // Nuestra gov es menor: no podemos hacer nada ¿Le pedimos o esperamos? de momento esperamos
+            return Err(ExecutorErrorResponses::OurGovIsLower)
+        }
         let context_hash = Self::generate_context_hash(execute_contract)?;
         let (contract, governance_version) = if execute_contract.context.schema_id == "governance"
             && execute_contract.context.governance_id.digest.is_empty()
