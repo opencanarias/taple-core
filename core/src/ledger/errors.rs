@@ -48,4 +48,6 @@ pub enum LedgerError {
     EventDoesNotFitHash,
     #[error("We are not witnesses: {0}")]
     WeAreNotWitnesses(String),
+    #[error("Invalid LCE After Genesis: {0}")]
+    InvalidLCEAfterGenesis(String),
 }
