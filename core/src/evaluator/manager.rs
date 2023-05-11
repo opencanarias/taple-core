@@ -159,6 +159,8 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send + Clone + 'static> Evalua
                         }
                         Err(ExecutorErrorResponses::OurGovIsLower) => {
                             // No podemos evaluar porque nos la van a rechazar
+                            // Pedir LCE al que nos mando la petición
+                            self.messenger_channel.tell(MessageTaskCommand::Request(None, TapleMessages::LedgerMessages(crate::ledger::LedgerCommand::GetLCE { who_asked: self.signature_manager.get_own_identifier(), subject_id: data.context.governance_id }), vec![data.context.owner], MessageConfig::direct_response())).await.map_err(|_| EvaluatorError::ChannelNotAvailable)?;
                             EvaluatorResponse::AskForEvaluation(Ok(()))
                         }
                         Err(ExecutorErrorResponses::DatabaseError(error)) => {
