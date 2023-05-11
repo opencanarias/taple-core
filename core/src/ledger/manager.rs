@@ -96,6 +96,7 @@ impl<D: DatabaseManager> EventManager<D> {
                 (None, data)
             }
         };
+        log::error!("MSG EN LEDGER {:?}", data);
         let response = {
             match data {
                 LedgerCommand::OwnEvent { event, signatures } => {

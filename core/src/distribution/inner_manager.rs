@@ -1,4 +1,6 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+
+use futures::TryFutureExt;
 
 use crate::commons::channel::SenderEnd;
 use crate::commons::models::state::Subject;
@@ -48,6 +50,201 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
             timeout: settings.node.timeout,
             replication_factor: settings.node.replication_factor,
         }
+    }
+
+    pub async fn governance_updated(
+        &self,
+        governance_id: &DigestIdentifier,
+    ) -> Result<(), DistributionManagerError> {
+        log::warn!("SE LLAMA A GOVERNANCE_UPDATED");
+        log::warn!("GOVERNANCE ID {}", governance_id.to_str());
+        let all_subjects_ids = self
+            .db
+            .get_subjects_by_governance(governance_id)
+            .map_err(|error| DistributionManagerError::DatabaseError(error.to_string()))?;
+        log::warn!("all_subjects_ids len: {}", all_subjects_ids.len());
+        let governance = self
+            .db
+            .get_subject(governance_id)
+            .map_err(|error| DistributionManagerError::DatabaseError(error.to_string()))?;
+        // Tenemos los IDs de los sujetos afectados. Si seguimos siendo testigos o no dependerá en gran medida del namespace y el schema_id
+        for id in all_subjects_ids {
+            log::warn!("SUBJECT ID {}", id.to_str());
+            let subject = self
+                .db
+                .get_subject(&id)
+                .map_err(|error| DistributionManagerError::DatabaseError(error.to_string()))?;
+            let metadata = build_metadata(&subject, governance.sn);
+            let witnesses = self
+                .governance
+                .get_signers(metadata, ValidationStage::Witness)
+                .await
+                .map_err(|_| DistributionManagerError::GovernanceChannelNotAvailable)?;
+            if !witnesses.contains(&self.signature_manager.get_own_identifier()) {
+                // Ya no somos testigos
+                self.db
+                    .del_witness_signatures(&id)
+                    .map_err(|error| DistributionManagerError::DatabaseError(error.to_string()))?;
+                continue;
+            }
+            log::warn!("Seguimos siendo testigos");
+            // Seguimos siendo testigos. Comprobamos si nos falta alguna firma.
+            let (_, current_signatures) = self
+                .db
+                .get_witness_signatures(&id)
+                .map_err(|error| DistributionManagerError::DatabaseError(error.to_string()))?;
+            let current_signers: HashSet<KeyIdentifier> = current_signatures
+                .into_iter()
+                .map(|s| s.content.signer)
+                .collect();
+            log::warn!("Current signers len {}", current_signers.len());
+            let remaining_signers: HashSet<KeyIdentifier> =
+                witnesses.difference(&current_signers).cloned().collect();
+            if !remaining_signers.is_empty() {
+                log::warn!("Se envía a la red");
+                self.send_signature_request(&id, subject.sn, witnesses, &remaining_signers)
+                    .await?;
+            }
+        }
+        Ok(())
+    }
+
+    async fn restart_distribution(
+        &self,
+        subject: &Subject,
+        signatures: &HashSet<Signature>,
+        witnesses: &HashSet<KeyIdentifier>,
+    ) -> Result<(), DistributionManagerError> {
+        let remaining_signatures = self.get_remaining_signers(signatures, witnesses);
+        if remaining_signatures.len() > 0 {
+            self.send_signature_request(
+                &subject.subject_id,
+                subject.sn,
+                witnesses.clone(),
+                &remaining_signatures,
+            )
+            .await?;
+        }
+        Ok(())
+    }
+
+    pub async fn init(&self) -> Result<(), DistributionManagerError> {
+        // Tenemos que comprobar todos los sujetos que conocemos y comprobar si tenemos todas las firmas de
+        // testificación para su último evento. Estos sujetos serán de diferentes gobernanzas, y para cada una de
+        // ellas las condiciones serán diferentes. Se tata pues de un proceso complejo.
+        // No obstante, en la práctica, el proceso se puede simplificar simplemente recurriendo a las firmas guardadas
+        // de testificación. Si tenemos al menos una firma, entonces es que estábamos testificando el sujeto. No
+        // obtante no hay manera de evitar el consultar la gobernanza. Como se puede suponer, es necesario implementar
+        // algún tipo de caché para evitar consultar muchas veces la misma gobernanza. Una alterntiva es agrupar los sujetos
+        // por gobernanzas en su lugar.
+        let mut governances_version = HashMap::new();
+        let signatures = self
+            .db
+            .get_all_witness_signatures()
+            .map_err(|error| DistributionManagerError::DatabaseError(error.to_string()))?;
+        // Tenemos el SubjectID, pero necesitamos la gobernanza de cada uno de ellos, así como el sn
+        // Se deberá de pedir cada sujeto por separado.
+        let mut governances_still_witness_flags: HashMap<
+            (DigestIdentifier, String, String),
+            (bool, Option<HashSet<KeyIdentifier>>),
+        > = HashMap::new();
+        for (subject_id, sn, signatures) in signatures.iter() {
+            log::warn!("HAY FIRMAS");
+            let subject = self
+                .db
+                .get_subject(subject_id)
+                .map_err(|error| DistributionManagerError::DatabaseError(error.to_string()))?;
+            if sn != &subject.sn {
+                log::warn!("SN NO COINCIDE");
+                // Si el SN no coincide es que o no se llamó el proceso de distribución o se completó con éxito, en cualquiera de los
+                // casos, el Ledger debería volver a solicitar la operación
+                continue;
+            }
+            let schema_id = subject.schema_id.clone();
+            let namespace = subject.namespace.clone();
+            let governance_id = if &subject.schema_id == "governance" {
+                subject.subject_id.clone()
+            } else {
+                subject.governance_id.clone()
+            };
+            // Comprobamos si ya hemos analizado sujetos del mismo tipo previamente
+            if let Some((node_is_witness, witnesses)) = governances_still_witness_flags.get(&(
+                governance_id.clone(),
+                schema_id.clone(),
+                namespace.clone(),
+            )) {
+                if !node_is_witness {
+                    // Ya no somos testigos. Descartamos las firmas.
+                    self.db
+                        .del_witness_signatures(subject_id)
+                        .map_err(|error| {
+                            DistributionManagerError::DatabaseError(error.to_string())
+                        })?;
+                    continue;
+                } else {
+                    log::warn!("DISTRIBUIR");
+                    // Somos testigos. Realizamos el proceso de solicitud de firmas
+                    // En principio, ya tenemos nuestra firma.
+                    // Es posible que los testigos hayan cambiado y algunas firmas ya no sean correctas. No obstante,
+                    // esto no supone ningún problema. Tener firmas de más es irrelevante a nivel de protocolo.
+                    self.restart_distribution(&subject, &signatures, witnesses.as_ref().unwrap())
+                        .await?;
+                    continue;
+                }
+            }
+            // No hemos analizado previamente la misma combinación de gobernanza, schema y namespace
+            // Pedimos la gobernanza ya que necesitamos saber su versión actual
+            let governance_version = {
+                if &schema_id == "governance" {
+                    governances_version.insert(governance_id.clone(), subject.sn);
+                    subject.sn
+                } else {
+                    match governances_version.get(&subject.governance_id) {
+                        Some(version) => *version,
+                        None => {
+                            let governance =
+                                self.db.get_subject(&governance_id).map_err(|error| {
+                                    DistributionManagerError::DatabaseError(error.to_string())
+                                })?;
+                            governances_version.insert(governance_id.clone(), governance.sn);
+                            governance.sn
+                        }
+                    }
+                }
+            };
+            // Comprobamos si seguimos siendo testigos para los sujetos de esta gobernanza
+            let witnesses = self
+                .governance
+                .get_signers(
+                    build_metadata(&subject, governance_version),
+                    ValidationStage::Witness,
+                )
+                .await
+                .map_err(|_| DistributionManagerError::GovernanceChannelNotAvailable)?;
+            if witnesses.contains(&self.signature_manager.get_own_identifier()) {
+                // Seguimos siendo testigos
+                log::warn!("REINTENTAR 2 INTENTO");
+                for i in witnesses.iter() {
+                    log::warn!("{}", i.to_str());
+                }
+                self.restart_distribution(&subject, &signatures, &witnesses)
+                    .await?;
+                governances_still_witness_flags.insert(
+                    (governance_id, schema_id, namespace),
+                    (true, Some(witnesses)),
+                );
+            } else {
+                // Ya no somos testigos
+                // Podemos borrar la firmas. Indicamos además que esta combinación de
+                // gobernanza + schema + namespace no es válida
+                self.db
+                    .del_witness_signatures(subject_id)
+                    .map_err(|error| DistributionManagerError::DatabaseError(error.to_string()))?;
+                governances_still_witness_flags
+                    .insert((governance_id, schema_id, namespace), (false, None));
+            }
+        }
+        Ok(())
     }
 
     pub async fn start_distribution(
@@ -212,6 +409,22 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
         return Ok(Ok(()));
     }
 
+    fn get_remaining_signers(
+        &self,
+        current_signatures: &HashSet<Signature>,
+        targets: &HashSet<KeyIdentifier>,
+    ) -> HashSet<KeyIdentifier> {
+        let current_signers: HashSet<&KeyIdentifier> = current_signatures
+            .iter()
+            .map(|s| &s.content.signer)
+            .collect();
+        let targets_ref: HashSet<&KeyIdentifier> = targets.iter().map(|s| s).collect();
+        targets_ref
+            .difference(&current_signers)
+            .map(|&s| s.clone())
+            .collect()
+    }
+
     pub async fn signatures_received(
         &self,
         msg: SignaturesReceived,
@@ -266,15 +479,8 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
                 let current_signatures: HashSet<Signature> =
                     current_signatures.union(&msg.signatures).cloned().collect();
                 // Calculamos firmas que nos faltan
-                let current_signers: HashSet<&KeyIdentifier> = current_signatures
-                    .iter()
-                    .map(|s| &s.content.signer)
-                    .collect();
-                let targets_ref: HashSet<&KeyIdentifier> = targets.iter().map(|s| s).collect();
-                let remaining_signatures: HashSet<KeyIdentifier> = targets_ref
-                    .difference(&current_signers)
-                    .map(|&s| s.clone())
-                    .collect();
+                let remaining_signatures =
+                    self.get_remaining_signers(&current_signatures, &targets);
                 self.db
                     .set_witness_signatures(&msg.subject_id, msg.sn, current_signatures)
                     .map_err(|error| DistributionManagerError::DatabaseError(error.to_string()))?;

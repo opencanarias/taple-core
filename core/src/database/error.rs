@@ -13,6 +13,6 @@ pub enum Error {
   SubjectApplyFailed,
   #[error("Conversion to Digest Identifier failed")]
   NoDigestIdentifier,
-  #[error("An error withing the database custom implementation")]
+  #[error("An error withing the database custom implementation: {0}")]
   CustomError(String),
 }

@@ -172,6 +172,7 @@ impl<D: DatabaseManager> Ledger<D> {
         } else {
             self.subject_is_gov.insert(subject_id.clone(), false);
         }
+        self.database.set_governance_index(&subject_id, &subject.governance_id)?;
         self.database.set_subject(&subject_id, subject)?;
         self.database.set_event(&subject_id, event)?;
         // Actualizar Ledger State
@@ -866,6 +867,7 @@ impl<D: DatabaseManager> Ledger<D> {
         let init_state = serde_json::to_string(&init_state)
             .map_err(|_| LedgerError::ErrorParsingJsonString("Init state".to_owned()))?;
         let subject = Subject::from_genesis_event(event.clone(), init_state)?;
+        self.database.set_governance_index(&subject_id, &subject.governance_id)?;
         self.database.set_event(&subject_id, event)?;
         self.database.set_subject(&subject_id, subject)?;
         Ok(metadata)

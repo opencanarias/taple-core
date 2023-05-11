@@ -455,6 +455,7 @@ impl<D: DatabaseManager + 'static> Taple<D> {
         // Creation DistributionManager
         let distribution_manager = DistributionManager::new(
             distribution_receiver,
+            governance_update_sx.subscribe(),
             bsx.clone(),
             bsx.subscribe(),
             task_sender.clone(),

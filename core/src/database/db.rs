@@ -25,6 +25,7 @@ const NOTARY_TABLE: &str = "notary";
 const CONTRACT_TABLE: &str = "contract";
 const NOTARY_SIGNATURES: &str = "notary-signatures";
 const WITNESS_SIGNATURES: &str = "witness-signatures";
+const SUBJECTS_BY_GOVERNANCE: &str = "governance-index";
 
 pub struct DB<M: DatabaseManager> {
     _manager: Arc<M>,
@@ -39,6 +40,7 @@ pub struct DB<M: DatabaseManager> {
     notary_signatures_db:
         Box<dyn DatabaseCollection<InnerDataType = (u64, HashSet<NotaryEventResponse>)>>,
     witness_signatures_db: Box<dyn DatabaseCollection<InnerDataType = (u64, HashSet<Signature>)>>,
+    subjects_by_governance: Box<dyn DatabaseCollection<InnerDataType = DigestIdentifier>>,
 }
 
 impl<M: DatabaseManager> DB<M> {
@@ -53,6 +55,7 @@ impl<M: DatabaseManager> DB<M> {
         let contract_db = manager.create_collection(CONTRACT_TABLE);
         let notary_signatures_db = manager.create_collection(NOTARY_SIGNATURES);
         let witness_signatures_db = manager.create_collection(WITNESS_SIGNATURES);
+        let subjects_by_governance = manager.create_collection(SUBJECTS_BY_GOVERNANCE);
         Self {
             _manager: manager,
             signature_db,
@@ -65,6 +68,7 @@ impl<M: DatabaseManager> DB<M> {
             contract_db,
             notary_signatures_db,
             witness_signatures_db,
+            subjects_by_governance,
         }
     }
 
@@ -186,6 +190,15 @@ impl<M: DatabaseManager> DB<M> {
         events_by_subject.get(&sn.to_string())
     }
 
+    pub fn get_all_witness_signatures(
+        &self,
+    ) -> Result<Vec<(DigestIdentifier, u64, HashSet<Signature>)>, Error> {
+        let iter = self.witness_signatures_db.iter();
+        Ok(iter
+            .map(|ws| (DigestIdentifier::from_str(&ws.0).unwrap(), ws.1 .0, ws.1 .1))
+            .collect())
+    }
+
     pub fn get_witness_signatures(
         &self,
         subject_id: &DigestIdentifier,
@@ -242,7 +255,7 @@ impl<M: DatabaseManager> DB<M> {
     ) -> Result<(), Error> {
         let id = subject_id.to_str();
         let total_signatures = match self.notary_signatures_db.get(&id) {
-            Ok((_, other)) => signatures.union(&other).cloned().collect(),
+            Ok((_u, other)) => signatures.union(&other).cloned().collect(),
             Err(Error::EntryNotFound) => signatures,
             Err(error) => {
                 // logError!("Error detected in database get_event operation: {}", error);
@@ -277,6 +290,27 @@ impl<M: DatabaseManager> DB<M> {
 
     pub fn get_subject(&self, subject_id: &DigestIdentifier) -> Result<Subject, Error> {
         self.subject_db.get(&subject_id.to_str())
+    }
+
+    pub fn set_governance_index(
+        &self,
+        subject_id: &DigestIdentifier,
+        gobernance_id: &DigestIdentifier,
+    ) -> Result<(), Error> {
+        log::error!("PASA POR SET GOVERNANCE index");
+        let intermediate_partition = self.subjects_by_governance.partition("xxxxxxxx");
+        let subjects_by_governance = intermediate_partition.partition(&gobernance_id.to_str());
+        subjects_by_governance.put(&subject_id.to_str(), subject_id.clone())
+    }
+
+    pub fn get_subjects_by_governance(
+        &self,
+        gobernance_id: &DigestIdentifier,
+    ) -> Result<Vec<DigestIdentifier>, Error> {
+        let intermediate_partition = self.subjects_by_governance.partition("xxxxxxxx");
+        let subjects_by_governance = intermediate_partition.partition(&gobernance_id.to_str());
+        let iter = subjects_by_governance.iter();
+        Ok(iter.map(|(_, id)| id).collect())
     }
 
     pub fn set_subject(
