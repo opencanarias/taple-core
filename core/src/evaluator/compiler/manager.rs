@@ -4,14 +4,14 @@ use crate::{
     database::DB,
     evaluator::errors::CompilerError,
     governance::{GovernanceInterface, GovernanceUpdatedMessage},
-    DatabaseManager,
+    DatabaseCollection
 };
 
 use super::compiler::Compiler;
 
-pub struct TapleCompiler<D: DatabaseManager, G: GovernanceInterface> {
+pub struct TapleCompiler<C: DatabaseCollection, G: GovernanceInterface> {
     input_channel: tokio::sync::broadcast::Receiver<GovernanceUpdatedMessage>,
-    inner_compiler: Compiler<D, G>,
+    inner_compiler: Compiler<C, G>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
 }
@@ -22,10 +22,10 @@ enum CompilerCodes {
     Ok,
 }
 
-impl<D: DatabaseManager, G: GovernanceInterface + Send> TapleCompiler<D, G> {
+impl<C: DatabaseCollection, G: GovernanceInterface + Send> TapleCompiler<C, G> {
     pub fn new(
         input_channel: tokio::sync::broadcast::Receiver<GovernanceUpdatedMessage>,
-        database: DB<D>,
+        database: DB<C>,
         gov_api: G,
         contracts_path: String,
         engine: Engine,
@@ -34,7 +34,7 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send> TapleCompiler<D, G> {
     ) -> Self {
         Self {
             input_channel,
-            inner_compiler: Compiler::<D, G>::new(database, gov_api, engine, contracts_path),
+            inner_compiler: Compiler::<C, G>::new(database, gov_api, engine, contracts_path),
             shutdown_receiver,
             shutdown_sender,
         }

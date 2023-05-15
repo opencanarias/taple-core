@@ -17,20 +17,20 @@ use super::{
     GovernanceUpdatedMessage,
 };
 
-use crate::database::{DatabaseManager, DB};
+use crate::database::{DB, DatabaseCollection};
 
-pub struct InnerGovernance<D: DatabaseManager> {
-    repo_access: DB<D>,
+pub struct InnerGovernance<C: DatabaseCollection> {
+    repo_access: DB<C>,
     governance_schema: Value,
     update_channel: tokio::sync::broadcast::Sender<GovernanceUpdatedMessage>,
 }
 
-impl<D: DatabaseManager> InnerGovernance<D> {
+impl<C: DatabaseCollection> InnerGovernance<C> {
     pub fn new(
-        repo_access: DB<D>,
+        repo_access: DB<C>,
         governance_schema: Value,
         update_channel: tokio::sync::broadcast::Sender<GovernanceUpdatedMessage>,
-    ) -> InnerGovernance<D> {
+    ) -> InnerGovernance<C> {
         Self {
             repo_access,
             governance_schema,

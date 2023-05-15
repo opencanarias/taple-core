@@ -1,25 +1,27 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, marker::PhantomData};
 
 use crate::{
     commons::{
+        config::VotationType,
         models::{
             approval::{Approval, ApprovalContent},
             event_proposal::EventProposal,
-            state::{Subject},
+            state::Subject,
             Acceptance,
         },
-        self_signature_manager::{SelfSignatureInterface, SelfSignatureManager}, config::VotationType,
+        self_signature_manager::{SelfSignatureInterface, SelfSignatureManager},
     },
     database::DB,
     event_content::Metadata,
     event_request::{EventRequest, EventRequestType},
     governance::{error::RequestError, GovernanceInterface},
     identifier::{Derivable, DigestIdentifier, KeyIdentifier},
-    DatabaseManager, Notification,
+    DatabaseManager, Notification, DatabaseCollection
 };
 
 use super::{
-    error::{ApprovalErrorResponse, ApprovalManagerError}, ApprovalPetitionData,
+    error::{ApprovalErrorResponse, ApprovalManagerError},
+    ApprovalPetitionData,
 };
 use crate::database::Error as DbError;
 use crate::governance::stage::ValidationStage;
@@ -63,9 +65,9 @@ impl NotifierInterface for RequestNotifier {
     }
 }
 
-pub struct InnerApprovalManager<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface> {
+pub struct InnerApprovalManager<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection> {
     governance: G,
-    database: DB<D>,
+    database: DB<C>,
     notifier: N,
     signature_manager: SelfSignatureManager,
     // Cola de 1 elemento por sujeto
@@ -74,12 +76,12 @@ pub struct InnerApprovalManager<G: GovernanceInterface, D: DatabaseManager, N: N
     pass_votation: VotationType,
 }
 
-impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
-    InnerApprovalManager<G, D, N>
+impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
+    InnerApprovalManager<G, N, C>
 {
     pub fn new(
         governance: G,
-        database: DB<D>,
+        database: DB<C>,
         notifier: N,
         signature_manager: SelfSignatureManager,
         pass_votation: VotationType,
@@ -95,7 +97,10 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
         }
     }
 
-    pub fn get_single_request(&self, request_id: &DigestIdentifier) -> Result<ApprovalPetitionData, ApprovalErrorResponse> {
+    pub fn get_single_request(
+        &self,
+        request_id: &DigestIdentifier,
+    ) -> Result<ApprovalPetitionData, ApprovalErrorResponse> {
         let Some(request) = self.request_table.get(request_id) else {
             return Err(ApprovalErrorResponse::ApprovalRequestNotFound);
         };
@@ -114,7 +119,11 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
         &self,
         governance_id: &DigestIdentifier,
     ) -> Result<Result<u64, ApprovalErrorResponse>, ApprovalManagerError> {
-        match self.governance.get_governance_version(governance_id.to_owned()).await {
+        match self
+            .governance
+            .get_governance_version(governance_id.to_owned())
+            .await
+        {
             Ok(data) => Ok(Ok(data)),
             Err(RequestError::GovernanceNotFound(_str)) => {
                 Ok(Err(ApprovalErrorResponse::GovernanceNotFound))
@@ -155,20 +164,20 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
         ApprovalManagerError,
     > {
         /*
-         EL APROBADOR AHORA TAMBIÉN ES TESTIGO
-         - Comprobar si se posee el sujeto
-         - Comprobar si estamos sincronizados
-         Comprobamos la versión de la gobernanza
-           - Rechazamos las peticiones que tengan una versión de gobernanza distinta a la nuestra
-         Comprobamos la validez criptográfica de la información que nos entrega.
-           - Comprobar la firma de invocación.
-           - Comprobar validez del invocador.
-           - Comprobar las firmas de evaluación.
-           - Comprobar la validez de los evaluadores.
-         Las peticiones no se van a guardar en la BBDD, pero sí en memoria.
-         Solo se guardará una petición por sujeto. Existe la problemática de que un evento haya sido aprobado sin nuestra
-         intervención. En ese caso es precisar eliminar la petición y actualizar a la nueva.
-         Debemos comprobar siempre si ya tenemos la petición que nos envían.
+            EL APROBADOR AHORA TAMBIÉN ES TESTIGO
+            - Comprobar si se posee el sujeto
+            - Comprobar si estamos sincronizados
+            Comprobamos la versión de la gobernanza
+                - Rechazamos las peticiones que tengan una versión de gobernanza distinta a la nuestra
+            Comprobamos la validez criptográfica de la información que nos entrega.
+                - Comprobar la firma de invocación.
+                - Comprobar validez del invocador.
+                - Comprobar las firmas de evaluación.
+                - Comprobar la validez de los evaluadores.
+            Las peticiones no se van a guardar en la BBDD, pero sí en memoria.
+            Solo se guardará una petición por sujeto. Existe la problemática de que un evento haya sido aprobado sin nuestra
+            intervención. En ese caso es precisar eliminar la petición y actualizar a la nueva.
+            Debemos comprobar siempre si ya tenemos la petición que nos envían.
         */
 
         let id = &approval_request
@@ -221,7 +230,11 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
             Err(error) => return Ok(Err(error)),
         };
 
-        let evaluation = approval_request.proposal.evaluation.clone().expect("los genesis no se aprueban");
+        let evaluation = approval_request
+            .proposal
+            .evaluation
+            .clone()
+            .expect("los genesis no se aprueban");
 
         if version != evaluation.governance_version {
             return Ok(Err(ApprovalErrorResponse::InvalidGovernanceVersion));
@@ -313,13 +326,17 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
 
         match evaluation.acceptance {
             Acceptance::Ok => {
-                if !(approval_request.proposal.evaluation_signatures.len() as u32 >= evaluator_quorum) {
+                if !(approval_request.proposal.evaluation_signatures.len() as u32
+                    >= evaluator_quorum)
+                {
                     return Ok(Err(ApprovalErrorResponse::NoQuorumReached));
                 }
             }
             Acceptance::Ko => {
                 let negativate_quorum = evaluators.len() as u32 - evaluator_quorum;
-                if !(approval_request.proposal.evaluation_signatures.len() as u32 > negativate_quorum) {
+                if !(approval_request.proposal.evaluation_signatures.len() as u32
+                    > negativate_quorum)
+                {
                     return Ok(Err(ApprovalErrorResponse::NoQuorumReached));
                 }
             }
@@ -343,7 +360,7 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
                 .event_content_hash
                 .clone(),
             sender: subject_data.owner.clone(),
-            json_patch: approval_request.proposal.json_patch.clone()
+            json_patch: approval_request.proposal.json_patch.clone(),
         };
 
         self.subject_been_approved

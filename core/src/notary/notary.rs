@@ -10,19 +10,19 @@ use crate::{
 };
 
 use super::{errors::NotaryError, NotaryEvent, NotaryEventResponse};
-use crate::database::{DatabaseManager, DB};
+use crate::database::{DB, DatabaseCollection};
 
-pub struct Notary<D: DatabaseManager> {
+pub struct Notary<C: DatabaseCollection> {
     gov_api: GovernanceAPI,
-    database: DB<D>,
+    database: DB<C>,
     cache_gov_ver: HashMap<DigestIdentifier, u32>,
     signature_manager: SelfSignatureManager,
 }
 
-impl<D: DatabaseManager> Notary<D> {
+impl<C: DatabaseCollection> Notary<C> {
     pub fn new(
         gov_api: GovernanceAPI,
-        database: DB<D>,
+        database: DB<C>,
         signature_manager: SelfSignatureManager,
     ) -> Self {
         Self {
