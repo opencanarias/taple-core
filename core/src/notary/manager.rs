@@ -1,6 +1,9 @@
+use crate::message::MessageTaskCommand;
+use crate::protocol::protocol_message_manager::TapleMessages;
 use crate::{
     commons::{
-        channel::{ChannelData, MpscChannel, SenderEnd}, self_signature_manager::SelfSignatureManager,
+        channel::{ChannelData, MpscChannel, SenderEnd},
+        self_signature_manager::SelfSignatureManager,
     },
     governance::GovernanceAPI,
 };
@@ -35,10 +38,11 @@ impl<C: DatabaseCollection> NotaryManager<C> {
         signature_manager: SelfSignatureManager,
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+        message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
     ) -> Self {
         Self {
             input_channel,
-            inner_notary: Notary::new(gov_api, database, signature_manager),
+            inner_notary: Notary::new(gov_api, database, signature_manager, message_channel),
             shutdown_receiver,
             shutdown_sender,
         }

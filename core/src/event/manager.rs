@@ -87,7 +87,6 @@ impl<C: DatabaseCollection> EventManager<C> {
         match self.event_completer.init().await {
             Ok(_) => {}
             Err(error) => {
-                log::error!("Problemas con Init de Event Manager: {:?}", error);
                 self.shutdown_sender.send(()).expect("Channel Closed");
                 return;
             }
@@ -196,7 +195,9 @@ impl<C: DatabaseCollection> EventManager<C> {
                                 self.shutdown_sender.send(()).expect("Channel Closed");
                                 return Err(EventError::ChannelClosed);
                             }
-                            _ => {}
+                            _ => {
+                                log::error!("{:?}", error);
+                            }
                         },
                         _ => {}
                     }
@@ -223,8 +224,15 @@ impl<C: DatabaseCollection> EventManager<C> {
                     }
                     EventResponse::NoResponse
                 }
-                EventCommand::ValidatorResponse { signature } => {
-                    match self.event_completer.validation_signatures(signature).await {
+                EventCommand::ValidatorResponse {
+                    event_hash,
+                    signature,
+                } => {
+                    match self
+                        .event_completer
+                        .validation_signatures(event_hash, signature)
+                        .await
+                    {
                         Err(error) => match error {
                             EventError::ChannelClosed => {
                                 log::error!("Channel Closed");
@@ -238,9 +246,41 @@ impl<C: DatabaseCollection> EventManager<C> {
                                 self.shutdown_sender.send(()).expect("Channel Closed");
                                 return Err(EventError::ChannelClosed);
                             }
-                            _ => {}
+                            _ => {
+                                log::error!("VALIDATION ERROR: {:?}", error);
+                            }
                         },
                         _ => {}
+                    }
+                    EventResponse::NoResponse
+                }
+                EventCommand::HigherGovernanceExpected {
+                    governance_id,
+                    who_asked,
+                } => {
+                    match self
+                        .event_completer
+                        .higher_governance_expected(governance_id, who_asked)
+                        .await
+                    {
+                        Ok(_) => {}
+                        Err(error) => match error {
+                            EventError::ChannelClosed => {
+                                log::error!("Channel Closed");
+                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                return Err(EventError::ChannelClosed);
+                            }
+                            EventError::GovernanceError(inner_error)
+                                if inner_error == RequestError::ChannelClosed =>
+                            {
+                                log::error!("Channel Closed");
+                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                return Err(EventError::ChannelClosed);
+                            }
+                            _ => {
+                                log::error!("VALIDATION ERROR: {:?}", error);
+                            }
+                        },
                     }
                     EventResponse::NoResponse
                 }

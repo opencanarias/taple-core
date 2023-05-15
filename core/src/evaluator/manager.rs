@@ -156,6 +156,17 @@ impl<M: DatabaseManager<C>, C: DatabaseCollection, G: GovernanceInterface + Send
                             )).await.map_err(|_| EvaluatorError::ChannelNotAvailable)?;
                             EvaluatorResponse::AskForEvaluation(Ok(()))
                         }
+                        Err(ExecutorErrorResponses::OurGovIsHigher) => {
+                            // Mandar mensaje de actualización pendiente
+                            self.messenger_channel.tell(MessageTaskCommand::Request(None, TapleMessages::EventMessage(crate::event::EventCommand::HigherGovernanceExpected { governance_id: data.context.governance_id, who_asked: self.signature_manager.get_own_identifier() }), vec![data.context.owner], MessageConfig::direct_response())).await.map_err(|_| EvaluatorError::ChannelNotAvailable)?;
+                            EvaluatorResponse::AskForEvaluation(Ok(()))
+                        }
+                        Err(ExecutorErrorResponses::OurGovIsLower) => {
+                            // No podemos evaluar porque nos la van a rechazar
+                            // Pedir LCE al que nos mando la petición
+                            self.messenger_channel.tell(MessageTaskCommand::Request(None, TapleMessages::LedgerMessages(crate::ledger::LedgerCommand::GetLCE { who_asked: self.signature_manager.get_own_identifier(), subject_id: data.context.governance_id }), vec![data.context.owner], MessageConfig::direct_response())).await.map_err(|_| EvaluatorError::ChannelNotAvailable)?;
+                            EvaluatorResponse::AskForEvaluation(Ok(()))
+                        }
                         Err(ExecutorErrorResponses::DatabaseError(error)) => {
                             return Err(EvaluatorError::DatabaseError(error))
                         }

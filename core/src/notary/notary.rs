@@ -2,11 +2,15 @@ use std::collections::HashMap;
 
 use crate::{
     commons::{
+        channel::SenderEnd,
         errors::ChannelErrors,
         self_signature_manager::{SelfSignatureInterface, SelfSignatureManager},
     },
+    event::EventCommand,
     governance::{GovernanceAPI, GovernanceInterface},
     identifier::DigestIdentifier,
+    message::{MessageConfig, MessageTaskCommand},
+    protocol::protocol_message_manager::TapleMessages,
 };
 
 use super::{errors::NotaryError, NotaryEvent, NotaryEventResponse};
@@ -17,6 +21,7 @@ pub struct Notary<C: DatabaseCollection> {
     database: DB<C>,
     cache_gov_ver: HashMap<DigestIdentifier, u32>,
     signature_manager: SelfSignatureManager,
+    message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
 }
 
 impl<C: DatabaseCollection> Notary<C> {
@@ -24,12 +29,14 @@ impl<C: DatabaseCollection> Notary<C> {
         gov_api: GovernanceAPI,
         database: DB<C>,
         signature_manager: SelfSignatureManager,
+        message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
     ) -> Self {
         Self {
             gov_api,
             database,
             cache_gov_ver: HashMap::new(),
             signature_manager,
+            message_channel,
         }
     }
 
@@ -86,19 +93,37 @@ impl<C: DatabaseCollection> Notary<C> {
             )
             .map_err(|_| NotaryError::DatabaseError)?;
         // Now we sign and send
-        let hash = DigestIdentifier::from_serializable_borsh((
-            notary_event.gov_id,
-            notary_event.subject_id,
-            notary_event.owner,
-            notary_event.event_hash,
-            notary_event.sn,
-            notary_event.gov_version,
-        ))
-        .map_err(|_| NotaryError::SerializingError)?;
+        // let hash = DigestIdentifier::from_serializable_borsh((
+        //     &notary_event.gov_id,
+        //     &notary_event.subject_id,
+        //     &notary_event.owner,
+        //     &notary_event.event_hash,
+        //     &notary_event.sn,
+        //     &notary_event.gov_version,
+        // ))
+        // .map_err(|_| NotaryError::SerializingError)?;
         let notary_signature = self
             .signature_manager
-            .sign(&(hash, actual_gov_version))
+            .sign(&(
+                &notary_event.gov_id,
+                &notary_event.subject_id,
+                &notary_event.owner,
+                &notary_event.event_hash,
+                &notary_event.sn,
+                &notary_event.gov_version,
+            ))
             .map_err(NotaryError::ProtocolErrors)?;
+        self.message_channel
+            .tell(MessageTaskCommand::Request(
+                None,
+                TapleMessages::EventMessage(EventCommand::ValidatorResponse {
+                    event_hash: notary_event.event_hash.clone(),
+                    signature: notary_signature.clone(),
+                }),
+                vec![notary_event.owner],
+                MessageConfig::direct_response(),
+            ))
+            .await?; // TODO borrar clone
         Ok(NotaryEventResponse {
             notary_signature,
             gov_version_notary: actual_gov_version,

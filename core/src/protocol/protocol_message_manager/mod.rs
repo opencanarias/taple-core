@@ -7,7 +7,7 @@ use crate::{
     evaluator::{EvaluatorMessage, EvaluatorResponse},
     event::{EventCommand, EventResponse},
     message::{Message, TaskCommandContent},
-    notary::{NotaryCommand, NotaryResponse},
+    notary::{NotaryCommand, NotaryResponse}, ledger::{LedgerCommand, LedgerResponse},
 };
 
 mod error;
@@ -20,7 +20,7 @@ pub enum TapleMessages {
     ValidationMessage(NotaryCommand),
     EventMessage(EventCommand),
     ApprovalMessages(ApprovalMessages),
-    LedgerMessages(LedgerMessages),
+    LedgerMessages(LedgerCommand),
 }
 
 impl TaskCommandContent for TapleMessages {}
@@ -32,6 +32,7 @@ pub struct ProtocolManager {
     validation_sx: SenderEnd<NotaryCommand, NotaryResponse>,
     event_sx: SenderEnd<EventCommand, EventResponse>,
     approval_sx: SenderEnd<ApprovalMessages, ApprovalResponses>,
+    ledger_sx: SenderEnd<LedgerCommand, LedgerResponse>,
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
 }
@@ -44,6 +45,7 @@ impl ProtocolManager {
         validation_sx: SenderEnd<NotaryCommand, NotaryResponse>,
         event_sx: SenderEnd<EventCommand, EventResponse>,
         approval_sx: SenderEnd<ApprovalMessages, ApprovalResponses>,
+        ledger_sx: SenderEnd<LedgerCommand, LedgerResponse>,
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
     ) -> Self {
         Self {
@@ -53,6 +55,7 @@ impl ProtocolManager {
             validation_sx,
             event_sx,
             approval_sx,
+            ledger_sx,
             shutdown_receiver: shutdown_sender.subscribe(),
             shutdown_sender,
         }
@@ -98,6 +101,7 @@ impl ProtocolManager {
             }
         };
         let msg = msg.content;
+        // println!("MSG PROTOCOL {:?}", msg);
         match msg {
             TapleMessages::DistributionMessage(data) => {
                 self.distribution_sx
@@ -125,7 +129,11 @@ impl ProtocolManager {
                 .tell(data)
                 .await
                 .map_err(|_| ProtocolErrors::ChannelClosed)?,
-            TapleMessages::LedgerMessages(_) => todo!(),
+            TapleMessages::LedgerMessages(data) => self
+            .ledger_sx
+            .tell(data)
+            .await
+            .map_err(|_| ProtocolErrors::ChannelClosed)?,
         }
         Ok(())
     }

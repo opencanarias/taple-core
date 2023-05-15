@@ -8,7 +8,7 @@ use crate::commons::models::state::Subject;
 use crate::event_request::EventRequest;
 use crate::identifier::{Derivable, DigestIdentifier, KeyIdentifier};
 use crate::signature::Signature;
-use crate::{Event, commons};
+use crate::{commons, Event};
 
 use super::error::Error;
 use super::{DatabaseCollection, DatabaseManager};
@@ -54,7 +54,6 @@ fn get_by_range<C: DatabaseCollection>(
     collection: &C,
     prefix: &str,
 ) -> Result<Vec<Vec<u8>>, Error> {
-
     fn convert<'a>(
         iter: impl Iterator<Item = (String, Vec<u8>)> + 'a,
     ) -> Box<dyn Iterator<Item = (String, Vec<u8>)> + 'a> {
@@ -64,10 +63,7 @@ fn get_by_range<C: DatabaseCollection>(
     let (mut iter, quantity) = match from {
         Some(key) => {
             // Get true key
-            let key_elements: Vec<Element> = vec![
-                Element::S(prefix.to_string()),
-                Element::S(key),
-            ];
+            let key_elements: Vec<Element> = vec![Element::S(prefix.to_string()), Element::S(key)];
             let key = get_key(key_elements)?;
             // Find the key
             let iter = if quantity >= 0 {
@@ -94,7 +90,7 @@ fn get_by_range<C: DatabaseCollection>(
             } else {
                 (collection.iter(true, prefix.to_string()), quantity.abs())
             }
-        }  
+        }
     };
     let mut result = Vec::new();
     let mut counter = 0;
@@ -189,8 +185,10 @@ impl<C: DatabaseCollection> SubjectDb<C> {
     }
 
     pub fn get_subject(&self, subject_id: &DigestIdentifier) -> Result<Subject, Error> {
-        let key_elements: Vec<Element> =
-            vec![Element::S(self.prefix.clone()), Element::S(subject_id.to_str())];
+        let key_elements: Vec<Element> = vec![
+            Element::S(self.prefix.clone()),
+            Element::S(subject_id.to_str()),
+        ];
         let key = get_key(key_elements)?;
         let subject = self.collection.get(&key)?;
         Ok(bincode::deserialize::<Subject>(&subject).unwrap())
@@ -201,8 +199,10 @@ impl<C: DatabaseCollection> SubjectDb<C> {
         subject_id: &DigestIdentifier,
         subject: Subject,
     ) -> Result<(), Error> {
-        let key_elements: Vec<Element> =
-            vec![Element::S(self.prefix.clone()), Element::S(subject_id.to_str())];
+        let key_elements: Vec<Element> = vec![
+            Element::S(self.prefix.clone()),
+            Element::S(subject_id.to_str()),
+        ];
         let key = get_key(key_elements)?;
         let Ok(data) = bincode::serialize::<Subject>(&subject) else {
             return Err(Error::SerializeError);
@@ -220,6 +220,15 @@ impl<C: DatabaseCollection> SubjectDb<C> {
             .iter()
             .map(|subject| (bincode::deserialize::<Subject>(subject).unwrap()))
             .collect())
+    }
+
+    pub fn del_subject(&self, subject_id: &DigestIdentifier) -> Result<(), Error> {
+        let key_elements: Vec<Element> = vec![
+            Element::S(self.prefix.clone()),
+            Element::S(subject_id.to_str()),
+        ];
+        let key = get_key(key_elements)?;
+        self.collection.del(&key)
     }
 
     pub fn get_governances(
@@ -277,15 +286,18 @@ impl<C: DatabaseCollection> EventDb<C> {
         from: Option<i64>,
         quantity: isize,
     ) -> Result<Vec<Event>, Error> {
-        let key_elements: Vec<Element> =
-            vec![Element::S(self.prefix.clone()), Element::S(subject_id.to_str())];
+        let key_elements: Vec<Element> = vec![
+            Element::S(self.prefix.clone()),
+            Element::S(subject_id.to_str()),
+        ];
         let key = get_key(key_elements)?;
         let subject = self.collection.get(&key)?;
         let from = match from {
             Some(from) => Some(from.to_string()),
             None => None,
         };
-        let events_by_subject = get_by_range(from, quantity, &self.collection, &self.prefix.clone())?;
+        let events_by_subject =
+            get_by_range(from, quantity, &self.collection, &self.prefix.clone())?;
         Ok(events_by_subject
             .iter()
             .map(|event| (bincode::deserialize::<Event>(event).unwrap()))
@@ -331,8 +343,10 @@ impl<C: DatabaseCollection> PrevalidatedEventDb<C> {
     }
 
     pub fn get_prevalidated_event(&self, subject_id: &DigestIdentifier) -> Result<Event, Error> {
-        let key_elements: Vec<Element> =
-            vec![Element::S(self.prefix.clone()), Element::S(subject_id.to_str())];
+        let key_elements: Vec<Element> = vec![
+            Element::S(self.prefix.clone()),
+            Element::S(subject_id.to_str()),
+        ];
         let key = get_key(key_elements)?;
         let prevalidated_event = self.collection.get(&key)?;
         Ok(bincode::deserialize::<Event>(&prevalidated_event).unwrap())
@@ -343,8 +357,10 @@ impl<C: DatabaseCollection> PrevalidatedEventDb<C> {
         subject_id: &DigestIdentifier,
         event: Event,
     ) -> Result<(), Error> {
-        let key_elements: Vec<Element> =
-            vec![Element::S(self.prefix.clone()), Element::S(subject_id.to_str())];
+        let key_elements: Vec<Element> = vec![
+            Element::S(self.prefix.clone()),
+            Element::S(subject_id.to_str()),
+        ];
         let key = get_key(key_elements)?;
         let Ok(data) = bincode::serialize::<Event>(&event) else {
             return Err(Error::SerializeError);
@@ -353,8 +369,10 @@ impl<C: DatabaseCollection> PrevalidatedEventDb<C> {
     }
 
     pub fn del_prevalidated_event(&self, subject_id: &DigestIdentifier) -> Result<(), Error> {
-        let key_elements: Vec<Element> =
-            vec![Element::S(self.prefix.clone()), Element::S(subject_id.to_str())];
+        let key_elements: Vec<Element> = vec![
+            Element::S(self.prefix.clone()),
+            Element::S(subject_id.to_str()),
+        ];
         let key = get_key(key_elements)?;
         self.collection.del(&key)
     }
@@ -374,8 +392,10 @@ impl<C: DatabaseCollection> RequestDb<C> {
     }
 
     pub fn get_request(&self, subject_id: &DigestIdentifier) -> Result<EventRequest, Error> {
-        let key_elements: Vec<Element> =
-            vec![Element::S(self.prefix.clone()), Element::S(subject_id.to_str())];
+        let key_elements: Vec<Element> = vec![
+            Element::S(self.prefix.clone()),
+            Element::S(subject_id.to_str()),
+        ];
         let key = get_key(key_elements)?;
         let request = self.collection.get(&key)?;
         Ok(bincode::deserialize::<EventRequest>(&request).unwrap())
@@ -395,8 +415,10 @@ impl<C: DatabaseCollection> RequestDb<C> {
         subject_id: &DigestIdentifier,
         request: EventRequest,
     ) -> Result<(), Error> {
-        let key_elements: Vec<Element> =
-            vec![Element::S(self.prefix.clone()), Element::S(subject_id.to_str())];
+        let key_elements: Vec<Element> = vec![
+            Element::S(self.prefix.clone()),
+            Element::S(subject_id.to_str()),
+        ];
         let key = get_key(key_elements)?;
         let Ok(data) = bincode::serialize::<EventRequest>(&request) else {
             return Err(Error::SerializeError);
@@ -405,8 +427,10 @@ impl<C: DatabaseCollection> RequestDb<C> {
     }
 
     pub fn del_request(&self, subject_id: &DigestIdentifier) -> Result<(), Error> {
-        let key_elements: Vec<Element> =
-            vec![Element::S(self.prefix.clone()), Element::S(subject_id.to_str())];
+        let key_elements: Vec<Element> = vec![
+            Element::S(self.prefix.clone()),
+            Element::S(subject_id.to_str()),
+        ];
         let key = get_key(key_elements)?;
         self.collection.del(&key)
     }
@@ -580,8 +604,10 @@ impl<C: DatabaseCollection> NotarySignaturesDb<C> {
         subject_id: &DigestIdentifier,
         sn: u64,
     ) -> Result<(u64, HashSet<NotaryEventResponse>), Error> {
-        let key_elements: Vec<Element> =
-            vec![Element::S(self.prefix.clone()), Element::S(subject_id.to_str())];
+        let key_elements: Vec<Element> = vec![
+            Element::S(self.prefix.clone()),
+            Element::S(subject_id.to_str()),
+        ];
         let key = get_key(key_elements)?;
         let notary_signatures = self.collection.get(&key)?;
         Ok(
@@ -596,8 +622,10 @@ impl<C: DatabaseCollection> NotarySignaturesDb<C> {
         sn: u64,
         signatures: HashSet<NotaryEventResponse>,
     ) -> Result<(), Error> {
-        let key_elements: Vec<Element> =
-            vec![Element::S(self.prefix.clone()), Element::S(subject_id.to_str())];
+        let key_elements: Vec<Element> = vec![
+            Element::S(self.prefix.clone()),
+            Element::S(subject_id.to_str()),
+        ];
         let key = get_key(key_elements)?;
         let total_signatures = match self.collection.get(&key) {
             Ok(other) => {
@@ -617,8 +645,10 @@ impl<C: DatabaseCollection> NotarySignaturesDb<C> {
     }
 
     pub fn delete_notary_signatures(&self, subject_id: &DigestIdentifier) -> Result<(), Error> {
-        let key_elements: Vec<Element> =
-            vec![Element::S(self.prefix.clone()), Element::S(subject_id.to_str())];
+        let key_elements: Vec<Element> = vec![
+            Element::S(self.prefix.clone()),
+            Element::S(subject_id.to_str()),
+        ];
         let key = get_key(key_elements)?;
         self.collection.del(&key)
     }
@@ -641,8 +671,10 @@ impl<C: DatabaseCollection> WitnessSignaturesDb<C> {
         &self,
         subject_id: &DigestIdentifier,
     ) -> Result<(u64, HashSet<Signature>), Error> {
-        let key_elements: Vec<Element> =
-            vec![Element::S(self.prefix.clone()), Element::S(subject_id.to_str())];
+        let key_elements: Vec<Element> = vec![
+            Element::S(self.prefix.clone()),
+            Element::S(subject_id.to_str()),
+        ];
         let key = get_key(key_elements)?;
         let witness_signatures = self.collection.get(&key)?;
         Ok(bincode::deserialize::<(u64, HashSet<Signature>)>(&witness_signatures).unwrap())
@@ -667,8 +699,10 @@ impl<C: DatabaseCollection> WitnessSignaturesDb<C> {
         sn: u64,
         signatures: HashSet<Signature>,
     ) -> Result<(), Error> {
-        let key_elements: Vec<Element> =
-            vec![Element::S(self.prefix.clone()), Element::S(subject_id.to_str())];
+        let key_elements: Vec<Element> = vec![
+            Element::S(self.prefix.clone()),
+            Element::S(subject_id.to_str()),
+        ];
         let key = get_key(key_elements)?;
         let total_signatures = match self.collection.get(&key) {
             Ok(other) => {
@@ -687,8 +721,10 @@ impl<C: DatabaseCollection> WitnessSignaturesDb<C> {
     }
 
     pub fn del_witness_signatures(&self, subject_id: &DigestIdentifier) -> Result<(), Error> {
-        let key_elements: Vec<Element> =
-            vec![Element::S(self.prefix.clone()), Element::S(subject_id.to_str())];
+        let key_elements: Vec<Element> = vec![
+            Element::S(self.prefix.clone()),
+            Element::S(subject_id.to_str()),
+        ];
         let key = get_key(key_elements)?;
         self.collection.del(&key)
     }
@@ -772,6 +808,10 @@ impl<C: DatabaseCollection> DB<C> {
         quantity: isize,
     ) -> Result<Vec<Subject>, Error> {
         self.subject_db.get_subjects(from, quantity)
+    }
+
+    pub fn del_subject(&self, subject_id: &DigestIdentifier) -> Result<(), Error> {
+        self.subject_db.del_subject(subject_id)
     }
 
     pub fn get_governances(

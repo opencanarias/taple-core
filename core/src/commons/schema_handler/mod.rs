@@ -3,6 +3,7 @@ use serde_json::{json, Value};
 use std::str::FromStr;
 
 pub mod gov_models;
+pub mod initial_state;
 
 use crate::commons::{errors::Error, identifier::KeyIdentifier};
 

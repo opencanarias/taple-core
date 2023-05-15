@@ -1,7 +1,7 @@
 //! Possible errors of a TAPLE Database
 use thiserror::Error;
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug, Clone, PartialEq)]
 pub enum Error {
     #[error("Entry Not Found")]
     EntryNotFound,

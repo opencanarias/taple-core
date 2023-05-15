@@ -5,7 +5,7 @@ use crate::{
     governance::{error::RequestError, GovernanceAPI},
     message::MessageTaskCommand,
     protocol::protocol_message_manager::TapleMessages,
-    Notification, KeyIdentifier, DatabaseCollection
+    Notification, KeyIdentifier, DatabaseCollection,
 };
 
 use super::{errors::LedgerError, ledger::Ledger, LedgerCommand, LedgerResponse};
@@ -53,7 +53,7 @@ impl<C: DatabaseCollection> EventManager<C> {
         match self.inner_ledger.init().await {
             Ok(_) => {}
             Err(error) => {
-                log::error!("Problemas con Init de Ledger Manager: {:?}", error);
+                log::error!("Ledger Manager Init fails: {:?}", error);
                 self.shutdown_sender.send(()).expect("Channel Closed");
                 return;
             }
@@ -193,8 +193,51 @@ impl<C: DatabaseCollection> EventManager<C> {
                     }
                     LedgerResponse::NoResponse
                 }
-                LedgerCommand::GetEvent { subject_id, sn } => todo!(),
-                LedgerCommand::GetLCE { subject_id } => todo!(),
+                LedgerCommand::GetEvent {
+                    who_asked,
+                    subject_id,
+                    sn,
+                } => {
+                    let response = self.inner_ledger.get_event(who_asked, subject_id, sn).await;
+                    let response = match response {
+                        Err(error) => match error.clone() {
+                            LedgerError::ChannelClosed => {
+                                log::error!("Channel Closed");
+                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                return Err(LedgerError::ChannelClosed);
+                            }
+                            LedgerError::DatabaseError(err) => match err {
+                                crate::DbError::EntryNotFound => return Ok(()),
+                                _ => Err(error),
+                            },
+                            _ => Err(error),
+                        },
+                        Ok(event) => Ok(event),
+                    };
+                    LedgerResponse::GetEvent(response)
+                }
+                LedgerCommand::GetLCE {
+                    who_asked,
+                    subject_id,
+                } => {
+                    let response = self.inner_ledger.get_lce(who_asked, subject_id).await;
+                    let response = match response {
+                        Err(error) => match error.clone() {
+                            LedgerError::ChannelClosed => {
+                                log::error!("Channel Closed");
+                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                return Err(LedgerError::ChannelClosed);
+                            }
+                            LedgerError::DatabaseError(err) => match err {
+                                crate::DbError::EntryNotFound => return Ok(()),
+                                _ => Err(error),
+                            },
+                            _ => Err(error),
+                        },
+                        Ok(event) => Ok(event),
+                    };
+                    LedgerResponse::GetLCE(response)
+                }
             }
         };
         if sender.is_some() {

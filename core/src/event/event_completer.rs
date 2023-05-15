@@ -50,7 +50,7 @@ pub struct EventCompleter<C: DatabaseCollection> {
     own_identifier: KeyIdentifier,
     subjects_by_governance: HashMap<DigestIdentifier, HashSet<DigestIdentifier>>,
     subjects_completing_event:
-        HashMap<DigestIdentifier, (ValidationStage, Vec<KeyIdentifier>, u32)>,
+        HashMap<DigestIdentifier, (ValidationStage, HashSet<KeyIdentifier>, u32)>,
     // actual_sn: HashMap<DigestIdentifier, u64>,
     // virtual_state: HashMap<DigestIdentifier, Value>,
     // Evaluation HashMaps
@@ -136,7 +136,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 Ok(last_event) => {
                     let gov_version = self
                         .gov_api
-                        .get_governance_version(subject.subject_id.clone())
+                        .get_governance_version(subject.governance_id.clone())
                         .await?;
                     let metadata = Metadata {
                         namespace: subject.namespace.clone(),
@@ -344,7 +344,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 namespace: metadata.namespace.clone(),
                 governance_version,
             },
-            sn: subject.sn,
+            sn: subject.sn + 1,
             // self.actual_sn.get(&subject_id).unwrap().to_owned() + 1, // Must be Some, filled in init function
         };
         let (signers, quorum_size) = self.get_signers_and_quorum(metadata, stage.clone()).await?;
@@ -361,6 +361,10 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     "Error calculating the hash of the event pre-evaluation",
                 ))
             })?;
+        let er_hash = event_request.signature.content.event_content_hash.clone();
+        self.database
+            .set_request(&subject.subject_id, event_request)
+            .map_err(|error| EventError::DatabaseError(error.to_string()))?;
         self.event_pre_evaluations
             .insert(event_preevaluation_hash, event_preevaluation);
         // if let Some(sn) = self.actual_sn.get_mut(&subject_id) {
@@ -375,7 +379,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             .entry(subject.governance_id)
             .or_insert_with(HashSet::new)
             .insert(subject_id);
-        Ok(event_request.signature.content.event_content_hash)
+        Ok(er_hash)
     }
 
     pub async fn evaluator_signatures(
@@ -406,10 +410,11 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         let Some((ValidationStage::Evaluate, signers, quorum_size)) = self.subjects_completing_event.get(&subject_id) else {
             return Err(EventError::WrongEventPhase);
         };
+        let signer = signature.content.signer.clone();
         // Check if evaluator is in the list of evaluators
-        if !signers.contains(&signature.content.signer) {
+        if !signers.contains(&signer) {
             return Err(EventError::CryptoError(String::from(
-                "The signer is not in the list of evaluators",
+                "The signer is not in the list of evaluators or we already have the signature",
             )));
         }
         // Comprobar que todo es correcto criptográficamente
@@ -430,7 +435,6 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             .await
             .map_err(EventError::GovernanceError)?;
         // Comprobar governance-version que sea la misma que la nuestra
-        // TODO: Pedir gov si la versión del evaluador es mayor
         if governance_version != evaluation.governance_version {
             return Err(EventError::WrongGovernanceVersion);
         }
@@ -461,8 +465,24 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         };
         let num_signatures_hash =
             count_signatures_with_event_content_hash(&signatures_set, &evaluation_hash) as u32;
+        let quorum_size = quorum_size.to_owned();
         // Comprobar si llegamos a Quorum
-        if num_signatures_hash < *quorum_size {
+        if num_signatures_hash < quorum_size {
+            let mut new_signers: HashSet<KeyIdentifier> =
+                signers.into_iter().map(|s| s.clone()).collect();
+            new_signers.remove(&signer);
+            self.ask_signatures(
+                &subject_id,
+                create_evaluator_request(preevaluation_event.clone()),
+                new_signers.clone(),
+                quorum_size,
+            )
+            .await?;
+            // Hacer update de fase por la que va el evento
+            self.subjects_completing_event.insert(
+                subject_id,
+                (ValidationStage::Evaluate, new_signers, quorum_size),
+            );
             return Ok(()); // No llegamos a quorum, no hacemos nada
         } else {
             // Si es así comprobar que json patch aplicado al evento parar la petición de firmas y empezar a pedir las approves con el evento completo con lo nuevo obtenido en esta fase si se requieren approves, si no informar a validator
@@ -475,16 +495,13 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 })
                 .map(|signature| signature.signature.clone())
                 .collect();
-            let hash_prev_event = if subject.sn == 0 {
-                DigestIdentifier::default()
-            } else {
-                self.database
-                    .get_event(&subject.subject_id, subject.sn - 1)
-                    .map_err(|e| EventError::DatabaseError(e.to_string()))?
-                    .signature
-                    .content
-                    .event_content_hash
-            };
+            let hash_prev_event = self
+                .database
+                .get_event(&subject.subject_id, subject.sn)
+                .map_err(|e| EventError::DatabaseError(e.to_string()))?
+                .signature
+                .content
+                .event_content_hash;
             let proposal = Proposal::new(
                 preevaluation_event.event_request.clone(),
                 preevaluation_event.sn,
@@ -546,7 +563,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 };
                 let gov_version = self
                     .gov_api
-                    .get_governance_version(subject.subject_id.clone())
+                    .get_governance_version(subject.governance_id.clone())
                     .await?;
                 let event = &self.create_event_prevalidated(
                     event_proposal,
@@ -605,10 +622,11 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         let Some((ValidationStage::Approve, signers, quorum_size)) = self.subjects_completing_event.get(&subject_id) else {
             return Err(EventError::WrongEventPhase);
         };
+        let signer = approval.signature.content.signer.clone();
         // Check if approver is in the list of approvers
-        if !signers.contains(&approval.signature.content.signer) {
+        if !signers.contains(&signer) {
             return Err(EventError::CryptoError(String::from(
-                "The signer is not in the list of approvers",
+                "The signer is not in the list of approvers or we already have his approve",
             )));
         }
         // Comprobar que todo es correcto criptográficamente
@@ -660,12 +678,26 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         let (quorum_size, execution) = match approval.content.acceptance {
             crate::commons::models::Acceptance::Ok => (quorum_size.to_owned(), true),
             crate::commons::models::Acceptance::Ko => {
-                (((signers.len() as u32) - quorum_size) + 1, false)
+                (((signers.len() as u32) - *quorum_size) + 1, false)
             }
-
             crate::commons::models::Acceptance::Error => unreachable!(),
         };
         if num_approvals_with_same_acceptance < quorum_size {
+            let mut new_signers: HashSet<KeyIdentifier> =
+                signers.into_iter().map(|s| s.clone()).collect();
+            new_signers.remove(&signer);
+            self.ask_signatures(
+                &subject_id,
+                create_approval_request(event_proposal.to_owned()),
+                signers.clone(),
+                quorum_size,
+            )
+            .await?;
+            // Hacer update de fase por la que va el evento
+            self.subjects_completing_event.insert(
+                subject_id,
+                (ValidationStage::Evaluate, new_signers, quorum_size),
+            );
             Ok(()) // No llegamos a quorum, no hacemos nada
         } else {
             // Si se llega a Quorum dejamos de pedir approves y empezamos a pedir notarizaciones con el evento completo incluyendo lo nuevo de las approves
@@ -693,7 +725,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
 
             let gov_version = self
                 .gov_api
-                .get_governance_version(subject.subject_id.clone())
+                .get_governance_version(subject.governance_id.clone())
                 .await?;
             let event =
                 &self.create_event_prevalidated(event_proposal, approvals, &subject, execution)?;
@@ -716,12 +748,13 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         }
     }
 
-    pub async fn validation_signatures(&mut self, signature: Signature) -> Result<(), EventError> {
+    pub async fn validation_signatures(
+        &mut self,
+        event_hash: DigestIdentifier,
+        signature: Signature,
+    ) -> Result<(), EventError> {
         // Mirar en que estado está el evento, si está en notarización o no
-        let event = match self
-            .events_to_validate
-            .get(&signature.content.event_content_hash)
-        {
+        let event = match self.events_to_validate.get(&event_hash) {
             Some(event) => event,
             None => {
                 return Err(EventError::CryptoError(String::from(
@@ -741,23 +774,35 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         let Some((ValidationStage::Validate, signers, quorum_size)) = self.subjects_completing_event.get(&subject_id) else {
             return Err(EventError::WrongEventPhase);
         };
+        let signer = signature.content.signer.clone();
         // Check if approver is in the list of approvers
-        if !signers.contains(&signature.content.signer) {
+        if !signers.contains(&signer) {
             return Err(EventError::CryptoError(String::from(
-                "The signer is not in the list of approvers",
+                "The signer is not in the list of validators or we already have the validation",
             )));
         }
-        // Comprobar que todo es correcto criptográficamente
-        let event_hash = check_cryptography(&event.content, &signature)
-            .map_err(|error| EventError::CryptoError(error.to_string()))?;
         // Obtener sujeto para saber si lo tenemos y los metadatos del mismo
-        let _subject = self
+        let subject = self
             .database
             .get_subject(&subject_id)
             .map_err(|error| match error {
                 crate::DbError::EntryNotFound => EventError::SubjectNotFound(subject_id.to_str()),
                 _ => EventError::DatabaseError(error.to_string()),
             })?;
+        let gov_version = event.content.event_proposal.proposal.gov_version.to_owned();
+        // Comprobar que todo es correcto criptográficamente
+        let event_hash = check_cryptography(
+            (
+                &subject.governance_id,
+                &subject.subject_id,
+                &subject.owner,
+                &event.signature.content.event_content_hash,
+                &event.content.event_proposal.proposal.sn,
+                &event.content.event_proposal.proposal.gov_version,
+            ),
+            &signature,
+        )
+        .map_err(|error| EventError::CryptoError(error.to_string()))?;
         // Guardar validación
         let validation_set = match self.event_validations.get_mut(&event_hash) {
             Some(validation_set) => {
@@ -774,8 +819,21 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 )
             }
         };
+        let quorum_size = quorum_size.to_owned();
         // Comprobar si llegamos a Quorum y si es así dejar de pedir firmas
-        if (validation_set.len() as u32) < *quorum_size {
+        if (validation_set.len() as u32) < quorum_size {
+            let event_message =
+                create_validator_request(self.create_notary_event(&subject, event, gov_version)?);
+            let mut new_signers: HashSet<KeyIdentifier> =
+                signers.into_iter().map(|s| s.clone()).collect();
+            new_signers.remove(&signer);
+            self.ask_signatures(&subject_id, event_message, new_signers.clone(), quorum_size)
+                .await?;
+            // Hacer update de fase por la que va el evento
+            self.subjects_completing_event.insert(
+                subject_id,
+                (ValidationStage::Evaluate, new_signers, quorum_size),
+            );
             Ok(())
         } else {
             let validation_signatures: HashSet<Signature> = validation_set
@@ -808,19 +866,38 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         }
     }
 
-    // TODO: Cambiar Vec por HashSet, no se por que puse vec
+    pub async fn higher_governance_expected(
+        &self,
+        governance_id: DigestIdentifier,
+        who_asked: KeyIdentifier,
+    ) -> Result<(), EventError> {
+        self.message_channel
+            .tell(MessageTaskCommand::Request(
+                None,
+                TapleMessages::LedgerMessages(LedgerCommand::GetLCE {
+                    who_asked: self.own_identifier.clone(),
+                    subject_id: governance_id,
+                }),
+                vec![who_asked],
+                MessageConfig {
+                    timeout: TIMEOUT,
+                    replication_factor: 1.0,
+                },
+            ))
+            .await
+            .map_err(EventError::ChannelError)
+    }
+
     async fn get_signers_and_quorum(
         &self,
         metadata: Metadata,
         stage: ValidationStage,
-    ) -> Result<(Vec<KeyIdentifier>, u32), EventError> {
+    ) -> Result<(HashSet<KeyIdentifier>, u32), EventError> {
         let signers = self
             .gov_api
             .get_signers(metadata.clone(), stage.clone())
             .await
-            .map_err(EventError::GovernanceError)?
-            .into_iter()
-            .collect();
+            .map_err(EventError::GovernanceError)?;
         let quorum_size = self
             .gov_api
             .get_quorum(metadata, stage)
@@ -833,7 +910,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         &self,
         subject_id: &DigestIdentifier,
         event_message: TapleMessages,
-        signers: Vec<KeyIdentifier>,
+        signers: HashSet<KeyIdentifier>,
         quorum_size: u32,
     ) -> Result<(), EventError> {
         let replication_factor = extend_quorum(quorum_size, signers.len());
@@ -841,7 +918,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             .tell(MessageTaskCommand::Request(
                 Some(String::from(format!("{}", subject_id.to_str()))),
                 event_message,
-                signers,
+                signers.into_iter().collect(),
                 MessageConfig {
                     timeout: TIMEOUT,
                     replication_factor,

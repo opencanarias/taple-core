@@ -69,7 +69,7 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
             .del_witness_signatures(&msg.subject_id)
             .map_err(|_| DistributionManagerError::SignGenerarionFailed)?;
         self.db
-            .set_signatures(&msg.subject_id, msg.sn, HashSet::from_iter(vec![signature]))
+            .set_witness_signatures(&msg.subject_id, msg.sn, HashSet::from_iter(vec![signature]))
             .map_err(|error| DistributionManagerError::DatabaseError(error.to_string()))?;
         let subject = self
             .db
@@ -84,11 +84,10 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
         let metadata = build_metadata(&subject, governance_version);
         let mut targets = self.get_targets(metadata).await?;
         targets.remove(&self.signature_manager.get_own_identifier());
-        self.send_signature_request(&subject.subject_id, msg.sn, targets.clone(), &targets)
-            .await?;
-        self.db
-            .del_witness_signatures(&msg.subject_id)
-            .map_err(|error| DistributionManagerError::DatabaseError(error.to_string()))?;
+        if !targets.is_empty() {
+            self.send_signature_request(&subject.subject_id, msg.sn, targets.clone(), &targets)
+                .await?;
+        }
         Ok(Ok(()))
     }
 
@@ -176,6 +175,7 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
                 } else if msg.sn > sn {
                     // No veo necesario un mensaje para el caso de MSG.SN = SN + 1
                     let request = request_lce(
+                        self.signature_manager.get_own_identifier(),
                         msg.subject_id.clone(),
                     );
                     self.messenger_channel
@@ -192,6 +192,7 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
             Err(DbError::EntryNotFound) => {
                 // El sujeto no tiene firmas de testificación.
                 let request = request_lce(
+                    self.signature_manager.get_own_identifier(),
                     msg.subject_id.clone(),
                 );
                 self.messenger_channel

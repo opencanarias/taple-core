@@ -36,9 +36,7 @@ pub struct ApprovalAPI {
 
 impl ApprovalAPI {
     pub fn new(input_channel: SenderEnd<ApprovalMessages, ApprovalResponses>) -> Self {
-        Self {
-            input_channel
-        }
+        Self { input_channel }
     }
 }
 
@@ -201,16 +199,81 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
                     return Err(ApprovalManagerError::AskNoAllowed);
                 }
                 let result = self.inner_manager.process_approval_request(message).await?;
-                if let Ok(Some((approval, sender))) = result {
-                    let msg = create_approver_response(approval);
-                    self.messenger_channel
-                        .tell(MessageTaskCommand::Request(
-                            None,
-                            msg,
-                            vec![sender],
-                            MessageConfig::direct_response(),
-                        ))
-                        .await;
+                match result {
+                    Ok(Some((approval, sender))) => {
+                        let msg = create_approver_response(approval);
+                        self.messenger_channel
+                            .tell(MessageTaskCommand::Request(
+                                None,
+                                msg,
+                                vec![sender],
+                                MessageConfig::direct_response(),
+                            ))
+                            .await
+                            .map_err(|_| ApprovalManagerError::MessageChannelFailed)?;
+                    }
+                    Ok(None) => {}
+                    Err(error) => match error {
+                        ApprovalErrorResponse::OurGovIsLower {
+                            our_id,
+                            sender,
+                            gov_id,
+                        } => self
+                            .messenger_channel
+                            .tell(MessageTaskCommand::Request(
+                                None,
+                                TapleMessages::LedgerMessages(
+                                    crate::ledger::LedgerCommand::GetLCE {
+                                        who_asked: our_id,
+                                        subject_id: gov_id,
+                                    },
+                                ),
+                                vec![sender],
+                                MessageConfig::direct_response(),
+                            ))
+                            .await
+                            .map_err(|_| ApprovalManagerError::MessageChannelFailed)?,
+                        ApprovalErrorResponse::OurGovIsHigher {
+                            our_id,
+                            sender,
+                            gov_id,
+                        } => self
+                            .messenger_channel
+                            .tell(MessageTaskCommand::Request(
+                                None,
+                                TapleMessages::EventMessage(
+                                    crate::event::EventCommand::HigherGovernanceExpected {
+                                        governance_id: gov_id,
+                                        who_asked: our_id,
+                                    },
+                                ),
+                                vec![sender],
+                                MessageConfig::direct_response(),
+                            ))
+                            .await
+                            .map_err(|_| ApprovalManagerError::MessageChannelFailed)?,
+                        ApprovalErrorResponse::APIChannelNotAvailable => todo!(),
+                        ApprovalErrorResponse::RequestAlreadyKnown => todo!(),
+                        ApprovalErrorResponse::NoFactEvent => todo!(),
+                        ApprovalErrorResponse::PreviousEventDetected => todo!(),
+                        ApprovalErrorResponse::GovernanceNotFound => todo!(),
+                        ApprovalErrorResponse::InvalidGovernanceID => todo!(),
+                        ApprovalErrorResponse::InvalidGovernanceVersion => todo!(),
+                        ApprovalErrorResponse::SubjectNotFound => todo!(),
+                        ApprovalErrorResponse::GovernanceNoCorrelation => todo!(),
+                        ApprovalErrorResponse::SubjectNotSynchronized => todo!(),
+                        ApprovalErrorResponse::SignatureSignerIsNotSubject => todo!(),
+                        ApprovalErrorResponse::InvalidSubjectSignature => todo!(),
+                        ApprovalErrorResponse::NodeIsNotApprover => todo!(),
+                        ApprovalErrorResponse::InvalidEvaluator => todo!(),
+                        ApprovalErrorResponse::InvalidEvaluatorSignature => todo!(),
+                        ApprovalErrorResponse::InvalidInvokator => todo!(),
+                        ApprovalErrorResponse::InvalidInvokatorPermission => todo!(),
+                        ApprovalErrorResponse::NoQuorumReached => todo!(),
+                        ApprovalErrorResponse::ApprovalRequestNotFound => todo!(),
+                        ApprovalErrorResponse::NoHashCorrelation => todo!(),
+                        ApprovalErrorResponse::InvalidAcceptance => todo!(),
+                    },
                 }
             }
             ApprovalMessages::EmitVote(message) => {
@@ -228,7 +291,8 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
                                 vec![owner],
                                 MessageConfig::direct_response(),
                             ))
-                            .await;
+                            .await
+                            .map_err(|_| ApprovalManagerError::MessageChannelFailed)?;
                         if sender.is_some() {
                             sender.unwrap().send(ApprovalResponses::EmitVote(Ok(())));
                         }

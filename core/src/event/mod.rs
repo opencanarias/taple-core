@@ -1,14 +1,11 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    commons::models::{
-        approval::Approval,
-        event_proposal::{Evaluation},
-    },
+    commons::models::{approval::Approval, event_proposal::Evaluation},
     event_request::EventRequest,
     identifier::DigestIdentifier,
     signature::Signature,
-    Event,
+    Event, KeyIdentifier,
 };
 
 use self::errors::EventError;
@@ -31,7 +28,12 @@ pub enum EventCommand {
         approval: Approval,
     },
     ValidatorResponse {
+        event_hash: DigestIdentifier,
         signature: Signature,
+    },
+    HigherGovernanceExpected {
+        governance_id: DigestIdentifier,
+        who_asked: KeyIdentifier,
     },
 }
 
@@ -39,11 +41,4 @@ pub enum EventCommand {
 pub enum EventResponse {
     Event(Result<DigestIdentifier, EventError>),
     NoResponse,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
-pub enum EventMessages {
-    //EvaluationRequest(EventPreEvaluation),
-    // ApprovalRequest(EventProposal),
-    ValidationRequest(Event),
 }

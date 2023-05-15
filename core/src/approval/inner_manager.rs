@@ -179,11 +179,8 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             intervención. En ese caso es precisar eliminar la petición y actualizar a la nueva.
             Debemos comprobar siempre si ya tenemos la petición que nos envían.
         */
-
         let id = &approval_request
-            .proposal
-            .event_request
-            .signature
+            .subject_signature
             .content
             .event_content_hash;
 
@@ -236,8 +233,20 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             .clone()
             .expect("los genesis no se aprueban");
 
-        if version != evaluation.governance_version {
-            return Ok(Err(ApprovalErrorResponse::InvalidGovernanceVersion));
+        if version > evaluation.governance_version {
+            // Nuestra gov es mayor: mandamos mensaje para que actualice el emisor
+            return Ok(Err(ApprovalErrorResponse::OurGovIsHigher {
+                our_id: self.signature_manager.get_own_identifier(),
+                sender: subject_data.owner.clone(),
+                gov_id: subject_data.governance_id.clone(),
+            }));
+        } else if version < evaluation.governance_version {
+            // Nuestra gov es menor: no podemos hacer nada. Pedimos LCE al que nos lo envió
+            return Ok(Err(ApprovalErrorResponse::OurGovIsLower {
+                our_id: self.signature_manager.get_own_identifier(),
+                sender: subject_data.owner.clone(),
+                gov_id: subject_data.governance_id.clone(),
+            }));
         }
 
         let metadata = create_metadata(&subject_data, version);
@@ -260,22 +269,24 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         }
 
         // Verificamos la firma
-        let hash = event_proposal_hash_gen(&approval_request)?;
-        if let Err(_error) = approval_request.subject_signature.content.signer.verify(
-            &hash.derivative(),
-            &approval_request.subject_signature.signature,
-        ) {
+        // let hash = event_proposal_hash_gen(&approval_request)?;
+        // if let Err(_error) = approval_request.subject_signature.content.signer.verify(
+        //     &hash.derivative(),
+        //     &approval_request.subject_signature.signature,
+        // ) {
+        //     return Ok(Err(ApprovalErrorResponse::InvalidSubjectSignature));
+        // }
+
+        let Ok(()) = approval_request.check_signatures() else {
             return Ok(Err(ApprovalErrorResponse::InvalidSubjectSignature));
         }
-
-        // Verificamos que el invocador es váĺido
         ;
-        if self
-            .check_event_request_signatures(&approval_request.proposal.event_request)?
-            .is_err()
-        {
-            return Ok(Err(ApprovalErrorResponse::InvalidInvokator));
-        }
+        // if self
+        //     .check_event_request_signatures(&approval_request.proposal.event_request)?
+        //     .is_err()
+        // {
+        //     return Ok(Err(ApprovalErrorResponse::InvalidInvokator));
+        // }
 
         // if !self
         //     .governance
@@ -448,7 +459,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
 fn event_proposal_hash_gen(
     approval_request: &EventProposal,
 ) -> Result<DigestIdentifier, ApprovalManagerError> {
-    Ok(DigestIdentifier::from_serializable_borsh(&approval_request)
+    Ok(DigestIdentifier::from_serializable_borsh(approval_request)
         .map_err(|_| ApprovalManagerError::HashGenerationFailed)?)
 }
 
