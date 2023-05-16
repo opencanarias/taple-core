@@ -11,7 +11,7 @@ pub mod manager;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AuthorizedSubjectsCommand {
-    NewAuthorizedGovernance {
+    NewAuthorizedSubject {
         subject_id: DigestIdentifier,
         providers: HashSet<KeyIdentifier>,
     },
