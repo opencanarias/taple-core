@@ -69,6 +69,7 @@ pub enum GovernanceMessage {
     },
     GetGovernanceVersion {
         governance_id: DigestIdentifier,
+        subject_id: DigestIdentifier
     },
     IsGovernance {
         subject_id: DigestIdentifier,
