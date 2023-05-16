@@ -151,22 +151,16 @@ impl<D: DatabaseManager> InnerGovernance<D> {
         signers_roles: &Vec<String>,
     ) -> Result<Result<HashSet<KeyIdentifier>, RequestError>, InternalError> {
         let members = get_members_from_governance(&properties)?;
-        log::warn!("Members from governance {}", members.len());
-        for m in members.iter() {
-            log::warn!("Member {}", m.to_str());
-        }
         let roles_prop = properties["roles"]
             .as_array()
             .expect("Existe roles")
             .to_owned();
         let roles = get_roles(&schema_id, roles_prop, &metadata.namespace)?;
-        log::warn!("ROLES {:?}", roles);
         let mut signers = get_signers_from_roles(&members, signers_roles, roles)?;
         if signers_roles.contains(&String::from("Owner")) {
             // Añadimos al owner
             signers.insert(metadata.owner.clone());
         }
-        log::warn!("SE ENVÍAN {} signers", signers.len());
         Ok(Ok(signers))
     }
 
@@ -246,7 +240,6 @@ impl<D: DatabaseManager> InnerGovernance<D> {
                     set.insert(s);
                 }
                 let signers_roles: Vec<String> = set.into_iter().collect();
-                log::warn!("SIGNERS ROLES {:?}", signers_roles);
                 Self::get_signers_aux(&properties, &schema_id, &metadata, &signers_roles)
             }
             ValidationStage::Close | ValidationStage::Create => {
@@ -391,11 +384,10 @@ impl<D: DatabaseManager> InnerGovernance<D> {
     // OLD BUT OK
     pub fn get_governance_version(
         &self,
+        subject_id: DigestIdentifier,
         governance_id: DigestIdentifier,
     ) -> Result<Result<u64, RequestError>, InternalError> {
-        if governance_id.digest.is_empty() {
-            return Ok(Ok(0));
-        }
+        let governance_id = if governance_id.digest.is_empty() { subject_id } else { governance_id };
         let governance = match self.repo_access.get_subject(&governance_id) {
             Ok(governance) => governance,
             Err(DbError::EntryNotFound) => {
@@ -558,7 +550,6 @@ fn get_signers_from_roles(
             }
         }
     }
-    log::warn!("RESULTADO DE GET SIGNERS {}", signers.len());
     Ok(signers)
 }
 
@@ -567,11 +558,8 @@ fn get_roles(
     roles_prop: Vec<Value>,
     namespace: &str,
 ) -> Result<Vec<Role>, InternalError> {
-    log::warn!("SCHEMA_ID: {}", schema_id);
-    log::warn!("NAMESPACE: {}", namespace);
     let mut roles = Vec::new();
     for role in roles_prop {
-        log::warn!("ROLES PROP: {}", role);
         let role_data: Role = serde_json::from_value(role)
             .map_err(|_| InternalError::InvalidGovernancePayload("15".into()))?;
         if !namespace_contiene(&role_data.namespace, namespace) {

@@ -56,6 +56,8 @@ pub enum ExecutorErrorResponses {
     OurGovIsLower,
     #[error("Our Gov Version is Higher than sender")]
     OurGovIsHigher,
+    #[error("Create Request not allowed")]
+    CreateRequestNotAllowed
 }
 
 #[derive(Error, Debug, Clone)]

@@ -65,6 +65,7 @@ impl<D: DatabaseManager> EventManager<D> {
                         Some(command) => {
                             let result = self.process_command(command).await;
                             if result.is_err() {
+                                log::error!("{}", result.unwrap_err());
                                 self.shutdown_sender.send(()).expect("Channel Closed");
                                 break;
                             }
@@ -96,7 +97,6 @@ impl<D: DatabaseManager> EventManager<D> {
                 (None, data)
             }
         };
-        log::error!("MSG EN LEDGER {:?}", data);
         let response = {
             match data {
                 LedgerCommand::OwnEvent { event, signatures } => {

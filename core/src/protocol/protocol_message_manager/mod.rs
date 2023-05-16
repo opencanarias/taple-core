@@ -101,7 +101,7 @@ impl ProtocolManager {
             }
         };
         let msg = msg.content;
-        // println!("MSG PROTOCOL {:?}", msg);
+        //println!("MSG PROTOCOL {:?}", msg);
         match msg {
             TapleMessages::DistributionMessage(data) => {
                 self.distribution_sx

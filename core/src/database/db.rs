@@ -297,7 +297,6 @@ impl<M: DatabaseManager> DB<M> {
         subject_id: &DigestIdentifier,
         gobernance_id: &DigestIdentifier,
     ) -> Result<(), Error> {
-        log::error!("PASA POR SET GOVERNANCE index");
         let intermediate_partition = self.subjects_by_governance.partition("xxxxxxxx");
         let subjects_by_governance = intermediate_partition.partition(&gobernance_id.to_str());
         subjects_by_governance.put(&subject_id.to_str(), subject_id.clone())
