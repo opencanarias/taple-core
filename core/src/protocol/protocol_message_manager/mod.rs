@@ -28,6 +28,7 @@ impl TaskCommandContent for TapleMessages {}
 pub struct ProtocolManager {
     input: MpscChannel<Message<TapleMessages>, ()>,
     distribution_sx: SenderEnd<DistributionMessagesNew, Result<(), DistributionErrorResponses>>,
+    #[cfg(feature = "evaluation")]
     evaluation_sx: SenderEnd<EvaluatorMessage, EvaluatorResponse>,
     validation_sx: SenderEnd<NotaryCommand, NotaryResponse>,
     event_sx: SenderEnd<EventCommand, EventResponse>,
@@ -41,6 +42,7 @@ impl ProtocolManager {
     pub fn new(
         input: MpscChannel<Message<TapleMessages>, ()>,
         distribution_sx: SenderEnd<DistributionMessagesNew, Result<(), DistributionErrorResponses>>,
+        #[cfg(feature = "evaluation")]
         evaluation_sx: SenderEnd<EvaluatorMessage, EvaluatorResponse>,
         validation_sx: SenderEnd<NotaryCommand, NotaryResponse>,
         event_sx: SenderEnd<EventCommand, EventResponse>,
@@ -51,6 +53,7 @@ impl ProtocolManager {
         Self {
             input,
             distribution_sx,
+            #[cfg(feature = "evaluation")]
             evaluation_sx,
             validation_sx,
             event_sx,
@@ -114,11 +117,18 @@ impl ProtocolManager {
                 .tell(data)
                 .await
                 .map_err(|_| ProtocolErrors::ChannelClosed)?,
-            TapleMessages::EvaluationMessage(data) => self
-                .evaluation_sx
-                .tell(data)
-                .await
-                .map_err(|_| ProtocolErrors::ChannelClosed)?,
+            TapleMessages::EvaluationMessage(data) => {
+                #[cfg(feature = "evaluation")]
+                {
+                    return Ok(self
+                        .evaluation_sx
+                        .tell(data)
+                        .await
+                        .map_err(|_| ProtocolErrors::ChannelClosed)?);
+                }
+                #[cfg(not(feature = "evaluation"))]
+                log::trace!("Evaluation Message received. Current node is not able to evaluate");
+            }
             TapleMessages::ValidationMessage(data) => self
                 .validation_sx
                 .tell(data)
