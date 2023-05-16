@@ -4,7 +4,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 
 use crate::commons::{
-    crypto::{check_cryptography, Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair},
+    crypto::{check_cryptography, KeyGenerator},
     errors::SubjectError,
     identifier::{Derivable, DigestIdentifier, KeyIdentifier},
     schema_handler::Schema,
@@ -16,66 +16,6 @@ use super::{
     state::Subject,
     timestamp::TimeStamp,
 };
-
-// #[derive(
-//     Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
-// )]
-// pub enum RequestPayload {
-//     Json(String),
-//     JsonPatch(String),
-// }
-
-// #[derive(
-//     Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
-// )]
-// pub struct CreateRequest {
-//     #[schema(value_type = String)]
-//     pub governance_id: DigestIdentifier,
-//     pub schema_id: String,
-//     pub namespace: String,
-//     pub payload: RequestPayload,
-// }
-
-// #[derive(
-//     Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
-// )]
-// pub struct StateRequest {
-//     #[schema(value_type = String)]
-//     pub subject_id: DigestIdentifier,
-//     pub payload: RequestPayload,
-// }
-
-// #[derive(
-//     Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
-// )]
-// pub enum EventRequestType {
-//     Create(CreateRequest),
-//     State(StateRequest),
-// }
-
-// /// Request that originated the event. It contains basically
-// /// the proposed change and the votes obtained related to it.
-// #[derive(
-//     Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
-// )]
-// pub struct EventRequest {
-//     pub request: EventRequestType,
-//     pub timestamp: TimeStamp,
-//     pub signature: Signature,
-//     #[schema(value_type = Vec<ApprovalResponse>)]
-//     pub approvals: HashSet<ApprovalResponse>,
-// }
-
-// #[derive(
-//     Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
-// )]
-// pub struct RequestData {
-//     pub request: EventRequestType,
-//     pub request_id: String,
-//     pub timestamp: TimeStamp,
-//     pub subject_id: Option<String>,
-//     pub sn: Option<u64>,
-// }
 
 #[derive(
     Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
@@ -91,6 +31,7 @@ pub struct EventRequest {
 pub enum EventRequestType {
     Create(CreateRequest),
     State(StateRequest),
+    Transfer(TransferRequest)
 }
 
 #[derive(
@@ -110,6 +51,15 @@ pub struct StateRequest {
     #[schema(value_type = String)]
     pub subject_id: DigestIdentifier,
     pub invokation: String,
+}
+
+#[derive(
+    Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
+)]
+pub struct TransferRequest {
+    #[schema(value_type = String)]
+    pub subject_id: DigestIdentifier,
+    pub public_key: Vec<u8>,
 }
 
 impl EventRequest {
