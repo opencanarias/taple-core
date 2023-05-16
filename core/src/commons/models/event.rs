@@ -189,12 +189,12 @@ use std::collections::HashSet;
 
 use crate::{
     commons::{
-        crypto::{check_cryptography, KeyPair, Payload, DSA, KeyMaterial},
+        crypto::{check_cryptography, KeyMaterial, KeyPair, Payload, DSA},
         errors::SubjectError,
     },
     event_content::Metadata,
     event_request::EventRequest,
-    identifier::{DigestIdentifier, KeyIdentifier, SignatureIdentifier, Derivable},
+    identifier::{Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier},
     signature::{Signature, SignatureContent},
     TimeStamp,
 };
@@ -207,6 +207,7 @@ use utoipa::ToSchema;
 use super::{
     approval::Approval,
     event_proposal::{EventProposal, Proposal},
+    state::Subject,
 };
 
 #[derive(
@@ -224,6 +225,46 @@ pub struct EventContent {
     pub event_proposal: EventProposal,
     pub approvals: HashSet<Approval>,
     pub execution: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
+pub struct ValidationProof {
+    pub governance_id: DigestIdentifier,
+    pub governance_version: u64,
+    pub subject_id: DigestIdentifier,
+    pub sn: u64,
+    pub schema_id: String,
+    pub namespace: String,
+    pub prev_event_hash: DigestIdentifier,
+    pub event_hash: DigestIdentifier,
+    pub state_hash: DigestIdentifier,
+    pub subject_public_key: KeyIdentifier,
+    pub owner: KeyIdentifier,
+}
+
+impl ValidationProof {
+    pub fn new(
+        subject: &Subject,
+        sn: u64,
+        prev_event_hash: DigestIdentifier,
+        event_hash: DigestIdentifier,
+        state_hash: DigestIdentifier,
+        governance_version: u64,
+    ) -> Self {
+        Self {
+            governance_id: subject.governance_id.clone(),
+            governance_version,
+            subject_id: subject.subject_id.clone(),
+            sn,
+            schema_id: subject.schema_id.clone(),
+            namespace: subject.namespace.clone(),
+            prev_event_hash,
+            event_hash,
+            state_hash,
+            subject_public_key: subject.public_key.clone(),
+            owner: subject.owner.clone(),
+        }
+    }
 }
 
 impl EventContent {
@@ -247,11 +288,12 @@ impl Event {
         gov_version: u64,
         init_state: &Value,
     ) -> Result<Self, SubjectError> {
-        let json_patch = serde_json::to_string(&serde_json::to_value(diff(&json!({}), init_state)).map_err(|_| {
-            SubjectError::CryptoError(String::from("Error converting patch to value"))
-        })?).map_err(|_| {
-            SubjectError::CryptoError(String::from("Error converting patch to string"))
-        })?;
+        let json_patch = serde_json::to_string(
+            &serde_json::to_value(diff(&json!({}), init_state)).map_err(|_| {
+                SubjectError::CryptoError(String::from("Error converting patch to value"))
+            })?,
+        )
+        .map_err(|_| SubjectError::CryptoError(String::from("Error converting patch to string")))?;
         let proposal = Proposal {
             event_request,
             sn: 0,
@@ -304,12 +346,12 @@ impl Event {
                 event_content_hash: content_hash,
                 timestamp: TimeStamp::now(),
             },
-            signature: SignatureIdentifier::new(
-                public_key.to_signature_derivator(),
-                &signature,
-            ),
+            signature: SignatureIdentifier::new(public_key.to_signature_derivator(), &signature),
         };
-        Ok(Self { content, signature: subject_signature })
+        Ok(Self {
+            content,
+            signature: subject_signature,
+        })
     }
 
     pub fn check_signatures(&self) -> Result<(), SubjectError> {
