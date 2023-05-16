@@ -297,6 +297,9 @@ impl<D: DatabaseManager> Ledger<D> {
             .request
             .clone()
         {
+            EventRequestType::Transfer(transfer_request) => {
+                todo!()
+            }
             EventRequestType::Create(create_request) => {
                 // Comprobar que evaluation es None
                 if event.content.event_proposal.proposal.evaluation.is_some() {
@@ -626,6 +629,7 @@ impl<D: DatabaseManager> Ledger<D> {
                 create_subject_id(&event)?
             }
             EventRequestType::State(state_request) => state_request.subject_id.clone(),
+            EventRequestType::Transfer(transfer_request) => todo!()
         };
         let ledger_state = self.ledger_state.get(&subject_id);
         match ledger_state {

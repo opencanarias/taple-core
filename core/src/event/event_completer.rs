@@ -294,6 +294,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
             .check_signatures()
             .map_err(EventError::SubjectError)?;
         match &event_request.request {
+            crate::event_request::EventRequestType::Transfer(transfer_request) => todo!(),
             crate::event_request::EventRequestType::Create(create_request) => {
                 // Comprobar si es governance, entonces vale todo, si no comprobar que el invoker soy yo y puedo hacerlo
                 if event_request.signature.content.signer != self.own_identifier {
@@ -435,6 +436,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
             ))),
         };
         let subject_id = match &preevaluation_event.event_request.request {
+            crate::event_request::EventRequestType::Transfer(_) => todo!(),
             crate::event_request::EventRequestType::Create(_) => {
                 return Err(EventError::EvaluationOrApprovationInCreationEvent)
             } // Que hago aquí?? devuelvo error?
@@ -650,6 +652,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
             }
         };
         let subject_id = match &event_proposal.proposal.event_request.request {
+            crate::event_request::EventRequestType::Transfer(_) => todo!(),
             crate::event_request::EventRequestType::Create(_) => {
                 return Err(EventError::EvaluationOrApprovationInCreationEvent)
             } // Que hago aquí?? devuelvo error?
@@ -805,6 +808,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
             }
         };
         let subject_id = match &event.content.event_proposal.proposal.event_request.request {
+            crate::event_request::EventRequestType::Transfer(_) => todo!(),
             crate::event_request::EventRequestType::Create(_) => {
                 return Err(EventError::EvaluationOrApprovationInCreationEvent)
             } // Que hago aquí?? devuelvo error?

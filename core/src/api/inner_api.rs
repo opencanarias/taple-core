@@ -8,6 +8,7 @@ use crate::event::errors::EventError;
 use crate::event::manager::{EventAPI, EventAPIInterface};
 use crate::event::EventResponse;
 use crate::identifier::Derivable;
+use crate::KeyIdentifier;
 // use crate::ledger::errors::LedgerManagerError;
 use crate::{
     commons::{
@@ -22,6 +23,7 @@ use crate::{
     },
     DatabaseManager, DB,
 };
+use std::collections::HashSet;
 use std::str::FromStr;
 
 use super::{
@@ -244,6 +246,25 @@ impl<D: DatabaseManager> InnerAPI<D> {
             }
             Err(error) => return ApiResponses::GetSingleRequest(Err(error.into())),
         }
+    }
+
+    pub async fn set_preauthorized_subject(
+        &self,
+        subject_id: DigestIdentifier,
+        providers: HashSet<KeyIdentifier>,
+    ) -> Result<ApiResponses, APIInternalError> {
+        if let Err(error) = self.db.set_preauthorized_subject_and_providers(&subject_id, providers) {
+            return Err(APIInternalError::DatabaseError(error.to_string()));
+        }
+        Ok(ApiResponses::SetPreauthorizedSubjectCompleted)
+    }
+
+    pub async fn expecting_transfer(
+        &self,
+        subject: DigestIdentifier,
+        public_key: Vec<u8>
+    ) -> Result<ApiResponses, APIInternalError> {
+        todo!()
     }
 }
 
