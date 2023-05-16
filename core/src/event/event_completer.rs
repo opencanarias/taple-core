@@ -170,7 +170,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 Ok(last_event) => {
                     let gov_version = self
                         .gov_api
-                        .get_governance_version(subject.governance_id.clone())
+                        .get_governance_version(subject.governance_id.clone(), subject.subject_id.clone())
                         .await?;
                     let metadata = Metadata {
                         namespace: subject.namespace.clone(),
@@ -352,7 +352,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
         // Get the list of evaluators
         let governance_version = self
             .gov_api
-            .get_governance_version(subject.governance_id.clone())
+            .get_governance_version(subject.governance_id.clone(), subject.subject_id.clone())
             .await
             .map_err(EventError::GovernanceError)?;
         let (metadata, stage) = (
@@ -467,7 +467,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
         // Comprobar si la versión de la governanza coincide con la nuestra, si no no lo aceptamos
         let governance_version = self
             .gov_api
-            .get_governance_version(subject.governance_id.clone())
+            .get_governance_version(subject.governance_id.clone(), subject.subject_id.clone())
             .await
             .map_err(EventError::GovernanceError)?;
         // Comprobar governance-version que sea la misma que la nuestra
@@ -600,7 +600,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 };
                 let gov_version = self
                     .gov_api
-                    .get_governance_version(subject.governance_id.clone())
+                    .get_governance_version(subject.governance_id.clone(), subject.subject_id.clone())
                     .await?;
                 let event = &self.create_event_prevalidated(
                     event_proposal,
@@ -763,7 +763,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
 
             let gov_version = self
                 .gov_api
-                .get_governance_version(subject.governance_id.clone())
+                .get_governance_version(subject.governance_id.clone(), subject.subject_id.clone())
                 .await?;
             let event =
                 &self.create_event_prevalidated(event_proposal, approvals, &subject, execution)?;

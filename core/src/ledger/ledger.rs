@@ -140,10 +140,16 @@ impl<D: DatabaseManager> Ledger<D> {
         let EventRequestType::Create(create_request) = event_request.request.clone() else {
             return Err(LedgerError::StateInGenesis)
         };
-        let governance_version = self
+        let governance_version = if create_request.schema_id == "governance"
+            && create_request.governance_id.digest.is_empty()
+        {
+            0
+        } else {
+            self
             .gov_api
-            .get_governance_version(create_request.governance_id.clone())
-            .await?;
+            .get_governance_version(create_request.governance_id.clone(), DigestIdentifier::default())
+            .await?
+        };
         let init_state = self
             .gov_api
             .get_init_state(
@@ -177,6 +183,8 @@ impl<D: DatabaseManager> Ledger<D> {
         } else {
             self.subject_is_gov.insert(subject_id.clone(), false);
         }
+        self.database
+            .set_governance_index(&subject_id, &subject.governance_id)?;
         self.database.set_subject(&subject_id, subject)?;
         self.database.set_event(&subject_id, event)?;
         // Actualizar Ledger State
@@ -311,7 +319,10 @@ impl<D: DatabaseManager> Ledger<D> {
                 };
                 let our_gov_version = self
                     .gov_api
-                    .get_governance_version(create_request.governance_id.clone())
+                    .get_governance_version(
+                        create_request.governance_id.clone(),
+                        DigestIdentifier::default(),
+                    )
                     .await?;
                 let metadata = Metadata {
                     namespace: create_request.namespace,
@@ -913,6 +924,8 @@ impl<D: DatabaseManager> Ledger<D> {
         let init_state = serde_json::to_string(&init_state)
             .map_err(|_| LedgerError::ErrorParsingJsonString("Init state".to_owned()))?;
         let subject = Subject::from_genesis_event(event.clone(), init_state)?;
+        self.database
+            .set_governance_index(&subject_id, &subject.governance_id)?;
         self.database.set_event(&subject_id, event)?;
         self.database.set_subject(&subject_id, subject)?;
         Ok(metadata)

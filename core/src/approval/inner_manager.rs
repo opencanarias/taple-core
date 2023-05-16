@@ -118,10 +118,11 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
     pub async fn get_governance_version(
         &self,
         governance_id: &DigestIdentifier,
+        subject_id: &DigestIdentifier
     ) -> Result<Result<u64, ApprovalErrorResponse>, ApprovalManagerError> {
         match self
             .governance
-            .get_governance_version(governance_id.to_owned())
+            .get_governance_version(governance_id.to_owned(), subject_id.clone())
             .await
         {
             Ok(data) => Ok(Ok(data)),
@@ -220,7 +221,7 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
 
         // Comprobamos si la versión de la gobernanza es correcta
         let version = match self
-            .get_governance_version(&subject_data.governance_id)
+            .get_governance_version(&subject_data.governance_id, &subject_data.subject_id)
             .await?
         {
             Ok(version) => version,

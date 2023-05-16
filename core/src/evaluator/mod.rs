@@ -6,11 +6,15 @@ use crate::{
 };
 
 use self::errors::EvaluatorErrorResponses;
-
+#[cfg(feature = "evaluation")]
 pub mod compiler;
+
 mod errors;
+#[cfg(feature = "evaluation")]
 mod manager;
+#[cfg(feature = "evaluation")]
 pub use manager::{EvaluatorAPI, EvaluatorManager};
+#[cfg(feature = "evaluation")]
 mod runner;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -16,6 +16,7 @@ use crate::database::{DatabaseManager, DB};
 use crate::distribution::error::DistributionErrorResponses;
 use crate::distribution::manager::DistributionManager;
 use crate::distribution::DistributionMessagesNew;
+#[cfg(feature = "evaluation")]
 use crate::evaluator::{EvaluatorManager, EvaluatorMessage, EvaluatorResponse};
 use crate::event::manager::{EventAPI, EventManager};
 use crate::event::{EventCommand, EventResponse};
@@ -311,6 +312,7 @@ impl<D: DatabaseManager + 'static> Taple<D> {
         let (approval_receiver, approval_sender) =
             MpscChannel::<ApprovalMessages, ApprovalResponses>::new(BUFFER_SIZE);
         // Receiver and sender of evaluation messages
+        #[cfg(feature = "evaluation")]
         let (evaluation_receiver, evaluation_sender) =
             MpscChannel::<EvaluatorMessage, EvaluatorResponse>::new(BUFFER_SIZE);
         // Receiver and sender of validation messages
@@ -374,6 +376,7 @@ impl<D: DatabaseManager + 'static> Taple<D> {
         let protocol_manager = ProtocolManager::new(
             protocol_receiver,
             distribution_sender.clone(),
+            #[cfg(feature = "evaluation")]
             evaluation_sender.clone(),
             validation_sender.clone(),
             event_sender.clone(),
@@ -427,6 +430,7 @@ impl<D: DatabaseManager + 'static> Taple<D> {
             bsx.subscribe(),
             DB::new(db.clone()),
         );
+        #[cfg(feature = "evaluation")]
         // Creation EvaluatorManager
         let evaluator_manager = EvaluatorManager::new(
             evaluation_receiver,
@@ -455,6 +459,7 @@ impl<D: DatabaseManager + 'static> Taple<D> {
         // Creation DistributionManager
         let distribution_manager = DistributionManager::new(
             distribution_receiver,
+            governance_update_sx.subscribe(),
             bsx.clone(),
             bsx.subscribe(),
             task_sender.clone(),
@@ -491,6 +496,7 @@ impl<D: DatabaseManager + 'static> Taple<D> {
         tokio::spawn(async move {
             network_receiver.run().await;
         });
+        #[cfg(feature = "evaluation")]
         tokio::spawn(async move {
             evaluator_manager.start().await;
         });
