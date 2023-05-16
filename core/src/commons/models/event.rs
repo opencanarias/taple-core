@@ -240,6 +240,7 @@ pub struct ValidationProof {
     pub state_hash: DigestIdentifier,
     pub subject_public_key: KeyIdentifier,
     pub owner: KeyIdentifier,
+    pub creator: KeyIdentifier,
 }
 
 impl ValidationProof {
@@ -263,6 +264,19 @@ impl ValidationProof {
             state_hash,
             subject_public_key: subject.public_key.clone(),
             owner: subject.owner.clone(),
+            creator: subject.creator.clone(),
+        }
+    }
+
+    pub fn get_metadata(&self) -> Metadata {
+        Metadata {
+            namespace: self.namespace.clone(),
+            governance_id: self.governance_id.clone(),
+            governance_version: self.governance_version,
+            schema_id: self.schema_id.clone(),
+            owner: self.owner.clone(),
+            subject_id: self.subject_id.clone(),
+            creator: self.creator.clone(),
         }
     }
 }

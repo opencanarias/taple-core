@@ -24,3 +24,15 @@ pub fn request_event(
         sn,
     })
 }
+
+pub fn request_gov_event(
+    who_asked: KeyIdentifier,
+    subject_id: DigestIdentifier,
+    sn: u64,
+) -> TapleMessages {
+    TapleMessages::LedgerMessages(LedgerCommand::GetNextGov {
+        who_asked,
+        subject_id,
+        sn,
+    })
+}
