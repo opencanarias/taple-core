@@ -9,7 +9,7 @@ use crate::{
         crypto::{check_cryptography, Payload, DSA},
         models::{
             approval::{Approval, UniqueApproval},
-            event::EventContent,
+            event::{EventContent, ValidationProof},
             event_preevaluation::{Context, EventPreEvaluation},
             event_proposal::{Evaluation, EventProposal, Proposal},
             state::Subject,
@@ -38,7 +38,7 @@ use super::errors::EventError;
 use crate::database::{DatabaseManager, DB};
 
 const TIMEOUT: u32 = 2000;
-const GET_ALL: isize = 200;
+// const GET_ALL: isize = 200;
 const QUORUM_PORCENTAGE_AMPLIFICATION: f64 = 0.2;
 
 pub struct EventCompleter<D: DatabaseManager> {
@@ -62,6 +62,7 @@ pub struct EventCompleter<D: DatabaseManager> {
     // Validation HashMaps
     events_to_validate: HashMap<DigestIdentifier, Event>,
     event_validations: HashMap<DigestIdentifier, HashSet<UniqueSignature>>,
+    event_notary_events: HashMap<DigestIdentifier, NotaryEvent>,
     // SignatureManager
     signature_manager: SelfSignatureManager,
 }
@@ -92,6 +93,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
             event_approvations: HashMap::new(),
             event_validations: HashMap::new(),
             subjects_by_governance: HashMap::new(),
+            event_notary_events: HashMap::new(),
             own_identifier,
             signature_manager,
         }
@@ -103,28 +105,60 @@ impl<D: DatabaseManager> EventCompleter<D> {
         event: &Event,
         gov_version: u64,
     ) -> Result<NotaryEvent, EventError> {
-        let signature = self
-            .signature_manager
-            .sign(&(
-                &subject.governance_id,
-                &subject.subject_id,
-                &subject.owner,
-                &event.signature.content.event_content_hash,
-                event.content.event_proposal.proposal.sn,
-                gov_version,
-            ))
-            .map_err(|_| {
-                EventError::CryptoError(String::from("Notary Event hash generation failed"))
-            })?;
-        Ok(NotaryEvent {
-            gov_id: subject.governance_id.clone(),
-            subject_id: subject.subject_id.clone(),
-            owner: subject.owner.clone(),
-            event_hash: event.signature.content.event_content_hash.clone(),
-            sn: event.content.event_proposal.proposal.sn,
+        let state_hash =
+            subject.state_hash_after_apply(&event.content.event_proposal.proposal.json_patch)?;
+        let prev_event_hash = if event.content.event_proposal.proposal.sn == 0 {
+            DigestIdentifier::default()
+        } else {
+            self.database
+                .get_event(
+                    &subject.subject_id,
+                    event.content.event_proposal.proposal.sn - 1,
+                )
+                .map_err(|e| EventError::DatabaseError(e.to_string()))?
+                .signature
+                .content
+                .event_content_hash
+        };
+        let event_hash = event.signature.content.event_content_hash.clone();
+        let proof = ValidationProof::new(
+            subject,
+            event.content.event_proposal.proposal.sn,
+            prev_event_hash,
+            event_hash,
+            state_hash,
             gov_version,
-            owner_signature: signature,
-        })
+        );
+        match &subject.keys {
+            Some(keys) => {
+                let proof_hash =
+                    DigestIdentifier::from_serializable_borsh(&proof).map_err(|_| {
+                        EventError::CryptoError(String::from(
+                            "Error calculating the hash of the proof",
+                        ))
+                    })?;
+                let signature = keys
+                    .sign(Payload::Buffer(proof_hash.derivative()))
+                    .map_err(|_| {
+                        EventError::CryptoError(String::from("Error signing the proof"))
+                    })?;
+                Ok(NotaryEvent {
+                    proof,
+                    subject_signature: Signature {
+                        content: SignatureContent {
+                            signer: self.own_identifier.clone(),
+                            event_content_hash: proof_hash,
+                            timestamp: TimeStamp::now(),
+                        },
+                        signature: SignatureIdentifier::new(
+                            self.own_identifier.to_signature_derivator(),
+                            &signature,
+                        ),
+                    },
+                })
+            }
+            None => Err(EventError::SubjectNotOwned(subject.subject_id.to_str()))?,
+        }
     }
 
     pub async fn init(&mut self) -> Result<(), EventError> {
@@ -150,11 +184,9 @@ impl<D: DatabaseManager> EventCompleter<D> {
                     let stage = ValidationStage::Validate;
                     let (signers, quorum_size) =
                         self.get_signers_and_quorum(metadata, stage.clone()).await?;
-                    let event_message = create_validator_request(self.create_notary_event(
-                        subject,
-                        &last_event,
-                        gov_version,
-                    )?);
+                    let notary_event =
+                        self.create_notary_event(subject, &last_event, gov_version)?;
+                    let event_message = create_validator_request(notary_event.clone());
                     self.ask_signatures(
                         &subject.subject_id,
                         event_message,
@@ -162,6 +194,10 @@ impl<D: DatabaseManager> EventCompleter<D> {
                         quorum_size,
                     )
                     .await?;
+                    self.event_notary_events.insert(
+                        last_event.signature.content.event_content_hash.clone(),
+                        notary_event,
+                    );
                     self.events_to_validate.insert(
                         last_event.signature.content.event_content_hash.clone(),
                         last_event,
@@ -556,6 +592,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 // Retornar TapleMessage directamente
                 (ValidationStage::Approve, msg)
             } else {
+                // No se necesita aprobación
                 let execution = match evaluation.acceptance {
                     crate::commons::models::Acceptance::Ok => true,
                     crate::commons::models::Acceptance::Ko => false,
@@ -571,11 +608,12 @@ impl<D: DatabaseManager> EventCompleter<D> {
                     &subject,
                     execution,
                 )?;
-                let event_message = create_validator_request(self.create_notary_event(
-                    &subject,
-                    event,
-                    gov_version,
-                )?);
+                let notary_event = self.create_notary_event(&subject, &event, gov_version)?;
+                let event_message = create_validator_request(notary_event.clone());
+                self.event_notary_events.insert(
+                    event.signature.content.event_content_hash.clone(),
+                    notary_event,
+                );
                 self.subjects_by_governance.remove(&subject_id);
                 (ValidationStage::Validate, event_message)
             };
@@ -729,8 +767,8 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 .await?;
             let event =
                 &self.create_event_prevalidated(event_proposal, approvals, &subject, execution)?;
-            let event_message =
-                create_validator_request(self.create_notary_event(&subject, event, gov_version)?);
+            let notary_event = self.create_notary_event(&subject, &event, gov_version)?;
+            let event_message = create_validator_request(notary_event.clone());
 
             // Limpiar HashMaps
             self.event_approvations
@@ -740,6 +778,10 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 self.get_signers_and_quorum(metadata, stage.clone()).await?;
             self.ask_signatures(&subject_id, event_message, signers.clone(), quorum_size)
                 .await?;
+            self.event_notary_events.insert(
+                event.signature.content.event_content_hash.clone(),
+                notary_event,
+            );
             self.subjects_by_governance.remove(&subject_id);
             // Hacer update de fase por la que va el evento
             self.subjects_completing_event
@@ -822,8 +864,18 @@ impl<D: DatabaseManager> EventCompleter<D> {
         let quorum_size = quorum_size.to_owned();
         // Comprobar si llegamos a Quorum y si es así dejar de pedir firmas
         if (validation_set.len() as u32) < quorum_size {
-            let event_message =
-                create_validator_request(self.create_notary_event(&subject, event, gov_version)?);
+            let notary_event = match self
+                .event_notary_events
+                .get(&event.signature.content.event_content_hash)
+            {
+                Some(notary_event) => notary_event.to_owned(),
+                None => {
+                    return Err(EventError::CryptoError(String::from(
+                        "The hash of the event does not match any of the events",
+                    )))
+                }
+            };
+            let event_message = create_validator_request(notary_event);
             let mut new_signers: HashSet<KeyIdentifier> =
                 signers.into_iter().map(|s| s.clone()).collect();
             new_signers.remove(&signer);

@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    commons::models::{event::ValidationProof, notary::NotaryEventResponse},
     identifier::{DigestIdentifier, KeyIdentifier},
-    signature::Signature, commons::models::notary::NotaryEventResponse,
+    signature::Signature,
 };
 
 use self::errors::NotaryError;
@@ -23,11 +24,6 @@ pub enum NotaryResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NotaryEvent {
-    pub gov_id: DigestIdentifier,
-    pub subject_id: DigestIdentifier,
-    pub owner: KeyIdentifier,
-    pub event_hash: DigestIdentifier,
-    pub sn: u64,
-    pub gov_version: u64,
-    pub owner_signature: Signature,
+    pub proof: ValidationProof,
+    pub subject_signature: Signature,
 }
