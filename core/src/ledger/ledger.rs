@@ -8,6 +8,7 @@ use crate::{
         channel::SenderEnd,
         models::{
             approval::Approval,
+            event::ValidationProof,
             event_preevaluation::{Context, EventPreEvaluation},
             state::Subject,
         },
@@ -442,14 +443,32 @@ impl<D: DatabaseManager> Ledger<D> {
                         let (signers, quorum) = self
                             .get_signers_and_quorum(metadata.clone(), ValidationStage::Validate)
                             .await?;
-                        let notary_hash = DigestIdentifier::from_serializable_borsh(&(
-                            &subject.governance_id,
-                            &subject.subject_id,
-                            &subject.owner,
-                            &event.signature.content.event_content_hash,
-                            &event.content.event_proposal.proposal.sn,
-                            &event.content.event_proposal.proposal.gov_version,
-                        ))
+                        let prev_event_hash = if event.content.event_proposal.proposal.sn == 0 {
+                            DigestIdentifier::default()
+                        } else {
+                            self.database
+                                .get_event(
+                                    &subject.subject_id,
+                                    event.content.event_proposal.proposal.sn - 1,
+                                )?
+                                .signature
+                                .content
+                                .event_content_hash
+                        };
+                        let state_hash = subject.state_hash_after_apply(
+                            &event.content.event_proposal.proposal.json_patch,
+                        )?;
+                        let validation_proof = ValidationProof::new(
+                            &subject,
+                            event.content.event_proposal.proposal.sn,
+                            prev_event_hash,
+                            event.signature.content.event_content_hash.clone(),
+                            state_hash,
+                            event.content.event_proposal.proposal.gov_version,
+                        );
+                        let notary_hash = DigestIdentifier::from_serializable_borsh(
+                            &validation_proof,
+                        )
                         .map_err(|_| {
                             LedgerError::CryptoError(String::from(
                                 "Error calculating the hash of the serializable",
