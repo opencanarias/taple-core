@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use blake3::Hash;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
@@ -26,6 +27,7 @@ const CONTRACT_TABLE: &str = "contract";
 const NOTARY_SIGNATURES: &str = "notary-signatures";
 const WITNESS_SIGNATURES: &str = "witness-signatures";
 const SUBJECTS_BY_GOVERNANCE: &str = "governance-index";
+const PREAUTHORIZED_SUBJECTS_AND_PROVIDERS: &str = "preauthorized-subjects-and-providers";
 
 pub struct DB<M: DatabaseManager> {
     _manager: Arc<M>,
@@ -41,6 +43,8 @@ pub struct DB<M: DatabaseManager> {
         Box<dyn DatabaseCollection<InnerDataType = (u64, HashSet<NotaryEventResponse>)>>,
     witness_signatures_db: Box<dyn DatabaseCollection<InnerDataType = (u64, HashSet<Signature>)>>,
     subjects_by_governance: Box<dyn DatabaseCollection<InnerDataType = DigestIdentifier>>,
+    preauthorized_subjects_and_providers:
+        Box<dyn DatabaseCollection<InnerDataType = (DigestIdentifier, HashSet<KeyIdentifier>)>>,
 }
 
 impl<M: DatabaseManager> DB<M> {
@@ -56,6 +60,8 @@ impl<M: DatabaseManager> DB<M> {
         let notary_signatures_db = manager.create_collection(NOTARY_SIGNATURES);
         let witness_signatures_db = manager.create_collection(WITNESS_SIGNATURES);
         let subjects_by_governance = manager.create_collection(SUBJECTS_BY_GOVERNANCE);
+        let preauthorized_subjects_and_providers =
+            manager.create_collection(PREAUTHORIZED_SUBJECTS_AND_PROVIDERS);
         Self {
             _manager: manager,
             signature_db,
@@ -69,7 +75,36 @@ impl<M: DatabaseManager> DB<M> {
             notary_signatures_db,
             witness_signatures_db,
             subjects_by_governance,
+            preauthorized_subjects_and_providers,
         }
+    }
+
+    pub fn get_preauthorized_subjects_and_providers(
+        &self,
+        from: Option<String>,
+        quantity: isize,
+    ) -> Result<Vec<(DigestIdentifier, HashSet<KeyIdentifier>)>, Error> {
+        self.get_by_range(from, quantity, &self.preauthorized_subjects_and_providers)
+    }
+
+    pub fn get_preauthorized_subject_and_providers(
+        &self,
+        subject_id: &DigestIdentifier,
+    ) -> Result<HashSet<KeyIdentifier>, Error> {
+        Ok(self
+            .preauthorized_subjects_and_providers
+            .get(&subject_id.to_str())?
+            .1)
+    }
+    
+    pub fn set_preauthorized_subject_and_providers(
+        &self,
+        subject_id: &DigestIdentifier,
+        providers: HashSet<KeyIdentifier>,
+    ) -> Result<(), Error> {
+        let id = subject_id.to_str();
+        self.preauthorized_subjects_and_providers
+            .put(&id, (subject_id.clone(), providers))
     }
 
     pub fn get_event(&self, subject_id: &DigestIdentifier, sn: u64) -> Result<Event, Error> {
