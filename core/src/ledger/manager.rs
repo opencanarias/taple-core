@@ -99,6 +99,9 @@ impl<D: DatabaseManager> EventManager<D> {
         };
         let response = {
             match data {
+                LedgerCommand::NewAuthorizedGovernance { subject_id, providers } => {
+                    todo!()
+                }
                 LedgerCommand::OwnEvent { event, signatures } => {
                     let response = self.inner_ledger.event_validated(event, signatures).await;
                     match response {

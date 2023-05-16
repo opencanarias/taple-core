@@ -43,6 +43,10 @@ pub enum LedgerCommand {
         who_asked: KeyIdentifier,
         subject_id: DigestIdentifier,
     },
+    NewAuthorizedGovernance {
+        subject_id: DigestIdentifier,
+        providers: HashSet<KeyIdentifier>
+    }
 }
 
 #[derive(Debug, Clone)]
