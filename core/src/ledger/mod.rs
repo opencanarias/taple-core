@@ -3,7 +3,8 @@ use std::collections::HashSet;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    event_request::EventRequest, identifier::DigestIdentifier, signature::Signature, Event, KeyIdentifier,
+    commons::models::event::ValidationProof, event_request::EventRequest,
+    identifier::DigestIdentifier, signature::Signature, Event, KeyIdentifier,
 };
 
 pub mod errors;
@@ -23,11 +24,17 @@ pub enum LedgerCommand {
         sender: KeyIdentifier,
         event: Event,
         signatures: HashSet<Signature>,
+        validation_proof: ValidationProof,
     },
     ExternalIntermediateEvent {
         event: Event,
     },
     GetEvent {
+        who_asked: KeyIdentifier,
+        subject_id: DigestIdentifier,
+        sn: u64,
+    },
+    GetNextGov {
         who_asked: KeyIdentifier,
         subject_id: DigestIdentifier,
         sn: u64,
@@ -41,6 +48,7 @@ pub enum LedgerCommand {
 #[derive(Debug, Clone)]
 pub enum LedgerResponse {
     GetEvent(Result<Event, errors::LedgerError>),
+    GetNextGov(Result<(Event, HashSet<Signature>), errors::LedgerError>),
     GetLCE(Result<(Event, HashSet<Signature>), errors::LedgerError>),
     NoResponse,
 }

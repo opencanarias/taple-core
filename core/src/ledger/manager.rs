@@ -147,10 +147,11 @@ impl<D: DatabaseManager> EventManager<D> {
                     sender,
                     event,
                     signatures,
+                    validation_proof,
                 } => {
                     let response = self
                         .inner_ledger
-                        .external_event(event, signatures, sender)
+                        .external_event(event, signatures, sender, validation_proof)
                         .await;
                     match response {
                         Err(error) => match error {
@@ -238,6 +239,32 @@ impl<D: DatabaseManager> EventManager<D> {
                         Ok(event) => Ok(event),
                     };
                     LedgerResponse::GetLCE(response)
+                }
+                LedgerCommand::GetNextGov {
+                    who_asked,
+                    subject_id,
+                    sn,
+                } => {
+                    let response = self
+                        .inner_ledger
+                        .get_next_gov(who_asked, subject_id, sn)
+                        .await;
+                    let response = match response {
+                        Err(error) => match error.clone() {
+                            LedgerError::ChannelClosed => {
+                                log::error!("Channel Closed");
+                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                return Err(LedgerError::ChannelClosed);
+                            }
+                            LedgerError::DatabaseError(err) => match err {
+                                crate::DbError::EntryNotFound => return Ok(()),
+                                _ => Err(error),
+                            },
+                            _ => Err(error),
+                        },
+                        Ok(event) => Ok(event),
+                    };
+                    LedgerResponse::GetNextGov(response)
                 }
             }
         };
