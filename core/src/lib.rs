@@ -89,6 +89,7 @@ pub(crate) mod distribution;
 pub(crate) mod evaluator;
 pub(crate) mod notary;
 pub(crate) mod utils;
+pub(crate) mod authorized_subjecs;
 
 pub mod event;
 pub mod protocol;
