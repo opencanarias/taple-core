@@ -1,11 +1,14 @@
+use std::collections::HashSet;
+
 use tokio::time::{interval, Duration};
 
+use crate::database::Error as DbError;
 use crate::{
     commons::channel::{ChannelData, MpscChannel, SenderEnd},
     database::DB,
     message::MessageTaskCommand,
     protocol::protocol_message_manager::TapleMessages,
-    DatabaseManager, KeyIdentifier,
+    DatabaseManager, DigestIdentifier, KeyIdentifier,
 };
 
 use super::{
@@ -13,6 +16,32 @@ use super::{
     AuthorizedSubjectsCommand, AuthorizedSubjectsResponse,
 };
 
+#[derive(Clone, Debug)]
+pub struct AuthorizedSubjectsAPI {
+    sender: SenderEnd<AuthorizedSubjectsCommand, AuthorizedSubjectsResponse>,
+}
+
+impl AuthorizedSubjectsAPI {
+    pub fn new(sender: SenderEnd<AuthorizedSubjectsCommand, AuthorizedSubjectsResponse>) -> Self {
+        Self { sender }
+    }
+
+    pub async fn new_authorized_subject(
+        &self,
+        subject_id: DigestIdentifier,
+        providers: HashSet<KeyIdentifier>,
+    ) -> Result<(), AuthorizedSubjectsError> {
+        self.sender
+            .tell(AuthorizedSubjectsCommand::NewAuthorizedSubject {
+                subject_id,
+                providers,
+            })
+            .await?;
+        Ok(())
+    }
+}
+
+/// Manages authorized subjects and their providers.
 pub struct AuthorizedSubjectsManager<D: DatabaseManager> {
     /// Communication channel for incoming petitions
     input_channel: MpscChannel<AuthorizedSubjectsCommand, AuthorizedSubjectsResponse>,
@@ -23,6 +52,7 @@ pub struct AuthorizedSubjectsManager<D: DatabaseManager> {
 }
 
 impl<D: DatabaseManager> AuthorizedSubjectsManager<D> {
+    /// Creates a new `AuthorizedSubjectsManager` with the given input channel, database, message channel, ID, and shutdown channels.
     pub fn new(
         input_channel: MpscChannel<AuthorizedSubjectsCommand, AuthorizedSubjectsResponse>,
         database: DB<D>,
@@ -39,18 +69,23 @@ impl<D: DatabaseManager> AuthorizedSubjectsManager<D> {
         }
     }
 
+    /// Starts the `AuthorizedSubjectsManager` and processes incoming commands.
     pub async fn start(mut self) {
+        // Ask for all authorized subjects from the database
         match self.inner_authorized_subjects.ask_for_all().await {
             Ok(_) => {}
+            Err(AuthorizedSubjectsError::DatabaseError(DbError::EntryNotFound)) => {}
             Err(error) => {
                 log::error!("{}", error);
                 self.shutdown_sender.send(()).expect("Channel Closed");
                 return;
             }
         };
+        // Set up a timer to periodically ask for all authorized subjects from the database
         let mut timer = interval(Duration::from_secs(15));
         loop {
             tokio::select! {
+                // Process incoming commands from the input channel
                 command = self.input_channel.receive() => {
                     match command {
                         Some(command) => {
@@ -67,9 +102,11 @@ impl<D: DatabaseManager> AuthorizedSubjectsManager<D> {
                         },
                     }
                 },
+                // Ask for all authorized subjects from the database when the timer ticks
                 _ = timer.tick() => {
                     match self.inner_authorized_subjects.ask_for_all().await {
                         Ok(_) => {}
+                        Err(AuthorizedSubjectsError::DatabaseError(DbError::EntryNotFound)) => {}
                         Err(error) => {
                             log::error!("{}", error);
                             self.shutdown_sender.send(()).expect("Channel Closed");
@@ -77,6 +114,7 @@ impl<D: DatabaseManager> AuthorizedSubjectsManager<D> {
                         }
                     };
                 },
+                // Shutdown the manager when a shutdown signal is received
                 _ = self.shutdown_receiver.recv() => {
                     break;
                 }
@@ -84,11 +122,12 @@ impl<D: DatabaseManager> AuthorizedSubjectsManager<D> {
         }
     }
 
+    /// Processes an incoming command from the input channel.
     async fn process_command(
         &mut self,
         command: ChannelData<AuthorizedSubjectsCommand, AuthorizedSubjectsResponse>,
     ) -> Result<(), AuthorizedSubjectsError> {
-        log::info!("EVENT MANAGER MSG RECEIVED");
+        log::info!("AuthorizedSubjects MANAGER MSG RECEIVED");
         let (sender, data) = match command {
             ChannelData::AskData(data) => {
                 let (sender, data) = data.get();

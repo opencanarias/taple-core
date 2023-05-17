@@ -252,27 +252,7 @@ impl<D: DatabaseManager> ApprovalManager<D> {
                             ))
                             .await
                             .map_err(|_| ApprovalManagerError::MessageChannelFailed)?,
-                        ApprovalErrorResponse::APIChannelNotAvailable => todo!(),
-                        ApprovalErrorResponse::RequestAlreadyKnown => todo!(),
-                        ApprovalErrorResponse::NoFactEvent => todo!(),
-                        ApprovalErrorResponse::PreviousEventDetected => todo!(),
-                        ApprovalErrorResponse::GovernanceNotFound => todo!(),
-                        ApprovalErrorResponse::InvalidGovernanceID => todo!(),
-                        ApprovalErrorResponse::InvalidGovernanceVersion => todo!(),
-                        ApprovalErrorResponse::SubjectNotFound => todo!(),
-                        ApprovalErrorResponse::GovernanceNoCorrelation => todo!(),
-                        ApprovalErrorResponse::SubjectNotSynchronized => todo!(),
-                        ApprovalErrorResponse::SignatureSignerIsNotSubject => todo!(),
-                        ApprovalErrorResponse::InvalidSubjectSignature => todo!(),
-                        ApprovalErrorResponse::NodeIsNotApprover => todo!(),
-                        ApprovalErrorResponse::InvalidEvaluator => todo!(),
-                        ApprovalErrorResponse::InvalidEvaluatorSignature => todo!(),
-                        ApprovalErrorResponse::InvalidInvokator => todo!(),
-                        ApprovalErrorResponse::InvalidInvokatorPermission => todo!(),
-                        ApprovalErrorResponse::NoQuorumReached => todo!(),
-                        ApprovalErrorResponse::ApprovalRequestNotFound => todo!(),
-                        ApprovalErrorResponse::NoHashCorrelation => todo!(),
-                        ApprovalErrorResponse::InvalidAcceptance => todo!(),
+                        _ => {}
                     },
                 }
             }
