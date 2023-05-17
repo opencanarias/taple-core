@@ -87,6 +87,8 @@ impl<D: DatabaseManager> AuthorizedSubjects<D> {
         subject_id: DigestIdentifier,
         providers: HashSet<KeyIdentifier>,
     ) -> Result<(), AuthorizedSubjectsError> {
+        self.database
+            .set_preauthorized_subject_and_providers(&subject_id, providers.clone())?;
         if !providers.is_empty() {
             self.message_channel
                 .tell(MessageTaskCommand::Request(
