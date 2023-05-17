@@ -1,3 +1,5 @@
+use tokio::time::{interval, Duration};
+
 use crate::{
     commons::channel::{ChannelData, MpscChannel, SenderEnd},
     database::DB,
@@ -46,6 +48,7 @@ impl<D: DatabaseManager> AuthorizedSubjectsManager<D> {
                 return;
             }
         };
+        let mut timer = interval(Duration::from_secs(15));
         loop {
             tokio::select! {
                 command = self.input_channel.receive() => {
@@ -63,6 +66,16 @@ impl<D: DatabaseManager> AuthorizedSubjectsManager<D> {
                             break;
                         },
                     }
+                },
+                _ = timer.tick() => {
+                    match self.inner_authorized_subjects.ask_for_all().await {
+                        Ok(_) => {}
+                        Err(error) => {
+                            log::error!("{}", error);
+                            self.shutdown_sender.send(()).expect("Channel Closed");
+                            break;
+                        }
+                    };
                 },
                 _ = self.shutdown_receiver.recv() => {
                     break;
