@@ -3,7 +3,7 @@ use crate::{
     database::DB,
     message::MessageTaskCommand,
     protocol::protocol_message_manager::TapleMessages,
-    DatabaseManager,
+    DatabaseManager, KeyIdentifier,
 };
 
 use super::{
@@ -25,19 +25,20 @@ impl<D: DatabaseManager> AuthorizedSubjectsManager<D> {
         input_channel: MpscChannel<AuthorizedSubjectsCommand, AuthorizedSubjectsResponse>,
         database: DB<D>,
         message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
+        our_id: KeyIdentifier,
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
     ) -> Self {
         Self {
             input_channel,
-            inner_authorized_subjects: AuthorizedSubjects::new(database, message_channel),
+            inner_authorized_subjects: AuthorizedSubjects::new(database, message_channel, our_id),
             shutdown_sender,
             shutdown_receiver,
         }
     }
 
     pub async fn start(mut self) {
-        match self.inner_authorized_subjects.init().await {
+        match self.inner_authorized_subjects.ask_for_all().await {
             Ok(_) => {}
             Err(error) => {
                 log::error!("{}", error);
