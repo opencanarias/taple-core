@@ -1,12 +1,13 @@
 use std::collections::HashSet;
 
+use super::GetEventsOfSubject;
 use super::{
     error::{APIInternalError, ApiError},
     inner_api::InnerAPI,
     APICommands, ApiResponses,
 };
-use super::{GetEventsOfSubject};
 use crate::approval::manager::ApprovalAPI;
+use crate::authorized_subjecs::manager::AuthorizedSubjectsAPI;
 use crate::commons::models::event::Event;
 use crate::commons::models::event_request::EventRequest;
 use crate::commons::models::state::SubjectData;
@@ -464,6 +465,7 @@ impl<D: DatabaseManager> API<D> {
         input: MpscChannel<APICommands, ApiResponses>,
         event_api: EventAPI,
         approval_api: ApprovalAPI,
+        authorized_subjects_api: AuthorizedSubjectsAPI,
         settings_sender: Sender<TapleSettings>,
         initial_settings: TapleSettings,
         keys: KeyPair,
@@ -474,7 +476,14 @@ impl<D: DatabaseManager> API<D> {
         Self {
             input,
             _settings_sender: settings_sender,
-            inner_api: InnerAPI::new(keys, &initial_settings, event_api, db, approval_api),
+            inner_api: InnerAPI::new(
+                keys,
+                &initial_settings,
+                event_api,
+                authorized_subjects_api,
+                db,
+                approval_api,
+            ),
             shutdown_sender: Some(shutdown_sender),
             shutdown_receiver: shutdown_receiver,
         }
@@ -561,7 +570,9 @@ impl<D: DatabaseManager> API<D> {
                             .await?
                     }
                     APICommands::ExpectingTransfer(subject_id, public_key) => {
-                        self.inner_api.expecting_transfer(subject_id, public_key).await?
+                        self.inner_api
+                            .expecting_transfer(subject_id, public_key)
+                            .await?
                     }
                 };
                 sx.send(response)

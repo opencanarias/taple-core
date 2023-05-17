@@ -291,6 +291,7 @@ impl<D: DatabaseManager> Ledger<D> {
         sender: KeyIdentifier,
         validation_proof: ValidationProof,
     ) -> Result<(), LedgerError> {
+        log::error!("External event: Event: {:?}", event);
         // Comprobaciones criptográficas
         event.check_signatures()?;
         // Comprobar si es genesis o state
@@ -360,24 +361,6 @@ impl<D: DatabaseManager> Ledger<D> {
                         .signer
                         .clone(),
                 };
-                let witnesses = self.get_witnesses(metadata).await?;
-                if !witnesses.contains(&self.our_id) {
-                    match self
-                        .database
-                        .get_preauthorized_subject_and_providers(&subject_id)
-                    {
-                        Ok(_) => {}
-                        Err(error) => match error {
-                            crate::DbError::EntryNotFound => {
-                                return Err(LedgerError::WeAreNotWitnesses(subject_id.to_str()));
-                            }
-                            _ => {
-                                return Err(LedgerError::DatabaseError(error));
-                            }
-                        },
-                    }
-                }
-                self.check_genesis(event, subject_id.clone()).await?;
                 if &create_request.schema_id == "governance" {
                     match self
                         .database
@@ -395,12 +378,33 @@ impl<D: DatabaseManager> Ledger<D> {
                             }
                         },
                     }
-                    self.subject_is_gov.insert(subject_id.clone(), true);
                     // Enviar mensaje a gov de governance updated con el id y el sn
+                    self.check_genesis(event, subject_id.clone()).await?;
                     self.gov_api
                         .governance_updated(subject_id.clone(), 0)
                         .await?;
+                    self.subject_is_gov.insert(subject_id.clone(), true);
                 } else {
+                    let witnesses = self.get_witnesses(metadata).await?;
+                    if !witnesses.contains(&self.our_id) {
+                        match self
+                            .database
+                            .get_preauthorized_subject_and_providers(&subject_id)
+                        {
+                            Ok(_) => {}
+                            Err(error) => match error {
+                                crate::DbError::EntryNotFound => {
+                                    return Err(LedgerError::WeAreNotWitnesses(
+                                        subject_id.to_str(),
+                                    ));
+                                }
+                                _ => {
+                                    return Err(LedgerError::DatabaseError(error));
+                                }
+                            },
+                        }
+                    }
+                    self.check_genesis(event, subject_id.clone()).await?;
                     self.subject_is_gov.insert(subject_id.clone(), false);
                 }
                 match self.ledger_state.get_mut(&subject_id) {
@@ -995,9 +999,18 @@ impl<D: DatabaseManager> Ledger<D> {
         subject_id: DigestIdentifier,
         sn: u64,
     ) -> Result<(Event, HashSet<Signature>), LedgerError> {
+        log::warn!("GET NEXT GOV");
+        log::info!("Getting NG: {}..............{}", subject_id.to_str(), sn);
+        log::info!("Who Asked: {}", who_asked.to_str());
         let subject = self.database.get_subject(&subject_id)?;
         let event = self.database.get_event(&subject_id, sn)?;
-        let signatures = self.database.get_signatures(&subject_id, sn)?;
+        let signatures = match self.database.get_signatures(&subject_id, subject.sn) {
+            Ok(s) => s,
+            Err(error) => match error {
+                crate::DbError::EntryNotFound => HashSet::new(),
+                _ => return Err(LedgerError::DatabaseError(error)),
+            },
+        };
         let prev_event_hash = if sn == 0 {
             DigestIdentifier::default()
         } else {
@@ -1040,9 +1053,17 @@ impl<D: DatabaseManager> Ledger<D> {
         who_asked: KeyIdentifier,
         subject_id: DigestIdentifier,
     ) -> Result<(Event, HashSet<Signature>), LedgerError> {
+        log::info!("Getting LCE: {}", subject_id.to_str());
+        log::info!("Who Asked: {}", who_asked.to_str());
         let subject = self.database.get_subject(&subject_id)?;
         let event = self.database.get_event(&subject_id, subject.sn)?;
-        let signatures = self.database.get_signatures(&subject_id, subject.sn)?;
+        let signatures = match self.database.get_signatures(&subject_id, subject.sn) {
+            Ok(s) => s,
+            Err(error) => match error {
+                crate::DbError::EntryNotFound => HashSet::new(),
+                _ => return Err(LedgerError::DatabaseError(error)),
+            },
+        };
         let prev_event_hash = if event.content.event_proposal.proposal.sn == 0 {
             DigestIdentifier::default()
         } else {

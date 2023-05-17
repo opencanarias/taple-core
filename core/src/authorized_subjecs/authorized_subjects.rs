@@ -7,7 +7,7 @@ use crate::{
     ledger::LedgerCommand,
     message::{MessageConfig, MessageTaskCommand},
     protocol::protocol_message_manager::TapleMessages,
-    DatabaseManager, DigestIdentifier, KeyIdentifier,
+    DatabaseManager, Derivable, DigestIdentifier, KeyIdentifier,
 };
 
 use super::error::AuthorizedSubjectsError;
@@ -49,12 +49,25 @@ impl<D: DatabaseManager> AuthorizedSubjects<D> {
     /// Devuelve un error si no se pueden obtener los sujetos preautorizados o si no se puede enviar un mensaje a través del canal de mensajes.
     pub async fn ask_for_all(&self) -> Result<(), AuthorizedSubjectsError> {
         // Obtenemos todos los sujetos preautorizados de la base de datos.
-        let preauthorized_subjects = self
+        let preauthorized_subjects = match self
             .database
-            .get_preauthorized_subjects_and_providers(None, 10000)?;
+            .get_preauthorized_subjects_and_providers(None, 10000)
+        {
+            Ok(psp) => psp,
+            Err(error) => {
+                log::error!("ERROR PSP_GET: {:?}", error);
+                match error {
+                    _ => return Err(AuthorizedSubjectsError::DatabaseError(error)),
+                }
+            }
+        };
 
         // Para cada sujeto preautorizado, enviamos un mensaje a los proveedores asociados a través del canal de mensajes.
         for (subject_id, providers) in preauthorized_subjects.into_iter() {
+            log::warn!("SUBJECT_ID: {}", subject_id.to_str());
+            providers.iter().for_each(|p| {
+                log::warn!("PROVIDER: {}", p.to_str());
+            });
             if !providers.is_empty() {
                 self.message_channel
                     .tell(MessageTaskCommand::Request(
@@ -87,6 +100,7 @@ impl<D: DatabaseManager> AuthorizedSubjects<D> {
         subject_id: DigestIdentifier,
         providers: HashSet<KeyIdentifier>,
     ) -> Result<(), AuthorizedSubjectsError> {
+        log::info!("HOLAW");
         self.database
             .set_preauthorized_subject_and_providers(&subject_id, providers.clone())?;
         if !providers.is_empty() {
