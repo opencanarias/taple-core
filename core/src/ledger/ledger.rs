@@ -215,54 +215,107 @@ impl<D: DatabaseManager> Ledger<D> {
         signatures: HashSet<Signature>,
     ) -> Result<(), LedgerError> {
         let sn = event.content.event_proposal.proposal.sn;
-        let EventRequestType::State(state_request) = &event.content.event_proposal.proposal.event_request.request
-            else {
-                return Err(LedgerError::StateInGenesis)
-            };
-        let subject_id = state_request.subject_id.clone();
-        self.database.set_signatures(
-            &subject_id,
-            event.content.event_proposal.proposal.sn,
-            signatures,
-        )?;
-        // Aplicar event sourcing
-        let mut subject = self
-            .database
-            .get_subject(&subject_id)
-            .map_err(|error| match error {
-                crate::DbError::EntryNotFound => LedgerError::SubjectNotFound(subject_id.to_str()),
-                _ => LedgerError::DatabaseError(error),
-            })?;
-        let json_patch = event.content.event_proposal.proposal.json_patch.as_str();
-        subject.update_subject(json_patch, event.content.event_proposal.proposal.sn)?;
-        self.database.set_event(&subject_id, event)?;
-        self.database.set_subject(&subject_id, subject)?;
-        // Comprobar is_gov
-        let is_gov = self.subject_is_gov.get(&subject_id);
-        match is_gov {
-            Some(true) => {
-                // Enviar mensaje a gov de governance updated con el id y el sn
-                self.gov_api
-                    .governance_updated(subject_id.clone(), sn)
-                    .await?;
-            }
-            Some(false) => {
-                self.database.del_signatures(&subject_id, sn - 1)?;
-            }
-            None => {
-                // Si no está en el mapa, añadirlo y enviar mensaje a gov de subject updated con el id y el sn
-                if self.gov_api.is_governance(subject_id.clone()).await? {
-                    self.subject_is_gov.insert(subject_id.clone(), true);
-                    // Enviar mensaje a gov de governance updated con el id y el sn
-                    self.gov_api
-                        .governance_updated(subject_id.clone(), sn)
-                        .await?;
-                } else {
-                    self.subject_is_gov.insert(subject_id.clone(), false);
-                    self.database.del_signatures(&subject_id, sn - 1)?;
+        let subject_id = match &event.content.event_proposal.proposal.event_request.request {
+            EventRequestType::State(state_request) => {
+                let subject_id = state_request.subject_id.clone();
+                self.database.set_signatures(
+                    &subject_id,
+                    event.content.event_proposal.proposal.sn,
+                    signatures,
+                )?;
+                // Aplicar event sourcing
+                let mut subject =
+                    self.database
+                        .get_subject(&subject_id)
+                        .map_err(|error| match error {
+                            crate::DbError::EntryNotFound => {
+                                LedgerError::SubjectNotFound(subject_id.to_str())
+                            }
+                            _ => LedgerError::DatabaseError(error),
+                        })?;
+                let json_patch = event.content.event_proposal.proposal.json_patch.as_str();
+                subject.update_subject(json_patch, event.content.event_proposal.proposal.sn)?;
+                self.database.set_event(&subject_id, event.clone())?;
+                self.database.set_subject(&subject_id, subject)?;
+                // Comprobar is_gov
+                let is_gov = self.subject_is_gov.get(&subject_id);
+                match is_gov {
+                    Some(true) => {
+                        // Enviar mensaje a gov de governance updated con el id y el sn
+                        self.gov_api
+                            .governance_updated(subject_id.clone(), sn)
+                            .await?;
+                    }
+                    Some(false) => {
+                        self.database.del_signatures(&subject_id, sn - 1)?;
+                    }
+                    None => {
+                        // Si no está en el mapa, añadirlo y enviar mensaje a gov de subject updated con el id y el sn
+                        if self.gov_api.is_governance(subject_id.clone()).await? {
+                            self.subject_is_gov.insert(subject_id.clone(), true);
+                            // Enviar mensaje a gov de governance updated con el id y el sn
+                            self.gov_api
+                                .governance_updated(subject_id.clone(), sn)
+                                .await?;
+                        } else {
+                            self.subject_is_gov.insert(subject_id.clone(), false);
+                            self.database.del_signatures(&subject_id, sn - 1)?;
+                        }
+                    }
                 }
+                state_request.subject_id.clone()
             }
-        }
+            EventRequestType::Create(_) => return Err(LedgerError::StateInGenesis),
+            EventRequestType::Transfer(transfer_request) => {
+                let subject_id = transfer_request.subject_id.clone();
+                self.database.set_signatures(
+                    &subject_id,
+                    event.content.event_proposal.proposal.sn,
+                    signatures,
+                )?;
+                // Aplicar event sourcing
+                let mut subject =
+                    self.database
+                        .get_subject(&subject_id)
+                        .map_err(|error| match error {
+                            crate::DbError::EntryNotFound => {
+                                LedgerError::SubjectNotFound(subject_id.to_str())
+                            }
+                            _ => LedgerError::DatabaseError(error),
+                        })?;
+                self.database.set_event(&subject_id, event.clone())?;
+                // Cambiar clave pública del sujeto y eliminar material criptográfico
+                subject.public_key = transfer_request.public_key.clone();
+                subject.owner = event
+                    .content
+                    .event_proposal
+                    .proposal
+                    .event_request
+                    .signature
+                    .content
+                    .signer
+                    .clone();
+                subject.keys = None;
+                self.database.set_subject(&subject_id, subject)?;
+                let is_gov = self.subject_is_gov.get(&subject_id);
+                match is_gov {
+                    Some(true) => {}
+                    Some(false) => {
+                        self.database.del_signatures(&subject_id, sn - 1)?;
+                    }
+                    None => {
+                        // Si no está en el mapa, añadirlo y enviar mensaje a gov de subject updated con el id y el sn
+                        if self.gov_api.is_governance(subject_id.clone()).await? {
+                            self.subject_is_gov.insert(subject_id.clone(), true);
+                        } else {
+                            self.subject_is_gov.insert(subject_id.clone(), false);
+                            self.database.del_signatures(&subject_id, sn - 1)?;
+                        }
+                    }
+                }
+                transfer_request.subject_id.clone()
+            }  
+        };
         // Actualizar Ledger State
         match self.ledger_state.entry(subject_id.clone()) {
             Entry::Occupied(mut ledger_state) => {
@@ -281,6 +334,7 @@ impl<D: DatabaseManager> Ledger<D> {
         self.distribution_channel
             .tell(DistributionMessagesNew::SignaturesNeeded { subject_id, sn })
             .await?;
+
         Ok(())
     }
 
@@ -788,7 +842,7 @@ impl<D: DatabaseManager> Ledger<D> {
                 create_subject_id(&event)?
             }
             EventRequestType::State(state_request) => state_request.subject_id.clone(),
-            EventRequestType::Transfer(transfer_request) => todo!()
+            EventRequestType::Transfer(transfer_request) => todo!(),
         };
         let ledger_state = self.ledger_state.get(&subject_id);
         match ledger_state {

@@ -59,7 +59,7 @@ pub struct StateRequest {
 pub struct TransferRequest {
     #[schema(value_type = String)]
     pub subject_id: DigestIdentifier,
-    pub public_key: Vec<u8>,
+    pub public_key: KeyIdentifier,
 }
 
 impl EventRequest {
