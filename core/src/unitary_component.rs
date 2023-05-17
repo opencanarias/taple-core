@@ -2,6 +2,8 @@ use std::sync::Arc;
 
 use crate::approval::manager::{ApprovalAPI, ApprovalManager};
 use crate::approval::{ApprovalMessages, ApprovalResponses};
+use crate::authorized_subjecs::manager::{AuthorizedSubjectsAPI, AuthorizedSubjectsManager};
+use crate::authorized_subjecs::{AuthorizedSubjectsCommand, AuthorizedSubjectsResponse};
 use crate::commons::channel::MpscChannel;
 use crate::commons::config::NetworkSettings;
 use crate::commons::config::{DatabaseSettings, NodeSettings, TapleSettings};
@@ -290,6 +292,9 @@ impl<D: DatabaseManager + 'static> Taple<D> {
         // Receiver and sender of commands
         let (ledger_receiver, ledger_sender) =
             MpscChannel::<LedgerCommand, LedgerResponse>::new(BUFFER_SIZE);
+        // Receiver and sender of commands AS
+        let (as_receiver, as_sender) =
+            MpscChannel::<AuthorizedSubjectsCommand, AuthorizedSubjectsResponse>::new(BUFFER_SIZE);
         // Receiver and sender of governance messages
         let (governance_receiver, governance_sender) =
             MpscChannel::<GovernanceMessage, GovernanceResponse>::new(BUFFER_SIZE);
@@ -418,11 +423,21 @@ impl<D: DatabaseManager + 'static> Taple<D> {
             distribution_sender,
             key_identifier.clone(),
         );
+        // Creation AuthorizedSubjectsManager
+        let as_manager = AuthorizedSubjectsManager::new(
+            as_receiver,
+            DB::new(db.clone()),
+            task_sender.clone(),
+            key_identifier.clone(),
+            bsx.clone(),
+            bsx.subscribe(),
+        );
         // Creation API module
         let api = API::new(
             self.api_input.take().unwrap(),
             EventAPI::new(event_sender),
             ApprovalAPI::new(approval_sender),
+            AuthorizedSubjectsAPI::new(as_sender),
             wath_sender,
             self.settings.clone(),
             kp.clone(),
@@ -508,6 +523,9 @@ impl<D: DatabaseManager + 'static> Taple<D> {
         });
         tokio::spawn(async move {
             approval_manager.start().await;
+        });
+        tokio::spawn(async move {
+            as_manager.start().await;
         });
         tokio::spawn(network_manager.run());
         // API Initialization

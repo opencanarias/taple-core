@@ -153,6 +153,7 @@ impl<D: DatabaseManager> EventManager<D> {
                         .inner_ledger
                         .external_event(event, signatures, sender, validation_proof)
                         .await;
+                    log::error!("External Event Response: {:?}", response);
                     match response {
                         Err(error) => match error {
                             LedgerError::ChannelClosed => {
@@ -238,6 +239,7 @@ impl<D: DatabaseManager> EventManager<D> {
                         },
                         Ok(event) => Ok(event),
                     };
+                    log::error!("GETLCE RESPONSE OK");
                     LedgerResponse::GetLCE(response)
                 }
                 LedgerCommand::GetNextGov {
@@ -249,6 +251,7 @@ impl<D: DatabaseManager> EventManager<D> {
                         .inner_ledger
                         .get_next_gov(who_asked, subject_id, sn)
                         .await;
+                    log::warn!("GetNextGov Response: {:?}", response);
                     let response = match response {
                         Err(error) => match error.clone() {
                             LedgerError::ChannelClosed => {

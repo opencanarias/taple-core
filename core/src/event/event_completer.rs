@@ -946,6 +946,10 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 )))
             }
         };
+        let notary_event = self
+            .event_notary_events
+            .get(&event_hash)
+            .expect("Should be");
         let subject_id = match &event.content.event_proposal.proposal.event_request.request {
             crate::event_request::EventRequestType::Transfer(_) => todo!(),
             crate::event_request::EventRequestType::Create(_) => {
@@ -975,18 +979,8 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 _ => EventError::DatabaseError(error.to_string()),
             })?;
         // Comprobar que todo es correcto criptográficamente
-        let event_hash = check_cryptography(
-            (
-                &subject.governance_id,
-                &subject.subject_id,
-                &subject.owner,
-                &event.signature.content.event_content_hash,
-                &event.content.event_proposal.proposal.sn,
-                &event.content.event_proposal.proposal.gov_version,
-            ),
-            &signature,
-        )
-        .map_err(|error| EventError::CryptoError(error.to_string()))?;
+        let event_hash = check_cryptography(&notary_event.proof, &signature)
+            .map_err(|error| EventError::CryptoError(error.to_string()))?;
         // Guardar validación
         let validation_set = match self.event_validations.get_mut(&event_hash) {
             Some(validation_set) => {

@@ -35,6 +35,7 @@ impl MessageSender {
         // TODO: Define type of invalid identifier error
         message.sender_id = Some(self.controller_id.clone());
         let bytes = rmp_serde::to_vec(&message).unwrap();
+        log::warn!("{}: Sending message to {:?}", LOG_TARGET, target.to_str());
         debug!("{}: Sending message to {:?}", LOG_TARGET, target.to_str());
         self.sender
             .send(Command::SendMessage {
