@@ -3,9 +3,7 @@ use std::{
     iter::Rev,
     sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
-
 use crate::DatabaseManager;
-
 use super::{DatabaseCollection, Error};
 
 pub struct DataStore {
@@ -29,12 +27,12 @@ impl DataStore {
 }
 
 impl DataStore {
-    fn iter(&self, entry_prefix: String) -> MemoryIterator {
-        MemoryIterator::new(&self, entry_prefix)
+    fn iter(&self) -> MemoryIterator {
+        MemoryIterator::new(&self)
     }
 
-    fn rev_iter(&self, entry_prefix: String) -> RevMemoryIterator {
-        RevMemoryIterator::new(&self, entry_prefix)
+    fn rev_iter(&self) -> RevMemoryIterator {
+        RevMemoryIterator::new(&self)
     }
 }
 
@@ -52,8 +50,8 @@ impl MemoryManager {
 
 impl DatabaseManager<MemoryCollection> for MemoryManager {
     fn create_collection(&self, identifier: &str) -> MemoryCollection {
-        let mut lock = self.data.write().unwrap();
-        let db = match lock.get(identifier) {
+        let lock = self.data.write().unwrap();
+        let db: Arc<DataStore> = match lock.get(identifier) {
             Some(map) => map.clone(),
             None => {
                 let db = Arc::new(DataStore::new());
@@ -69,7 +67,7 @@ pub struct MemoryCollection {
 }
 
 impl DatabaseCollection for MemoryCollection {
-    fn get(&self, key: &str) -> Result<Vec<u8>, super::Error> {
+    fn get(&self, key: &str) -> Result<Vec<u8>, Error> {
         let lock = self.data._get_inner_read_lock();
         let Some(data) = lock.get(key) else {
             return Err(Error::EntryNotFound);
@@ -92,12 +90,12 @@ impl DatabaseCollection for MemoryCollection {
     fn iter<'a>(
         &'a self,
         reverse: bool,
-        prefix: String,
+        _prefix: String
     ) -> Box<dyn Iterator<Item = (String, Vec<u8>)> + 'a> {
         if reverse {
-            Box::new(self.data.rev_iter(format!("{}", prefix)))
+            Box::new(self.data.rev_iter())
         } else {
-            Box::new(self.data.iter(format!("{}", prefix)))
+            Box::new(self.data.iter())
         }
     }
 }
@@ -106,20 +104,14 @@ type GuardIter<'a, K, V> = (Arc<RwLockReadGuard<'a, BTreeMap<K, V>>>, Iter<'a, K
 
 pub struct MemoryIterator<'a> {
     map: &'a DataStore,
-    current: Option<GuardIter<'a, String, Vec<u8>>>,
-    prefix: String,
-    key: String,
-    value: Vec<u8>,
+    current: Option<GuardIter<'a, String, Vec<u8>>>
 }
 
 impl<'a> MemoryIterator<'a> {
-    fn new(map: &'a DataStore, entry_prefix: String) -> Self {
+    fn new(map: &'a DataStore) -> Self {
         Self {
             map,
-            current: None,
-            prefix: entry_prefix,
-            key: "".to_string(),
-            value: vec![],
+            current: None
         }
     }
 }
@@ -140,15 +132,7 @@ impl<'a> Iterator for MemoryIterator<'a> {
             let Some((key, val)) = iter.next() else {
                 return None;
             };
-            let key = key.to_string();
-            if key.starts_with(&self.prefix) {
-                let key = key.replace(&self.prefix, "");
-                self.key = key.clone();
-                self.value = val.clone();
-                return Some((key.clone(), val.clone()));
-            } else {
-                return None;
-            }
+            return Some((key.clone(), val.clone()));
         }
     }
 }
@@ -160,20 +144,14 @@ type GuardRevIter<'a> = (
 
 pub struct RevMemoryIterator<'a> {
     map: &'a DataStore,
-    current: Option<GuardRevIter<'a>>,
-    prefix: String,
-    key: String,
-    value: Vec<u8>,
+    current: Option<GuardRevIter<'a>>
 }
 
 impl<'a> RevMemoryIterator<'a> {
-    fn new(map: &'a DataStore, entry_prefix: String) -> Self {
+    fn new(map: &'a DataStore) -> Self {
         Self {
             map,
-            current: None,
-            prefix: entry_prefix,
-            key: "".to_string(),
-            value: vec![],
+            current: None
         }
     }
 }
@@ -194,12 +172,7 @@ impl<'a> Iterator for RevMemoryIterator<'a> {
             let Some((key, val)) = iter.next() else {
                 return None;
             };
-            if key.starts_with(&self.prefix) {
-                let key = key.replace(&self.prefix, "");
-                return Some((key.clone(), val.clone()));
-            } else {
-                return None;
-            }
+            return Some((key.clone(), val.clone()));
         }
     }
 }
@@ -208,452 +181,287 @@ unsafe fn change_lifetime_const<'a, 'b, T>(x: &'a T) -> &'b T {
     &*(x as *const T)
 }
 
-//#[cfg(test)]
-//mod test {
-//    use super::MemoryManager;
-//    use crate::{database::DatabaseCollection, DatabaseManager};
-//    use serde::{Deserialize, Serialize};
-//
-//    #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
-//    struct Data {
-//        id: usize,
-//        value: String,
-//    }
-//
-//    #[test]
-//    fn basic_operations_test() {
-//        let db = MemoryManager::new();
-//        let first_collection: Box<dyn DatabaseCollection<InnerDataType = Data>> =
-//            db.create_collection("first");
-//        // PUT & GET Operations
-//        // PUT
-//        let result = first_collection.put(
-//            "a",
-//            Data {
-//                id: 1,
-//                value: "A".into(),
-//            },
-//        );
-//        assert!(result.is_ok());
-//        let result = first_collection.put(
-//            "b",
-//            Data {
-//                id: 2,
-//                value: "B".into(),
-//            },
-//        );
-//        assert!(result.is_ok());
-//        let result = first_collection.put(
-//            "c",
-//            Data {
-//                id: 3,
-//                value: "C".into(),
-//            },
-//        );
-//        assert!(result.is_ok());
-//        // GET
-//        let result = first_collection.get("a");
-//        assert!(result.is_ok());
-//        assert_eq!(
-//            result.unwrap(),
-//            Data {
-//                id: 1,
-//                value: "A".into()
-//            }
-//        );
-//        let result = first_collection.get("b");
-//        assert!(result.is_ok());
-//        assert_eq!(
-//            result.unwrap(),
-//            Data {
-//                id: 2,
-//                value: "B".into()
-//            }
-//        );
-//        let result = first_collection.get("c");
-//        assert!(result.is_ok());
-//        assert_eq!(
-//            result.unwrap(),
-//            Data {
-//                id: 3,
-//                value: "C".into()
-//            }
-//        );
-//        // DEL
-//        let result = first_collection.del("a");
-//        assert!(result.is_ok());
-//        let result = first_collection.del("b");
-//        assert!(result.is_ok());
-//        let result = first_collection.del("c");
-//        assert!(result.is_ok());
-//        // GET OF DELETED ENTRIES
-//        let result = first_collection.get("a");
-//        assert!(result.is_err());
-//        let result = first_collection.get("b");
-//        assert!(result.is_err());
-//        let result = first_collection.get("c");
-//        assert!(result.is_err());
-//    }
-//
-//    #[test]
-//    fn partitions_test() {
-//        let db = MemoryManager::new();
-//        let first_collection: Box<dyn DatabaseCollection<InnerDataType = Data>> =
-//            db.create_collection("first");
-//        let second_collection: Box<dyn DatabaseCollection<InnerDataType = Data>> =
-//            db.create_collection("second");
-//        // PUT UNIQUE ENTRIES IN EACH PARTITION
-//        let result = first_collection.put(
-//            "a",
-//            Data {
-//                id: 1,
-//                value: "A".into(),
-//            },
-//        );
-//        assert!(result.is_ok());
-//        let result = second_collection.put(
-//            "b",
-//            Data {
-//                id: 2,
-//                value: "B".into(),
-//            },
-//        );
-//        assert!(result.is_ok());
-//        // TRYING TO GET ENTRIES FROM A DIFFERENT PARTITION
-//        let result = first_collection.get("b");
-//        assert!(result.is_err());
-//        let result = second_collection.get("a");
-//        assert!(result.is_err());
-//    }
-//
-//    #[test]
-//    fn inner_partition() {
-//        let db = MemoryManager::new();
-//        let first_collection: Box<dyn DatabaseCollection<InnerDataType = Data>> =
-//            db.create_collection("first");
-//        let inner_collection: Box<dyn DatabaseCollection<InnerDataType = Data>> =
-//            first_collection.partition("inner");
-//        // PUT OPERATIONS
-//        let result = first_collection.put(
-//            "a",
-//            Data {
-//                id: 1,
-//                value: "A".into(),
-//            },
-//        );
-//        assert!(result.is_ok());
-//        let result = inner_collection.put(
-//            "b",
-//            Data {
-//                id: 2,
-//                value: "B".into(),
-//            },
-//        );
-//        assert!(result.is_ok());
-//        // TRYING TO GET ENTRIES FROM A DIFFERENT PARTITION
-//        let result = first_collection.get("b");
-//        assert!(result.is_err());
-//        let result = inner_collection.get("a");
-//        assert!(result.is_err());
-//    }
-//
-//    fn build_state(collection: &Box<dyn DatabaseCollection>) {
-//        let result = collection.put(
-//            "a",
-//            Data {
-//                id: 1,
-//                value: "A".into(),
-//            },
-//        );
-//        assert!(result.is_ok());
-//        let result = collection.put(
-//            "b",
-//            Data {
-//                id: 2,
-//                value: "B".into(),
-//            },
-//        );
-//        assert!(result.is_ok());
-//        let result = collection.put(
-//            "c",
-//            Data {
-//                id: 3,
-//                value: "C".into(),
-//            },
-//        );
-//        assert!(result.is_ok());
-//    }
-//
-//    fn build_initial_data() -> (Vec<&'static str>, Vec<Data>) {
-//        let keys = vec!["a", "b", "c"];
-//        let data = vec![
-//            Data {
-//                id: 1,
-//                value: "A".into(),
-//            },
-//            Data {
-//                id: 2,
-//                value: "B".into(),
-//            },
-//            Data {
-//                id: 3,
-//                value: "C".into(),
-//            },
-//        ];
-//        (keys, data)
-//    }
-//
-//    #[test]
-//    fn iterator_test() {
-//        let db = MemoryManager::new();
-//        let first_collection: Box<dyn DatabaseCollection> = db.create_collection("first");
-//        build_state(&first_collection);
-//        // ITER TEST
-//        let mut iter = first_collection.iter(false);
-//        let (keys, data) = build_initial_data();
-//        for i in 0..3 {
-//            let (key, val) = iter.next().unwrap();
-//            assert_eq!(keys[i], key);
-//            assert_eq!(data[i], val);
-//        }
-//        assert!(iter.next().is_none());
-//    }
-//
-//    #[test]
-//    fn rev_iterator_test() {
-//        let db = MemoryManager::new();
-//        let first_collection: Box<dyn DatabaseCollection> = db.create_collection("first");
-//        build_state(&first_collection);
-//        // ITER TEST
-//        let mut iter = first_collection.rev_iter();
-//        let (keys, data) = build_initial_data();
-//        for i in (0..3).rev() {
-//            let (key, val) = iter.next().unwrap();
-//            assert_eq!(keys[i], key);
-//            assert_eq!(data[i], val);
-//        }
-//        assert!(iter.next().is_none());
-//    }
-//
-//    #[test]
-//    fn iterator_with_various_collection_test() {
-//        let db = MemoryManager::new();
-//        let first_collection: Box<dyn DatabaseCollection<InnerDataType = Data>> =
-//            db.create_collection("first");
-//        let second_collection: Box<dyn DatabaseCollection<InnerDataType = Data>> =
-//            db.create_collection("second");
-//        build_state(&first_collection);
-//        let result = second_collection.put(
-//            "d",
-//            Data {
-//                id: 4,
-//                value: "D".into(),
-//            },
-//        );
-//        assert!(result.is_ok());
-//        let result = second_collection.put(
-//            "e",
-//            Data {
-//                id: 5,
-//                value: "E".into(),
-//            },
-//        );
-//        assert!(result.is_ok());
-//        let mut iter = first_collection.iter(false);
-//        let (keys, data) = build_initial_data();
-//        for i in 0..3 {
-//            let (key, val) = iter.next().unwrap();
-//            assert_eq!(keys[i], key);
-//            assert_eq!(data[i], val);
-//        }
-//        assert!(iter.next().is_none());
-//
-//        let mut iter = second_collection.iter(false);
-//        let (keys, data) = (
-//            vec!["d", "e"],
-//            vec![
-//                Data {
-//                    id: 4,
-//                    value: "D".into(),
-//                },
-//                Data {
-//                    id: 5,
-//                    value: "E".into(),
-//                },
-//            ],
-//        );
-//        for i in 0..2 {
-//            let (key, val) = iter.next().unwrap();
-//            assert_eq!(keys[i], key);
-//            assert_eq!(data[i], val);
-//        }
-//        assert!(iter.next().is_none());
-//    }
-//
-//    #[test]
-//    fn rev_iterator_with_various_collection_test() {
-//        let db = MemoryManager::new();
-//        let first_collection: Box<dyn DatabaseCollection<InnerDataType = Data>> =
-//            db.create_collection("first");
-//        let second_collection: Box<dyn DatabaseCollection<InnerDataType = Data>> =
-//            db.create_collection("second");
-//        build_state(&first_collection);
-//        let result = second_collection.put(
-//            "d",
-//            Data {
-//                id: 4,
-//                value: "D".into(),
-//            },
-//        );
-//        assert!(result.is_ok());
-//        let result = second_collection.put(
-//            "e",
-//            Data {
-//                id: 5,
-//                value: "E".into(),
-//            },
-//        );
-//        assert!(result.is_ok());
-//        let mut iter = first_collection.rev_iter();
-//        let (keys, data) = build_initial_data();
-//        for i in (0..3).rev() {
-//            let (key, val) = iter.next().unwrap();
-//            assert_eq!(keys[i], key);
-//            assert_eq!(data[i], val);
-//        }
-//        assert!(iter.next().is_none());
-//
-//        let mut iter = second_collection.rev_iter();
-//        let (keys, data) = (
-//            vec!["d", "e"],
-//            vec![
-//                Data {
-//                    id: 4,
-//                    value: "D".into(),
-//                },
-//                Data {
-//                    id: 5,
-//                    value: "E".into(),
-//                },
-//            ],
-//        );
-//        for i in (0..2).rev() {
-//            let (key, val) = iter.next().unwrap();
-//            assert_eq!(keys[i], key);
-//            assert_eq!(data[i], val);
-//        }
-//        assert!(iter.next().is_none());
-//    }
-//
-//    #[test]
-//    fn iteration_with_partitions_test() {
-//        let db = MemoryManager::new();
-//        let first_collection: Box<dyn DatabaseCollection<InnerDataType = Data>> =
-//            db.create_collection("first");
-//        let first_inner = first_collection.partition("inner1");
-//        let second_inner = first_inner.partition("inner2");
-//        first_collection
-//            .put(
-//                "a",
-//                Data {
-//                    id: 0,
-//                    value: "A".into(),
-//                },
-//            )
-//            .unwrap();
-//        first_inner
-//            .put(
-//                "b",
-//                Data {
-//                    id: 0,
-//                    value: "B".into(),
-//                },
-//            )
-//            .unwrap();
-//        second_inner
-//            .put(
-//                "c",
-//                Data {
-//                    id: 0,
-//                    value: "C".into(),
-//                },
-//            )
-//            .unwrap();
-//        let mut iter = second_inner.iter();
-//        let item = iter.next().unwrap();
-//        assert_eq!(&item.0, "c");
-//        assert!(iter.next().is_none());
-//
-//        let mut iter = first_inner.iter();
-//        let item = iter.next().unwrap();
-//        assert_eq!(&item.0, "b");
-//        let item = iter.next().unwrap();
-//        assert_eq!(&item.0, "inner2\u{10ffff}c");
-//        assert!(iter.next().is_none());
-//
-//        let mut iter = first_collection.iter(false);
-//        let item = iter.next().unwrap();
-//        assert_eq!(&item.0, "a");
-//        let item = iter.next().unwrap();
-//        assert_eq!(&item.0, "inner1\u{10ffff}b");
-//        let item = iter.next().unwrap();
-//        assert_eq!(&item.0, "inner1\u{10ffff}inner2\u{10ffff}c");
-//        assert!(iter.next().is_none());
-//    }
-//
-//    #[test]
-//    fn rev_iteration_with_partitions_test() {
-//        let db = MemoryManager::new();
-//        let first_collection: Box<dyn DatabaseCollection<InnerDataType = Data>> =
-//            db.create_collection("first");
-//        let first_inner = first_collection.partition("inner1");
-//        let second_inner = first_inner.partition("inner2");
-//        first_collection
-//            .put(
-//                "a",
-//                Data {
-//                    id: 0,
-//                    value: "A".into(),
-//                },
-//            )
-//            .unwrap();
-//        first_inner
-//            .put(
-//                "b",
-//                Data {
-//                    id: 0,
-//                    value: "B".into(),
-//                },
-//            )
-//            .unwrap();
-//        second_inner
-//            .put(
-//                "c",
-//                Data {
-//                    id: 0,
-//                    value: "C".into(),
-//                },
-//            )
-//            .unwrap();
-//        let mut iter = second_inner.rev_iter();
-//        let item = iter.next().unwrap();
-//        assert_eq!(&item.0, "c");
-//        assert!(iter.next().is_none());
-//
-//        let mut iter = first_inner.rev_iter();
-//        let item = iter.next().unwrap();
-//        assert_eq!(&item.0, "inner2\u{10ffff}c");
-//        let item = iter.next().unwrap();
-//        assert_eq!(&item.0, "b");
-//        assert!(iter.next().is_none());
-//
-//        let mut iter = first_collection.rev_iter();
-//        let item = iter.next().unwrap();
-//        assert_eq!(&item.0, "inner1\u{10ffff}inner2\u{10ffff}c");
-//        let item = iter.next().unwrap();
-//        assert_eq!(&item.0, "inner1\u{10ffff}b");
-//        let item = iter.next().unwrap();
-//        assert_eq!(&item.0, "a");
-//        assert!(iter.next().is_none());
-//    }
-//}
+#[cfg(test)]
+mod test {
+    use super::{MemoryManager, MemoryCollection};
+    use crate::{database::DatabaseCollection, DatabaseManager};
+    use serde::{Deserialize, Serialize};
+    use super::{Error};
+
+    #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+    struct Data {
+        id: usize,
+        value: String,
+    }
+
+    fn get_data() -> Result<Vec<Vec<u8>>, Error> {
+        let data1 = Data {
+            id: 1,
+            value: "A".into(),
+        };
+        let data2 = Data {
+            id: 2,
+            value: "B".into(),
+        };
+        let data3 = Data {
+            id: 3,
+            value: "C".into(),
+        };
+        let Ok(data1) = bincode::serialize::<Data>(&data1) else {
+            return Err(Error::SerializeError);
+        };
+        let Ok(data2) = bincode::serialize::<Data>(&data2) else {
+            return Err(Error::SerializeError);
+        };
+        let Ok(data3) = bincode::serialize::<Data>(&data3) else {
+            return Err(Error::SerializeError);
+        };
+        Ok(vec![data1, data2, data3])
+    }
+
+    #[test]
+    fn basic_operations_test() {
+        let db = MemoryManager::new();
+        let first_collection = db.create_collection("first");
+        let data = get_data().unwrap();
+        // PUT & GET Operations
+        // PUT
+        let result = first_collection.put(
+            "a",
+            data[0].clone(),
+        );
+        assert!(result.is_ok());
+        let result = first_collection.put(
+            "b",
+            data[1].clone(),
+        );
+        assert!(result.is_ok());
+        let result = first_collection.put(
+            "c",
+            data[2].clone(),
+        );
+        assert!(result.is_ok());
+        // GET
+        let result = first_collection.get("a");
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap(),
+            data[0]
+        );
+        let result = first_collection.get("b");
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap(),
+            data[1]
+        );
+        let result = first_collection.get("c");
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap(),
+            data[2]
+        );
+        // DEL
+        let result = first_collection.del("a");
+        assert!(result.is_ok());
+        let result = first_collection.del("b");
+        assert!(result.is_ok());
+        let result = first_collection.del("c");
+        assert!(result.is_ok());
+        // GET OF DELETED ENTRIES
+        let result = first_collection.get("a");
+        assert!(result.is_err());
+        let result = first_collection.get("b");
+        assert!(result.is_err());
+        let result = first_collection.get("c");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn partitions_test() {
+        let db = MemoryManager::new();
+        let first_collection = db.create_collection("first");
+        let second_collection = db.create_collection("second");
+        let data = get_data().unwrap();
+        // PUT UNIQUE ENTRIES IN EACH PARTITION
+        let result = first_collection.put(
+            "a",
+            data[0].to_owned(),
+        );
+        assert!(result.is_ok());
+        let result = second_collection.put(
+            "b",
+            data[1].to_owned(),
+        );
+        assert!(result.is_ok());
+        // TRYING TO GET ENTRIES FROM A DIFFERENT PARTITION
+        let result = first_collection.get("b");
+        assert!(result.is_err());
+        let result = second_collection.get("a");
+        assert!(result.is_err());
+    }
+
+    fn build_state(collection: &MemoryCollection) {
+        let data = get_data().unwrap();
+        let result = collection.put(
+            "a",
+            data[0].to_owned()
+        );
+        assert!(result.is_ok());
+        let result = collection.put(
+            "b",
+            data[1].to_owned()
+        );
+        assert!(result.is_ok());
+        let result = collection.put(
+            "c",
+            data[2].to_owned()
+        );
+        assert!(result.is_ok());
+    }
+
+    fn build_initial_data() -> (Vec<&'static str>, Vec<Vec<u8>>) {
+        let keys = vec!["a", "b", "c"];
+        let data = get_data().unwrap();
+        let values = vec![data[0].to_owned(), data[1].to_owned(), data[2].to_owned()];
+        (keys, values)
+    }
+
+    #[test]
+    fn iterator_test() {
+        let db = MemoryManager::new();
+        let first_collection = db.create_collection("first");
+        build_state(&first_collection);
+        // ITER TEST
+        let mut iter = first_collection.iter(false, "first".to_string());
+        let (keys, data) = build_initial_data();
+        for i in 0..3 {
+            let (key, val) = iter.next().unwrap();
+            assert_eq!(keys[i], key);
+            assert_eq!(data[i], val);
+        }
+        assert!(iter.next().is_none());
+    }
+
+    #[test]
+    fn rev_iterator_test() {
+        let db = MemoryManager::new();
+        let first_collection = db.create_collection("first");
+        build_state(&first_collection);
+        // ITER TEST
+        let mut iter = first_collection.iter(true, "first".to_string());
+        let (keys, data) = build_initial_data();
+        for i in (0..3).rev() {
+            let (key, val) = iter.next().unwrap();
+            assert_eq!(keys[i], key);
+            assert_eq!(data[i], val);
+        }
+        assert!(iter.next().is_none());
+    }
+
+    #[test]
+    fn iterator_with_various_collection_test() {
+        let db = MemoryManager::new();
+        let first_collection = db.create_collection("first");
+        let second_collection = db.create_collection("second");
+        build_state(&first_collection);
+        let data4 = Data {
+            id: 4,
+            value: "D".into(),
+        };
+        let data5 = Data {
+            id: 5,
+            value: "E".into(),
+        };
+        let Ok(data4) = bincode::serialize::<Data>(&data4) else {
+            panic!();
+        };
+        let Ok(data5) = bincode::serialize::<Data>(&data5) else {
+            panic!();
+        };
+        let result = second_collection.put(
+            "d",
+            data4.clone()
+        );
+        assert!(result.is_ok());
+        let result = second_collection.put(
+            "e",
+            data5.clone()
+        );
+        assert!(result.is_ok());
+
+        let mut iter = second_collection.iter(false, "second".to_string());
+        let (keys, data) = (
+            vec!["d", "e"],
+            vec![data4, data5]
+        );
+        for i in 0..2 {
+            let (key, val) = iter.next().unwrap();
+            assert_eq!(keys[i], key);
+            assert_eq!(data[i], val);
+        }
+        assert!(iter.next().is_none());
+
+        let mut iter = first_collection.iter(false, "first".to_string());
+        let (keys, data) = build_initial_data();
+        for i in 0..3 {
+            let (key, val) = iter.next().unwrap();
+            assert_eq!(keys[i], key);
+            assert_eq!(data[i], val);
+        }
+        assert!(iter.next().is_none()); 
+    }
+
+    #[test]
+    fn rev_iterator_with_various_collection_test() {
+        let db = MemoryManager::new();
+        let first_collection = db.create_collection("first");
+        let second_collection = db.create_collection("second");
+        build_state(&first_collection);
+        let data4 = Data {
+            id: 4,
+            value: "D".into(),
+        };
+        let data5 = Data {
+            id: 5,
+            value: "E".into(),
+        };
+        let Ok(data4) = bincode::serialize::<Data>(&data4) else {
+            panic!();
+        };
+        let Ok(data5) = bincode::serialize::<Data>(&data5) else {
+            panic!();
+        };
+        let result = second_collection.put(
+            "d",
+            data4.clone()
+        );
+        assert!(result.is_ok());
+        let result = second_collection.put(
+            "e",
+            data5.clone()
+        );
+        assert!(result.is_ok());
+
+        let mut iter = second_collection.iter(true, "second".to_string());
+        let (keys, data) = (
+            vec!["d", "e"],
+            vec![data4, data5],
+        );
+        for i in (0..2).rev() {
+            let (key, val) = iter.next().unwrap();
+            assert_eq!(keys[i], key);
+            assert_eq!(data[i], val);
+        }
+        assert!(iter.next().is_none());
+
+        let mut iter = first_collection.iter(true, "first".to_string());
+        let (keys, data) = build_initial_data();
+        for i in (0..3).rev() {
+            let (key, val) = iter.next().unwrap();
+            assert_eq!(keys[i], key);
+            assert_eq!(data[i], val);
+        }
+        assert!(iter.next().is_none());
+    }
+
+}
