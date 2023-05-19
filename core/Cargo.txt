@@ -1,0 +1,101 @@
+[package]
+name = "taple-core"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+documentation.workspace = true
+readme.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+
+[features]
+default = ["secp256k1", "x25519", "sha2", "sha3", "blake2", "evaluation"]
+evaluation = [ "dep:wasmtime", "dep:wasm-gc-api" ]
+mobile = ["secp256k1", "x25519", "sha2", "sha3", "blake2"]
+secp256k1 = ["libsecp256k1"]
+x25519 = ["x25519-dalek", "curve25519-dalek"]
+
+[dependencies]
+tokio = { workspace = true, features = [
+	"default",
+	"time",
+	"rt",
+	"rt-multi-thread",
+	"sync",
+	"macros",
+] }
+config = { workspace = true, features = ["toml"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+env_logger = { workspace = true }
+log = { workspace = true }
+hex = { workspace = true }
+jsonschema = { workspace = true }
+time = { workspace = true, features = ["std"] }
+
+# API
+thiserror = { workspace = true }
+utoipa = { workspace = true }
+
+# Protocol
+tokio-stream = { workspace = true }
+rmp-serde = { workspace = true }
+borsh = { workspace = true }
+blake3 = { workspace = true }
+rand = { workspace = true, features = ["small_rng"] }
+
+# Network
+instant = { workspace = true }
+unsigned-varint = { workspace = true, features = ["futures"] }
+async-std = { workspace = true, features = ["attributes"] }
+bincode = { workspace = true }
+
+# Message
+serde_cbor = { workspace = true }
+dashmap = { workspace = true }
+
+# Ledger
+base64 = { workspace = true }
+
+# Commons
+getrandom = { workspace = true }
+json-patch = { workspace = true }
+rand_core = { workspace = true }
+ed25519-dalek = { workspace = true, features = ["serde"] }
+libsecp256k1 = { workspace = true, optional = true }
+x25519-dalek = { workspace = true, optional = true }
+curve25519-dalek = { workspace = true, optional = true }
+blake2 = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
+sha3 = { workspace = true, optional = true }
+
+## Evaluator
+wasmtime = { workspace = true, features = ["cache"], optional = true }
+wasm-gc-api = { workspace = true, optional = true }
+
+db-key = { workspace = true }  #Usar esta versión. Necesario para implementar custom keys para leveldb::Database
+url = { workspace = true }
+
+[dependencies.libp2p]
+workspace = true
+features = [
+	"identify",
+	"kad",
+	"mplex",
+	"noise",
+	"serde",
+	"tcp-tokio",
+	"yamux",
+	"dns-tokio",
+]
+default-features = false
+
+[dev-dependencies]
+serial_test = "1.0.0"
+leveldb = "^0.8"
+bs58 = "^0.4.0"
+rand = "^0.8.5"

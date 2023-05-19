@@ -87,6 +87,7 @@ impl<C: DatabaseCollection> EventManager<C> {
         match self.event_completer.init().await {
             Ok(_) => {}
             Err(error) => {
+                log::error!("{}", error);
                 self.shutdown_sender.send(()).expect("Channel Closed");
                 return;
             }
@@ -98,6 +99,7 @@ impl<C: DatabaseCollection> EventManager<C> {
                         Some(command) => {
                             let result = self.process_command(command).await;
                             if result.is_err() {
+                                log::error!("{}", result.unwrap_err());
                                 self.shutdown_sender.send(()).expect("Channel Closed");
                                 break;
                             }
@@ -138,6 +140,7 @@ impl<C: DatabaseCollection> EventManager<C> {
         &mut self,
         command: ChannelData<EventCommand, EventResponse>,
     ) -> Result<(), EventError> {
+        log::info!("EVENT MANAGER MSG RECEIVED");
         let (sender, data) = match command {
             ChannelData::AskData(data) => {
                 let (sender, data) = data.get();

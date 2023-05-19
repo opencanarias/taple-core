@@ -1,6 +1,7 @@
 mod db;
 mod error;
 mod memory;
+mod layers;
 
 pub use self::memory::MemoryManager;
 pub use db::DB;

@@ -110,10 +110,10 @@ impl<M: DatabaseManager<C>, C: DatabaseCollection> Governance<M, C> {
                         let to_send = self.inner_governance.get_quorum(metadata, stage)?;
                         Ok(sender.send(GovernanceResponse::GetQuorum(to_send)).unwrap())
                     }
-                    GovernanceMessage::GetGovernanceVersion { governance_id } => {
+                    GovernanceMessage::GetGovernanceVersion { governance_id, subject_id } => {
                         let version = self
                             .inner_governance
-                            .get_governance_version(governance_id)?;
+                            .get_governance_version(subject_id, governance_id)?;
                         Ok(sender
                             .send(GovernanceResponse::GetGovernanceVersion(version))
                             .map_err(|_| InternalError::OneshotClosed)?)
@@ -238,6 +238,7 @@ pub trait GovernanceInterface: Sync + Send {
     async fn get_governance_version(
         &self,
         governance_id: DigestIdentifier,
+        subject_id: DigestIdentifier,
     ) -> Result<u64, RequestError>;
 
     async fn is_governance(&self, subject_id: DigestIdentifier) -> Result<bool, RequestError>;
@@ -392,10 +393,11 @@ impl GovernanceInterface for GovernanceAPI {
     async fn get_governance_version(
         &self,
         governance_id: DigestIdentifier,
+        subject_id: DigestIdentifier
     ) -> Result<u64, RequestError> {
         let response = self
             .sender
-            .ask(GovernanceMessage::GetGovernanceVersion { governance_id })
+            .ask(GovernanceMessage::GetGovernanceVersion { governance_id, subject_id })
             .await
             .map_err(|_| RequestError::ChannelClosed)?;
         if let GovernanceResponse::GetGovernanceVersion(version) = response {

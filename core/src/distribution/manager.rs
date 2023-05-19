@@ -4,7 +4,7 @@ use crate::{
         self_signature_manager::SelfSignatureManager,
     },
     database::DB,
-    governance::GovernanceAPI,
+    governance::{GovernanceAPI, GovernanceUpdatedMessage},
     message::MessageTaskCommand,
     protocol::protocol_message_manager::TapleMessages,
     TapleSettings, DatabaseCollection
@@ -16,7 +16,9 @@ use super::{
     DistributionMessagesNew,
 };
 
+
 pub struct DistributionManager<C: DatabaseCollection> {
+    governance_update_input: tokio::sync::broadcast::Receiver<GovernanceUpdatedMessage>,
     input_channel: MpscChannel<DistributionMessagesNew, Result<(), DistributionErrorResponses>>,
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
@@ -26,6 +28,7 @@ pub struct DistributionManager<C: DatabaseCollection> {
 impl<C: DatabaseCollection> DistributionManager<C> {
     pub fn new(
         input_channel: MpscChannel<DistributionMessagesNew, Result<(), DistributionErrorResponses>>,
+        governance_update_input: tokio::sync::broadcast::Receiver<GovernanceUpdatedMessage>,
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
         messenger_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
@@ -36,6 +39,7 @@ impl<C: DatabaseCollection> DistributionManager<C> {
     ) -> Self {
         Self {
             input_channel,
+            governance_update_input,
             shutdown_sender,
             shutdown_receiver,
             inner_manager: InnerDistributionManager::new(
@@ -49,6 +53,9 @@ impl<C: DatabaseCollection> DistributionManager<C> {
     }
 
     pub async fn start(mut self) {
+        if let Err(error) = self.inner_manager.init().await {
+            log::error!("{}", error);
+        }
         loop {
             tokio::select! {
                 command = self.input_channel.receive() => {
@@ -56,6 +63,7 @@ impl<C: DatabaseCollection> DistributionManager<C> {
                         Some(command) => {
                             let result = self.process_command(command).await;
                             if result.is_err() {
+                                log::error!("{}", result.unwrap_err());
                                 self.shutdown_sender.send(()).expect("Channel Closed");
                                 break;
                             }
@@ -68,6 +76,25 @@ impl<C: DatabaseCollection> DistributionManager<C> {
                 },
                 _ = self.shutdown_receiver.recv() => {
                     break;
+                },
+                msg = self.governance_update_input.recv() => {
+                    match msg {
+                        Ok(data) => {
+                            match data {
+                                GovernanceUpdatedMessage::GovernanceUpdated{ governance_id, governance_version: _governance_version } => {
+                                    if let Err(error) = self.inner_manager.governance_updated(&governance_id).await {
+                                        log::error!("{}", error);
+                                        self.shutdown_sender.send(()).expect("Channel Closed");
+                                        break;
+                                    }
+                                }
+                            }
+                        },
+                        Err(_) => {
+                            self.shutdown_sender.send(()).expect("Channel Closed");
+                            break;
+                        }
+                    }
                 }
             }
         }
@@ -96,8 +123,10 @@ impl<C: DatabaseCollection> DistributionManager<C> {
                 self.inner_manager.signatures_received(data).await?
             }
             DistributionMessagesNew::SignaturesNeeded { subject_id, sn } => {
-                self.inner_manager.start_distribution(super::StartDistribution { subject_id, sn }).await?
-            },
+                self.inner_manager
+                    .start_distribution(super::StartDistribution { subject_id, sn })
+                    .await?
+            }
         };
         if sender.is_some() {
             sender

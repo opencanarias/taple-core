@@ -384,11 +384,10 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
     // OLD BUT OK
     pub fn get_governance_version(
         &self,
+        subject_id: DigestIdentifier,
         governance_id: DigestIdentifier,
     ) -> Result<Result<u64, RequestError>, InternalError> {
-        if governance_id.digest.is_empty() {
-            return Ok(Ok(0));
-        }
+        let governance_id = if governance_id.digest.is_empty() { subject_id } else { governance_id };
         let governance = match self.repo_access.get_subject(&governance_id) {
             Ok(governance) => governance,
             Err(DbError::EntryNotFound) => {

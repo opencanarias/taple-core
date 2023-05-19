@@ -9,7 +9,7 @@ use crate::{
     event_request::StateRequest,
     governance::GovernanceInterface,
     identifier::DigestIdentifier,
-    DatabaseCollection
+    DatabaseCollection, EventRequestType
 };
 
 use super::{executor::ContractExecutor, ExecuteContractResponse};
@@ -40,16 +40,31 @@ impl<C: DatabaseCollection, G: GovernanceInterface + Send> TapleRunner<C, G> {
         state_data: &StateRequest,
     ) -> Result<ExecuteContractResponse, ExecutorErrorResponses> {
         // Check governance version
-        let governance = self
-            .database
-            .get_subject(&execute_contract.context.governance_id)
-            .map_err(|db_err| ExecutorErrorResponses::DatabaseError(db_err.to_string()))?;
+        let governance_id = if &execute_contract.context.schema_id == "governance" {
+            if let EventRequestType::State(data) = &execute_contract.event_request.request {
+                data.subject_id.clone()
+            } else {
+                return Err(ExecutorErrorResponses::CreateRequestNotAllowed);
+            }
+        } else {
+            execute_contract.context.governance_id.clone()
+        };
+        let governance = match self.database.get_subject(&governance_id) {
+            Ok(governance) => governance,
+            Err(DbError::EntryNotFound) => {
+                // Pedimos LCE
+                return Err(ExecutorErrorResponses::OurGovIsLower);
+            },
+            Err(error) => {
+               return Err(ExecutorErrorResponses::DatabaseError(error.to_string())) 
+            }
+        };
         if governance.sn > execute_contract.context.governance_version {
             // Nuestra gov es mayor: mandamos mensaje para que actualice el emisor
-            return Err(ExecutorErrorResponses::OurGovIsHigher)
+            return Err(ExecutorErrorResponses::OurGovIsHigher);
         } else if governance.sn < execute_contract.context.governance_version {
             // Nuestra gov es menor: no podemos hacer nada. Pedimos LCE al que nos lo envió
-            return Err(ExecutorErrorResponses::OurGovIsLower)
+            return Err(ExecutorErrorResponses::OurGovIsLower);
         }
         let context_hash = Self::generate_context_hash(execute_contract)?;
         let (contract, governance_version) = if execute_contract.context.schema_id == "governance"

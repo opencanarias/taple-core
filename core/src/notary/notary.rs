@@ -46,7 +46,7 @@ impl<C: DatabaseCollection> Notary<C> {
     ) -> Result<NotaryEventResponse, NotaryError> {
         let actual_gov_version = match self
             .gov_api
-            .get_governance_version(notary_event.gov_id.clone())
+            .get_governance_version(notary_event.gov_id.clone(), notary_event.subject_id.clone())
             .await
         {
             Ok(gov_version) => gov_version,

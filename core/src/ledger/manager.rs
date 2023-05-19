@@ -65,6 +65,7 @@ impl<C: DatabaseCollection> EventManager<C> {
                         Some(command) => {
                             let result = self.process_command(command).await;
                             if result.is_err() {
+                                log::error!("{}", result.unwrap_err());
                                 self.shutdown_sender.send(()).expect("Channel Closed");
                                 break;
                             }
