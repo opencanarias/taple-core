@@ -121,14 +121,28 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 .event_content_hash
         };
         let event_hash = event.signature.content.event_content_hash.clone();
-        let proof = ValidationProof::new(
-            subject,
-            event.content.event_proposal.proposal.sn,
-            prev_event_hash,
-            event_hash,
-            state_hash,
-            gov_version,
-        );
+        let proof = match &event.content.event_proposal.proposal.event_request.request {
+            EventRequestType::Create(_) | EventRequestType::State(_) => ValidationProof::new(
+                subject,
+                event.content.event_proposal.proposal.sn,
+                prev_event_hash,
+                event_hash,
+                state_hash,
+                gov_version,
+            ),
+            EventRequestType::Transfer(transfer_request) => {
+                ValidationProof::new_from_transfer_event(
+                    subject,
+                    event.content.event_proposal.proposal.sn,
+                    prev_event_hash,
+                    event_hash,
+                    state_hash,
+                    gov_version,
+                    event.signature.content.signer.clone(),
+                    transfer_request.public_key.clone(),
+                )
+            }
+        };
         match &subject.keys {
             Some(keys) => {
                 let proof_hash =
@@ -322,7 +336,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
             governance_id: subject.governance_id.clone(),
             governance_version: gov_version,
             schema_id: subject.schema_id.clone(),
-            owner: subject.owner.clone(),
+            owner: event_request.signature.content.signer.clone(),
             creator: subject.creator.clone(),
         };
         // Añadir al hashmap para poder acceder a él cuando lleguen las firmas de los validadores
@@ -951,7 +965,9 @@ impl<D: DatabaseManager> EventCompleter<D> {
             .get(&event_hash)
             .expect("Should be");
         let subject_id = match &event.content.event_proposal.proposal.event_request.request {
-            crate::event_request::EventRequestType::Transfer(_) => todo!(),
+            crate::event_request::EventRequestType::Transfer(transfer_request) => {
+                transfer_request.subject_id.clone()
+            }
             crate::event_request::EventRequestType::Create(_) => {
                 return Err(EventError::EvaluationOrApprovationInCreationEvent)
             } // Que hago aquí?? devuelvo error?
@@ -971,7 +987,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
             )));
         }
         // Obtener sujeto para saber si lo tenemos y los metadatos del mismo
-        let subject = self
+        let _subject = self
             .database
             .get_subject(&subject_id)
             .map_err(|error| match error {

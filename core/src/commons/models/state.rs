@@ -184,6 +184,17 @@ impl Subject {
         Ok(())
     }
 
+    pub fn transfer_subject(
+        &mut self,
+        owner: KeyIdentifier,
+        public_key: KeyIdentifier,
+        keys: Option<KeyPair>,
+    ) {
+        self.owner = owner;
+        self.public_key = public_key;
+        self.keys = keys;
+    }
+
     pub fn state_hash_after_apply(
         &self,
         json_patch: &str,

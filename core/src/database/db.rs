@@ -8,6 +8,7 @@ use serde::Serialize;
 
 use crate::commons::models::notary::NotaryEventResponse;
 use crate::commons::models::state::Subject;
+use crate::crypto::KeyPair;
 use crate::event_request::EventRequest;
 use crate::identifier::{Derivable, DigestIdentifier, KeyIdentifier};
 use crate::signature::Signature;
@@ -28,6 +29,7 @@ const NOTARY_SIGNATURES: &str = "notary-signatures";
 const WITNESS_SIGNATURES: &str = "witness-signatures";
 const SUBJECTS_BY_GOVERNANCE: &str = "governance-index";
 const PREAUTHORIZED_SUBJECTS_AND_PROVIDERS: &str = "preauthorized-subjects-and-providers";
+const EXPECTING_TRANSFER: &str = "transfer";
 
 pub struct DB<M: DatabaseManager> {
     _manager: Arc<M>,
@@ -45,6 +47,7 @@ pub struct DB<M: DatabaseManager> {
     subjects_by_governance: Box<dyn DatabaseCollection<InnerDataType = DigestIdentifier>>,
     preauthorized_subjects_and_providers:
         Box<dyn DatabaseCollection<InnerDataType = (DigestIdentifier, HashSet<KeyIdentifier>)>>,
+    expecting_transfer: Box<dyn DatabaseCollection<InnerDataType = KeyPair>>,
 }
 
 impl<M: DatabaseManager> DB<M> {
@@ -62,6 +65,7 @@ impl<M: DatabaseManager> DB<M> {
         let subjects_by_governance = manager.create_collection(SUBJECTS_BY_GOVERNANCE);
         let preauthorized_subjects_and_providers =
             manager.create_collection(PREAUTHORIZED_SUBJECTS_AND_PROVIDERS);
+        let expecting_transfer = manager.create_collection(EXPECTING_TRANSFER);
         Self {
             _manager: manager,
             signature_db,
@@ -76,7 +80,30 @@ impl<M: DatabaseManager> DB<M> {
             witness_signatures_db,
             subjects_by_governance,
             preauthorized_subjects_and_providers,
+            expecting_transfer
         }
+    }
+
+    pub fn set_expecting_transfer(
+        &self,
+        subject_id: &DigestIdentifier,
+        keypair: KeyPair
+    ) -> Result<(), Error> {
+        let id = subject_id.to_str();
+        self.expecting_transfer.put(&id, keypair)
+    }
+
+    pub fn get_expecting_transfer(
+        &self,
+        subject_id: &DigestIdentifier
+    ) -> Result<KeyPair, Error> {
+        let id = subject_id.to_str();
+        self.expecting_transfer.get(&id)
+    }
+
+    pub fn del_expecting_transfer(&self, subject_id: &DigestIdentifier) -> Result<(), Error> {
+        let id = subject_id.to_str();
+        self.expecting_transfer.del(&id)
     }
 
     pub fn get_preauthorized_subjects_and_providers(
@@ -96,7 +123,7 @@ impl<M: DatabaseManager> DB<M> {
             .get(&subject_id.to_str())?
             .1)
     }
-    
+
     pub fn set_preauthorized_subject_and_providers(
         &self,
         subject_id: &DigestIdentifier,

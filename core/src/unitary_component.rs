@@ -24,6 +24,7 @@ use crate::event::manager::{EventAPI, EventManager};
 use crate::event::{EventCommand, EventResponse};
 use crate::governance::GovernanceAPI;
 use crate::governance::{governance::Governance, GovernanceMessage, GovernanceResponse};
+use crate::ledger::manager::EventManagerAPI;
 use crate::ledger::{manager::EventManager as LedgerManager, LedgerCommand, LedgerResponse};
 use crate::message::{
     Message, MessageReceiver, MessageSender, MessageTaskCommand, MessageTaskManager, NetworkEvent,
@@ -407,7 +408,7 @@ impl<D: DatabaseManager + 'static> Taple<D> {
             bsx.subscribe(),
             task_sender.clone(),
             self.notification_sender.clone(),
-            ledger_sender,
+            ledger_sender.clone(),
             signature_manager.get_own_identifier(),
             signature_manager.clone(),
         );
@@ -438,6 +439,7 @@ impl<D: DatabaseManager + 'static> Taple<D> {
             EventAPI::new(event_sender),
             ApprovalAPI::new(approval_sender),
             AuthorizedSubjectsAPI::new(as_sender),
+            EventManagerAPI::new(ledger_sender),
             wath_sender,
             self.settings.clone(),
             kp.clone(),
