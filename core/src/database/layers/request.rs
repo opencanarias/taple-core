@@ -31,7 +31,7 @@ impl<C: DatabaseCollection> RequestDb<C> {
 
     pub fn get_all_request(&self) -> Vec<EventRequest> {
         let mut result = Vec::new();
-        for (_, request) in self.collection.iter(false, self.prefix.clone()) {
+        for (_, request) in self.collection.iter(false, format!("{}{}", self.prefix, char::MAX)) {
             let request = bincode::deserialize::<EventRequest>(&request).unwrap();
             result.push(request);
         }

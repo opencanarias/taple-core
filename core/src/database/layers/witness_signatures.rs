@@ -38,8 +38,7 @@ impl<C: DatabaseCollection> WitnessSignaturesDb<C> {
     pub fn get_all_witness_signatures(
         &self,
     ) -> Result<Vec<(DigestIdentifier, u64, HashSet<Signature>)>, DbError> {
-        // let key_elements: Vec<Element> = vec![Element::S(self.prefix.clone())];
-        let iter = self.collection.iter(false, self.prefix.clone());
+        let iter = self.collection.iter(false, format!("{}{}", self.prefix, char::MAX));
         Ok(iter
             .map(|ws| {
                 let ws_1 = bincode::deserialize::<(u64, HashSet<Signature>)>(&ws.1).unwrap();

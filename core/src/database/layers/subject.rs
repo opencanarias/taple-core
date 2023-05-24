@@ -81,9 +81,8 @@ impl<C: DatabaseCollection> SubjectDb<C> {
     }
 
     pub fn get_all_subjects(&self) -> Vec<Subject> {
-        // let key_elements: Vec<Element> = vec![Element::S(self.prefix.clone())];
         let mut result = Vec::new();
-        for (_, subject) in self.collection.iter(false, self.prefix.clone()) {
+        for (_, subject) in self.collection.iter(false, format!("{}{}", self.prefix, char::MAX)) {
             let subject = bincode::deserialize::<Subject>(&subject).unwrap();
             result.push(subject);
         }

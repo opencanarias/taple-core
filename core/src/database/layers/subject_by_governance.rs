@@ -43,7 +43,7 @@ impl<C: DatabaseCollection> SubjectByGovernanceDb<C> {
         ];
         let key = get_key(key_elements)?;
         let mut result = Vec::new();
-        for (_, data) in self.collection.iter(false, key) {
+        for (_, data) in self.collection.iter(false, format!("{}{}", key, char::MAX)) {
             let request = bincode::deserialize::<DigestIdentifier>(&data).map_err(|_| {
                 DbError::DeserializeError
             })?;

@@ -55,9 +55,9 @@ pub(crate) fn get_by_range<C: DatabaseCollection>(
             let key = get_key(key_elements)?;
             // Find the key
             let iter = if quantity >= 0 {
-                collection.iter(false, prefix.to_string())
+                collection.iter(false, format!("{}{}", prefix, char::MAX))
             } else {
-                collection.iter(true, prefix.to_string())
+                collection.iter(true, format!("{}{}", prefix, char::MAX))
             };
             let mut iter = iter.peekable();
             loop {
