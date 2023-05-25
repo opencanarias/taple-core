@@ -1,15 +1,16 @@
 use std::collections::HashSet;
 
-use serde::{Deserialize, Serialize, de::Visitor};
+use serde::{de::Visitor, Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged)]
-#[allow(non_snake_case)]
 pub enum Quorum {
-    #[serde(rename = "majority")]
-    Majority,
+    Majority(String),
+    #[serde(rename_all = "PascalCase")]
     Fixed { fixed: u32 },
+    #[serde(rename_all = "PascalCase")]
     Porcentaje { porcentaje: f64 },
+    #[serde(rename_all = "PascalCase")]
     BFT { BFT: f64 },
 }
 
@@ -27,7 +28,7 @@ impl Serialize for Who {
         S: serde::Serializer,
     {
         match self {
-            Who::Id{ id } => serializer.serialize_str(&id),
+            Who::Id { id } => serializer.serialize_str(&id),
             Who::Members => serializer.serialize_str("Members"),
             Who::All => serializer.serialize_str("All"),
             Who::External => serializer.serialize_str("External"),
@@ -54,7 +55,7 @@ impl<'de> Deserialize<'de> for Who {
                     "Members" => Ok(Who::Members),
                     "All" => Ok(Who::All),
                     "External" => Ok(Who::External),
-                    &_ => Ok(Self::Value::Id{ id: v }),
+                    &_ => Ok(Self::Value::Id { id: v }),
                 }
             }
             fn visit_borrowed_str<E>(self, v: &'de str) -> Result<Self::Value, E>
@@ -85,7 +86,7 @@ impl Serialize for Schema {
         S: serde::Serializer,
     {
         match self {
-            Schema::Id{ id } => serializer.serialize_str(&id),
+            Schema::Id { id } => serializer.serialize_str(&id),
             Schema::AllSchemas => serializer.serialize_str("all_schemas"),
         }
     }
@@ -108,7 +109,7 @@ impl<'de> Deserialize<'de> for Schema {
             {
                 match v.as_str() {
                     "all_schemas" => Ok(Self::Value::AllSchemas),
-                    &_ => Ok(Self::Value::Id{id: v}),
+                    &_ => Ok(Self::Value::Id { id: v }),
                 }
             }
             fn visit_borrowed_str<E>(self, v: &'de str) -> Result<Self::Value, E>
@@ -117,7 +118,7 @@ impl<'de> Deserialize<'de> for Schema {
             {
                 match v {
                     "all_schemas" => Ok(Self::Value::AllSchemas),
-                    &_ => Ok(Self::Value::Id{id: v.to_string()}),
+                    &_ => Ok(Self::Value::Id { id: v.to_string() }),
                 }
             }
         }

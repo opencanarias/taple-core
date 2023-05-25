@@ -44,7 +44,6 @@ impl<T: TaskCommandContent + Serialize + DeserializeOwned + 'static> MessageRece
                     Some(NetworkEvent::MessageReceived { message }) => {
                         // The message will be a string for now
                         // Deserialize the message
-                        println!("Mensaje RECIBIDO DE la red");
                         let cur = Cursor::new(message);
                         let mut de = Deserializer::new(cur);
                         let message: Message<T> = Deserialize::deserialize(&mut de).expect("Fallo de deserialización");

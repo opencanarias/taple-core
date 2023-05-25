@@ -204,6 +204,10 @@ impl<D: DatabaseManager> EventCompleter<D> {
                     let notary_event =
                         self.create_notary_event(subject, &last_event, gov_version)?;
                     let event_message = create_validator_request(notary_event.clone());
+                    log::warn!(
+                        "1 PIDIENDO FIRMAS DE VALIDACION PARA: {}",
+                        subject.subject_id.to_str()
+                    );
                     self.ask_signatures(
                         &subject.subject_id,
                         event_message,
@@ -230,7 +234,6 @@ impl<D: DatabaseManager> EventCompleter<D> {
             }
             // Comprobar si hay requests en la base de datos que corresponden con eventos que aun no han llegado a la fase de validación y habría que reiniciar desde pedir evaluaciones
             match self.database.get_request(&subject.subject_id) {
-                // TODO: Quitar request_id de este método
                 Ok(event_request) => {
                     self.new_event(event_request).await?;
                 }
@@ -357,6 +360,10 @@ impl<D: DatabaseManager> EventCompleter<D> {
         //(ValidationStage::Validate, event_message)
         let stage = ValidationStage::Validate;
         let (signers, quorum_size) = self.get_signers_and_quorum(metadata, stage.clone()).await?;
+        log::warn!(
+            "2 PIDIENDO FIRMAS DE VALIDACION PARA: {}",
+            subject.subject_id.to_str()
+        );
         self.ask_signatures(&subject_id, event_message, signers.clone(), quorum_size)
             .await?;
         // Hacer update de fase por la que va el evento
@@ -445,6 +452,14 @@ impl<D: DatabaseManager> EventCompleter<D> {
                     return Err(EventError::ExternalGenesisEvent);
                 }
                 if &create_request.schema_id != "governance" {
+                    let governance_version = self
+                        .gov_api
+                        .get_governance_version(
+                            create_request.governance_id.clone(),
+                            DigestIdentifier::default(),
+                        )
+                        .await
+                        .map_err(EventError::GovernanceError)?;
                     let creators = self
                         .gov_api
                         .get_signers(
@@ -452,7 +467,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
                                 namespace: create_request.namespace.clone(),
                                 subject_id: DigestIdentifier::default(), // Not necessary for this method
                                 governance_id: create_request.governance_id.clone(),
-                                governance_version: 0, // Not necessary for this method TODO: Ahora si sera necesario
+                                governance_version,
                                 schema_id: create_request.schema_id.clone(),
                                 owner: self.own_identifier.clone(),
                                 creator: self.own_identifier.clone(),
@@ -529,6 +544,16 @@ impl<D: DatabaseManager> EventCompleter<D> {
             // self.actual_sn.get(&subject_id).unwrap().to_owned() + 1, // Must be Some, filled in init function
         };
         let (signers, quorum_size) = self.get_signers_and_quorum(metadata, stage.clone()).await?;
+        log::warn!(
+            "{} PIDIENDO FIRMAS DE EVALUACIÓN {} PARA: {}",
+            subject.sn + 1,
+            quorum_size,
+            subject.subject_id.to_str()
+        );
+        log::warn!("SIGNERS::::");
+        for signer in signers.iter() {
+            log::warn!("{}", signer.to_str());
+        }
         self.ask_signatures(
             &subject_id,
             create_evaluator_request(event_preevaluation.clone()),
@@ -569,6 +594,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
         json_patch: String,
         signature: Signature,
     ) -> Result<(), EventError> {
+        log::warn!("LLEGAN FIRMAS EVALUACION");
         // Comprobar que el hash devuelto coincide con el hash de la preevaluación
         let preevaluation_event = match self
             .event_pre_evaluations
@@ -653,9 +679,15 @@ impl<D: DatabaseManager> EventCompleter<D> {
         let quorum_size = quorum_size.to_owned();
         // Comprobar si llegamos a Quorum
         if num_signatures_hash < quorum_size {
+            log::warn!("NO QUORUM EN EVALUACIÓN");
+            log::warn!("QUORUM EVAL: {}", quorum_size);
             let mut new_signers: HashSet<KeyIdentifier> =
                 signers.into_iter().map(|s| s.clone()).collect();
             new_signers.remove(&signer);
+            log::warn!(
+                "PIDIENDO FIRMAS DE EVALUACIÓN PARA: {}",
+                subject.subject_id.to_str()
+            );
             self.ask_signatures(
                 &subject_id,
                 create_evaluator_request(preevaluation_event.clone()),
@@ -737,6 +769,10 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 .insert(proposal_hash, event_proposal.clone());
             // Pedir Approves si es necesario, si no pedir validaciones
             let (stage, event_message) = if evaluation.approval_required {
+                log::warn!(
+                    "PIDIENDO FIRMAS DE APROBACION PARA: {}",
+                    subject.subject_id.to_str()
+                );
                 let msg = create_approval_request(event_proposal);
                 // Retornar TapleMessage directamente
                 (ValidationStage::Approve, msg)
@@ -766,7 +802,10 @@ impl<D: DatabaseManager> EventCompleter<D> {
                     event.signature.content.event_content_hash.clone(),
                     notary_event,
                 );
-                self.subjects_by_governance.remove(&subject_id);
+                log::warn!(
+                    "POST EVAL: PIDIENDO FIRMAS DE VALIDACION PARA: {}",
+                    subject.subject_id.to_str()
+                );
                 (ValidationStage::Validate, event_message)
             };
             // Limpiar HashMaps
@@ -880,6 +919,10 @@ impl<D: DatabaseManager> EventCompleter<D> {
             let mut new_signers: HashSet<KeyIdentifier> =
                 signers.into_iter().map(|s| s.clone()).collect();
             new_signers.remove(&signer);
+            log::warn!(
+                "faltan PIDIENDO FIRMAS DE Aprobacion PARA: {}",
+                subject.subject_id.to_str()
+            );
             self.ask_signatures(
                 &subject_id,
                 create_approval_request(event_proposal.to_owned()),
@@ -894,12 +937,17 @@ impl<D: DatabaseManager> EventCompleter<D> {
             );
             Ok(()) // No llegamos a quorum, no hacemos nada
         } else {
+            let governance_version = self
+                .gov_api
+                .get_governance_version(subject.governance_id.clone(), subject.subject_id.clone())
+                .await
+                .map_err(EventError::GovernanceError)?;
             // Si se llega a Quorum dejamos de pedir approves y empezamos a pedir notarizaciones con el evento completo incluyendo lo nuevo de las approves
             let metadata = Metadata {
                 namespace: subject.namespace.clone(),
                 subject_id: subject_id.clone(),
                 governance_id: subject.governance_id.clone(),
-                governance_version: 0, // Me lo invento porque da igual para estos métodos TODO: Ya no va a dar igual
+                governance_version,
                 schema_id: subject.schema_id.clone(),
                 owner: subject.owner.clone(),
                 creator: subject.creator.clone(),
@@ -932,13 +980,16 @@ impl<D: DatabaseManager> EventCompleter<D> {
             let stage = ValidationStage::Validate;
             let (signers, quorum_size) =
                 self.get_signers_and_quorum(metadata, stage.clone()).await?;
+            log::warn!(
+                "START PIDIENDO FIRMAS DE VALIDACION PARA: {}",
+                subject.subject_id.to_str()
+            );
             self.ask_signatures(&subject_id, event_message, signers.clone(), quorum_size)
                 .await?;
             self.event_notary_events.insert(
                 event.signature.content.event_content_hash.clone(),
                 notary_event,
             );
-            self.subjects_by_governance.remove(&subject_id);
             // Hacer update de fase por la que va el evento
             self.subjects_completing_event
                 .insert(subject_id, (stage, signers, quorum_size));
@@ -951,6 +1002,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
         event_hash: DigestIdentifier,
         signature: Signature,
     ) -> Result<(), EventError> {
+        log::warn!("VALIDATION SIGNATURES");
         // Mirar en que estado está el evento, si está en notarización o no
         let event = match self.events_to_validate.get(&event_hash) {
             Some(event) => event,
@@ -975,6 +1027,9 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 state_request.subject_id.clone()
             }
         };
+        log::warn!("TDO BIEN");
+        let a = self.subjects_completing_event.get(&subject_id);
+        log::warn!("STAGE: {:?}", a);
         // CHeck phase
         let Some((ValidationStage::Validate, signers, quorum_size)) = self.subjects_completing_event.get(&subject_id) else {
             return Err(EventError::WrongEventPhase);
@@ -1027,6 +1082,10 @@ impl<D: DatabaseManager> EventCompleter<D> {
                     )))
                 }
             };
+            log::warn!(
+                "NO COMPLETAS PIDIENDO FIRMAS DE VALIDACION PARA: {}",
+                notary_event.proof.subject_id.to_str()
+            );
             let event_message = create_validator_request(notary_event);
             let mut new_signers: HashSet<KeyIdentifier> =
                 signers.into_iter().map(|s| s.clone()).collect();
@@ -1036,7 +1095,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
             // Hacer update de fase por la que va el evento
             self.subjects_completing_event.insert(
                 subject_id,
-                (ValidationStage::Evaluate, new_signers, quorum_size),
+                (ValidationStage::Validate, new_signers, quorum_size),
             );
             Ok(())
         } else {
@@ -1066,6 +1125,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
             self.events_to_validate.remove(&event_hash);
             self.event_validations.remove(&event_hash);
             self.subjects_completing_event.remove(&subject_id);
+            self.subjects_by_governance.remove(&subject_id);
             Ok(())
         }
     }

@@ -273,6 +273,10 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
         // Empezamos la distribución
         let metadata = build_metadata(&subject, governance_version);
         let mut targets = self.get_targets(metadata).await?;
+        log::warn!("REMAIMING SIGNATURES: {}", targets.len());
+        for signer in targets.iter() {
+            log::warn!("REMAIMING SIGNER: {}", signer.to_str());
+        }
         targets.insert(owner);
         targets.remove(&self.signature_manager.get_own_identifier());
         if !targets.is_empty() {

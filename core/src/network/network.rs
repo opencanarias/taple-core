@@ -713,7 +713,6 @@ impl NetworkProcessor {
                                 .send_message(&peer_id, &message);
                         }
                     }
-                    log::info!("Sending message in NETWORK OK");
                     return;
                 }
 
@@ -754,7 +753,6 @@ impl NetworkProcessor {
 
     /// Send all the pending messages to the specified controller
     fn send_pendings(&mut self, peer_id: &PeerId) {
-        log::info!("Sending message in NETWORK OK PENDINGS");
         let pending_messages = self.pendings.remove(peer_id);
         if let Some(pending_messages) = pending_messages {
             for message in pending_messages.into_iter() {
