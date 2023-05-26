@@ -10,7 +10,7 @@ pub(crate) struct SubjectDb<C: DatabaseCollection> {
 }
 
 impl<C: DatabaseCollection> SubjectDb<C> {
-    pub fn new<M: DatabaseManager<C>>(manager: Arc<M>) -> Self {
+    pub fn new<M: DatabaseManager<C>>(manager: &Arc<M>) -> Self {
         Self {
             collection: manager.create_collection("subject"),
             prefix: "subject".to_string(),

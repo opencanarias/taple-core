@@ -9,7 +9,7 @@ pub(crate) struct EventDb<C: DatabaseCollection> {
 }
 
 impl<C: DatabaseCollection> EventDb<C> {
-    pub fn new<M: DatabaseManager<C>>(manager: Arc<M>) -> Self {
+    pub fn new<M: DatabaseManager<C>>(manager: &Arc<M>) -> Self {
         Self {
             collection: manager.create_collection("event"),
             prefix: "event".to_string(),

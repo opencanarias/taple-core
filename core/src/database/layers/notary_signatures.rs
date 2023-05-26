@@ -11,7 +11,7 @@ pub(crate) struct NotarySignaturesDb<C: DatabaseCollection> {
 }
 
 impl<C: DatabaseCollection> NotarySignaturesDb<C> {
-    pub fn new<M: DatabaseManager<C>>(manager: Arc<M>) -> Self {
+    pub fn new<M: DatabaseManager<C>>(manager: &Arc<M>) -> Self {
         Self {
             collection: manager.create_collection("notary-signatures"),
             prefix: "notary-signatures".to_string(),

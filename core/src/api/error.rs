@@ -13,7 +13,9 @@ pub(crate) enum APIInternalError {
     #[error("An error has ocurred during sign process")]
     SignError,
     #[error("Unexpect response received after manager request")]
-    UnexpectedManagerResponse
+    UnexpectedManagerResponse,
+    #[error("Database error {0}")]
+    DatabaseError(String)
 }
 
 /// Errors that may occur when using the TAPLE API
@@ -24,7 +26,6 @@ pub enum ApiError {
         #[from]
         source: EventError,
     },
-    
     // OLD
     /// An item of the protocol has not been found, for example, a subject
     #[error("{0} not found")]

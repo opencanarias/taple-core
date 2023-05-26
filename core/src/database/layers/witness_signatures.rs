@@ -12,7 +12,7 @@ pub(crate) struct WitnessSignaturesDb<C: DatabaseCollection> {
 }
 
 impl<C: DatabaseCollection> WitnessSignaturesDb<C> {
-    pub fn new<M: DatabaseManager<C>>(manager: Arc<M>) -> Self {
+    pub fn new<M: DatabaseManager<C>>(manager: &Arc<M>) -> Self {
         Self {
             collection: manager.create_collection("witness-signatures"),
             prefix: "witness-signatures".to_string(),

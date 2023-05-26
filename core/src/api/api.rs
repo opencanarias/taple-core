@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use super::GetEventsOfSubject;
 use super::{
     error::{APIInternalError, ApiError},
@@ -5,6 +7,7 @@ use super::{
     APICommands, ApiResponses,
 };
 use crate::approval::manager::ApprovalAPI;
+use crate::authorized_subjecs::manager::AuthorizedSubjectsAPI;
 use crate::commons::models::event::Event;
 use crate::commons::models::event_request::EventRequest;
 use crate::commons::models::state::SubjectData;
@@ -14,6 +17,7 @@ use crate::commons::{
     crypto::KeyPair,
 };
 use crate::event::manager::EventAPI;
+use crate::KeyIdentifier;
 use crate::{
     approval::ApprovalPetitionData,
     commons::models::Acceptance,
@@ -124,7 +128,7 @@ pub trait ApiModuleInterface {
     /// • [ApiError::SignError] if it has not been possible to create the signature that accompanies
     /// the creation of the event with the identity of the node.<br />
     /// • [ApiError::EventCreationError] if it has not been possible to create the governance.
-    async fn create_governance(&self, payload: String) -> Result<DigestIdentifier, ApiError>;
+    async fn create_governance(&self) -> Result<DigestIdentifier, ApiError>;
     /// Stops the node, consuming the instance on the fly. This implies that any previously created API
     /// or [NotificationHandler] instances will no longer be functional.
     async fn shutdown(self) -> Result<(), ApiError>;
@@ -156,9 +160,19 @@ pub trait ApiModuleInterface {
     /// • [ApiError::InternalError] if an internal error occurs during operation execution.
     /// • [ApiError::NotFound] if the requested request does not exist.
     async fn get_single_request(
-        self,
+        &self,
         id: DigestIdentifier,
     ) -> Result<ApprovalPetitionData, ApiError>;
+    async fn add_preauthorize_subject(
+        &self,
+        subject_id: &DigestIdentifier,
+        providers: &HashSet<KeyIdentifier>,
+    ) -> Result<(), ApiError>;
+    async fn expecting_transfer(
+        &self,
+        subject_id: DigestIdentifier,
+        public_key: Vec<u8>,
+    ) -> Result<DigestIdentifier, ApiError>;
 }
 
 /// Object that allows interaction with a TAPLE node.
@@ -222,7 +236,7 @@ impl ApiModuleInterface for NodeAPI {
     }
 
     async fn get_single_request(
-        self,
+        &self,
         id: DigestIdentifier,
     ) -> Result<ApprovalPetitionData, ApiError> {
         let response = self
@@ -356,7 +370,7 @@ impl ApiModuleInterface for NodeAPI {
             unreachable!()
         }
     }
-    async fn create_governance(&self, payload: String) -> Result<DigestIdentifier, ApiError> {
+    async fn create_governance(&self) -> Result<DigestIdentifier, ApiError> {
         let request = EventRequestType::Create(CreateRequest {
             governance_id: DigestIdentifier::default(),
             schema_id: "".into(),
@@ -399,6 +413,43 @@ impl ApiModuleInterface for NodeAPI {
             unreachable!()
         }
     }
+
+    async fn add_preauthorize_subject(
+        &self,
+        subject_id: &DigestIdentifier,
+        providers: &HashSet<KeyIdentifier>,
+    ) -> Result<(), ApiError> {
+        let response = self
+            .sender
+            .ask(APICommands::SetPreauthorizedSubject(
+                subject_id.clone(),
+                providers.clone(),
+            ))
+            .await
+            .unwrap();
+        if let ApiResponses::SetPreauthorizedSubjectCompleted = response {
+            Ok(())
+        } else {
+            unreachable!()
+        }
+    }
+
+    async fn expecting_transfer(
+        &self,
+        subject_id: DigestIdentifier,
+        public_key: Vec<u8>,
+    ) -> Result<DigestIdentifier, ApiError> {
+        let response = self
+            .sender
+            .ask(APICommands::ExpectingTransfer(subject_id, public_key))
+            .await
+            .unwrap();
+        if let ApiResponses::ExpectingTransfer(data) = response {
+            data
+        } else {
+            unreachable!()
+        }
+    }
 }
 
 pub struct API<C: DatabaseCollection,> {
@@ -414,6 +465,7 @@ impl<C: DatabaseCollection,> API<C> {
         input: MpscChannel<APICommands, ApiResponses>,
         event_api: EventAPI,
         approval_api: ApprovalAPI,
+        authorized_subjects_api: AuthorizedSubjectsAPI,
         settings_sender: Sender<TapleSettings>,
         initial_settings: TapleSettings,
         keys: KeyPair,
@@ -424,7 +476,14 @@ impl<C: DatabaseCollection,> API<C> {
         Self {
             input,
             _settings_sender: settings_sender,
-            inner_api: InnerAPI::new(keys, &initial_settings, event_api, db, approval_api),
+            inner_api: InnerAPI::new(
+                keys,
+                &initial_settings,
+                event_api,
+                authorized_subjects_api,
+                db,
+                approval_api,
+            ),
             shutdown_sender: Some(shutdown_sender),
             shutdown_receiver: shutdown_receiver,
         }
@@ -504,6 +563,16 @@ impl<C: DatabaseCollection,> API<C> {
                     APICommands::ExternalRequest(event_request) => {
                         let response = self.inner_api.handle_external_request(event_request).await;
                         response?
+                    }
+                    APICommands::SetPreauthorizedSubject(subject_id, providers) => {
+                        self.inner_api
+                            .set_preauthorized_subject(subject_id, providers)
+                            .await?
+                    }
+                    APICommands::ExpectingTransfer(subject_id, public_key) => {
+                        self.inner_api
+                            .expecting_transfer(subject_id, public_key)
+                            .await?
                     }
                 };
                 sx.send(response)

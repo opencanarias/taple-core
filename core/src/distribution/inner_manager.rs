@@ -107,6 +107,10 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
         witnesses: &HashSet<KeyIdentifier>,
     ) -> Result<(), DistributionManagerError> {
         let remaining_signatures = self.get_remaining_signers(signatures, witnesses);
+        log::warn!("REMAIMING SIGNATURES: {}", remaining_signatures.len());
+        for signer in remaining_signatures.iter() {
+            log::warn!("REMAIMING SIGNER: {}", signer.to_str());
+        }
         if remaining_signatures.len() > 0 {
             self.send_signature_request(
                 &subject.subject_id,
@@ -438,7 +442,10 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
                 };
                 let governance_version = self
                     .governance
-                    .get_governance_version(subject.governance_id.clone(), subject.subject_id.clone())
+                    .get_governance_version(
+                        subject.governance_id.clone(),
+                        subject.subject_id.clone(),
+                    )
                     .await
                     .map_err(|_| DistributionManagerError::GovernanceChannelNotAvailable)?;
                 let metadata = build_metadata(&subject, governance_version);

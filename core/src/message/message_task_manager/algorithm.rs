@@ -59,7 +59,7 @@ impl Algorithm {
             // Targets are selected
             let targets_selected = Algorithm::get_targets(targets, config.replication_factor());
             for target in targets_selected {
-                sender
+                let result_sending = sender
                     .send_message(
                         target,
                         Message::<T> {
@@ -67,8 +67,9 @@ impl Algorithm {
                             sender_id: None,
                         },
                     )
-                    .await
-                    .map_err(|_| Error::SenderChannelError)?;
+                    .await;
+                log::warn!("RESULT SENDING: {:?}", result_sending);
+                result_sending.map_err(|_| Error::SenderChannelError)?;
             }
             Ok(())
         }

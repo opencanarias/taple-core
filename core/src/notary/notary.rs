@@ -46,7 +46,10 @@ impl<C: DatabaseCollection> Notary<C> {
     ) -> Result<NotaryEventResponse, NotaryError> {
         let actual_gov_version = match self
             .gov_api
-            .get_governance_version(notary_event.gov_id.clone(), notary_event.subject_id.clone())
+            .get_governance_version(
+                notary_event.proof.governance_id.clone(),
+                notary_event.proof.subject_id.clone(),
+            )
             .await
         {
             Ok(gov_version) => gov_version,
@@ -62,18 +65,18 @@ impl<C: DatabaseCollection> Notary<C> {
                 _ => return Err(NotaryError::GovApiUnexpectedResponse),
             },
         };
-        if actual_gov_version < notary_event.gov_version {
+        if actual_gov_version < notary_event.proof.governance_version {
             return Err(NotaryError::GovernanceVersionTooHigh);
         }
         match self
             .database
-            .get_notary_register(&notary_event.owner, &notary_event.subject_id)
+            .get_notary_register(&notary_event.proof.owner, &notary_event.proof.subject_id)
         {
             Ok(notary_register) => {
-                if notary_register.1 > notary_event.sn {
+                if notary_register.1 > notary_event.proof.sn {
                     return Err(NotaryError::EventSnLowerThanLastSigned);
-                } else if notary_register.1 == notary_event.sn
-                    && notary_event.event_hash != notary_register.0
+                } else if notary_register.1 == notary_event.proof.sn
+                    && notary_event.proof.event_hash != notary_register.0
                 {
                     return Err(NotaryError::DifferentHashForEvent);
                 }
@@ -86,10 +89,10 @@ impl<C: DatabaseCollection> Notary<C> {
         // Get in DB, it is important that this goes first to ensure that we dont sign 2 different event_hash for the same event sn and subject
         self.database
             .set_notary_register(
-                &notary_event.owner,
-                &notary_event.subject_id,
-                notary_event.event_hash.clone(),
-                notary_event.sn,
+                &notary_event.proof.owner,
+                &notary_event.proof.subject_id,
+                notary_event.proof.event_hash.clone(),
+                notary_event.proof.sn,
             )
             .map_err(|_| NotaryError::DatabaseError)?;
         // Now we sign and send
@@ -104,23 +107,16 @@ impl<C: DatabaseCollection> Notary<C> {
         // .map_err(|_| NotaryError::SerializingError)?;
         let notary_signature = self
             .signature_manager
-            .sign(&(
-                &notary_event.gov_id,
-                &notary_event.subject_id,
-                &notary_event.owner,
-                &notary_event.event_hash,
-                &notary_event.sn,
-                &notary_event.gov_version,
-            ))
+            .sign(&notary_event.proof)
             .map_err(NotaryError::ProtocolErrors)?;
         self.message_channel
             .tell(MessageTaskCommand::Request(
                 None,
                 TapleMessages::EventMessage(EventCommand::ValidatorResponse {
-                    event_hash: notary_event.event_hash.clone(),
+                    event_hash: notary_event.proof.event_hash.clone(),
                     signature: notary_signature.clone(),
                 }),
-                vec![notary_event.owner],
+                vec![notary_event.proof.owner],
                 MessageConfig::direct_response(),
             ))
             .await?; // TODO borrar clone

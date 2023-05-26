@@ -1,50 +1,52 @@
 use super::utils::{get_key, Element};
+use crate::crypto::KeyPair;
 use crate::{DatabaseCollection, DatabaseManager, Derivable, DigestIdentifier};
-use crate::{DbError, Event};
+use crate::DbError;
 use std::sync::Arc;
 
-pub(crate) struct PrevalidatedEventDb<C: DatabaseCollection> {
+
+pub(crate) struct TransferEventsDb<C: DatabaseCollection> {
     collection: C,
     prefix: String,
 }
 
-impl<C: DatabaseCollection> PrevalidatedEventDb<C> {
+impl<C: DatabaseCollection> TransferEventsDb<C> {
     pub fn new<M: DatabaseManager<C>>(manager: &Arc<M>) -> Self {
         Self {
-            collection: manager.create_collection("prevalidated-event"),
-            prefix: "prevalidated-event".to_string(),
+            collection: manager.create_collection("transfer"),
+            prefix: "transfer".to_string(),
         }
     }
 
-    pub fn get_prevalidated_event(&self, subject_id: &DigestIdentifier) -> Result<Event, DbError> {
+    pub fn get_expecting_transfer(&self, subject_id: &DigestIdentifier) -> Result<KeyPair, DbError> {
         let key_elements: Vec<Element> = vec![
             Element::S(self.prefix.clone()),
             Element::S(subject_id.to_str()),
         ];
         let key = get_key(key_elements)?;
-        let prevalidated_event = self.collection.get(&key)?;
-        Ok(bincode::deserialize::<Event>(&prevalidated_event).map_err(|_| {
-            DbError::DeserializeError
-        })?)
+        let value = self.collection.get(&key)?;
+        let result = bincode::deserialize::<KeyPair>(&value)
+            .map_err(|_| DbError::DeserializeError)?;
+        Ok(result)
     }
 
-    pub fn set_prevalidated_event(
+    pub fn set_expecting_transfer(
         &self,
         subject_id: &DigestIdentifier,
-        event: Event,
+        keypair: KeyPair,
     ) -> Result<(), DbError> {
         let key_elements: Vec<Element> = vec![
             Element::S(self.prefix.clone()),
             Element::S(subject_id.to_str()),
         ];
         let key = get_key(key_elements)?;
-        let Ok(data) = bincode::serialize::<Event>(&event) else {
+        let Ok(data) = bincode::serialize::<KeyPair>(&keypair) else {
             return Err(DbError::SerializeError);
-        };
+        }; 
         self.collection.put(&key, data)
     }
 
-    pub fn del_prevalidated_event(&self, subject_id: &DigestIdentifier) -> Result<(), DbError> {
+    pub fn del_expecting_transfer(&self, subject_id: &DigestIdentifier) -> Result<(), DbError> {
         let key_elements: Vec<Element> = vec![
             Element::S(self.prefix.clone()),
             Element::S(subject_id.to_str()),

@@ -9,7 +9,7 @@ pub(crate) struct ContractDb<C: DatabaseCollection> {
 }
 
 impl<C: DatabaseCollection> ContractDb<C> {
-    pub fn new<M: DatabaseManager<C>>(manager: Arc<M>) -> Self {
+    pub fn new<M: DatabaseManager<C>>(manager: &Arc<M>) -> Self {
         Self {
             collection: manager.create_collection("contract"),
             prefix: "contract".to_string(),

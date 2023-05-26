@@ -1,3 +1,6 @@
+use std::collections::HashSet;
+
+use crate::KeyIdentifier;
 use crate::approval::ApprovalPetitionData;
 use crate::commons::models::event::Event;
 use crate::commons::models::event_request::EventRequest;
@@ -26,6 +29,8 @@ pub enum APICommands {
     ExternalRequest(EventRequest),
     GetPendingRequests,
     GetSingleRequest(DigestIdentifier),
+    SetPreauthorizedSubject(DigestIdentifier, HashSet<KeyIdentifier>),
+    ExpectingTransfer(DigestIdentifier, Vec<u8>),
     Shutdown,
 }
 
@@ -40,7 +45,9 @@ pub enum ApiResponses {
     HandleRequest(Result<DigestIdentifier, ApiError>), // Borrar RequestData
     GetPendingRequests(Result<Vec<ApprovalPetitionData>, ApiError>),
     GetSingleRequest(Result<ApprovalPetitionData, ApiError>),
-    ShutdownCompleted
+    ExpectingTransfer(Result<DigestIdentifier, ApiError>),
+    ShutdownCompleted,
+    SetPreauthorizedSubjectCompleted
 }
 
 #[derive(Debug, Clone)]

@@ -50,4 +50,8 @@ pub enum LedgerError {
     WeAreNotWitnesses(String),
     #[error("Invalid LCE After Genesis: {0}")]
     InvalidLCEAfterGenesis(String),
+    #[error("Governance Not Preauthorized: {0}")]
+    GovernanceNotPreauthorized(String),
+    #[error("Governance LCE: {0}")]
+    GovernanceLCE(String),
 }

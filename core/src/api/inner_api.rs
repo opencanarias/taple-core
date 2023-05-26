@@ -2,12 +2,14 @@ use super::error::APIInternalError;
 use super::ApiResponses;
 use crate::approval::error::ApprovalErrorResponse;
 use crate::approval::manager::{ApprovalAPI, ApprovalAPIInterface};
+use crate::authorized_subjecs::manager::AuthorizedSubjectsAPI;
 use crate::commons::models::Acceptance;
 use crate::commons::self_signature_manager::{SelfSignatureInterface, SelfSignatureManager};
 use crate::event::errors::EventError;
 use crate::event::manager::{EventAPI, EventAPIInterface};
 use crate::event::EventResponse;
 use crate::identifier::Derivable;
+use crate::KeyIdentifier;
 // use crate::ledger::errors::LedgerManagerError;
 use crate::{
     commons::{
@@ -22,6 +24,7 @@ use crate::{
     },
     DB, DatabaseCollection
 };
+use std::collections::HashSet;
 use std::str::FromStr;
 
 use super::{
@@ -34,6 +37,7 @@ pub(crate) struct InnerAPI<C: DatabaseCollection> {
     signature_manager: SelfSignatureManager,
     event_api: EventAPI,
     approval_api: ApprovalAPI,
+    authorized_subjects_api: AuthorizedSubjectsAPI,
     db: DB<C>,
 }
 
@@ -44,6 +48,7 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         keys: KeyPair,
         settings: &TapleSettings,
         event_api: EventAPI,
+        authorized_subjects_api: AuthorizedSubjectsAPI,
         db: DB<C>,
         approval_api: ApprovalAPI,
     ) -> Self {
@@ -51,6 +56,7 @@ impl<C: DatabaseCollection> InnerAPI<C> {
             signature_manager: SelfSignatureManager::new(keys, settings),
             event_api,
             approval_api,
+            authorized_subjects_api,
             db,
         }
     }
@@ -244,6 +250,31 @@ impl<C: DatabaseCollection> InnerAPI<C> {
             }
             Err(error) => return ApiResponses::GetSingleRequest(Err(error.into())),
         }
+    }
+
+    pub async fn set_preauthorized_subject(
+        &self,
+        subject_id: DigestIdentifier,
+        providers: HashSet<KeyIdentifier>,
+    ) -> Result<ApiResponses, APIInternalError> {
+        log::info!("HOLA");
+        if let Err(error) = self
+            .authorized_subjects_api
+            .new_authorized_subject(subject_id, providers)
+            .await
+        {
+            log::error!("ERROR FATAL: {:?}", error);
+            return Err(APIInternalError::DatabaseError(error.to_string()));
+        }
+        Ok(ApiResponses::SetPreauthorizedSubjectCompleted)
+    }
+
+    pub async fn expecting_transfer(
+        &self,
+        subject: DigestIdentifier,
+        public_key: Vec<u8>,
+    ) -> Result<ApiResponses, APIInternalError> {
+        todo!()
     }
 }
 

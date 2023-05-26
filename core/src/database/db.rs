@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use crate::commons::models::notary::NotaryEventResponse;
 use crate::commons::models::state::Subject;
+use crate::crypto::KeyPair;
 use crate::event_request::EventRequest;
 use crate::identifier::{DigestIdentifier, KeyIdentifier};
 use crate::signature::Signature;
@@ -15,6 +16,7 @@ use super::{
         notary_signatures::NotarySignaturesDb, prevalidated_event::PrevalidatedEventDb,
         request::RequestDb, signature::SignatureDb, subject::SubjectDb,
         subject_by_governance::SubjectByGovernanceDb, witness_signatures::WitnessSignaturesDb,
+        preauthorized_subjects_and_providers::PreauthorizedSbujectsAndProovidersDb, transfer_events::TransferEventsDb
     },
     DatabaseCollection, DatabaseManager,
 };
@@ -31,21 +33,25 @@ pub struct DB<C: DatabaseCollection> {
     notary_signatures_db: NotarySignaturesDb<C>,
     witness_signatures_db: WitnessSignaturesDb<C>,
     subject_by_governance_db: SubjectByGovernanceDb<C>,
+    transfer_events_db: TransferEventsDb<C>,
+    preauthorized_subjects_and_providers_db: PreauthorizedSbujectsAndProovidersDb<C>
 }
 
 impl<C: DatabaseCollection> DB<C> {
     pub fn new<M: DatabaseManager<C>>(manager: Arc<M>) -> Self {
-        let signature_db = SignatureDb::new(manager.clone());
-        let subject_db = SubjectDb::new(manager.clone());
-        let event_db = EventDb::new(manager.clone());
-        let prevalidated_event_db = PrevalidatedEventDb::new(manager.clone());
-        let request_db = RequestDb::new(manager.clone());
-        let controller_id_db = ControllerIdDb::new(manager.clone());
-        let notary_db = NotaryDb::new(manager.clone());
-        let contract_db = ContractDb::new(manager.clone());
-        let notary_signatures_db = NotarySignaturesDb::new(manager.clone());
-        let witness_signatures_db = WitnessSignaturesDb::new(manager.clone());
-        let subject_by_governance_db = SubjectByGovernanceDb::new(manager);
+        let signature_db = SignatureDb::new(&manager);
+        let subject_db = SubjectDb::new(&manager);
+        let event_db = EventDb::new(&manager);
+        let prevalidated_event_db = PrevalidatedEventDb::new(&manager);
+        let request_db = RequestDb::new(&manager);
+        let controller_id_db = ControllerIdDb::new(&manager);
+        let notary_db = NotaryDb::new(&manager);
+        let contract_db = ContractDb::new(&manager);
+        let notary_signatures_db = NotarySignaturesDb::new(&manager);
+        let witness_signatures_db = WitnessSignaturesDb::new(&manager);
+        let subject_by_governance_db = SubjectByGovernanceDb::new(&manager);
+        let transfer_events_db = TransferEventsDb::new(&manager);
+        let preauthorized_subjects_and_providers_db = PreauthorizedSbujectsAndProovidersDb::new(&manager);
         Self {
             signature_db,
             subject_db,
@@ -58,6 +64,9 @@ impl<C: DatabaseCollection> DB<C> {
             notary_signatures_db,
             witness_signatures_db,
             subject_by_governance_db,
+            transfer_events_db,
+            preauthorized_subjects_and_providers_db
+
         }
     }
 
@@ -302,5 +311,44 @@ impl<C: DatabaseCollection> DB<C> {
     ) -> Result<Vec<DigestIdentifier>, Error> {
         self.subject_by_governance_db
             .get_subjects_by_governance(gobernance_id)
+    }
+
+    pub fn get_expecting_transfer(&self, subject_id: &DigestIdentifier) -> Result<KeyPair, Error> {
+        self.transfer_events_db.get_expecting_transfer(subject_id)
+    }
+
+    pub fn set_expecting_transfer(
+        &self,
+        subject_id: &DigestIdentifier,
+        keypair: KeyPair,
+    ) -> Result<(), Error> {
+        self.transfer_events_db.set_expecting_transfer(subject_id, keypair)
+    }
+
+    pub fn del_expecting_transfer(&self, subject_id: &DigestIdentifier) -> Result<(), Error> {
+        self.transfer_events_db.del_expecting_transfer(subject_id)
+    }
+
+    pub fn get_preauthorized_subject_and_providers(
+        &self,
+        subject_id: &DigestIdentifier,
+    ) -> Result<HashSet<KeyIdentifier>, Error> {
+        self.preauthorized_subjects_and_providers_db.get_preauthorized_subject_and_providers(subject_id)
+    }
+
+    pub fn get_preauthorized_subjects_and_providers(
+        &self,
+        from: Option<String>,
+        quantity: isize,
+    ) -> Result<Vec<(DigestIdentifier, HashSet<KeyIdentifier>)>, Error> {
+        self.preauthorized_subjects_and_providers_db.get_preauthorized_subjects_and_providers(from, quantity)
+    }
+
+    pub fn set_preauthorized_subject_and_providers(
+        &self,
+        subject_id: &DigestIdentifier,
+        providers: HashSet<KeyIdentifier>,
+    ) -> Result<(), Error> {
+        self.preauthorized_subjects_and_providers_db.set_preauthorized_subject_and_providers(subject_id, providers)
     }
 }

@@ -11,7 +11,7 @@ pub(crate) struct SignatureDb<C: DatabaseCollection> {
 }
 
 impl<C: DatabaseCollection> SignatureDb<C> {
-    pub fn new<M: DatabaseManager<C>>(manager: Arc<M>) -> Self {
+    pub fn new<M: DatabaseManager<C>>(manager: &Arc<M>) -> Self {
         Self {
             collection: manager.create_collection("signature"),
             prefix: "signature".to_string(),
