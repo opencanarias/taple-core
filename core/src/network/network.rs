@@ -198,12 +198,6 @@ impl NetworkProcessor {
                             .boxed(),
                     );
                     // DNS
-                    transport = Some(
-                        dns::GenDnsConfig::system(transport.unwrap())
-                            // .await
-                            .expect("DNS wont fail")
-                            .boxed(),
-                    );
                     transport = {
                         match dns::GenDnsConfig::system(transport.unwrap()) {
                             Ok(t) => Some(t.boxed()),
