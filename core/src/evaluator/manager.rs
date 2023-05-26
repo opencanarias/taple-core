@@ -1,3 +1,4 @@
+use std::marker::PhantomData;
 use std::sync::Arc;
 
 use wasmtime::Engine;
@@ -6,7 +7,7 @@ use super::compiler::manager::TapleCompiler;
 use super::errors::EvaluatorError;
 use super::{EvaluatorMessage, EvaluatorResponse};
 use crate::commons::self_signature_manager::{SelfSignatureInterface, SelfSignatureManager};
-use crate::database::{DatabaseManager, DB};
+use crate::database::{DatabaseManager, DB, DatabaseCollection};
 use crate::evaluator::errors::ExecutorErrorResponses;
 use crate::evaluator::runner::manager::TapleRunner;
 use crate::event_request::{EventRequestType};
@@ -30,23 +31,25 @@ impl EvaluatorAPI {
 }
 
 pub struct EvaluatorManager<
-    D: DatabaseManager + Send + 'static,
+    M: DatabaseManager<C>,
+    C: DatabaseCollection + 'static,
     G: GovernanceInterface + Send + Clone + 'static,
 > {
     /// Communication channel for incoming petitions
     input_channel: MpscChannel<EvaluatorMessage, EvaluatorResponse>,
     /// Contract executioner
-    runner: TapleRunner<D, G>,
+    runner: TapleRunner<C, G>,
     signature_manager: SelfSignatureManager,
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
     messenger_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
+    _m: PhantomData<M>
 }
 
-impl<D: DatabaseManager, G: GovernanceInterface + Send + Clone + 'static> EvaluatorManager<D, G> {
+impl<M: DatabaseManager<C>, C: DatabaseCollection, G: GovernanceInterface + Send + Clone + 'static> EvaluatorManager<M, C, G> {
     pub fn new(
         input_channel: MpscChannel<EvaluatorMessage, EvaluatorResponse>,
-        database: Arc<D>,
+        database: Arc<M>,
         signature_manager: SelfSignatureManager,
         compiler_channel: tokio::sync::broadcast::Receiver<GovernanceUpdatedMessage>,
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
@@ -75,6 +78,7 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send + Clone + 'static> Evalua
             shutdown_receiver,
             shutdown_sender,
             messenger_channel,
+            _m: PhantomData::default()
         }
     }
 
@@ -123,6 +127,7 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send + Clone + 'static> Evalua
                         break 'response EvaluatorResponse::AskForEvaluation(Err(super::errors::EvaluatorErrorResponses::CreateRequestNotAllowed));
                     };
                     let result = self.runner.execute_contract(&data, state_data).await;
+                    log::warn!("Execution result: {:?}", result);
                     match result {
                         Ok(executor_response) => {
                             let governance_version = executor_response.governance_version;

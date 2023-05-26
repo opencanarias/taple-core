@@ -3,26 +3,25 @@ use std::collections::HashSet;
 use crate::{
     commons::channel::SenderEnd,
     database::DB,
-    distribution::LedgerMessages,
     ledger::LedgerCommand,
     message::{MessageConfig, MessageTaskCommand},
     protocol::protocol_message_manager::TapleMessages,
-    DatabaseManager, Derivable, DigestIdentifier, KeyIdentifier,
+    DatabaseCollection, Derivable, DigestIdentifier, KeyIdentifier,
 };
 
 use super::error::AuthorizedSubjectsError;
 
 /// Estructura que maneja los sujetos preautorizados en un sistema y se comunica con otros componentes del sistema a través de un canal de mensajes.
-pub struct AuthorizedSubjects<D: DatabaseManager> {
+pub struct AuthorizedSubjects<C: DatabaseCollection> {
     /// Objeto que maneja la conexión a la base de datos.
-    database: DB<D>,
+    database: DB<C>,
     /// Canal de mensajes que se utiliza para comunicarse con otros componentes del sistema.
     message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
     /// Identificador único para el componente que utiliza esta estructura.
     our_id: KeyIdentifier,
 }
 
-impl<D: DatabaseManager> AuthorizedSubjects<D> {
+impl<C: DatabaseCollection> AuthorizedSubjects<C> {
     /// Crea una nueva instancia de la estructura `AuthorizedSubjects`.
     ///
     /// # Arguments
@@ -31,7 +30,7 @@ impl<D: DatabaseManager> AuthorizedSubjects<D> {
     /// * `message_channel` - Canal de mensajes.
     /// * `our_id` - Identificador único.
     pub fn new(
-        database: DB<D>,
+        database: DB<C>,
         message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
         our_id: KeyIdentifier,
     ) -> Self {
@@ -64,10 +63,6 @@ impl<D: DatabaseManager> AuthorizedSubjects<D> {
 
         // Para cada sujeto preautorizado, enviamos un mensaje a los proveedores asociados a través del canal de mensajes.
         for (subject_id, providers) in preauthorized_subjects.into_iter() {
-            log::warn!("SUBJECT_ID: {}", subject_id.to_str());
-            providers.iter().for_each(|p| {
-                log::warn!("PROVIDER: {}", p.to_str());
-            });
             if !providers.is_empty() {
                 self.message_channel
                     .tell(MessageTaskCommand::Request(

@@ -6,8 +6,12 @@ use crate::database::Error as DbError;
 pub enum LedgerError {
     #[error("A channel has been closed")]
     ChannelClosed,
+    #[error("Unexpected response")]
+    UnexpectedResponse,
     #[error("Subject Not Found: {0}")]
     SubjectNotFound(String),
+    #[error("Unexpected transfer received")]
+    UnexpectedTransfer,
     #[error("Error parsing json string: \"{0}\"")]
     ErrorParsingJsonString(String),
     #[error("Error applying patch: \"{0}\"")]
@@ -54,4 +58,12 @@ pub enum LedgerError {
     GovernanceNotPreauthorized(String),
     #[error("Governance LCE: {0}")]
     GovernanceLCE(String),
+    #[error("Evaluation found in Transfer Event")]
+    EvaluationInTransferEvent,
+    #[error("Approval found in transfer event")]
+    ApprovalInTransferEvent,
+    #[error("State event with an SN of 0 detected")]
+    StateEventWithZeroSNDetected,
+    #[error("Unexpected create event")]
+    UnexpectedCreateEvent
 }

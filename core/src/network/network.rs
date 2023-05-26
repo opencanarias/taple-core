@@ -198,12 +198,34 @@ impl NetworkProcessor {
                             .boxed(),
                     );
                     // DNS
-                    transport = Some(
-                        dns::GenDnsConfig::system(transport.unwrap())
-                            // .await
-                            .expect("DNS wont fail")
-                            .boxed(),
-                    );
+                    transport = {
+                        match dns::GenDnsConfig::system(transport.unwrap()) {
+                            Ok(t) => Some(t.boxed()),
+                            Err(_) => { 
+                                // TODO: vuelvo a crear el transporte porque no tiene clone, quizás sería interesante poner una variable de entorno que diga si estamos en android y hacer lo segundo directamente en ese caso 
+                                let transport = Some(
+                                    TokioTcpConfig::new()
+                                        .nodelay(true)
+                                        .upgrade(upgrade::Version::V1)
+                                        .authenticate(
+                                            noise::NoiseConfig::xx(noise_key.clone())
+                                                .into_authenticated(),
+                                        )
+                                        .multiplex(mplex::MplexConfig::new())
+                                        .boxed(),
+                                );
+                                Some(
+                                    dns::GenDnsConfig::custom(
+                                        transport.unwrap(),
+                                        dns::ResolverConfig::cloudflare(),
+                                        dns::ResolverOpts::default(),
+                                    )
+                                    .expect("DNS wont fail")
+                                    .boxed(),
+                                )
+                            }
+                        }
+                    };
                     break;
                 } else if let Protocol::Memory(_) = protocol {
                     transport = Some(
@@ -713,7 +735,6 @@ impl NetworkProcessor {
                                 .send_message(&peer_id, &message);
                         }
                     }
-                    log::info!("Sending message in NETWORK OK");
                     return;
                 }
 
@@ -754,7 +775,6 @@ impl NetworkProcessor {
 
     /// Send all the pending messages to the specified controller
     fn send_pendings(&mut self, peer_id: &PeerId) {
-        log::info!("Sending message in NETWORK OK PENDINGS");
         let pending_messages = self.pendings.remove(peer_id);
         if let Some(pending_messages) = pending_messages {
             for message in pending_messages.into_iter() {

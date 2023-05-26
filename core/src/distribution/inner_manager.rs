@@ -18,24 +18,24 @@ use crate::TapleSettings;
 use crate::{
     database::{Error as DbError, DB},
     governance::GovernanceInterface,
-    DatabaseManager,
+    DatabaseCollection
 };
 
 use super::error::{DistributionErrorResponses, DistributionManagerError};
 use super::StartDistribution;
-pub struct InnerDistributionManager<G: GovernanceInterface, D: DatabaseManager> {
+pub struct InnerDistributionManager<G: GovernanceInterface, C: DatabaseCollection> {
     governance: G,
-    db: DB<D>,
+    db: DB<C>,
     messenger_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
     signature_manager: SelfSignatureManager,
     timeout: u32,
     replication_factor: f64,
 }
 
-impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> {
+impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, C> {
     pub fn new(
         governance: G,
-        db: DB<D>,
+        db: DB<C>,
         messenger_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
         signature_manager: SelfSignatureManager,
         settings: TapleSettings,
@@ -68,8 +68,9 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
                 .db
                 .get_subject(&id)
                 .map_err(|error| DistributionManagerError::DatabaseError(error.to_string()))?;
+            let owner = subject.owner.clone();
             let metadata = build_metadata(&subject, governance.sn);
-            let witnesses = self
+            let mut witnesses = self
                 .governance
                 .get_signers(metadata, ValidationStage::Witness)
                 .await
@@ -92,6 +93,7 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
                 .collect();
             let remaining_signers: HashSet<KeyIdentifier> =
                 witnesses.difference(&current_signers).cloned().collect();
+            witnesses.insert(owner);
             if !remaining_signers.is_empty() {
                 self.send_signature_request(&id, subject.sn, witnesses, &remaining_signers)
                     .await?;
@@ -215,6 +217,7 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
                 .map_err(|_| DistributionManagerError::GovernanceChannelNotAvailable)?;
             if witnesses.contains(&self.signature_manager.get_own_identifier()) {
                 // Seguimos siendo testigos
+                witnesses.insert(subject.owner.clone());
                 witnesses.remove(&self.signature_manager.get_own_identifier());
                 self.restart_distribution(&subject, &signatures, &witnesses)
                     .await?;
@@ -261,6 +264,7 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
             .db
             .get_subject(&msg.subject_id)
             .map_err(|e| DistributionManagerError::DatabaseError(e.to_string()))?;
+        let owner = subject.owner.clone();
         let governance_version = self
             .governance
             .get_governance_version(subject.governance_id.clone(), subject.subject_id.clone())
@@ -269,6 +273,11 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
         // Empezamos la distribución
         let metadata = build_metadata(&subject, governance_version);
         let mut targets = self.get_targets(metadata).await?;
+        log::warn!("REMAIMING SIGNATURES: {}", targets.len());
+        for signer in targets.iter() {
+            log::warn!("REMAIMING SIGNER: {}", signer.to_str());
+        }
+        targets.insert(owner);
         targets.remove(&self.signature_manager.get_own_identifier());
         if !targets.is_empty() {
             self.send_signature_request(&subject.subject_id, msg.sn, targets.clone(), &targets)
@@ -440,6 +449,7 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
                         return Err(DistributionManagerError::DatabaseError(error.to_string()))
                     }
                 };
+                let owner = subject.owner.clone();
                 let governance_version = self
                     .governance
                     .get_governance_version(
@@ -479,6 +489,7 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
                 if remaining_signatures.len() == 0 {
                     self.cancel_signature_request(&subject.subject_id).await?;
                 } else {
+                    targets.insert(owner);
                     self.send_signature_request(
                         &subject.subject_id,
                         msg.sn,

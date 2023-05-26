@@ -3,3 +3,4 @@
 .DS_Store
 data.md
 Cargo.lock
+**/settings.toml

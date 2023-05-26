@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, marker::PhantomData};
 
 use crate::{
     commons::{
@@ -16,7 +16,7 @@ use crate::{
     event_request::{EventRequest, EventRequestType},
     governance::{error::RequestError, GovernanceInterface},
     identifier::{Derivable, DigestIdentifier, KeyIdentifier},
-    DatabaseManager, Notification,
+    DatabaseManager, Notification, DatabaseCollection
 };
 
 use super::{
@@ -65,9 +65,9 @@ impl NotifierInterface for RequestNotifier {
     }
 }
 
-pub struct InnerApprovalManager<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface> {
+pub struct InnerApprovalManager<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection> {
     governance: G,
-    database: DB<D>,
+    database: DB<C>,
     notifier: N,
     signature_manager: SelfSignatureManager,
     // Cola de 1 elemento por sujeto
@@ -76,12 +76,12 @@ pub struct InnerApprovalManager<G: GovernanceInterface, D: DatabaseManager, N: N
     pass_votation: VotationType,
 }
 
-impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
-    InnerApprovalManager<G, D, N>
+impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
+    InnerApprovalManager<G, N, C>
 {
     pub fn new(
         governance: G,
-        database: DB<D>,
+        database: DB<C>,
         notifier: N,
         signature_manager: SelfSignatureManager,
         pass_votation: VotationType,
@@ -165,20 +165,20 @@ impl<G: GovernanceInterface, D: DatabaseManager, N: NotifierInterface>
         ApprovalManagerError,
     > {
         /*
-         EL APROBADOR AHORA TAMBIÉN ES TESTIGO
-         - Comprobar si se posee el sujeto
-         - Comprobar si estamos sincronizados
-         Comprobamos la versión de la gobernanza
-           - Rechazamos las peticiones que tengan una versión de gobernanza distinta a la nuestra
-         Comprobamos la validez criptográfica de la información que nos entrega.
-           - Comprobar la firma de invocación.
-           - Comprobar validez del invocador.
-           - Comprobar las firmas de evaluación.
-           - Comprobar la validez de los evaluadores.
-         Las peticiones no se van a guardar en la BBDD, pero sí en memoria.
-         Solo se guardará una petición por sujeto. Existe la problemática de que un evento haya sido aprobado sin nuestra
-         intervención. En ese caso es precisar eliminar la petición y actualizar a la nueva.
-         Debemos comprobar siempre si ya tenemos la petición que nos envían.
+            EL APROBADOR AHORA TAMBIÉN ES TESTIGO
+            - Comprobar si se posee el sujeto
+            - Comprobar si estamos sincronizados
+            Comprobamos la versión de la gobernanza
+                - Rechazamos las peticiones que tengan una versión de gobernanza distinta a la nuestra
+            Comprobamos la validez criptográfica de la información que nos entrega.
+                - Comprobar la firma de invocación.
+                - Comprobar validez del invocador.
+                - Comprobar las firmas de evaluación.
+                - Comprobar la validez de los evaluadores.
+            Las peticiones no se van a guardar en la BBDD, pero sí en memoria.
+            Solo se guardará una petición por sujeto. Existe la problemática de que un evento haya sido aprobado sin nuestra
+            intervención. En ese caso es precisar eliminar la petición y actualizar a la nueva.
+            Debemos comprobar siempre si ya tenemos la petición que nos envían.
         */
         let id = &approval_request
             .subject_signature

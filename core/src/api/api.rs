@@ -18,12 +18,13 @@ use crate::commons::{
 };
 use crate::event::manager::EventAPI;
 use crate::KeyIdentifier;
+use crate::ledger::manager::EventManagerAPI;
 use crate::{
     approval::ApprovalPetitionData,
     commons::models::Acceptance,
     event_request::{CreateRequest, EventRequestType, StateRequest},
     identifier::DigestIdentifier,
-    DatabaseManager, DB,
+    DatabaseManager, DB, DatabaseCollection
 };
 use async_trait::async_trait;
 use tokio::sync::watch::Sender;
@@ -171,8 +172,7 @@ pub trait ApiModuleInterface {
     async fn expecting_transfer(
         &self,
         subject_id: DigestIdentifier,
-        public_key: Vec<u8>,
-    ) -> Result<DigestIdentifier, ApiError>;
+    ) -> Result<KeyIdentifier, ApiError>;
 }
 
 /// Object that allows interaction with a TAPLE node.
@@ -437,11 +437,10 @@ impl ApiModuleInterface for NodeAPI {
     async fn expecting_transfer(
         &self,
         subject_id: DigestIdentifier,
-        public_key: Vec<u8>,
-    ) -> Result<DigestIdentifier, ApiError> {
+    ) -> Result<KeyIdentifier, ApiError> {
         let response = self
             .sender
-            .ask(APICommands::ExpectingTransfer(subject_id, public_key))
+            .ask(APICommands::ExpectingTransfer(subject_id))
             .await
             .unwrap();
         if let ApiResponses::ExpectingTransfer(data) = response {
@@ -452,26 +451,27 @@ impl ApiModuleInterface for NodeAPI {
     }
 }
 
-pub struct API<D: DatabaseManager> {
+pub struct API<C: DatabaseCollection,> {
     input: MpscChannel<APICommands, ApiResponses>,
     _settings_sender: Sender<TapleSettings>,
-    inner_api: InnerAPI<D>,
+    inner_api: InnerAPI<C>,
     shutdown_sender: Option<tokio::sync::broadcast::Sender<()>>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
 }
 
-impl<D: DatabaseManager> API<D> {
+impl<C: DatabaseCollection,> API<C> {
     pub fn new(
         input: MpscChannel<APICommands, ApiResponses>,
         event_api: EventAPI,
         approval_api: ApprovalAPI,
         authorized_subjects_api: AuthorizedSubjectsAPI,
+        ledger_api: EventManagerAPI,
         settings_sender: Sender<TapleSettings>,
         initial_settings: TapleSettings,
         keys: KeyPair,
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
-        db: DB<D>,
+        db: DB<C>,
     ) -> Self {
         Self {
             input,
@@ -483,6 +483,7 @@ impl<D: DatabaseManager> API<D> {
                 authorized_subjects_api,
                 db,
                 approval_api,
+                ledger_api
             ),
             shutdown_sender: Some(shutdown_sender),
             shutdown_receiver: shutdown_receiver,
@@ -569,9 +570,9 @@ impl<D: DatabaseManager> API<D> {
                             .set_preauthorized_subject(subject_id, providers)
                             .await?
                     }
-                    APICommands::ExpectingTransfer(subject_id, public_key) => {
+                    APICommands::ExpectingTransfer(subject_id) => {
                         self.inner_api
-                            .expecting_transfer(subject_id, public_key)
+                            .expecting_transfer(subject_id)
                             .await?
                     }
                 };

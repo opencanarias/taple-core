@@ -1,3 +1,4 @@
+use std::marker::PhantomData;
 use std::sync::Arc;
 
 use crate::approval::manager::{ApprovalAPI, ApprovalManager};
@@ -14,7 +15,7 @@ use crate::commons::identifier::derive::KeyDerivator;
 use crate::commons::identifier::{Derivable, KeyIdentifier};
 use crate::commons::models::notification::Notification;
 use crate::commons::self_signature_manager::{SelfSignatureInterface, SelfSignatureManager};
-use crate::database::{DatabaseManager, DB};
+use crate::database::{DatabaseManager, DB, DatabaseCollection};
 use crate::distribution::error::DistributionErrorResponses;
 use crate::distribution::manager::DistributionManager;
 use crate::distribution::DistributionMessagesNew;
@@ -24,6 +25,7 @@ use crate::event::manager::{EventAPI, EventManager};
 use crate::event::{EventCommand, EventResponse};
 use crate::governance::GovernanceAPI;
 use crate::governance::{governance::Governance, GovernanceMessage, GovernanceResponse};
+use crate::ledger::manager::EventManagerAPI;
 use crate::ledger::{manager::EventManager as LedgerManager, LedgerCommand, LedgerResponse};
 use crate::message::{
     Message, MessageReceiver, MessageSender, MessageTaskCommand, MessageTaskManager, NetworkEvent,
@@ -104,7 +106,7 @@ impl NotificationHandler {
 /// of [configuration](Settings) parameters in order to be properly initialized.
 ///
 #[derive(Debug)]
-pub struct Taple<D: DatabaseManager> {
+pub struct Taple<M: DatabaseManager<C>, C: DatabaseCollection> {
     api: NodeAPI,
     peer_id: Option<PeerId>,
     controller_id: Option<String>,
@@ -112,10 +114,11 @@ pub struct Taple<D: DatabaseManager> {
     api_input: Option<MpscChannel<APICommands, ApiResponses>>,
     notification_sender: tokio::sync::broadcast::Sender<Notification>,
     settings: TapleSettings,
-    database: Option<D>,
+    database: Option<M>,
+    _c: PhantomData<C>
 }
 
-impl<D: DatabaseManager + 'static> Taple<D> {
+impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, C> {
     /// Returns the [PeerId] of the node is available.
     /// This ID is the identifier of the node at the network level.
     /// **None** can only be get if the node has not been started yet.
@@ -175,7 +178,7 @@ impl<D: DatabaseManager + 'static> Taple<D> {
     }
 
     /// Main and unique method to create an instance of a TAPLE node.
-    pub fn new(settings: TapleSettings, database: D) -> Self {
+    pub fn new(settings: TapleSettings, database: M) -> Self {
         check_dev_settings(&settings);
         let (api_input, api_sender) = MpscChannel::new(BUFFER_SIZE);
         let (sender, _) = tokio::sync::broadcast::channel(BUFFER_SIZE);
@@ -189,6 +192,7 @@ impl<D: DatabaseManager + 'static> Taple<D> {
             notification_sender: sender,
             settings,
             database: Some(database),
+            _c: PhantomData::default()
         }
     }
 
@@ -390,7 +394,7 @@ impl<D: DatabaseManager + 'static> Taple<D> {
             bsx.clone(),
         );
         // Creation Governance
-        let mut governance_manager = Governance::new(
+        let mut governance_manager = Governance::<M, C>::new(
             governance_receiver,
             bsx.clone(),
             bsx.subscribe(),
@@ -407,7 +411,7 @@ impl<D: DatabaseManager + 'static> Taple<D> {
             bsx.subscribe(),
             task_sender.clone(),
             self.notification_sender.clone(),
-            ledger_sender,
+            ledger_sender.clone(),
             signature_manager.get_own_identifier(),
             signature_manager.clone(),
         );
@@ -438,6 +442,7 @@ impl<D: DatabaseManager + 'static> Taple<D> {
             EventAPI::new(event_sender),
             ApprovalAPI::new(approval_sender),
             AuthorizedSubjectsAPI::new(as_sender),
+            EventManagerAPI::new(ledger_sender),
             wath_sender,
             self.settings.clone(),
             kp.clone(),

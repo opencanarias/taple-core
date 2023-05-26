@@ -2,7 +2,7 @@ use async_trait::async_trait;
 
 use super::{errors::EventError, event_completer::EventCompleter, EventCommand, EventResponse};
 use crate::commons::self_signature_manager::SelfSignatureManager;
-use crate::database::{DatabaseManager, DB};
+use crate::database::{DB, DatabaseCollection};
 use crate::event_request::EventRequest;
 use crate::governance::error::RequestError;
 use crate::governance::GovernanceUpdatedMessage;
@@ -42,22 +42,22 @@ impl EventAPIInterface for EventAPI {
     }
 }
 
-pub struct EventManager<D: DatabaseManager> {
+pub struct EventManager<C: DatabaseCollection> {
     /// Communication channel for incoming petitions
     input_channel: MpscChannel<EventCommand, EventResponse>,
     input_channel_updated_gov: tokio::sync::broadcast::Receiver<GovernanceUpdatedMessage>,
     /// Notarization functions
-    event_completer: EventCompleter<D>,
+    event_completer: EventCompleter<C>,
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
 }
 
-impl<D: DatabaseManager> EventManager<D> {
+impl<C: DatabaseCollection> EventManager<C> {
     pub fn new(
         input_channel: MpscChannel<EventCommand, EventResponse>,
         input_channel_updated_gov: tokio::sync::broadcast::Receiver<GovernanceUpdatedMessage>,
         gov_api: GovernanceAPI,
-        database: DB<D>,
+        database: DB<C>,
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
         message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
@@ -155,6 +155,7 @@ impl<D: DatabaseManager> EventManager<D> {
             match data {
                 EventCommand::Event { event_request } => {
                     let response = self.event_completer.new_event(event_request).await;
+                    log::warn!("EVENT REPSONE: {:?}", response);
                     match response.clone() {
                         Err(error) => match error {
                             EventError::ChannelClosed => {

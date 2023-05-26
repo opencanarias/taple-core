@@ -244,6 +244,32 @@ pub struct ValidationProof {
 }
 
 impl ValidationProof {
+    pub fn new_from_transfer_event(
+        subject: &Subject,
+        sn: u64,
+        prev_event_hash: DigestIdentifier,
+        event_hash: DigestIdentifier,
+        state_hash: DigestIdentifier,
+        governance_version: u64,
+        owner: KeyIdentifier,
+        subject_public_key: KeyIdentifier,
+    ) -> Self {
+        Self {
+            governance_id: subject.governance_id.clone(),
+            governance_version,
+            subject_id: subject.subject_id.clone(),
+            sn,
+            schema_id: subject.schema_id.clone(),
+            namespace: subject.namespace.clone(),
+            prev_event_hash,
+            event_hash,
+            state_hash,
+            subject_public_key,
+            owner,
+            creator: subject.creator.clone(),
+        }
+    }
+
     pub fn new(
         subject: &Subject,
         sn: u64,

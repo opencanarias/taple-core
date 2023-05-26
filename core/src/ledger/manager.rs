@@ -1,3 +1,5 @@
+use async_trait::async_trait;
+
 use crate::{
     commons::channel::{ChannelData, MpscChannel, SenderEnd},
     database::DB,
@@ -5,28 +7,66 @@ use crate::{
     governance::{error::RequestError, GovernanceAPI},
     message::MessageTaskCommand,
     protocol::protocol_message_manager::TapleMessages,
-    DatabaseManager, KeyIdentifier, Notification,
+    DatabaseCollection, DigestIdentifier, KeyIdentifier, Notification,
 };
 
 use super::{errors::LedgerError, ledger::Ledger, LedgerCommand, LedgerResponse};
 
-pub struct EventManager<D: DatabaseManager> {
+#[async_trait]
+pub trait EventManagerInterface {
+    async fn expecting_transfer(
+        &self,
+        subject_id: DigestIdentifier,
+    ) -> Result<KeyIdentifier, LedgerError>;
+}
+
+#[derive(Debug, Clone)]
+pub struct EventManagerAPI {
+    sender: SenderEnd<LedgerCommand, LedgerResponse>,
+}
+
+impl EventManagerAPI {
+    pub fn new(sender: SenderEnd<LedgerCommand, LedgerResponse>) -> Self {
+        Self { sender }
+    }
+}
+
+#[async_trait]
+impl EventManagerInterface for EventManagerAPI {
+    async fn expecting_transfer(
+        &self,
+        subject_id: DigestIdentifier,
+    ) -> Result<KeyIdentifier, LedgerError> {
+        let response = self
+            .sender
+            .ask(LedgerCommand::ExpectingTransfer { subject_id })
+            .await
+            .map_err(|_| LedgerError::ChannelClosed)?;
+        if let LedgerResponse::ExpectingTransfer(public_key) = response {
+            public_key
+        } else {
+            Err(LedgerError::UnexpectedResponse)
+        }
+    }
+}
+
+pub struct EventManager<C: DatabaseCollection> {
     /// Communication channel for incoming petitions
     input_channel: MpscChannel<LedgerCommand, LedgerResponse>,
-    inner_ledger: Ledger<D>,
+    inner_ledger: Ledger<C>,
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
     notification_sender: tokio::sync::broadcast::Sender<Notification>,
 }
 
-impl<D: DatabaseManager> EventManager<D> {
+impl<C: DatabaseCollection> EventManager<C> {
     pub fn new(
         input_channel: MpscChannel<LedgerCommand, LedgerResponse>,
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
         notification_sender: tokio::sync::broadcast::Sender<Notification>,
         gov_api: GovernanceAPI,
-        database: DB<D>,
+        database: DB<C>,
         message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
         distribution_channel: SenderEnd<
             DistributionMessagesNew,
@@ -99,6 +139,28 @@ impl<D: DatabaseManager> EventManager<D> {
         };
         let response = {
             match data {
+                LedgerCommand::ExpectingTransfer { subject_id } => {
+                    let response = self.inner_ledger.expecting_transfer(subject_id).await;
+                    match &response {
+                        Err(error) => match error {
+                            LedgerError::ChannelClosed => {
+                                log::error!("Channel Closed");
+                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                return Err(LedgerError::ChannelClosed);
+                            }
+                            LedgerError::GovernanceError(inner_error)
+                                if *inner_error == RequestError::ChannelClosed =>
+                            {
+                                log::error!("Channel Closed");
+                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                return Err(LedgerError::ChannelClosed);
+                            }
+                            _ => {}
+                        },
+                        _ => {}
+                    }
+                    LedgerResponse::ExpectingTransfer(response)
+                }
                 LedgerCommand::OwnEvent { event, signatures } => {
                     let response = self.inner_ledger.event_validated(event, signatures).await;
                     match response {
