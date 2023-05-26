@@ -47,7 +47,6 @@ pub(crate) fn get_by_range<C: DatabaseCollection>(
     ) -> Box<dyn Iterator<Item = (String, Vec<u8>)> + 'a> {
         Box::new(iter)
     }
-
     let (mut iter, quantity) = match from {
         Some(key) => {
             // Get true key

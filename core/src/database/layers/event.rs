@@ -40,16 +40,18 @@ impl<C: DatabaseCollection> EventDb<C> {
             Element::S(subject_id.to_str()),
         ];
         let key = get_key(key_elements)?;
-        let _subject = self.collection.get(&key)?;
         let from = match from {
             Some(from) => Some(from.to_string()),
             None => None,
         };
+        log::error!("from: {:?} quantity: {}", from, quantity);
         let events_by_subject =
-            get_by_range(from, quantity, &self.collection, &self.prefix.clone())?;
+            get_by_range(from, quantity, &self.collection, &key)?;
         Ok(events_by_subject
             .iter()
-            .map(|event| (bincode::deserialize::<Event>(event).unwrap()))
+            .map(|event| {
+                bincode::deserialize::<Event>(event).unwrap()
+            })
             .collect())
     }
 
