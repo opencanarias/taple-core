@@ -80,6 +80,7 @@ impl EventProposal {
     pub fn check_signatures(&self) -> Result<(), SubjectError> {
         check_cryptography(&self.proposal, &self.subject_signature)
             .map_err(|error| SubjectError::CryptoError(error.to_string()))?;
+        log::warn!("CHECK SIGNATURES NO FALLA EN EVENT PROPOSAL");
         self.proposal.event_request.check_signatures()?;
         Ok(())
     }

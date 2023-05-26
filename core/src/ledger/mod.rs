@@ -43,6 +43,9 @@ pub enum LedgerCommand {
         who_asked: KeyIdentifier,
         subject_id: DigestIdentifier,
     },
+    ExpectingTransfer {
+        subject_id: DigestIdentifier,
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -50,5 +53,6 @@ pub enum LedgerResponse {
     GetEvent(Result<Event, errors::LedgerError>),
     GetNextGov(Result<(Event, HashSet<Signature>), errors::LedgerError>),
     GetLCE(Result<(Event, HashSet<Signature>), errors::LedgerError>),
+    ExpectingTransfer(Result<KeyIdentifier, errors::LedgerError>),
     NoResponse,
 }

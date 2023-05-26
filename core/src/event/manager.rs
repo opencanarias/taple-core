@@ -155,6 +155,7 @@ impl<C: DatabaseCollection> EventManager<C> {
             match data {
                 EventCommand::Event { event_request } => {
                     let response = self.event_completer.new_event(event_request).await;
+                    log::warn!("EVENT REPSONE: {:?}", response);
                     match response.clone() {
                         Err(error) => match error {
                             EventError::ChannelClosed => {

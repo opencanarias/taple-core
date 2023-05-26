@@ -42,4 +42,8 @@ pub enum EventError {
     CreatingPermissionDenied,
     #[error("Genesis In Gov Update:")]
     GenesisInGovUpdate,
+    #[error("Transfer events are not evaluated")]
+    NoEvaluationForTransferEvents,
+    #[error("Transfer events are not approved")]
+    NoAprovalForTransferEvents
 }

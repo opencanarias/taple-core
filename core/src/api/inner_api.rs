@@ -10,6 +10,7 @@ use crate::event::manager::{EventAPI, EventAPIInterface};
 use crate::event::EventResponse;
 use crate::identifier::Derivable;
 use crate::KeyIdentifier;
+use crate::ledger::manager::{EventManagerAPI, EventManagerInterface};
 // use crate::ledger::errors::LedgerManagerError;
 use crate::{
     commons::{
@@ -25,7 +26,6 @@ use crate::{
     DB, DatabaseCollection
 };
 use std::collections::HashSet;
-use std::str::FromStr;
 
 use super::{
     error::ApiError, GetAllSubjects, GetEventsOfSubject, GetSingleSubject as GetSingleSubjectAPI,
@@ -38,6 +38,7 @@ pub(crate) struct InnerAPI<C: DatabaseCollection> {
     event_api: EventAPI,
     approval_api: ApprovalAPI,
     authorized_subjects_api: AuthorizedSubjectsAPI,
+    ledger_api: EventManagerAPI,
     db: DB<C>,
 }
 
@@ -51,6 +52,7 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         authorized_subjects_api: AuthorizedSubjectsAPI,
         db: DB<C>,
         approval_api: ApprovalAPI,
+        ledger_api: EventManagerAPI
     ) -> Self {
         Self {
             signature_manager: SelfSignatureManager::new(keys, settings),
@@ -58,6 +60,7 @@ impl<C: DatabaseCollection> InnerAPI<C> {
             approval_api,
             authorized_subjects_api,
             db,
+            ledger_api
         }
     }
 
@@ -271,10 +274,16 @@ impl<C: DatabaseCollection> InnerAPI<C> {
 
     pub async fn expecting_transfer(
         &self,
-        subject: DigestIdentifier,
-        public_key: Vec<u8>,
+        subject_id: DigestIdentifier,
     ) -> Result<ApiResponses, APIInternalError> {
-        todo!()
+        match self.ledger_api.expecting_transfer(subject_id).await {
+            Ok(public_key) => {
+                Ok(ApiResponses::ExpectingTransfer(Ok(public_key)))
+            },
+            Err(error) => {
+                Err(APIInternalError::DatabaseError(error.to_string()))
+            }
+        }
     }
 }
 

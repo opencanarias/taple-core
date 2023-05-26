@@ -63,10 +63,6 @@ impl<C: DatabaseCollection> AuthorizedSubjects<C> {
 
         // Para cada sujeto preautorizado, enviamos un mensaje a los proveedores asociados a través del canal de mensajes.
         for (subject_id, providers) in preauthorized_subjects.into_iter() {
-            log::warn!("SUBJECT_ID: {}", subject_id.to_str());
-            providers.iter().for_each(|p| {
-                log::warn!("PROVIDER: {}", p.to_str());
-            });
             if !providers.is_empty() {
                 self.message_channel
                     .tell(MessageTaskCommand::Request(

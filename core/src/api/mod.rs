@@ -30,7 +30,7 @@ pub enum APICommands {
     GetPendingRequests,
     GetSingleRequest(DigestIdentifier),
     SetPreauthorizedSubject(DigestIdentifier, HashSet<KeyIdentifier>),
-    ExpectingTransfer(DigestIdentifier, Vec<u8>),
+    ExpectingTransfer(DigestIdentifier),
     Shutdown,
 }
 
@@ -45,7 +45,7 @@ pub enum ApiResponses {
     HandleRequest(Result<DigestIdentifier, ApiError>), // Borrar RequestData
     GetPendingRequests(Result<Vec<ApprovalPetitionData>, ApiError>),
     GetSingleRequest(Result<ApprovalPetitionData, ApiError>),
-    ExpectingTransfer(Result<DigestIdentifier, ApiError>),
+    ExpectingTransfer(Result<KeyIdentifier, ApiError>),
     ShutdownCompleted,
     SetPreauthorizedSubjectCompleted
 }

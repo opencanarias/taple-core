@@ -265,6 +265,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         stage: ValidationStage,
     ) -> Result<Result<u32, RequestError>, InternalError> {
         let mut governance_id = metadata.governance_id;
+        log::info!("Quorum de: {}", metadata.subject_id.to_str());
         if governance_id.digest.is_empty() {
             governance_id = metadata.subject_id;
         }
@@ -307,8 +308,15 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         let signers = get_signers_from_roles(&members, &signers_roles, roles)?;
         let quorum = get_quorum(&schema_policy, stage_str)?;
         match quorum {
-            Quorum::Majority => Ok(Ok((signers.len() as u32 / 2) + 1)),
-            Quorum::Fixed { fixed } => Ok(Ok(fixed)),
+            Quorum::Majority(_) => {
+                log::info!("Quorum Majority");
+
+                Ok(Ok((signers.len() as u32 / 2) + 1))
+            }
+            Quorum::Fixed { fixed } => {
+                log::info!("Quorum fijo: {}", fixed);
+                Ok(Ok(fixed))
+            }
             Quorum::Porcentaje { porcentaje } => {
                 let result = (signers.len() as f64 * porcentaje).ceil() as u32;
                 Ok(Ok(result))
@@ -387,7 +395,11 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         subject_id: DigestIdentifier,
         governance_id: DigestIdentifier,
     ) -> Result<Result<u64, RequestError>, InternalError> {
-        let governance_id = if governance_id.digest.is_empty() { subject_id } else { governance_id };
+        let governance_id = if governance_id.digest.is_empty() {
+            subject_id
+        } else {
+            governance_id
+        };
         let governance = match self.repo_access.get_subject(&governance_id) {
             Ok(governance) => governance,
             Err(DbError::EntryNotFound) => {
@@ -397,7 +409,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
             }
             Err(error) => return Err(InternalError::DatabaseError { source: error }),
         };
-        if !governance.governance_id.digest.is_empty() {
+        if &governance.governance_id.to_str() != "" {
             return Ok(Err(RequestError::InvalidGovernanceID));
         }
         Ok(Ok(governance.sn))
@@ -498,7 +510,9 @@ fn get_quorum<'a>(data: &'a Value, key: &str) -> Result<Quorum, InternalError> {
         .ok_or(InternalError::InvalidGovernancePayload("10".into()))?
         .get("quorum")
         .ok_or(InternalError::InvalidGovernancePayload("11".into()))?;
-    let quorum: Quorum = serde_json::from_value(json_data["quorum"].clone()).unwrap();
+    log::warn!("QUORUM: {:?}", json_data);
+    let quorum: Quorum = serde_json::from_value(json_data.clone()).unwrap();
+    log::warn!("QUORUM: {:?}", quorum);
     Ok(quorum)
 }
 
@@ -549,6 +563,9 @@ fn get_signers_from_roles(
                 // crate::commons::schema_handler::gov_models::Who::External => todo!(),
             }
         }
+    }
+    for signer in signers.iter() {
+        log::warn!("FINAL SIGNERS: {}", signer.to_str());
     }
     Ok(signers)
 }
