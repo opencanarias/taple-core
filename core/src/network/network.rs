@@ -204,6 +204,34 @@ impl NetworkProcessor {
                             .expect("DNS wont fail")
                             .boxed(),
                     );
+                    transport = {
+                        match dns::GenDnsConfig::system(transport.unwrap()) {
+                            Ok(t) => Some(t.boxed()),
+                            Err(_) => { 
+                                // TODO: vuelvo a crear el transporte porque no tiene clone, quizás sería interesante poner una variable de entorno que diga si estamos en android y hacer lo segundo directamente en ese caso 
+                                let transport = Some(
+                                    TokioTcpConfig::new()
+                                        .nodelay(true)
+                                        .upgrade(upgrade::Version::V1)
+                                        .authenticate(
+                                            noise::NoiseConfig::xx(noise_key.clone())
+                                                .into_authenticated(),
+                                        )
+                                        .multiplex(mplex::MplexConfig::new())
+                                        .boxed(),
+                                );
+                                Some(
+                                    dns::GenDnsConfig::custom(
+                                        transport.unwrap(),
+                                        dns::ResolverConfig::cloudflare(),
+                                        dns::ResolverOpts::default(),
+                                    )
+                                    .expect("DNS wont fail")
+                                    .boxed(),
+                                )
+                            }
+                        }
+                    };
                     break;
                 } else if let Protocol::Memory(_) = protocol {
                     transport = Some(
