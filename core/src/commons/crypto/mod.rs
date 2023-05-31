@@ -31,16 +31,19 @@ pub fn check_cryptography<T: BorshSerialize>(
     serializable: T,
     signature: &Signature,
 ) -> Result<DigestIdentifier, CryptoError> {
+    log::error!("AQUÍ 0");
     let hash = DigestIdentifier::from_serializable_borsh(&serializable).map_err(|_| {
         CryptoError::CryptoError(String::from(
             "Error calculating the hash of the serializable",
         ))
     })?;
+    log::error!("AQUÍ 1");
     if hash != signature.content.event_content_hash {
         return Err(CryptoError::CryptoError(String::from(
             "The hash does not match the content of the signature",
         )));
     }
+    log::error!("AQUÍ 2");
     signature
         .content
         .signer
@@ -48,6 +51,7 @@ pub fn check_cryptography<T: BorshSerialize>(
         .map_err(|_| {
             CryptoError::CryptoError(String::from("The signature does not validate the hash"))
         })?;
+    log::error!("AQUÍ 3");
     Ok(hash)
 }
 

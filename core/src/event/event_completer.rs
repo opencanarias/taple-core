@@ -105,8 +105,17 @@ impl<D: DatabaseManager> EventCompleter<D> {
         event: &Event,
         gov_version: u64,
     ) -> Result<NotaryEvent, EventError> {
-        let state_hash =
-            subject.state_hash_after_apply(&event.content.event_proposal.proposal.json_patch)?;
+        let state_hash = match &event.content.event_proposal.proposal.event_request.request {
+            EventRequestType::Create(_) => {
+                unreachable!();
+            },
+            EventRequestType::State(_) => {
+                subject.state_hash_after_apply(&event.content.event_proposal.proposal.json_patch)?
+            },
+            EventRequestType::Transfer(_) => {
+                subject.get_state_hash()?
+            }
+        };
         let prev_event_hash = if event.content.event_proposal.proposal.sn == 0 {
             DigestIdentifier::default()
         } else {
@@ -235,6 +244,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
             // Comprobar si hay requests en la base de datos que corresponden con eventos que aun no han llegado a la fase de validación y habría que reiniciar desde pedir evaluaciones
             match self.database.get_request(&subject.subject_id) {
                 Ok(event_request) => {
+                    log::warn!("PASA POR AQUÍ EN INIT");
                     self.new_event(event_request).await?;
                 }
                 Err(error) => match error {
@@ -351,7 +361,9 @@ impl<D: DatabaseManager> EventCompleter<D> {
             &subject,
             true, // TODO: Consultar
         )?;
+        log::error!("PRE NOTARY");
         let notary_event = self.create_notary_event(&subject, &event, gov_version)?;
+        log::error!("POST NOTARY");
         let event_message = create_validator_request(notary_event.clone());
         self.event_notary_events.insert(
             event.signature.content.event_content_hash.clone(),
@@ -437,6 +449,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
             .map_err(EventError::SubjectError)?;
         match &event_request.request {
             crate::event_request::EventRequestType::Transfer(_) => {
+                log::error!("ENTRA EN TRANSFER");
                 // Debemos eliminar el material criptográfico del sujeto actual y cambiar su clave pública
                 // No obstante, el evento debe firmarse con la clave actual, por lo que no se puede eliminar
                 // de inmediato. Debe ser eliminado pues, después de la validación.
@@ -1034,6 +1047,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
         let Some((ValidationStage::Validate, signers, quorum_size)) = self.subjects_completing_event.get(&subject_id) else {
             return Err(EventError::WrongEventPhase);
         };
+        log::warn!("PASO 1");
         let signer = signature.content.signer.clone();
         // Check if approver is in the list of approvers
         if !signers.contains(&signer) {
@@ -1041,6 +1055,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 "The signer is not in the list of validators or we already have the validation",
             )));
         }
+        log::warn!("PASO 2");
         // Obtener sujeto para saber si lo tenemos y los metadatos del mismo
         let _subject = self
             .database
@@ -1049,9 +1064,11 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 crate::DbError::EntryNotFound => EventError::SubjectNotFound(subject_id.to_str()),
                 _ => EventError::DatabaseError(error.to_string()),
             })?;
+        log::warn!("PASO 3");
         // Comprobar que todo es correcto criptográficamente
         let event_hash = check_cryptography(&notary_event.proof, &signature)
             .map_err(|error| EventError::CryptoError(error.to_string()))?;
+        log::warn!("PASO 4");
         // Guardar validación
         let validation_set = match self.event_validations.get_mut(&event_hash) {
             Some(validation_set) => {
@@ -1068,9 +1085,11 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 )
             }
         };
+        log::warn!("PASO 5");
         let quorum_size = quorum_size.to_owned();
         // Comprobar si llegamos a Quorum y si es así dejar de pedir firmas
         if (validation_set.len() as u32) < quorum_size {
+            log::warn!("PASO 6 IF");
             let notary_event = match self
                 .event_notary_events
                 .get(&event.signature.content.event_content_hash)
@@ -1099,6 +1118,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
             );
             Ok(())
         } else {
+            log::warn!("PASO 6 ELSE");
             let validation_signatures: HashSet<Signature> = validation_set
                 .iter()
                 .map(|unique_signature| unique_signature.signature.clone())
@@ -1115,12 +1135,9 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 .map_err(|error| EventError::DatabaseError(error.to_string()))?;
             // Cancelar pedir firmas
             self.message_channel
-                .tell(MessageTaskCommand::Cancel(String::from(format!(
-                    "{}",
-                    subject_id.to_str()
-                ))))
-                .await
-                .map_err(EventError::ChannelError)?;
+                .tell(MessageTaskCommand::Cancel(
+                    String::from(format!("{}", subject_id.to_str())
+            ))).await.map_err(EventError::ChannelError)?;
             // Limpiar HashMaps
             self.events_to_validate.remove(&event_hash);
             self.event_validations.remove(&event_hash);

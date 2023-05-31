@@ -137,6 +137,7 @@ impl<D: DatabaseManager> EventManager<D> {
                 (None, data)
             }
         };
+        log::error!("MENSAJE RECIBIDO EN EL LEDGER: {:?}", data);
         let response = {
             match data {
                 LedgerCommand::ExpectingTransfer { subject_id } => {
@@ -177,7 +178,9 @@ impl<D: DatabaseManager> EventManager<D> {
                                 self.shutdown_sender.send(()).expect("Channel Closed");
                                 return Err(LedgerError::ChannelClosed);
                             }
-                            _ => {}
+                            _ => {
+                                log::error!("ERROR EN LEDGER {}", error);
+                            }
                         },
                         _ => {}
                     }
