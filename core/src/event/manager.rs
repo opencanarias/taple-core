@@ -84,14 +84,14 @@ impl<D: DatabaseManager> EventManager<D> {
     }
 
     pub async fn start(mut self) {
-        match self.event_completer.init().await {
-            Ok(_) => {}
-            Err(error) => {
-                log::error!("{}", error);
-                self.shutdown_sender.send(()).expect("Channel Closed");
-                return;
-            }
-        };
+        // match self.event_completer.init().await {
+        //     Ok(_) => {}
+        //     Err(error) => {
+        //         log::error!("{}", error);
+        //         self.shutdown_sender.send(()).expect("Channel Closed");
+        //         return;
+        //     }
+        // };
         loop {
             tokio::select! {
                 command = self.input_channel.receive() => {
@@ -254,7 +254,9 @@ impl<D: DatabaseManager> EventManager<D> {
                                 log::error!("VALIDATION ERROR: {:?}", error);
                             }
                         },
-                        _ => {}
+                        _ => {
+                            log::error!("VALIDATION ACCEPTED");
+                        }
                     }
                     EventResponse::NoResponse
                 }

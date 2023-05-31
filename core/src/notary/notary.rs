@@ -73,6 +73,7 @@ impl<D: DatabaseManager> Notary<D> {
             .get_notary_register(&notary_event.proof.owner, &notary_event.proof.subject_id)
         {
             Ok(notary_register) => {
+                log::error!("SN REGISTRADO ES: {}", notary_register.1);
                 if notary_register.1 > notary_event.proof.sn {
                     return Err(NotaryError::EventSnLowerThanLastSigned);
                 } else if notary_register.1 == notary_event.proof.sn
@@ -86,6 +87,7 @@ impl<D: DatabaseManager> Notary<D> {
                 _ => return Err(NotaryError::DatabaseError),
             },
         };
+        log::error!("NO SE CUMPLE NINGUNA DE LAS CONDICIONES SUPERIORES");
         // Get in DB, it is important that this goes first to ensure that we dont sign 2 different event_hash for the same event sn and subject
         self.database
             .set_notary_register(

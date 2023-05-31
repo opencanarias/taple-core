@@ -10,7 +10,7 @@ pub enum EventError {
     DatabaseError(String),
     #[error("Governance Error")]
     GovernanceError(#[from] RequestError),
-    #[error("Governance Error")]
+    #[error("Subject Error: {0}")]
     SubjectError(#[from] SubjectError),
     #[error("Crypto Error")]
     CryptoError(String),
