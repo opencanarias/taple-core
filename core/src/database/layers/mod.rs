@@ -11,5 +11,6 @@ pub(crate) mod subject_by_governance;
 pub(crate) mod witness_signatures;
 pub(crate) mod transfer_events;
 pub(crate) mod preauthorized_subjects_and_providers;
+pub(crate) mod lce_validation_proofs;
 
 mod utils;

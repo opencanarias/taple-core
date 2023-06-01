@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use crate::commons::models::event::ValidationProof;
 use crate::commons::models::notary::NotaryEventResponse;
 use crate::commons::models::state::Subject;
 use crate::crypto::KeyPair;
@@ -10,13 +11,15 @@ use crate::signature::Signature;
 use crate::Event;
 
 use super::error::Error;
+use super::layers::lce_validation_proofs::{self, LceValidationProofs};
 use super::{
     layers::{
         contract::ContractDb, controller_id::ControllerIdDb, event::EventDb, notary::NotaryDb,
-        notary_signatures::NotarySignaturesDb, prevalidated_event::PrevalidatedEventDb,
-        request::RequestDb, signature::SignatureDb, subject::SubjectDb,
-        subject_by_governance::SubjectByGovernanceDb, witness_signatures::WitnessSignaturesDb,
-        preauthorized_subjects_and_providers::PreauthorizedSbujectsAndProovidersDb, transfer_events::TransferEventsDb
+        notary_signatures::NotarySignaturesDb,
+        preauthorized_subjects_and_providers::PreauthorizedSbujectsAndProovidersDb,
+        prevalidated_event::PrevalidatedEventDb, request::RequestDb, signature::SignatureDb,
+        subject::SubjectDb, subject_by_governance::SubjectByGovernanceDb,
+        transfer_events::TransferEventsDb, witness_signatures::WitnessSignaturesDb,
     },
     DatabaseCollection, DatabaseManager,
 };
@@ -34,7 +37,8 @@ pub struct DB<C: DatabaseCollection> {
     witness_signatures_db: WitnessSignaturesDb<C>,
     subject_by_governance_db: SubjectByGovernanceDb<C>,
     transfer_events_db: TransferEventsDb<C>,
-    preauthorized_subjects_and_providers_db: PreauthorizedSbujectsAndProovidersDb<C>
+    preauthorized_subjects_and_providers_db: PreauthorizedSbujectsAndProovidersDb<C>,
+    lce_validation_proofs_db: LceValidationProofs<C>,
 }
 
 impl<C: DatabaseCollection> DB<C> {
@@ -51,7 +55,9 @@ impl<C: DatabaseCollection> DB<C> {
         let witness_signatures_db = WitnessSignaturesDb::new(&manager);
         let subject_by_governance_db = SubjectByGovernanceDb::new(&manager);
         let transfer_events_db = TransferEventsDb::new(&manager);
-        let preauthorized_subjects_and_providers_db = PreauthorizedSbujectsAndProovidersDb::new(&manager);
+        let preauthorized_subjects_and_providers_db =
+            PreauthorizedSbujectsAndProovidersDb::new(&manager);
+        let lce_validation_proofs_db = LceValidationProofs::new(&manager);
         Self {
             signature_db,
             subject_db,
@@ -65,8 +71,8 @@ impl<C: DatabaseCollection> DB<C> {
             witness_signatures_db,
             subject_by_governance_db,
             transfer_events_db,
-            preauthorized_subjects_and_providers_db
-
+            preauthorized_subjects_and_providers_db,
+            lce_validation_proofs_db,
         }
     }
 
@@ -322,7 +328,8 @@ impl<C: DatabaseCollection> DB<C> {
         subject_id: &DigestIdentifier,
         keypair: KeyPair,
     ) -> Result<(), Error> {
-        self.transfer_events_db.set_expecting_transfer(subject_id, keypair)
+        self.transfer_events_db
+            .set_expecting_transfer(subject_id, keypair)
     }
 
     pub fn del_expecting_transfer(&self, subject_id: &DigestIdentifier) -> Result<(), Error> {
@@ -333,7 +340,8 @@ impl<C: DatabaseCollection> DB<C> {
         &self,
         subject_id: &DigestIdentifier,
     ) -> Result<HashSet<KeyIdentifier>, Error> {
-        self.preauthorized_subjects_and_providers_db.get_preauthorized_subject_and_providers(subject_id)
+        self.preauthorized_subjects_and_providers_db
+            .get_preauthorized_subject_and_providers(subject_id)
     }
 
     pub fn get_preauthorized_subjects_and_providers(
@@ -341,7 +349,8 @@ impl<C: DatabaseCollection> DB<C> {
         from: Option<String>,
         quantity: isize,
     ) -> Result<Vec<(DigestIdentifier, HashSet<KeyIdentifier>)>, Error> {
-        self.preauthorized_subjects_and_providers_db.get_preauthorized_subjects_and_providers(from, quantity)
+        self.preauthorized_subjects_and_providers_db
+            .get_preauthorized_subjects_and_providers(from, quantity)
     }
 
     pub fn set_preauthorized_subject_and_providers(
@@ -349,6 +358,29 @@ impl<C: DatabaseCollection> DB<C> {
         subject_id: &DigestIdentifier,
         providers: HashSet<KeyIdentifier>,
     ) -> Result<(), Error> {
-        self.preauthorized_subjects_and_providers_db.set_preauthorized_subject_and_providers(subject_id, providers)
+        self.preauthorized_subjects_and_providers_db
+            .set_preauthorized_subject_and_providers(subject_id, providers)
+    }
+
+    pub fn get_lce_validation_proof(
+        &self,
+        subject_id: &DigestIdentifier,
+    ) -> Result<ValidationProof, Error> {
+        self.lce_validation_proofs_db
+            .get_lce_validation_proof(subject_id)
+    }
+
+    pub fn set_lce_validation_proof(
+        &self,
+        subject_id: &DigestIdentifier,
+        proof: ValidationProof,
+    ) -> Result<(), Error> {
+        self.lce_validation_proofs_db
+            .set_lce_validation_proof(subject_id, proof)
+    }
+
+    pub fn del_lce_validation_proof(&self, subject_id: &DigestIdentifier) -> Result<(), Error> {
+        self.lce_validation_proofs_db
+            .del_lce_validation_proof(subject_id)
     }
 }
