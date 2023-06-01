@@ -18,24 +18,24 @@ use crate::TapleSettings;
 use crate::{
     database::{Error as DbError, DB},
     governance::GovernanceInterface,
-    DatabaseManager,
+    DatabaseCollection
 };
 
 use super::error::{DistributionErrorResponses, DistributionManagerError};
 use super::StartDistribution;
-pub struct InnerDistributionManager<G: GovernanceInterface, D: DatabaseManager> {
+pub struct InnerDistributionManager<G: GovernanceInterface, C: DatabaseCollection> {
     governance: G,
-    db: DB<D>,
+    db: DB<C>,
     messenger_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
     signature_manager: SelfSignatureManager,
     timeout: u32,
     replication_factor: f64,
 }
 
-impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> {
+impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, C> {
     pub fn new(
         governance: G,
-        db: DB<D>,
+        db: DB<C>,
         messenger_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
         signature_manager: SelfSignatureManager,
         settings: TapleSettings,

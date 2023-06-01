@@ -25,7 +25,7 @@ use crate::{
     protocol::protocol_message_manager::TapleMessages,
     signature::Signature,
     utils::message::ledger::{request_event, request_gov_event},
-    DatabaseManager, Event,
+    DatabaseCollection, Event,
 };
 
 use super::errors::LedgerError;
@@ -36,9 +36,9 @@ pub struct LedgerState {
     pub head: Option<u64>,
 }
 
-pub struct Ledger<D: DatabaseManager> {
+pub struct Ledger<C: DatabaseCollection> {
     gov_api: GovernanceAPI,
-    database: DB<D>,
+    database: DB<C>,
     subject_is_gov: HashMap<DigestIdentifier, bool>,
     ledger_state: HashMap<DigestIdentifier, LedgerState>,
     message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
@@ -47,10 +47,10 @@ pub struct Ledger<D: DatabaseManager> {
     our_id: KeyIdentifier,
 }
 
-impl<D: DatabaseManager> Ledger<D> {
+impl<C: DatabaseCollection> Ledger<C> {
     pub fn new(
         gov_api: GovernanceAPI,
-        database: DB<D>,
+        database: DB<C>,
         message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
         distribution_channel: SenderEnd<
             DistributionMessagesNew,

@@ -12,7 +12,7 @@ use crate::{
     message::{MessageConfig, MessageTaskCommand},
     protocol::protocol_message_manager::TapleMessages,
     utils::message::event::create_approver_response,
-    DatabaseManager, Notification, TapleSettings,
+    DatabaseCollection, Notification, TapleSettings
 };
 
 use super::{
@@ -21,13 +21,13 @@ use super::{
     ApprovalMessages, ApprovalPetitionData, ApprovalResponses, EmitVote,
 };
 
-pub struct ApprovalManager<D: DatabaseManager> {
+pub struct ApprovalManager<C: DatabaseCollection> {
     input_channel: MpscChannel<ApprovalMessages, ApprovalResponses>,
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
     governance_update_channel: tokio::sync::broadcast::Receiver<GovernanceUpdatedMessage>,
     messenger_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
-    inner_manager: InnerApprovalManager<GovernanceAPI, D, RequestNotifier>,
+    inner_manager: InnerApprovalManager<GovernanceAPI, RequestNotifier, C>,
 }
 
 pub struct ApprovalAPI {
@@ -109,7 +109,7 @@ impl ApprovalAPIInterface for ApprovalAPI {
     }
 }
 
-impl<D: DatabaseManager> ApprovalManager<D> {
+impl<C: DatabaseCollection> ApprovalManager<C> {
     pub fn new(
         gov_api: GovernanceAPI,
         input_channel: MpscChannel<ApprovalMessages, ApprovalResponses>,
@@ -120,7 +120,7 @@ impl<D: DatabaseManager> ApprovalManager<D> {
         signature_manager: SelfSignatureManager,
         notification_sender: tokio::sync::broadcast::Sender<Notification>,
         settings: TapleSettings,
-        database: DB<D>,
+        database: DB<C>,
     ) -> Self {
         let passvotation = settings.node.passvotation.into();
         Self {

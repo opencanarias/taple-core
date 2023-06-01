@@ -7,7 +7,7 @@ use crate::{
     governance::{error::RequestError, GovernanceAPI},
     message::MessageTaskCommand,
     protocol::protocol_message_manager::TapleMessages,
-    DatabaseManager, DigestIdentifier, KeyIdentifier, Notification,
+    DatabaseCollection, DigestIdentifier, KeyIdentifier, Notification,
 };
 
 use super::{errors::LedgerError, ledger::Ledger, LedgerCommand, LedgerResponse};
@@ -50,23 +50,23 @@ impl EventManagerInterface for EventManagerAPI {
     }
 }
 
-pub struct EventManager<D: DatabaseManager> {
+pub struct EventManager<C: DatabaseCollection> {
     /// Communication channel for incoming petitions
     input_channel: MpscChannel<LedgerCommand, LedgerResponse>,
-    inner_ledger: Ledger<D>,
+    inner_ledger: Ledger<C>,
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
     notification_sender: tokio::sync::broadcast::Sender<Notification>,
 }
 
-impl<D: DatabaseManager> EventManager<D> {
+impl<C: DatabaseCollection> EventManager<C> {
     pub fn new(
         input_channel: MpscChannel<LedgerCommand, LedgerResponse>,
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
         notification_sender: tokio::sync::broadcast::Sender<Notification>,
         gov_api: GovernanceAPI,
-        database: DB<D>,
+        database: DB<C>,
         message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
         distribution_channel: SenderEnd<
             DistributionMessagesNew,

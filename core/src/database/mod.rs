@@ -1,32 +1,26 @@
 mod db;
 mod error;
 mod memory;
+mod layers;
 
-use serde::{de::DeserializeOwned, Serialize};
-
-pub use error::Error;
-pub use db::DB;
 pub use self::memory::MemoryManager;
+pub use db::DB;
+pub use error::Error;
 
-pub trait DatabaseManager: Sync + Send {
-    fn create_collection<V>(
-        &self,
-        identifier: &str,
-    ) -> Box<dyn DatabaseCollection<InnerDataType = V>>
-    where
-        V: Serialize + DeserializeOwned + Sync + Send + 'static;
+pub trait DatabaseManager<C>: Sync + Send
+where
+    C: DatabaseCollection,
+{
+    fn create_collection(&self, identifier: &str) -> C;
 }
 
 pub trait DatabaseCollection: Sync + Send {
-    type InnerDataType: Serialize + DeserializeOwned + Sync + Send;
-
-    fn put(&self, key: &str, data: Self::InnerDataType) -> Result<(), Error>;
-    fn get(&self, key: &str) -> Result<Self::InnerDataType, Error>;
+    fn get(&self, key: &str) -> Result<Vec<u8>, Error>;
+    fn put(&self, key: &str, data: Vec<u8>) -> Result<(), Error>;
     fn del(&self, key: &str) -> Result<(), Error>;
-    fn partition<'a>(
+    fn iter<'a>(
         &'a self,
-        key: &str,
-    ) -> Box<dyn DatabaseCollection<InnerDataType = Self::InnerDataType> + 'a>;
-    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = (String, Self::InnerDataType)> + 'a>;
-    fn rev_iter<'a>(&'a self) -> Box<dyn Iterator<Item = (String, Self::InnerDataType)> + 'a>;
+        reverse: bool,
+        prefix: String,
+    ) -> Box<dyn Iterator<Item = (String, Vec<u8>)> + 'a>;
 }

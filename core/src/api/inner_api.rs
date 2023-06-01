@@ -23,7 +23,7 @@ use crate::{
             timestamp::TimeStamp,
         },
     },
-    DatabaseManager, DB,
+    DB, DatabaseCollection
 };
 use std::collections::HashSet;
 
@@ -33,24 +33,24 @@ use super::{
 
 use crate::database::Error as DbError;
 
-pub(crate) struct InnerAPI<D: DatabaseManager> {
+pub(crate) struct InnerAPI<C: DatabaseCollection> {
     signature_manager: SelfSignatureManager,
     event_api: EventAPI,
     approval_api: ApprovalAPI,
     authorized_subjects_api: AuthorizedSubjectsAPI,
     ledger_api: EventManagerAPI,
-    db: DB<D>,
+    db: DB<C>,
 }
 
 const MAX_QUANTITY: isize = 100;
 
-impl<D: DatabaseManager> InnerAPI<D> {
+impl<C: DatabaseCollection> InnerAPI<C> {
     pub fn new(
         keys: KeyPair,
         settings: &TapleSettings,
         event_api: EventAPI,
         authorized_subjects_api: AuthorizedSubjectsAPI,
-        db: DB<D>,
+        db: DB<C>,
         approval_api: ApprovalAPI,
         ledger_api: EventManagerAPI
     ) -> Self {

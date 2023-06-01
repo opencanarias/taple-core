@@ -35,15 +35,15 @@ use crate::{
 use std::hash::Hash;
 
 use super::errors::EventError;
-use crate::database::{DatabaseManager, DB};
+use crate::database::{DB, DatabaseCollection};
 
 const TIMEOUT: u32 = 2000;
 // const GET_ALL: isize = 200;
 const QUORUM_PORCENTAGE_AMPLIFICATION: f64 = 0.2;
 
-pub struct EventCompleter<D: DatabaseManager> {
+pub struct EventCompleter<C: DatabaseCollection> {
     gov_api: GovernanceAPI,
-    database: DB<D>,
+    database: DB<C>,
     message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
     notification_sender: tokio::sync::broadcast::Sender<Notification>,
     ledger_sender: SenderEnd<LedgerCommand, LedgerResponse>,
@@ -67,10 +67,10 @@ pub struct EventCompleter<D: DatabaseManager> {
     signature_manager: SelfSignatureManager,
 }
 
-impl<D: DatabaseManager> EventCompleter<D> {
+impl<C: DatabaseCollection> EventCompleter<C> {
     pub fn new(
         gov_api: GovernanceAPI,
-        database: DB<D>,
+        database: DB<C>,
         message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
         notification_sender: tokio::sync::broadcast::Sender<Notification>,
         ledger_sender: SenderEnd<LedgerCommand, LedgerResponse>,

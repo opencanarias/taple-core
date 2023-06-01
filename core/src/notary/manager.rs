@@ -1,5 +1,3 @@
-use super::{errors::NotaryError, notary::Notary, NotaryCommand, NotaryResponse};
-use crate::database::{DatabaseManager, DB};
 use crate::message::MessageTaskCommand;
 use crate::protocol::protocol_message_manager::TapleMessages;
 use crate::{
@@ -9,6 +7,8 @@ use crate::{
     },
     governance::GovernanceAPI,
 };
+use crate::database::{DB, DatabaseCollection};
+use super::{errors::NotaryError, notary::Notary, NotaryCommand, NotaryResponse};
 
 #[derive(Clone, Debug)]
 pub struct NotaryAPI {
@@ -21,20 +21,20 @@ impl NotaryAPI {
     }
 }
 
-pub struct NotaryManager<D: DatabaseManager> {
+pub struct NotaryManager<C: DatabaseCollection> {
     /// Communication channel for incoming petitions
     input_channel: MpscChannel<NotaryCommand, NotaryResponse>,
     /// Notarization functions
-    inner_notary: Notary<D>,
+    inner_notary: Notary<C>,
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
 }
 
-impl<D: DatabaseManager> NotaryManager<D> {
+impl<C: DatabaseCollection> NotaryManager<C> {
     pub fn new(
         input_channel: MpscChannel<NotaryCommand, NotaryResponse>,
         gov_api: GovernanceAPI,
-        database: DB<D>,
+        database: DB<C>,
         signature_manager: SelfSignatureManager,
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,

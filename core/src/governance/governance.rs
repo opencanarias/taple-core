@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, marker::PhantomData};
 
 use async_trait::async_trait;
 use serde_json::Value;
@@ -13,7 +13,7 @@ use crate::{
             gov_models::{Contract, Invoke},
         },
     },
-    DatabaseManager, DB,
+    DB, DatabaseCollection, DatabaseManager
 };
 
 use super::{
@@ -23,19 +23,20 @@ use super::{
     GovernanceMessage, GovernanceResponse, GovernanceUpdatedMessage,
 };
 
-pub struct Governance<D: DatabaseManager> {
+pub struct Governance<M: DatabaseManager<C>, C: DatabaseCollection> {
     input: MpscChannel<GovernanceMessage, GovernanceResponse>,
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
-    inner_governance: InnerGovernance<D>,
+    inner_governance: InnerGovernance<C>,
+    _m: PhantomData<M>
 }
 
-impl<D: DatabaseManager> Governance<D> {
+impl<M: DatabaseManager<C>, C: DatabaseCollection> Governance<M, C> {
     pub fn new(
         input: MpscChannel<GovernanceMessage, GovernanceResponse>,
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
-        repo_access: DB<D>,
+        repo_access: DB<C>,
         update_channel: tokio::sync::broadcast::Sender<GovernanceUpdatedMessage>,
     ) -> Self {
         Self {
@@ -47,6 +48,7 @@ impl<D: DatabaseManager> Governance<D> {
                 get_governance_schema(),
                 update_channel,
             ),
+            _m: PhantomData::default()
         }
     }
 

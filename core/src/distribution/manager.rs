@@ -7,7 +7,7 @@ use crate::{
     governance::{GovernanceAPI, GovernanceUpdatedMessage},
     message::MessageTaskCommand,
     protocol::protocol_message_manager::TapleMessages,
-    DatabaseManager, TapleSettings,
+    TapleSettings, DatabaseCollection
 };
 
 use super::{
@@ -16,15 +16,16 @@ use super::{
     DistributionMessagesNew,
 };
 
-pub struct DistributionManager<D: DatabaseManager> {
+
+pub struct DistributionManager<C: DatabaseCollection> {
     governance_update_input: tokio::sync::broadcast::Receiver<GovernanceUpdatedMessage>,
     input_channel: MpscChannel<DistributionMessagesNew, Result<(), DistributionErrorResponses>>,
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
-    inner_manager: InnerDistributionManager<GovernanceAPI, D>,
+    inner_manager: InnerDistributionManager<GovernanceAPI, C>,
 }
 
-impl<D: DatabaseManager> DistributionManager<D> {
+impl<C: DatabaseCollection> DistributionManager<C> {
     pub fn new(
         input_channel: MpscChannel<DistributionMessagesNew, Result<(), DistributionErrorResponses>>,
         governance_update_input: tokio::sync::broadcast::Receiver<GovernanceUpdatedMessage>,
@@ -34,7 +35,7 @@ impl<D: DatabaseManager> DistributionManager<D> {
         gov_api: GovernanceAPI,
         signature_manager: SelfSignatureManager,
         settings: TapleSettings,
-        db: DB<D>,
+        db: DB<C>,
     ) -> Self {
         Self {
             input_channel,
