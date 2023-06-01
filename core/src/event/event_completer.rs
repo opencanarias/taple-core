@@ -147,7 +147,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
                     event_hash,
                     state_hash,
                     gov_version,
-                    event.signature.content.signer.clone(),
+                    subject.owner.clone(),
                     transfer_request.public_key.clone(),
                 )
             }
@@ -567,13 +567,6 @@ impl<D: DatabaseManager> EventCompleter<D> {
         for signer in signers.iter() {
             log::warn!("{}", signer.to_str());
         }
-        self.ask_signatures(
-            &subject_id,
-            create_evaluator_request(event_preevaluation.clone()),
-            signers.clone(),
-            quorum_size,
-        )
-        .await?;
         let event_preevaluation_hash =
             DigestIdentifier::from_serializable_borsh(&event_preevaluation).map_err(|_| {
                 EventError::CryptoError(String::from(
@@ -585,7 +578,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
             .set_request(&subject.subject_id, event_request)
             .map_err(|error| EventError::DatabaseError(error.to_string()))?;
         self.event_pre_evaluations
-            .insert(event_preevaluation_hash, event_preevaluation);
+            .insert(event_preevaluation_hash, event_preevaluation.clone());
         // if let Some(sn) = self.actual_sn.get_mut(&subject_id) {
         //     *sn += 1;
         // } else {
@@ -593,11 +586,18 @@ impl<D: DatabaseManager> EventCompleter<D> {
         // }
         // Add the event to the hashset to not complete two at the same time for the same subject
         self.subjects_completing_event
-            .insert(subject_id.clone(), (stage, signers, quorum_size));
+            .insert(subject_id.clone(), (stage, signers.clone(), quorum_size));
         self.subjects_by_governance
             .entry(subject.governance_id)
             .or_insert_with(HashSet::new)
-            .insert(subject_id);
+            .insert(subject_id.clone());
+        self.ask_signatures(
+            &subject_id,
+            create_evaluator_request(event_preevaluation.clone()),
+            signers.clone(),
+            quorum_size,
+        )
+        .await?;
         Ok(er_hash)
     }
 
@@ -618,6 +618,8 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 "The hash of the event pre-evaluation does not match any of the pre-evaluations",
             ))),
         };
+        log::warn!("ESTO ES LO QUE TENGO: {:?}", preevaluation_event);
+
         let subject_id = match &preevaluation_event.event_request.request {
             // La transferencia no se evalua
             crate::event_request::EventRequestType::Transfer(_) => {
@@ -831,16 +833,22 @@ impl<D: DatabaseManager> EventCompleter<D> {
             self.ask_signatures(&subject_id, event_message, signers.clone(), quorum_size)
                 .await?;
             // Hacer update de fase por la que va el evento
+            log::error!("LLEGA A ACTUALIZAR EL STAGE QUE ES: {:?}", stage);
+            log::error!("LLEGA A ACTUALIZAR EL STAGE PARA EL SUJETO: {:?}", subject_id.to_str());
             self.subjects_completing_event
-                .insert(subject_id, (stage, signers, quorum_size));
+                .insert(subject_id.clone(), (stage, signers, quorum_size));
+            let tmp = self.subjects_completing_event.get(&subject_id);
+            log::error!("STAGE: {:?}", tmp);
         }
         Ok(())
     }
 
     pub async fn approver_signatures(&mut self, approval: Approval) -> Result<(), EventError> {
+        log::warn!("APPROVAL SIGNATURES");
         if let Acceptance::Error = approval.content.acceptance {
             return Ok(()); // Ignoramos respuestas de Error
         }
+        log::warn!("APPROVAL 1");
         // Mirar en que estado está el evento, si está en aprovación o no
         let event_proposal = match self
             .event_proposals
@@ -853,6 +861,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 )))
             }
         };
+        log::warn!("APPROVAL 2");
         let subject_id = match &event_proposal.proposal.event_request.request {
             // La transferencia no se aprueba
             crate::event_request::EventRequestType::Transfer(_) => {
@@ -865,9 +874,13 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 state_request.subject_id.clone()
             }
         };
+        log::warn!("APPROVAL 3");
+        let tmp = self.subjects_completing_event.get(&subject_id);
+        log::error!("STAGE: {:?}", tmp);
         let Some((ValidationStage::Approve, signers, quorum_size)) = self.subjects_completing_event.get(&subject_id) else {
             return Err(EventError::WrongEventPhase);
         };
+        log::warn!("APPROVAL 4");
         let signer = approval.signature.content.signer.clone();
         // Check if approver is in the list of approvers
         if !signers.contains(&signer) {
@@ -875,9 +888,11 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 "The signer is not in the list of approvers or we already have his approve",
             )));
         }
+        log::warn!("APPROVAL 5");
         // Comprobar que todo es correcto criptográficamente
         let _approval_hash = check_cryptography(&approval.content, &approval.signature)
             .map_err(|error| EventError::CryptoError(error.to_string()))?;
+        log::warn!("APPROVAL 6");
         // Obtener sujeto para saber si lo tenemos y los metadatos del mismo
         let subject = self
             .database
@@ -886,6 +901,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 crate::DbError::EntryNotFound => EventError::SubjectNotFound(subject_id.to_str()),
                 _ => EventError::DatabaseError(error.to_string()),
             })?;
+        log::warn!("APPROVAL 7");
         // Guardar aprobación
         let approval_set = match self
             .event_approvations
@@ -946,7 +962,7 @@ impl<D: DatabaseManager> EventCompleter<D> {
             // Hacer update de fase por la que va el evento
             self.subjects_completing_event.insert(
                 subject_id,
-                (ValidationStage::Evaluate, new_signers, quorum_size),
+                (ValidationStage::Approve, new_signers, quorum_size),
             );
             Ok(()) // No llegamos a quorum, no hacemos nada
         } else {
@@ -1020,15 +1036,18 @@ impl<D: DatabaseManager> EventCompleter<D> {
         let event = match self.events_to_validate.get(&event_hash) {
             Some(event) => event,
             None => {
+                log::warn!("SE EJECUTA NONE");
                 return Err(EventError::CryptoError(String::from(
                     "The hash of the event does not match any of the events",
                 )))
             }
         };
+        log::warn!("VALIDATION AFTER EVENT");
         let notary_event = self
             .event_notary_events
             .get(&event_hash)
             .expect("Should be");
+        log::warn!("VALIDATION AFTER EXPECT");
         let subject_id = match &event.content.event_proposal.proposal.event_request.request {
             crate::event_request::EventRequestType::Transfer(transfer_request) => {
                 transfer_request.subject_id.clone()

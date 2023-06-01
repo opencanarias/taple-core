@@ -10,7 +10,7 @@ use crate::{
     governance::{GovernanceAPI, GovernanceInterface},
     identifier::DigestIdentifier,
     message::{MessageConfig, MessageTaskCommand},
-    protocol::protocol_message_manager::TapleMessages,
+    protocol::protocol_message_manager::TapleMessages, Derivable,
 };
 
 use super::{errors::NotaryError, NotaryEvent, NotaryEventResponse};
@@ -111,6 +111,7 @@ impl<D: DatabaseManager> Notary<D> {
             .signature_manager
             .sign(&notary_event.proof)
             .map_err(NotaryError::ProtocolErrors)?;
+        log::warn!("SE ENVÍA LA VALIDACIÓN A {}", notary_event.proof.owner.to_str());
         self.message_channel
             .tell(MessageTaskCommand::Request(
                 None,

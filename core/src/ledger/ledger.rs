@@ -323,6 +323,7 @@ impl<D: DatabaseManager> Ledger<D> {
                     .signer
                     .clone();
                 subject.keys = None;
+                subject.sn = event.content.event_proposal.proposal.sn;
                 self.database.set_subject(&subject_id, subject)?;
                 let is_gov = self.subject_is_gov.get(&subject_id);
                 match is_gov {
@@ -443,7 +444,10 @@ impl<D: DatabaseManager> Ledger<D> {
                                     return Err(LedgerError::DatabaseError(error));
                                 }
                             };
-                        let is_gov = self.subject_is_gov.get(&transfer_request.subject_id).unwrap();
+                        let is_gov = self
+                            .subject_is_gov
+                            .get(&transfer_request.subject_id)
+                            .unwrap();
                         if *is_gov {
                             // Comprobamos si existe head
                             if let Some(head) = ledger_state.head {
@@ -530,9 +534,7 @@ impl<D: DatabaseManager> Ledger<D> {
                                 .content
                                 .event_content_hash
                         };
-                        let state_hash = subject.state_hash_after_apply(
-                            &event.content.event_proposal.proposal.json_patch,
-                        )?;
+                        let state_hash = subject.get_state_hash()?;
                         let validation_proof = ValidationProof::new_from_transfer_event(
                             &subject,
                             event.content.event_proposal.proposal.sn,
@@ -540,7 +542,7 @@ impl<D: DatabaseManager> Ledger<D> {
                             event.signature.content.event_content_hash.clone(),
                             state_hash,
                             event.content.event_proposal.proposal.gov_version,
-                            event.signature.content.signer.clone(),
+                            subject.owner.clone(),
                             transfer_request.public_key.clone(),
                         );
                         // let validation_proof = ValidationProof::new(
@@ -567,7 +569,14 @@ impl<D: DatabaseManager> Ledger<D> {
                             // Caso Evento Siguiente
                             let sn: u64 = event.content.event_proposal.proposal.sn;
                             // Comprobamos si estamos esperando la transferencia y si esta es a nosotros
-                            let (keypair, to_delete) = if event.signature.content.signer
+                            let (keypair, to_delete) = if event
+                                .content
+                                .event_proposal
+                                .proposal
+                                .event_request
+                                .signature
+                                .content
+                                .signer
                                 == self.our_id
                             {
                                 // TODO: ANALIZAR QUE DEBERÍAMOS HACER SI SE NOS TRANSFIERE Y NO LO QUEREMOS
@@ -583,9 +592,18 @@ impl<D: DatabaseManager> Ledger<D> {
                                 (None, false)
                             };
                             subject.transfer_subject(
-                                event.signature.content.signer.clone(),
+                                event
+                                    .content
+                                    .event_proposal
+                                    .proposal
+                                    .event_request
+                                    .signature
+                                    .content
+                                    .signer
+                                    .clone(),
                                 transfer_request.public_key.clone(),
                                 keypair,
+                                event.content.event_proposal.proposal.sn,
                             );
                             self.database.set_signatures(
                                 &transfer_request.subject_id,
@@ -1819,7 +1837,16 @@ impl<D: DatabaseManager> Ledger<D> {
             return Err(LedgerError::EventDoesNotFitHash);
         }
         let mut subject = self.database.get_subject(&subject_id)?;
-        let (keypair, to_delete) = if event.signature.content.signer == self.our_id {
+        let (keypair, to_delete) = if event
+            .content
+            .event_proposal
+            .proposal
+            .event_request
+            .signature
+            .content
+            .signer
+            == self.our_id
+        {
             // TODO: ANALIZAR QUE DEBERÍAMOS HACER SI SE NOS TRANSFIERE Y NO LO QUEREMOS
             // La transferencia es a nosotros
             match self.database.get_expecting_transfer(&subject_id) {
@@ -1832,7 +1859,12 @@ impl<D: DatabaseManager> Ledger<D> {
         } else {
             (None, false)
         };
-        subject.transfer_subject(owner, public_key, keypair);
+        subject.transfer_subject(
+            owner,
+            public_key,
+            keypair,
+            event.content.event_proposal.proposal.sn,
+        );
         self.database.set_subject(&subject_id, subject)?;
         if to_delete {
             self.database.del_expecting_transfer(&subject_id)?;

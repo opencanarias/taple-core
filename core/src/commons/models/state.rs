@@ -189,10 +189,12 @@ impl Subject {
         owner: KeyIdentifier,
         public_key: KeyIdentifier,
         keys: Option<KeyPair>,
+        sn: u64
     ) {
         self.owner = owner;
         self.public_key = public_key;
         self.keys = keys;
+        self.sn = sn;
     }
 
     pub fn get_state_hash(&self) -> Result<DigestIdentifier, SubjectError> {
