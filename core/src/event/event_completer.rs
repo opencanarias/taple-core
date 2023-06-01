@@ -28,14 +28,14 @@ use crate::{
     signature::{Signature, SignatureContent, UniqueSignature},
     utils::message::{
         approval::create_approval_request, evaluator::create_evaluator_request,
-        validation::create_validator_request,
+        ledger::request_gov_event, validation::create_validator_request,
     },
     Event, EventRequestType, Notification, TimeStamp,
 };
 use std::hash::Hash;
 
 use super::errors::EventError;
-use crate::database::{DB, DatabaseCollection};
+use crate::database::{DatabaseCollection, DB};
 
 const TIMEOUT: u32 = 2000;
 // const GET_ALL: isize = 200;
@@ -108,13 +108,11 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         let state_hash = match &event.content.event_proposal.proposal.event_request.request {
             EventRequestType::Create(_) => {
                 unreachable!();
-            },
+            }
             EventRequestType::State(_) => {
                 subject.state_hash_after_apply(&event.content.event_proposal.proposal.json_patch)?
-            },
-            EventRequestType::Transfer(_) => {
-                subject.get_state_hash()?
             }
+            EventRequestType::Transfer(_) => subject.get_state_hash()?,
         };
         let prev_event_hash = if event.content.event_proposal.proposal.sn == 0 {
             DigestIdentifier::default()
@@ -282,7 +280,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
     pub async fn new_governance_version(
         &mut self,
         governance_id: DigestIdentifier,
-        _version: u64,
+        new_version: u64,
     ) -> Result<(), EventError> {
         // Pedir event requests para cada subject_id del set y lanza new_event con ellas
         match self.subjects_by_governance.get(&governance_id).cloned() {
@@ -296,6 +294,61 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                             let subject_id = state_request.subject_id.clone();
                             self.subjects_completing_event.remove(&subject_id);
                             self.new_event(event_request).await?;
+                        }
+                        Err(error) => match error {
+                            crate::DbError::EntryNotFound => {}
+                            _ => {
+                                return Err(EventError::DatabaseError(error.to_string()));
+                            }
+                        },
+                    }
+                    match self.database.get_prevalidated_event(subject_id) {
+                        Ok(event_prevalidated) => {
+                            // TODO: Cambiar si se tuviesen que validar los genesis
+                            let subject = self
+                                .database
+                                .get_subject(subject_id)
+                                .map_err(|error| EventError::DatabaseError(error.to_string()))?;
+                            let metadata = Metadata {
+                                namespace: subject.namespace.clone(),
+                                subject_id: subject_id.clone(),
+                                governance_id: subject.governance_id.clone(),
+                                governance_version: new_version,
+                                schema_id: subject.schema_id.clone(),
+                                owner: subject.owner.clone(),
+                                creator: subject.creator.clone(),
+                            };
+                            let notary_event = self.create_notary_event(
+                                &subject,
+                                &event_prevalidated,
+                                new_version,
+                            )?;
+                            let event_message = create_validator_request(notary_event.clone());
+                            let stage = ValidationStage::Validate;
+                            let (signers, quorum_size) =
+                                self.get_signers_and_quorum(metadata, stage.clone()).await?;
+                            log::warn!(
+                                "GOV_UPDATED: START PIDIENDO FIRMAS DE VALIDACION PARA: {}",
+                                subject.subject_id.to_str()
+                            );
+                            self.ask_signatures(
+                                &subject_id,
+                                event_message,
+                                signers.clone(),
+                                quorum_size,
+                            )
+                            .await?;
+                            self.event_notary_events.insert(
+                                event_prevalidated
+                                    .signature
+                                    .content
+                                    .event_content_hash
+                                    .clone(),
+                                notary_event,
+                            );
+                            // Hacer update de fase por la que va el evento
+                            self.subjects_completing_event
+                                .insert(subject_id.clone(), (stage, signers, quorum_size));
                         }
                         Err(error) => match error {
                             crate::DbError::EntryNotFound => {}
@@ -834,7 +887,10 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 .await?;
             // Hacer update de fase por la que va el evento
             log::error!("LLEGA A ACTUALIZAR EL STAGE QUE ES: {:?}", stage);
-            log::error!("LLEGA A ACTUALIZAR EL STAGE PARA EL SUJETO: {:?}", subject_id.to_str());
+            log::error!(
+                "LLEGA A ACTUALIZAR EL STAGE PARA EL SUJETO: {:?}",
+                subject_id.to_str()
+            );
             self.subjects_completing_event
                 .insert(subject_id.clone(), (stage, signers, quorum_size));
             let tmp = self.subjects_completing_event.get(&subject_id);
@@ -1030,6 +1086,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         &mut self,
         event_hash: DigestIdentifier,
         signature: Signature,
+        governance_version: u64,
     ) -> Result<(), EventError> {
         log::warn!("VALIDATION SIGNATURES");
         // Mirar en que estado está el evento, si está en notarización o no
@@ -1039,7 +1096,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 log::warn!("SE EJECUTA NONE");
                 return Err(EventError::CryptoError(String::from(
                     "The hash of the event does not match any of the events",
-                )))
+                )));
             }
         };
         log::warn!("VALIDATION AFTER EVENT");
@@ -1059,6 +1116,43 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 state_request.subject_id.clone()
             }
         };
+        // Obtener sujeto para saber si lo tenemos y los metadatos del mismo
+        let subject = self
+            .database
+            .get_subject(&subject_id)
+            .map_err(|error| match error {
+                crate::DbError::EntryNotFound => EventError::SubjectNotFound(subject_id.to_str()),
+                _ => EventError::DatabaseError(error.to_string()),
+            })?;
+        log::warn!("PASO 1");
+        let our_governance_version = self
+            .gov_api
+            .get_governance_version(subject.governance_id.clone(), subject.subject_id.clone())
+            .await
+            .map_err(EventError::GovernanceError)?;
+        if our_governance_version < governance_version {
+            // Ignoramos la firma de validación porque no nos vale, pero pedimos la governance al validador que nos la ha enviado
+            let msg = request_gov_event(
+                self.own_identifier.clone(),
+                subject.governance_id.clone(),
+                our_governance_version + 1,
+            );
+            self.message_channel
+                .tell(MessageTaskCommand::Request(
+                    None,
+                    msg,
+                    vec![signature.content.signer],
+                    MessageConfig {
+                        timeout: 2000,
+                        replication_factor: 1.0,
+                    },
+                ))
+                .await?;
+            return Ok(());
+        } else if our_governance_version > governance_version {
+            // Ignoramos la firma de validación porque no nos vale
+            return Ok(());
+        }
         log::warn!("TDO BIEN");
         let a = self.subjects_completing_event.get(&subject_id);
         log::warn!("STAGE: {:?}", a);
@@ -1066,7 +1160,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         let Some((ValidationStage::Validate, signers, quorum_size)) = self.subjects_completing_event.get(&subject_id) else {
             return Err(EventError::WrongEventPhase);
         };
-        log::warn!("PASO 1");
+        log::warn!("PASO 2");
         let signer = signature.content.signer.clone();
         // Check if approver is in the list of approvers
         if !signers.contains(&signer) {
@@ -1074,15 +1168,6 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 "The signer is not in the list of validators or we already have the validation",
             )));
         }
-        log::warn!("PASO 2");
-        // Obtener sujeto para saber si lo tenemos y los metadatos del mismo
-        let _subject = self
-            .database
-            .get_subject(&subject_id)
-            .map_err(|error| match error {
-                crate::DbError::EntryNotFound => EventError::SubjectNotFound(subject_id.to_str()),
-                _ => EventError::DatabaseError(error.to_string()),
-            })?;
         log::warn!("PASO 3");
         // Comprobar que todo es correcto criptográficamente
         let event_hash = check_cryptography(&notary_event.proof, &signature)
@@ -1154,9 +1239,12 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 .map_err(|error| EventError::DatabaseError(error.to_string()))?;
             // Cancelar pedir firmas
             self.message_channel
-                .tell(MessageTaskCommand::Cancel(
-                    String::from(format!("{}", subject_id.to_str())
-            ))).await.map_err(EventError::ChannelError)?;
+                .tell(MessageTaskCommand::Cancel(String::from(format!(
+                    "{}",
+                    subject_id.to_str()
+                ))))
+                .await
+                .map_err(EventError::ChannelError)?;
             // Limpiar HashMaps
             self.events_to_validate.remove(&event_hash);
             self.event_validations.remove(&event_hash);

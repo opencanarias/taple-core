@@ -116,13 +116,14 @@ impl<C: DatabaseCollection> Notary<C> {
             .tell(MessageTaskCommand::Request(
                 None,
                 TapleMessages::EventMessage(EventCommand::ValidatorResponse {
-                    event_hash: notary_event.proof.event_hash.clone(),
+                    event_hash: notary_event.proof.event_hash,
                     signature: notary_signature.clone(),
+                    governance_version: actual_gov_version,
                 }),
                 vec![notary_event.proof.owner],
                 MessageConfig::direct_response(),
             ))
-            .await?; // TODO borrar clone
+            .await?;
         Ok(NotaryEventResponse {
             notary_signature,
             gov_version_notary: actual_gov_version,
