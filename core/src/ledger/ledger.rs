@@ -665,6 +665,10 @@ impl<C: DatabaseCollection> Ledger<C> {
                             )?;
                             self.database
                                 .set_event(&transfer_request.subject_id, event)?;
+                            self.database.set_lce_validation_proof(
+                                &transfer_request.subject_id,
+                                validation_proof,
+                            )?;
                             if last_lce.is_some() {
                                 let last_lce_sn = last_lce.unwrap();
                                 self.database
@@ -1179,6 +1183,10 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 sn,
                                 signatures,
                             )?;
+                            self.database.set_lce_validation_proof(
+                                &state_request.subject_id,
+                                validation_proof,
+                            )?;
                             self.database.set_event(&state_request.subject_id, event)?;
                             if last_lce.is_some() {
                                 let last_lce_sn = last_lce.unwrap();
@@ -1389,6 +1397,19 @@ impl<C: DatabaseCollection> Ledger<C> {
                                                 }
                                                 _ => LedgerError::DatabaseError(error),
                                             })?;
+                                        // Comprobar ValidationProof
+                                        let validation_proof =
+                                            self.database.get_lce_validation_proof(&subject_id)?;
+                                        let state_hash = subject.state_hash_after_apply(
+                                            &head_event.content.event_proposal.proposal.json_patch,
+                                        )?;
+                                        // TODO: Si falla aquí inutilizamos sujeto???
+                                        self.check_validation_proof(
+                                            &validation_proof,
+                                            &subject,
+                                            &head_event.signature.content.event_content_hash,
+                                            &state_hash,
+                                        )?;
                                         self.event_sourcing(head_event)?;
                                         self.ledger_state.insert(
                                             subject_id.clone(),
@@ -1397,6 +1418,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                                 head: None,
                                             },
                                         );
+                                        self.database.del_lce_validation_proof(&subject_id)?;
                                         // Se llega hasta el LCE con el event sourcing
                                         // Pedir firmas de testificación
                                         self.distribution_channel
@@ -1467,6 +1489,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                     //     }
                                     // };
                                     if head == 1 {
+                                        let subject = self.database.get_subject(&subject_id)?;
                                         let head_event = self
                                             .database
                                             .get_event(&subject_id, head)
@@ -1476,6 +1499,19 @@ impl<C: DatabaseCollection> Ledger<C> {
                                                 }
                                                 _ => LedgerError::DatabaseError(error),
                                             })?;
+                                        // Comprobar ValidationProof
+                                        let validation_proof =
+                                            self.database.get_lce_validation_proof(&subject_id)?;
+                                        let state_hash = subject.state_hash_after_apply(
+                                            &head_event.content.event_proposal.proposal.json_patch,
+                                        )?;
+                                        // TODO: Si falla aquí inutilizamos sujeto???
+                                        self.check_validation_proof(
+                                            &validation_proof,
+                                            &subject,
+                                            &head_event.signature.content.event_content_hash,
+                                            &state_hash,
+                                        )?;
                                         // Hacer event sourcing del evento 1 tambien y actualizar subject
                                         self.event_sourcing(head_event)?;
                                         self.ledger_state.insert(
@@ -1485,6 +1521,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                                 head: None,
                                             },
                                         );
+                                        self.database.del_lce_validation_proof(&subject_id)?;
                                         // Se llega hasta el LCE con el event sourcing
                                         // Pedir firmas de testificación
                                         self.distribution_channel

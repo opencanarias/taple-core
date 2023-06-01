@@ -1,7 +1,7 @@
 use super::utils::{get_key, Element};
 use crate::commons::models::event::ValidationProof;
 use crate::{DatabaseCollection, DatabaseManager, Derivable, DigestIdentifier};
-use crate::{DbError, Event};
+use crate::{DbError};
 use std::sync::Arc;
 
 pub(crate) struct LceValidationProofs<C: DatabaseCollection> {
