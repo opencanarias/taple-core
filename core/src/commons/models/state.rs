@@ -41,6 +41,8 @@ pub struct Subject {
     pub creator: KeyIdentifier,
     /// Current status of the subject
     pub properties: String,
+    /// Indicates if the subject is active or not
+    pub active: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
@@ -67,6 +69,8 @@ pub struct SubjectData {
     pub creator: KeyIdentifier,
     /// Current status of the subject
     pub properties: String,
+    /// Indicates if the subject is active or not
+    pub active: bool,
 }
 
 impl From<Subject> for SubjectData {
@@ -81,6 +85,7 @@ impl From<Subject> for SubjectData {
             owner: subject.owner,
             creator: subject.creator,
             properties: subject.properties,
+            active: subject.active,
         }
     }
 }
@@ -114,6 +119,7 @@ impl Subject {
             owner: event_request.signature.content.signer.clone(),
             creator: event_request.signature.content.signer.clone(),
             properties: init_state,
+            active: true,
         })
     }
 
@@ -162,6 +168,7 @@ impl Subject {
                 .signer
                 .clone(),
             properties: init_state,
+            active: true,
         })
     }
 
@@ -189,7 +196,7 @@ impl Subject {
         owner: KeyIdentifier,
         public_key: KeyIdentifier,
         keys: Option<KeyPair>,
-        sn: u64
+        sn: u64,
     ) {
         self.owner = owner;
         self.public_key = public_key;
@@ -207,6 +214,10 @@ impl Subject {
                 SubjectError::CryptoError(String::from("Error calculating the hash of the state"))
             })?,
         )
+    }
+
+    pub fn eol_event(&mut self) {
+        self.active = false;
     }
 
     pub fn state_hash_after_apply(
