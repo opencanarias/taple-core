@@ -165,6 +165,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
     }
 
     // NEW
+    // Cuando se piden testigos de incluyen los aprobadores actualmente
     pub fn get_signers(
         &self,
         metadata: Metadata,
