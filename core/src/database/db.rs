@@ -2,11 +2,9 @@ use std::collections::HashSet;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use blake3::Hash;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use crate::commons::models::notary::NotaryEventResponse;
 use crate::commons::models::state::Subject;
 use crate::crypto::KeyPair;
 use crate::event_request::EventRequest;
@@ -33,7 +31,7 @@ const EXPECTING_TRANSFER: &str = "transfer";
 
 pub struct DB<M: DatabaseManager> {
     _manager: Arc<M>,
-    signature_db: Box<dyn DatabaseCollection<InnerDataType = HashSet<Signature>>>,
+    signature_db: Box<dyn DatabaseCollection<InnerDataType = (HashSet<Signature>, KeyIdentifier)>>,
     subject_db: Box<dyn DatabaseCollection<InnerDataType = Subject>>,
     event_db: Box<dyn DatabaseCollection<InnerDataType = Event>>,
     prevalidated_event_db: Box<dyn DatabaseCollection<InnerDataType = Event>>,
@@ -41,8 +39,6 @@ pub struct DB<M: DatabaseManager> {
     id_db: Box<dyn DatabaseCollection<InnerDataType = String>>,
     notary_db: Box<dyn DatabaseCollection<InnerDataType = (DigestIdentifier, u64)>>,
     contract_db: Box<dyn DatabaseCollection<InnerDataType = (Vec<u8>, DigestIdentifier, u64)>>,
-    notary_signatures_db:
-        Box<dyn DatabaseCollection<InnerDataType = (u64, HashSet<NotaryEventResponse>)>>,
     witness_signatures_db: Box<dyn DatabaseCollection<InnerDataType = (u64, HashSet<Signature>)>>,
     subjects_by_governance: Box<dyn DatabaseCollection<InnerDataType = DigestIdentifier>>,
     preauthorized_subjects_and_providers:
@@ -60,7 +56,6 @@ impl<M: DatabaseManager> DB<M> {
         let id_db = manager.create_collection(ID_TABLE);
         let notary_db = manager.create_collection(NOTARY_TABLE);
         let contract_db = manager.create_collection(CONTRACT_TABLE);
-        let notary_signatures_db = manager.create_collection(NOTARY_SIGNATURES);
         let witness_signatures_db = manager.create_collection(WITNESS_SIGNATURES);
         let subjects_by_governance = manager.create_collection(SUBJECTS_BY_GOVERNANCE);
         let preauthorized_subjects_and_providers =
@@ -76,29 +71,36 @@ impl<M: DatabaseManager> DB<M> {
             id_db,
             notary_db,
             contract_db,
-            notary_signatures_db,
             witness_signatures_db,
             subjects_by_governance,
             preauthorized_subjects_and_providers,
-            expecting_transfer
+            expecting_transfer,
         }
     }
 
     pub fn set_expecting_transfer(
         &self,
         subject_id: &DigestIdentifier,
-        keypair: KeyPair
+        keypair: KeyPair,
     ) -> Result<(), Error> {
         let id = subject_id.to_str();
         self.expecting_transfer.put(&id, keypair)
     }
 
-    pub fn get_expecting_transfer(
-        &self,
-        subject_id: &DigestIdentifier
-    ) -> Result<KeyPair, Error> {
+    pub fn get_expecting_transfer(&self, subject_id: &DigestIdentifier) -> Result<KeyPair, Error> {
         let id = subject_id.to_str();
         self.expecting_transfer.get(&id)
+    }
+
+    pub fn get_all_expecting_transfers(
+        &self,
+    ) -> Result<Vec<(DigestIdentifier, HashSet<KeyIdentifier>)>, Error> {
+        let mut result = Vec::new();
+        let iter = self.preauthorized_subjects_and_providers.iter();
+        for (_, data) in iter {
+            result.push(data)
+        }
+        Ok(result)
     }
 
     pub fn del_expecting_transfer(&self, subject_id: &DigestIdentifier) -> Result<(), Error> {
@@ -183,7 +185,7 @@ impl<M: DatabaseManager> DB<M> {
         let mut result = Vec::new();
         let mut counter = 0;
         while counter < quantity {
-            let Some((_, event)) = iter.next() else {
+            let Some((_key, event)) = iter.next() else {
                 break;
             };
             result.push(event);
@@ -246,7 +248,7 @@ impl<M: DatabaseManager> DB<M> {
         &self,
         subject_id: &DigestIdentifier,
         sn: u64,
-    ) -> Result<HashSet<Signature>, Error> {
+    ) -> Result<(HashSet<Signature>, KeyIdentifier), Error> {
         let id = subject_id.to_str();
         let events_by_subject = self.signature_db.partition(&id);
         events_by_subject.get(&sn.to_string())
@@ -269,37 +271,25 @@ impl<M: DatabaseManager> DB<M> {
         self.witness_signatures_db.get(&id)
     }
 
-    pub fn get_notary_signatures(
-        &self,
-        subject_id: &DigestIdentifier,
-        sn: u64,
-    ) -> Result<(u64, HashSet<NotaryEventResponse>), Error> {
-        let id = subject_id.to_str();
-        self.notary_signatures_db.get(&id)
-    }
-
-    pub fn delete_notary_signatures(&self, subject_id: &DigestIdentifier) -> Result<(), Error> {
-        self.notary_signatures_db.del(&subject_id.to_str())
-    }
-
     pub fn set_signatures(
         &self,
         subject_id: &DigestIdentifier,
         sn: u64,
         signatures: HashSet<Signature>,
+        owner: KeyIdentifier,
     ) -> Result<(), Error> {
         let id = subject_id.to_str();
         let signatures_by_subject = self.signature_db.partition(&id);
         let sn = sn.to_string();
         let total_signatures = match signatures_by_subject.get(&sn) {
-            Ok(other) => signatures.union(&other).cloned().collect(),
+            Ok((other, _)) => signatures.union(&other).cloned().collect(),
             Err(Error::EntryNotFound) => signatures,
             Err(error) => {
                 // logError!("Error detected in database get_event operation: {}", error);
                 return Err(error);
             }
         };
-        signatures_by_subject.put(&sn.to_string(), total_signatures)
+        signatures_by_subject.put(&sn.to_string(), (total_signatures, owner))
     }
 
     pub fn del_signatures(&self, subject_id: &DigestIdentifier, sn: u64) -> Result<(), Error> {
@@ -307,24 +297,6 @@ impl<M: DatabaseManager> DB<M> {
         let signatures_by_subject = self.signature_db.partition(&id);
         let sn = sn.to_string();
         signatures_by_subject.del(&sn)
-    }
-
-    pub fn set_notary_signatures(
-        &self,
-        subject_id: &DigestIdentifier,
-        sn: u64,
-        signatures: HashSet<NotaryEventResponse>,
-    ) -> Result<(), Error> {
-        let id = subject_id.to_str();
-        let total_signatures = match self.notary_signatures_db.get(&id) {
-            Ok((_u, other)) => signatures.union(&other).cloned().collect(),
-            Err(Error::EntryNotFound) => signatures,
-            Err(error) => {
-                // logError!("Error detected in database get_event operation: {}", error);
-                return Err(error);
-            }
-        };
-        self.notary_signatures_db.put(&id, (sn, total_signatures))
     }
 
     pub fn set_witness_signatures(

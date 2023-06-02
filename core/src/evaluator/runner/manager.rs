@@ -137,7 +137,6 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send> TapleRunner<D, G> {
                 &state_data.subject_id,
             )
             .await?;
-        log::warn!("Contract result: {:?}", contract_result);
         let (patch, hash) = match contract_result.success {
             Acceptance::Ok => (
                 generate_json_patch(&previous_state, &contract_result.final_state)?,

@@ -70,11 +70,7 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
                 .map_err(|error| DistributionManagerError::DatabaseError(error.to_string()))?;
             let owner = subject.owner.clone();
             let metadata = build_metadata(&subject, governance.sn);
-            let mut witnesses = self
-                .governance
-                .get_signers(metadata, ValidationStage::Witness)
-                .await
-                .map_err(|_| DistributionManagerError::GovernanceChannelNotAvailable)?;
+            let mut witnesses = self.get_targets(metadata).await?;
             if !witnesses.contains(&self.signature_manager.get_own_identifier()) {
                 // Ya no somos testigos
                 self.db
@@ -109,10 +105,6 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
         witnesses: &HashSet<KeyIdentifier>,
     ) -> Result<(), DistributionManagerError> {
         let remaining_signatures = self.get_remaining_signers(signatures, witnesses);
-        log::warn!("REMAIMING SIGNATURES: {}", remaining_signatures.len());
-        for signer in remaining_signatures.iter() {
-            log::warn!("REMAIMING SIGNER: {}", signer.to_str());
-        }
         if remaining_signatures.len() > 0 {
             self.send_signature_request(
                 &subject.subject_id,
@@ -179,7 +171,7 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
                 } else {
                     // Somos testigos. Realizamos el proceso de solicitud de firmas
                     // En principio, ya tenemos nuestra firma.
-                    // Es posible que los testigos hayan cambiado y algunas firmas ya no sean correctas. No obstante,
+                    // Es posible que los testigos hayan cambiado y algunas firmas ya no sean correctos. No obstante,
                     // esto no supone ningún problema. Tener firmas de más es irrelevante a nivel de protocolo.
                     self.restart_distribution(&subject, &signatures, witnesses.as_ref().unwrap())
                         .await?;
@@ -208,13 +200,8 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
             };
             // Comprobamos si seguimos siendo testigos para los sujetos de esta gobernanza
             let mut witnesses = self
-                .governance
-                .get_signers(
-                    build_metadata(&subject, governance_version),
-                    ValidationStage::Witness,
-                )
-                .await
-                .map_err(|_| DistributionManagerError::GovernanceChannelNotAvailable)?;
+                .get_targets(build_metadata(&subject, governance_version))
+                .await?;
             if witnesses.contains(&self.signature_manager.get_own_identifier()) {
                 // Seguimos siendo testigos
                 witnesses.insert(subject.owner.clone());
@@ -264,7 +251,6 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
             .db
             .get_subject(&msg.subject_id)
             .map_err(|e| DistributionManagerError::DatabaseError(e.to_string()))?;
-        let owner = subject.owner.clone();
         let governance_version = self
             .governance
             .get_governance_version(subject.governance_id.clone(), subject.subject_id.clone())
@@ -273,11 +259,6 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
         // Empezamos la distribución
         let metadata = build_metadata(&subject, governance_version);
         let mut targets = self.get_targets(metadata).await?;
-        log::warn!("REMAIMING SIGNATURES: {}", targets.len());
-        for signer in targets.iter() {
-            log::warn!("REMAIMING SIGNER: {}", signer.to_str());
-        }
-        targets.insert(owner);
         targets.remove(&self.signature_manager.get_own_identifier());
         if !targets.is_empty() {
             self.send_signature_request(&subject.subject_id, msg.sn, targets.clone(), &targets)
@@ -334,10 +315,15 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
         &self,
         metadata: Metadata,
     ) -> Result<HashSet<KeyIdentifier>, DistributionManagerError> {
-        self.governance
+        // Owner of subject must be included
+        let owner = metadata.owner.clone();
+        let mut targets = self
+            .governance
             .get_signers(metadata, ValidationStage::Witness)
             .await
-            .map_err(|_| DistributionManagerError::GovernanceChannelNotAvailable)
+            .map_err(|_| DistributionManagerError::GovernanceChannelNotAvailable)?;
+        targets.insert(owner);
+        Ok(targets)
     }
 
     pub async fn provide_signatures(
@@ -449,7 +435,6 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
                         return Err(DistributionManagerError::DatabaseError(error.to_string()))
                     }
                 };
-                let owner = subject.owner.clone();
                 let governance_version = self
                     .governance
                     .get_governance_version(
@@ -489,7 +474,6 @@ impl<G: GovernanceInterface, D: DatabaseManager> InnerDistributionManager<G, D> 
                 if remaining_signatures.len() == 0 {
                     self.cancel_signature_request(&subject.subject_id).await?;
                 } else {
-                    targets.insert(owner);
                     self.send_signature_request(
                         &subject.subject_id,
                         msg.sn,

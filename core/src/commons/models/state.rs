@@ -198,12 +198,12 @@ impl Subject {
     }
 
     pub fn get_state_hash(&self) -> Result<DigestIdentifier, SubjectError> {
-        let mut subject_properties = serde_json::from_str::<Value>(&self.properties)
-            .map_err(|_| SubjectError::CryptoError(String::from("Error parsing the state")))?;
-        let subject_properties_str = serde_json::to_string(&subject_properties)
-            .map_err(|_| SubjectError::CryptoError(String::from("Error serializing the state")))?;
+        // let subject_properties = serde_json::from_str::<Value>(&self.properties)
+        //     .map_err(|_| SubjectError::CryptoError(String::from("Error parsing the state")))?;
+        // let subject_properties_str = serde_json::to_string(&subject_properties)
+        //     .map_err(|_| SubjectError::CryptoError(String::from("Error serializing the state")))?;
         Ok(
-            DigestIdentifier::from_serializable_borsh(&subject_properties_str).map_err(|_| {
+            DigestIdentifier::from_serializable_borsh(&self.properties).map_err(|_| {
                 SubjectError::CryptoError(String::from("Error calculating the hash of the state"))
             })?,
         )

@@ -140,7 +140,6 @@ impl<D: DatabaseManager> EventManager<D> {
         &mut self,
         command: ChannelData<EventCommand, EventResponse>,
     ) -> Result<(), EventError> {
-        log::info!("EVENT MANAGER MSG RECEIVED");
         let (sender, data) = match command {
             ChannelData::AskData(data) => {
                 let (sender, data) = data.get();
@@ -155,7 +154,6 @@ impl<D: DatabaseManager> EventManager<D> {
             match data {
                 EventCommand::Event { event_request } => {
                     let response = self.event_completer.new_event(event_request).await;
-                    log::warn!("EVENT REPSONE: {:?}", response);
                     match response.clone() {
                         Err(error) => match error {
                             EventError::ChannelClosed => {

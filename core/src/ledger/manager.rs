@@ -127,6 +127,7 @@ impl<D: DatabaseManager> EventManager<D> {
         &mut self,
         command: ChannelData<LedgerCommand, LedgerResponse>,
     ) -> Result<(), LedgerError> {
+        log::warn!("MENSAJE EN EL LEDGER RECIBIDO");
         let (sender, data) = match command {
             ChannelData::AskData(data) => {
                 let (sender, data) = data.get();
@@ -137,7 +138,6 @@ impl<D: DatabaseManager> EventManager<D> {
                 (None, data)
             }
         };
-        log::error!("MENSAJE RECIBIDO EN EL LEDGER: {:?}", data);
         let response = {
             match data {
                 LedgerCommand::ExpectingTransfer { subject_id } => {
@@ -214,6 +214,7 @@ impl<D: DatabaseManager> EventManager<D> {
                     signatures,
                     validation_proof,
                 } => {
+                    log::error!("EXTERNAL EVENT RECIVED");
                     let response = self
                         .inner_ledger
                         .external_event(event, signatures, sender, validation_proof)
@@ -240,6 +241,7 @@ impl<D: DatabaseManager> EventManager<D> {
                     LedgerResponse::NoResponse
                 }
                 LedgerCommand::ExternalIntermediateEvent { event } => {
+                    log::error!("EXTERNAL INTERMEDIATE EVENT");
                     let response = self.inner_ledger.external_intermediate_event(event).await;
                     match response {
                         Err(error) => match error {
@@ -316,7 +318,6 @@ impl<D: DatabaseManager> EventManager<D> {
                         .inner_ledger
                         .get_next_gov(who_asked, subject_id, sn)
                         .await;
-                    log::warn!("GetNextGov Response: {:?}", response);
                     let response = match response {
                         Err(error) => match error.clone() {
                             LedgerError::ChannelClosed => {
