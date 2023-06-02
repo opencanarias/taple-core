@@ -68,4 +68,6 @@ pub enum LedgerError {
     UnexpectedCreateEvent,
     #[error("Validation Proof Error: {0}")]
     ValidationProofError(String),
+    #[error("EOL when active LCE for subject: {0}")]
+    EOLWhenActiveLCE(String),
 }

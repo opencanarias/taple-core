@@ -563,14 +563,18 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 _ => return Err(EventError::DatabaseError(error.to_string())),
             },
         };
-        // Chek if we are owner of Subject
-        if subject.keys.is_none() {
-            return Err(EventError::SubjectNotOwned(subject_id.to_str()));
-        }
         // Check if we already have an event for that subject
         let None = self.subjects_completing_event.get(&subject.subject_id) else {
             return Err(EventError::EventAlreadyInProgress);
         };
+        // Check is subject life has not come to an end
+        if !subject.active {
+            return Err(EventError::SubjectLifeEnd(subject_id.to_str()));
+        }
+        // Chek if we are owner of Subject
+        if subject.keys.is_none() {
+            return Err(EventError::SubjectNotOwned(subject_id.to_str()));
+        }
         // Obtenemos versión actual de la gobernanza
         let gov_version = self
             .gov_api
@@ -606,6 +610,18 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     },
                     ValidationStage::Evaluate,
                 );
+                // Check the invoker can Invoke for this subject
+                let invokers = self
+                    .gov_api
+                    .get_signers(metadata.clone(), ValidationStage::Invoke)
+                    .await
+                    .map_err(EventError::GovernanceError)?;
+                if !invokers.contains(&event_request.signature.content.signer) {
+                    return Err(EventError::InvokePermissionDenied(
+                        event_request.signature.content.signer.to_str(),
+                        subject_id.to_str(),
+                    ));
+                }
                 let event_preevaluation = EventPreEvaluation {
                     event_request: event_request.clone(),
                     context: Context {

@@ -52,4 +52,8 @@ pub enum EventError {
     NoAprovalForEOLEvents,
     #[error("KeyID: {0}, not authorized for close")]
     CloseNotAuthorized(String),
+    #[error("Subject Life Ended: {0}")]
+    SubjectLifeEnd(String),
+    #[error("Invoke permission denied for ID: {0}, Subject ID: {1}")]
+    InvokePermissionDenied(String, String),
 }

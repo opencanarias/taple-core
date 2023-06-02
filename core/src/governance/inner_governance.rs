@@ -21,7 +21,7 @@ use super::{
     GovernanceUpdatedMessage,
 };
 
-use crate::database::{DB, DatabaseCollection};
+use crate::database::{DatabaseCollection, DB};
 
 pub struct InnerGovernance<C: DatabaseCollection> {
     repo_access: DB<C>,
@@ -242,7 +242,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                 let signers_roles: Vec<String> = set.into_iter().collect();
                 Self::get_signers_aux(&properties, &schema_id, &metadata, &signers_roles)
             }
-            ValidationStage::Close | ValidationStage::Create => {
+            ValidationStage::Close | ValidationStage::Create | ValidationStage::Invoke => {
                 let stage_str = stage.to_str();
                 let roles: Vec<String> = get_as_array(&schema_policy, stage_str)?
                     .into_iter()
