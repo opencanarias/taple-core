@@ -127,7 +127,6 @@ impl<C: DatabaseCollection> AuthorizedSubjectsManager<C> {
         &mut self,
         command: ChannelData<AuthorizedSubjectsCommand, AuthorizedSubjectsResponse>,
     ) -> Result<(), AuthorizedSubjectsError> {
-        log::info!("AuthorizedSubjects MANAGER MSG RECEIVED");
         let (sender, data) = match command {
             ChannelData::AskData(data) => {
                 let (sender, data) = data.get();

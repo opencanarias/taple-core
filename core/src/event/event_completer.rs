@@ -15,10 +15,10 @@ use crate::{
             state::Subject,
             Acceptance,
         },
-        self_signature_manager::{SelfSignatureInterface, SelfSignatureManager},
+        self_signature_manager::{SelfSignatureManager},
     },
     event_content::Metadata,
-    event_request::{EventRequest, TransferRequest},
+    event_request::{EventRequest},
     governance::{stage::ValidationStage, GovernanceAPI, GovernanceInterface},
     identifier::{Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier},
     ledger::{LedgerCommand, LedgerResponse},
@@ -30,7 +30,7 @@ use crate::{
         approval::create_approval_request, evaluator::create_evaluator_request,
         ledger::request_gov_event, validation::create_validator_request,
     },
-    Event, EventRequestType, Notification, TimeStamp,
+    Event, EventRequestType, Notification, TimeStamp, DatabaseCollection,
 };
 use std::hash::Hash;
 
@@ -138,6 +138,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     event_hash,
                     state_hash,
                     gov_version,
+                    subject.owner.clone(),
                 )
             }
             EventRequestType::Transfer(transfer_request) => {
@@ -214,10 +215,6 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     let notary_event =
                         self.create_notary_event(subject, &last_event, gov_version)?;
                     let event_message = create_validator_request(notary_event.clone());
-                    log::warn!(
-                        "1 PIDIENDO FIRMAS DE VALIDACION PARA: {}",
-                        subject.subject_id.to_str()
-                    );
                     self.ask_signatures(
                         &subject.subject_id,
                         event_message,
@@ -406,8 +403,6 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             _ => unreachable!(),
         }
         // Añadir al hashmap para poder acceder a él cuando lleguen las firmas de los validadores
-        self.event_proposals
-            .insert(proposal_hash, event_proposal.clone());
         let event = &self.create_event_prevalidated(
             event_proposal,
             HashSet::new(),
@@ -425,10 +420,6 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         //(ValidationStage::Validate, event_message)
         let stage = ValidationStage::Validate;
         let (signers, quorum_size) = self.get_signers_and_quorum(metadata, stage.clone()).await?;
-        log::warn!(
-            "2 PIDIENDO FIRMAS DE VALIDACION PARA: {}",
-            subject.subject_id.to_str()
-        );
         self.ask_signatures(&subject_id, event_message, signers.clone(), quorum_size)
             .await?;
         // Hacer update de fase por la que va el evento
@@ -695,7 +686,6 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         json_patch: String,
         signature: Signature,
     ) -> Result<(), EventError> {
-        log::warn!("LLEGAN FIRMAS EVALUACION");
         // Comprobar que el hash devuelto coincide con el hash de la preevaluación
         let preevaluation_event = match self
             .event_pre_evaluations
@@ -706,7 +696,6 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 "The hash of the event pre-evaluation does not match any of the pre-evaluations",
             ))),
         };
-        log::warn!("ESTO ES LO QUE TENGO: {:?}", preevaluation_event);
 
         let subject_id = match &preevaluation_event.event_request.request {
             // La transferencia no se evalua
@@ -785,15 +774,9 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         let quorum_size = quorum_size.to_owned();
         // Comprobar si llegamos a Quorum
         if num_signatures_hash < quorum_size {
-            log::warn!("NO QUORUM EN EVALUACIÓN");
-            log::warn!("QUORUM EVAL: {}", quorum_size);
             let mut new_signers: HashSet<KeyIdentifier> =
                 signers.into_iter().map(|s| s.clone()).collect();
             new_signers.remove(&signer);
-            log::warn!(
-                "PIDIENDO FIRMAS DE EVALUACIÓN PARA: {}",
-                subject.subject_id.to_str()
-            );
             self.ask_signatures(
                 &subject_id,
                 create_evaluator_request(preevaluation_event.clone()),
@@ -875,10 +858,6 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 .insert(proposal_hash, event_proposal.clone());
             // Pedir Approves si es necesario, si no pedir validaciones
             let (stage, event_message) = if evaluation.approval_required {
-                log::warn!(
-                    "PIDIENDO FIRMAS DE APROBACION PARA: {}",
-                    subject.subject_id.to_str()
-                );
                 let msg = create_approval_request(event_proposal);
                 // Retornar TapleMessage directamente
                 (ValidationStage::Approve, msg)
@@ -908,10 +887,6 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     event.signature.content.event_content_hash.clone(),
                     notary_event,
                 );
-                log::warn!(
-                    "POST EVAL: PIDIENDO FIRMAS DE VALIDACION PARA: {}",
-                    subject.subject_id.to_str()
-                );
                 (ValidationStage::Validate, event_message)
             };
             // Limpiar HashMaps
@@ -932,7 +907,6 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             self.subjects_completing_event
                 .insert(subject_id.clone(), (stage, signers, quorum_size));
             let tmp = self.subjects_completing_event.get(&subject_id);
-            log::error!("STAGE: {:?}", tmp);
         }
         Ok(())
     }
@@ -1046,10 +1020,6 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             let mut new_signers: HashSet<KeyIdentifier> =
                 signers.into_iter().map(|s| s.clone()).collect();
             new_signers.remove(&signer);
-            log::warn!(
-                "faltan PIDIENDO FIRMAS DE Aprobacion PARA: {}",
-                subject.subject_id.to_str()
-            );
             self.ask_signatures(
                 &subject_id,
                 create_approval_request(event_proposal.to_owned()),
@@ -1107,10 +1077,6 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             let stage = ValidationStage::Validate;
             let (signers, quorum_size) =
                 self.get_signers_and_quorum(metadata, stage.clone()).await?;
-            log::warn!(
-                "START PIDIENDO FIRMAS DE VALIDACION PARA: {}",
-                subject.subject_id.to_str()
-            );
             self.ask_signatures(&subject_id, event_message, signers.clone(), quorum_size)
                 .await?;
             self.event_notary_events.insert(
@@ -1130,7 +1096,6 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         signature: Signature,
         governance_version: u64,
     ) -> Result<(), EventError> {
-        log::warn!("VALIDATION SIGNATURES");
         // Mirar en que estado está el evento, si está en notarización o no
         let event = match self.events_to_validate.get(&event_hash) {
             Some(event) => event,
@@ -1250,10 +1215,6 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     )))
                 }
             };
-            log::warn!(
-                "NO COMPLETAS PIDIENDO FIRMAS DE VALIDACION PARA: {}",
-                notary_event.proof.subject_id.to_str()
-            );
             let event_message = create_validator_request(notary_event);
             let mut new_signers: HashSet<KeyIdentifier> =
                 signers.into_iter().map(|s| s.clone()).collect();
@@ -1277,6 +1238,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 .tell(LedgerCommand::OwnEvent {
                     event: event.clone(),
                     signatures: validation_signatures,
+                    validation_proof: notary_event.proof.clone()
                 })
                 .await?;
             self.database
@@ -1284,12 +1246,9 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 .map_err(|error| EventError::DatabaseError(error.to_string()))?;
             // Cancelar pedir firmas
             self.message_channel
-                .tell(MessageTaskCommand::Cancel(String::from(format!(
-                    "{}",
-                    subject_id.to_str()
-                ))))
-                .await
-                .map_err(EventError::ChannelError)?;
+                .tell(MessageTaskCommand::Cancel(
+                    String::from(format!("{}", subject_id.to_str())
+            ))).await.map_err(EventError::ChannelError)?;
             // Limpiar HashMaps
             self.events_to_validate.remove(&event_hash);
             self.event_validations.remove(&event_hash);

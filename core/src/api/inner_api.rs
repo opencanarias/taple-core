@@ -260,13 +260,11 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         subject_id: DigestIdentifier,
         providers: HashSet<KeyIdentifier>,
     ) -> Result<ApiResponses, APIInternalError> {
-        log::info!("HOLA");
         if let Err(error) = self
             .authorized_subjects_api
             .new_authorized_subject(subject_id, providers)
             .await
         {
-            log::error!("ERROR FATAL: {:?}", error);
             return Err(APIInternalError::DatabaseError(error.to_string()));
         }
         Ok(ApiResponses::SetPreauthorizedSubjectCompleted)

@@ -54,7 +54,6 @@ impl<C: DatabaseCollection> AuthorizedSubjects<C> {
         {
             Ok(psp) => psp,
             Err(error) => {
-                log::error!("ERROR PSP_GET: {:?}", error);
                 match error {
                     _ => return Err(AuthorizedSubjectsError::DatabaseError(error)),
                 }
@@ -95,7 +94,6 @@ impl<C: DatabaseCollection> AuthorizedSubjects<C> {
         subject_id: DigestIdentifier,
         providers: HashSet<KeyIdentifier>,
     ) -> Result<(), AuthorizedSubjectsError> {
-        log::info!("HOLAW");
         self.database
             .set_preauthorized_subject_and_providers(&subject_id, providers.clone())?;
         if !providers.is_empty() {

@@ -68,7 +68,6 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
             .get_contracts(governance_id.clone(), governance_version)
             .await
             .map_err(CompilerErrorResponses::GovernanceError)?;
-        log::info!("UPDATE CONTRACTS - CONTRACTS ARRAY LENGTH: {}", contracts.len());
         for contract_info in contracts {
             let contract_data = match self
                 .database
@@ -91,6 +90,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
                     continue;
                 }
                 if contract_data.1 == new_contract_hash {
+                    // Se actualiza la versión de la gobernanza asociada
                     self.database
                         .put_contract(
                             &governance_id,

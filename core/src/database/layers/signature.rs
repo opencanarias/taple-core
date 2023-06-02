@@ -1,6 +1,7 @@
 use super::utils::{get_key, Element};
+use crate::commons::models::event::ValidationProof;
 use crate::signature::Signature;
-use crate::DbError;
+use crate::{DbError};
 use crate::{DatabaseCollection, DatabaseManager, Derivable, DigestIdentifier};
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -22,7 +23,7 @@ impl<C: DatabaseCollection> SignatureDb<C> {
         &self,
         subject_id: &DigestIdentifier,
         sn: u64,
-    ) -> Result<HashSet<Signature>, DbError> {
+    ) -> Result<(HashSet<Signature>, ValidationProof), DbError> {
         let key_elements: Vec<Element> = vec![
             Element::S(self.prefix.clone()),
             Element::S(subject_id.to_str()),
@@ -30,7 +31,7 @@ impl<C: DatabaseCollection> SignatureDb<C> {
         ];
         let key = get_key(key_elements)?;
         let signatures = self.collection.get(&key)?;
-        Ok(bincode::deserialize::<HashSet<Signature>>(&signatures).map_err(|_| {
+        Ok(bincode::deserialize::<(HashSet<Signature>, ValidationProof)>(&signatures).map_err(|_| {
             DbError::DeserializeError
         })?)
     }
@@ -40,6 +41,7 @@ impl<C: DatabaseCollection> SignatureDb<C> {
         subject_id: &DigestIdentifier,
         sn: u64,
         signatures: HashSet<Signature>,
+        validation_proof: ValidationProof
     ) -> Result<(), DbError> {
         let key_elements: Vec<Element> = vec![
             Element::S(self.prefix.clone()),
@@ -49,7 +51,7 @@ impl<C: DatabaseCollection> SignatureDb<C> {
         let key = get_key(key_elements)?;
         let total_signatures = match self.collection.get(&key) {
             Ok(other) => {
-                let other = bincode::deserialize::<HashSet<Signature>>(&other).map_err(|_| {
+                let (other, _) = bincode::deserialize::<(HashSet<Signature>, ValidationProof)>(&other).map_err(|_| {
                     DbError::SerializeError
                 })?;
                 signatures.union(&other).cloned().collect()
@@ -59,7 +61,7 @@ impl<C: DatabaseCollection> SignatureDb<C> {
                 return Err(error);
             }
         };
-        let total_signatures = bincode::serialize(&total_signatures).map_err(|_| {
+        let total_signatures = bincode::serialize(&(total_signatures, validation_proof)).map_err(|_| {
             DbError::SerializeError
         })?;
         self.collection.put(&key, total_signatures)

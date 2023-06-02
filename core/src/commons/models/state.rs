@@ -1,11 +1,10 @@
 use crate::{
     commons::{
-        crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair, Payload, DSA},
+        crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair},
         errors::SubjectError,
         identifier::{
-            derive::KeyDerivator, Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier,
+            DigestIdentifier, KeyIdentifier,
         },
-        schema_handler::{get_governance_schema, Schema},
     },
     event_request::EventRequest,
 };

@@ -2,7 +2,6 @@ pub(crate) mod contract;
 pub(crate) mod controller_id;
 pub(crate) mod event;
 pub(crate) mod notary;
-pub(crate) mod notary_signatures;
 pub(crate) mod prevalidated_event;
 pub(crate) mod request;
 pub(crate) mod signature;
