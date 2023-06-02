@@ -8,7 +8,7 @@ pub enum EventError {
     EventApiChannelNotAvailable,
     #[error("A database error has ocurred at main component {0}")]
     DatabaseError(String),
-    #[error("Governance Error")]
+    #[error("Governance Error: {0}")]
     GovernanceError(#[from] RequestError),
     #[error("Subject Error: {0}")]
     SubjectError(#[from] SubjectError),

@@ -2,7 +2,7 @@ use crate::database::Error as DbError;
 use crate::evaluator::errors::CompilerError;
 use crate::governance::GovernanceInterface;
 use crate::identifier::{DigestIdentifier, Derivable};
-use crate::{database::DB, evaluator::errors::CompilerErrorResponses, DatabaseManager};
+use crate::{database::DB, evaluator::errors::CompilerErrorResponses, DatabaseCollection};
 use async_std::fs;
 use std::collections::HashSet;
 use std::path::Path;
@@ -10,16 +10,16 @@ use std::process::Command;
 use wasm_gc::garbage_collect_file;
 use wasmtime::{Engine, ExternType};
 
-pub struct Compiler<D: DatabaseManager, G: GovernanceInterface> {
-    database: DB<D>,
+pub struct Compiler<C: DatabaseCollection, G: GovernanceInterface> {
+    database: DB<C>,
     gov_api: G,
     engine: Engine,
     contracts_path: String,
     available_imports_set: HashSet<String>,
 }
 
-impl<D: DatabaseManager, G: GovernanceInterface> Compiler<D, G> {
-    pub fn new(database: DB<D>, gov_api: G, engine: Engine, contracts_path: String) -> Self {
+impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
+    pub fn new(database: DB<C>, gov_api: G, engine: Engine, contracts_path: String) -> Self {
         let available_imports_set = get_sdk_functions_identifier();
         Self {
             database,

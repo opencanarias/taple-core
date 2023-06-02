@@ -1,8 +1,5 @@
 use std::collections::{hash_map::Entry, HashMap, HashSet};
 
-use json_patch::{patch, Patch};
-use serde_json::Value;
-
 use crate::commons::crypto::KeyGenerator;
 use crate::{
     commons::{
@@ -25,7 +22,7 @@ use crate::{
     protocol::protocol_message_manager::TapleMessages,
     signature::Signature,
     utils::message::ledger::{request_event, request_gov_event},
-    DatabaseManager, Event,
+    DatabaseCollection, Event,
 };
 
 use super::errors::LedgerError;
@@ -36,9 +33,9 @@ pub struct LedgerState {
     pub head: Option<u64>,
 }
 
-pub struct Ledger<D: DatabaseManager> {
+pub struct Ledger<C: DatabaseCollection> {
     gov_api: GovernanceAPI,
-    database: DB<D>,
+    database: DB<C>,
     subject_is_gov: HashMap<DigestIdentifier, bool>,
     ledger_state: HashMap<DigestIdentifier, LedgerState>,
     message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
@@ -47,10 +44,10 @@ pub struct Ledger<D: DatabaseManager> {
     our_id: KeyIdentifier,
 }
 
-impl<D: DatabaseManager> Ledger<D> {
+impl<C: DatabaseCollection> Ledger<C> {
     pub fn new(
         gov_api: GovernanceAPI,
-        database: DB<D>,
+        database: DB<C>,
         message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
         distribution_channel: SenderEnd<
             DistributionMessagesNew,
@@ -235,6 +232,7 @@ impl<D: DatabaseManager> Ledger<D> {
         subject_id: DigestIdentifier,
     ) -> Result<KeyIdentifier, LedgerError> {
         // Generar material criptográfico y guardarlo en BBDD asociado al subject_id
+        // TODO: Hacer la eleccion del MC dinámica. Es necesario primero hacer el cambio a nivel de state.rs
         let public_key = match self.database.get_expecting_transfer(&subject_id) {
             Ok(keypair) => {
                 let public_key =
@@ -828,15 +826,6 @@ impl<D: DatabaseManager> Ledger<D> {
                         let (signers, quorum) = self
                             .get_signers_and_quorum(metadata.clone(), ValidationStage::Validate)
                             .await?;
-                        log::warn!("SE IMPRIME LA PRUEBA DE VALIDACIÓN QUE NOS LLEGA");
-                        log::warn!("PROOF CREATOR {}", validation_proof.creator.to_str());
-                        log::warn!("PROOF OWNER {}", validation_proof.owner.to_str());
-                        log::warn!("PROOF EVENT HASH {}", validation_proof.event_hash.to_str());
-                        log::warn!("PROOF STATE HASH {}", validation_proof.state_hash.to_str());
-                        log::warn!(
-                            "PROOF subject_public_key {}",
-                            validation_proof.subject_public_key.to_str()
-                        );
                         verify_signatures(&signatures, &signers, quorum, &notary_hash)?;
                         let sn = event.content.event_proposal.proposal.sn;
                         self.database.set_signatures(
@@ -1104,15 +1093,12 @@ impl<D: DatabaseManager> Ledger<D> {
                                 },
                             }
                         }
-                        let sn = event.content.event_proposal.proposal.sn;
                         self.check_event(event.clone(), metadata.clone()).await?;
-                        log::warn!("CHECK EVENT");
                         // Si no está en el mapa, añadirlo y enviar mensaje a gov de subject updated con el id y el sn
                         let subject_id = state_request.subject_id.clone();
                         let (signers, quorum) = self
                             .get_signers_and_quorum(metadata.clone(), ValidationStage::Validate)
                             .await?;
-                        log::warn!("GET SIGNERS AND QUORUM");
                         let prev_event_hash = if event.content.event_proposal.proposal.sn == 0 {
                             DigestIdentifier::default()
                         } else {
@@ -1344,7 +1330,7 @@ impl<D: DatabaseManager> Ledger<D> {
                         } else {
                             self.subject_is_gov.insert(subject_id.clone(), false);
                         }
-                        let mut witnesses = self.get_witnesses(metadata.clone()).await?;
+                        let witnesses = self.get_witnesses(metadata.clone()).await?;
                         if !witnesses.contains(&self.our_id) {
                             match self
                                 .database
@@ -1363,7 +1349,6 @@ impl<D: DatabaseManager> Ledger<D> {
                                 },
                             }
                         }
-                        let sn = event.content.event_proposal.proposal.sn;
                         self.check_event(event.clone(), metadata.clone()).await?;
                         // Si no está en el mapa, añadirlo y enviar mensaje a gov de subject updated con el id y el sn
                         let notary_hash = DigestIdentifier::from_serializable_borsh(

@@ -8,7 +8,7 @@ use crate::{
     database::DB,
     message::MessageTaskCommand,
     protocol::protocol_message_manager::TapleMessages,
-    DatabaseManager, DigestIdentifier, KeyIdentifier,
+    DatabaseCollection, DigestIdentifier, KeyIdentifier,
 };
 
 use super::{
@@ -42,20 +42,20 @@ impl AuthorizedSubjectsAPI {
 }
 
 /// Manages authorized subjects and their providers.
-pub struct AuthorizedSubjectsManager<D: DatabaseManager> {
+pub struct AuthorizedSubjectsManager<C: DatabaseCollection> {
     /// Communication channel for incoming petitions
     input_channel: MpscChannel<AuthorizedSubjectsCommand, AuthorizedSubjectsResponse>,
-    inner_authorized_subjects: AuthorizedSubjects<D>,
+    inner_authorized_subjects: AuthorizedSubjects<C>,
     /// Notarization functions
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
 }
 
-impl<D: DatabaseManager> AuthorizedSubjectsManager<D> {
+impl<C: DatabaseCollection> AuthorizedSubjectsManager<C> {
     /// Creates a new `AuthorizedSubjectsManager` with the given input channel, database, message channel, ID, and shutdown channels.
     pub fn new(
         input_channel: MpscChannel<AuthorizedSubjectsCommand, AuthorizedSubjectsResponse>,
-        database: DB<D>,
+        database: DB<C>,
         message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
         our_id: KeyIdentifier,
         shutdown_sender: tokio::sync::broadcast::Sender<()>,

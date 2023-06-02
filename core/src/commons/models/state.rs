@@ -1,11 +1,10 @@
 use crate::{
     commons::{
-        crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair, Payload, DSA},
+        crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair},
         errors::SubjectError,
         identifier::{
-            derive::KeyDerivator, Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier,
+            DigestIdentifier, KeyIdentifier,
         },
-        schema_handler::{get_governance_schema, Schema},
     },
     event_request::EventRequest,
 };
@@ -198,10 +197,6 @@ impl Subject {
     }
 
     pub fn get_state_hash(&self) -> Result<DigestIdentifier, SubjectError> {
-        // let subject_properties = serde_json::from_str::<Value>(&self.properties)
-        //     .map_err(|_| SubjectError::CryptoError(String::from("Error parsing the state")))?;
-        // let subject_properties_str = serde_json::to_string(&subject_properties)
-        //     .map_err(|_| SubjectError::CryptoError(String::from("Error serializing the state")))?;
         Ok(
             DigestIdentifier::from_serializable_borsh(&self.properties).map_err(|_| {
                 SubjectError::CryptoError(String::from("Error calculating the hash of the state"))

@@ -9,18 +9,18 @@ use crate::{
     event_request::StateRequest,
     governance::GovernanceInterface,
     identifier::DigestIdentifier,
-    DatabaseManager, EventRequestType,
+    DatabaseCollection, EventRequestType
 };
 
 use super::{executor::ContractExecutor, ExecuteContractResponse};
 use crate::database::Error as DbError;
-pub struct TapleRunner<D: DatabaseManager, G: GovernanceInterface + Send> {
-    database: DB<D>,
+pub struct TapleRunner<C: DatabaseCollection, G: GovernanceInterface + Send> {
+    database: DB<C>,
     executor: ContractExecutor<G>,
 }
 
-impl<D: DatabaseManager, G: GovernanceInterface + Send> TapleRunner<D, G> {
-    pub fn new(database: DB<D>, engine: Engine, gov_api: G) -> Self {
+impl<C: DatabaseCollection, G: GovernanceInterface + Send> TapleRunner<C, G> {
+    pub fn new(database: DB<C>, engine: Engine, gov_api: G) -> Self {
         Self {
             database,
             executor: ContractExecutor::new(engine, gov_api),
@@ -137,6 +137,7 @@ impl<D: DatabaseManager, G: GovernanceInterface + Send> TapleRunner<D, G> {
                 &state_data.subject_id,
             )
             .await?;
+        log::warn!("Contract result: {:?}", contract_result);
         let (patch, hash) = match contract_result.success {
             Acceptance::Ok => (
                 generate_json_patch(&previous_state, &contract_result.final_state)?,

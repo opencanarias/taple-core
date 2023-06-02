@@ -15,10 +15,10 @@ use crate::{
             state::Subject,
             Acceptance,
         },
-        self_signature_manager::{SelfSignatureInterface, SelfSignatureManager},
+        self_signature_manager::{SelfSignatureManager},
     },
     event_content::Metadata,
-    event_request::{EventRequest, TransferRequest},
+    event_request::{EventRequest},
     governance::{stage::ValidationStage, GovernanceAPI, GovernanceInterface},
     identifier::{Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier},
     ledger::{LedgerCommand, LedgerResponse},
@@ -30,20 +30,20 @@ use crate::{
         approval::create_approval_request, evaluator::create_evaluator_request,
         validation::create_validator_request,
     },
-    Event, EventRequestType, Notification, TimeStamp,
+    Event, EventRequestType, Notification, TimeStamp, DatabaseCollection,
 };
 use std::hash::Hash;
 
 use super::errors::EventError;
-use crate::database::{DatabaseManager, DB};
+use crate::database::{DB};
 
 const TIMEOUT: u32 = 2000;
 // const GET_ALL: isize = 200;
 const QUORUM_PORCENTAGE_AMPLIFICATION: f64 = 0.2;
 
-pub struct EventCompleter<D: DatabaseManager> {
+pub struct EventCompleter<C: DatabaseCollection> {
     gov_api: GovernanceAPI,
-    database: DB<D>,
+    database: DB<C>,
     message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
     notification_sender: tokio::sync::broadcast::Sender<Notification>,
     ledger_sender: SenderEnd<LedgerCommand, LedgerResponse>,
@@ -67,10 +67,10 @@ pub struct EventCompleter<D: DatabaseManager> {
     signature_manager: SelfSignatureManager,
 }
 
-impl<D: DatabaseManager> EventCompleter<D> {
+impl<C: DatabaseCollection> EventCompleter<C> {
     pub fn new(
         gov_api: GovernanceAPI,
-        database: DB<D>,
+        database: DB<C>,
         message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
         notification_sender: tokio::sync::broadcast::Sender<Notification>,
         ledger_sender: SenderEnd<LedgerCommand, LedgerResponse>,
@@ -782,10 +782,6 @@ impl<D: DatabaseManager> EventCompleter<D> {
                     event.signature.content.event_content_hash.clone(),
                     notary_event,
                 );
-                log::warn!(
-                    "POST EVAL: PIDIENDO FIRMAS DE VALIDACION PARA: {}",
-                    subject.subject_id.to_str()
-                );
                 (ValidationStage::Validate, event_message)
             };
             // Limpiar HashMaps
@@ -798,22 +794,17 @@ impl<D: DatabaseManager> EventCompleter<D> {
             self.ask_signatures(&subject_id, event_message, signers.clone(), quorum_size)
                 .await?;
             // Hacer update de fase por la que va el evento
-            log::error!("LLEGA A ACTUALIZAR EL STAGE QUE ES: {:?}", stage);
-            log::error!("LLEGA A ACTUALIZAR EL STAGE PARA EL SUJETO: {:?}", subject_id.to_str());
             self.subjects_completing_event
                 .insert(subject_id.clone(), (stage, signers, quorum_size));
             let tmp = self.subjects_completing_event.get(&subject_id);
-            log::error!("STAGE: {:?}", tmp);
         }
         Ok(())
     }
 
     pub async fn approver_signatures(&mut self, approval: Approval) -> Result<(), EventError> {
-        log::warn!("APPROVAL SIGNATURES");
         if let Acceptance::Error = approval.content.acceptance {
             return Ok(()); // Ignoramos respuestas de Error
         }
-        log::warn!("APPROVAL 1");
         // Mirar en que estado está el evento, si está en aprovación o no
         let event_proposal = match self
             .event_proposals
@@ -826,7 +817,6 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 )))
             }
         };
-        log::warn!("APPROVAL 2");
         let subject_id = match &event_proposal.proposal.event_request.request {
             // La transferencia no se aprueba
             crate::event_request::EventRequestType::Transfer(_) => {
@@ -839,13 +829,10 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 state_request.subject_id.clone()
             }
         };
-        log::warn!("APPROVAL 3");
         let tmp = self.subjects_completing_event.get(&subject_id);
-        log::error!("STAGE: {:?}", tmp);
         let Some((ValidationStage::Approve, signers, quorum_size)) = self.subjects_completing_event.get(&subject_id) else {
             return Err(EventError::WrongEventPhase);
         };
-        log::warn!("APPROVAL 4");
         let signer = approval.signature.content.signer.clone();
         // Check if approver is in the list of approvers
         if !signers.contains(&signer) {
@@ -853,11 +840,9 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 "The signer is not in the list of approvers or we already have his approve",
             )));
         }
-        log::warn!("APPROVAL 5");
         // Comprobar que todo es correcto criptográficamente
         let _approval_hash = check_cryptography(&approval.content, &approval.signature)
             .map_err(|error| EventError::CryptoError(error.to_string()))?;
-        log::warn!("APPROVAL 6");
         // Obtener sujeto para saber si lo tenemos y los metadatos del mismo
         let subject = self
             .database
@@ -866,7 +851,6 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 crate::DbError::EntryNotFound => EventError::SubjectNotFound(subject_id.to_str()),
                 _ => EventError::DatabaseError(error.to_string()),
             })?;
-        log::warn!("APPROVAL 7");
         // Guardar aprobación
         let approval_set = match self
             .event_approvations
@@ -913,10 +897,6 @@ impl<D: DatabaseManager> EventCompleter<D> {
             let mut new_signers: HashSet<KeyIdentifier> =
                 signers.into_iter().map(|s| s.clone()).collect();
             new_signers.remove(&signer);
-            log::warn!(
-                "faltan PIDIENDO FIRMAS DE Aprobacion PARA: {}",
-                subject.subject_id.to_str()
-            );
             self.ask_signatures(
                 &subject_id,
                 create_approval_request(event_proposal.to_owned()),
@@ -974,10 +954,6 @@ impl<D: DatabaseManager> EventCompleter<D> {
             let stage = ValidationStage::Validate;
             let (signers, quorum_size) =
                 self.get_signers_and_quorum(metadata, stage.clone()).await?;
-            log::warn!(
-                "START PIDIENDO FIRMAS DE VALIDACION PARA: {}",
-                subject.subject_id.to_str()
-            );
             self.ask_signatures(&subject_id, event_message, signers.clone(), quorum_size)
                 .await?;
             self.event_notary_events.insert(
@@ -996,23 +972,19 @@ impl<D: DatabaseManager> EventCompleter<D> {
         event_hash: DigestIdentifier,
         signature: Signature,
     ) -> Result<(), EventError> {
-        log::warn!("VALIDATION SIGNATURES");
         // Mirar en que estado está el evento, si está en notarización o no
         let event = match self.events_to_validate.get(&event_hash) {
             Some(event) => event,
             None => {
-                log::warn!("SE EJECUTA NONE");
                 return Err(EventError::CryptoError(String::from(
                     "The hash of the event does not match any of the events",
                 )))
             }
         };
-        log::warn!("VALIDATION AFTER EVENT");
         let notary_event = self
             .event_notary_events
             .get(&event_hash)
             .expect("Should be");
-        log::warn!("VALIDATION AFTER EXPECT");
         let subject_id = match &event.content.event_proposal.proposal.event_request.request {
             crate::event_request::EventRequestType::Transfer(transfer_request) => {
                 transfer_request.subject_id.clone()
@@ -1024,14 +996,10 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 state_request.subject_id.clone()
             }
         };
-        log::warn!("TDO BIEN");
-        let a = self.subjects_completing_event.get(&subject_id);
-        log::warn!("STAGE: {:?}", a);
         // CHeck phase
         let Some((ValidationStage::Validate, signers, quorum_size)) = self.subjects_completing_event.get(&subject_id) else {
             return Err(EventError::WrongEventPhase);
         };
-        log::warn!("PASO 1");
         let signer = signature.content.signer.clone();
         // Check if approver is in the list of approvers
         if !signers.contains(&signer) {
@@ -1039,7 +1007,6 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 "The signer is not in the list of validators or we already have the validation",
             )));
         }
-        log::warn!("PASO 2");
         // Obtener sujeto para saber si lo tenemos y los metadatos del mismo
         let _subject = self
             .database
@@ -1048,11 +1015,9 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 crate::DbError::EntryNotFound => EventError::SubjectNotFound(subject_id.to_str()),
                 _ => EventError::DatabaseError(error.to_string()),
             })?;
-        log::warn!("PASO 3");
         // Comprobar que todo es correcto criptográficamente
         let event_hash = check_cryptography(&notary_event.proof, &signature)
             .map_err(|error| EventError::CryptoError(error.to_string()))?;
-        log::warn!("PASO 4");
         // Guardar validación
         let validation_set = match self.event_validations.get_mut(&event_hash) {
             Some(validation_set) => {
@@ -1069,11 +1034,9 @@ impl<D: DatabaseManager> EventCompleter<D> {
                 )
             }
         };
-        log::warn!("PASO 5");
         let quorum_size = quorum_size.to_owned();
         // Comprobar si llegamos a Quorum y si es así dejar de pedir firmas
         if (validation_set.len() as u32) < quorum_size {
-            log::warn!("PASO 6 IF");
             let notary_event = match self
                 .event_notary_events
                 .get(&event.signature.content.event_content_hash)
@@ -1085,10 +1048,6 @@ impl<D: DatabaseManager> EventCompleter<D> {
                     )))
                 }
             };
-            log::warn!(
-                "NO COMPLETAS PIDIENDO FIRMAS DE VALIDACION PARA: {}",
-                notary_event.proof.subject_id.to_str()
-            );
             let event_message = create_validator_request(notary_event);
             let mut new_signers: HashSet<KeyIdentifier> =
                 signers.into_iter().map(|s| s.clone()).collect();

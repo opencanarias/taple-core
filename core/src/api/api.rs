@@ -24,7 +24,7 @@ use crate::{
     commons::models::Acceptance,
     event_request::{CreateRequest, EventRequestType, StateRequest},
     identifier::DigestIdentifier,
-    DatabaseManager, DB,
+    DatabaseManager, DB, DatabaseCollection
 };
 use async_trait::async_trait;
 use tokio::sync::watch::Sender;
@@ -451,15 +451,15 @@ impl ApiModuleInterface for NodeAPI {
     }
 }
 
-pub struct API<D: DatabaseManager> {
+pub struct API<C: DatabaseCollection,> {
     input: MpscChannel<APICommands, ApiResponses>,
     _settings_sender: Sender<TapleSettings>,
-    inner_api: InnerAPI<D>,
+    inner_api: InnerAPI<C>,
     shutdown_sender: Option<tokio::sync::broadcast::Sender<()>>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
 }
 
-impl<D: DatabaseManager> API<D> {
+impl<C: DatabaseCollection,> API<C> {
     pub fn new(
         input: MpscChannel<APICommands, ApiResponses>,
         event_api: EventAPI,
@@ -471,7 +471,7 @@ impl<D: DatabaseManager> API<D> {
         keys: KeyPair,
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
-        db: DB<D>,
+        db: DB<C>,
     ) -> Self {
         Self {
             input,
