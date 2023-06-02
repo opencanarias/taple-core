@@ -493,6 +493,9 @@ impl<C: DatabaseCollection> Ledger<C> {
                                     return Err(LedgerError::DatabaseError(error));
                                 }
                             };
+                        if !subject.active {
+                            return Err(LedgerError::SubjectLifeEnd(subject.subject_id.to_str()));
+                        }
                         let is_gov = self
                             .subject_is_gov
                             .get(&transfer_request.subject_id)
@@ -1068,6 +1071,9 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 return Err(LedgerError::DatabaseError(error));
                             }
                         };
+                        if !subject.active {
+                            return Err(LedgerError::SubjectLifeEnd(subject.subject_id.to_str()));
+                        }
                         let is_gov = self.subject_is_gov.get(&state_request.subject_id).unwrap();
                         log::warn!("EL SUJETO ES  IS GOV: {}", is_gov);
                         if *is_gov {
@@ -1435,17 +1441,371 @@ impl<C: DatabaseCollection> Ledger<C> {
                 }
                 match ledger_state {
                     Some(ledger_state) => {
-                        match ledger_state.head {
-                            Some(head) => {
-                                // Si hay un LCE es un error, comprobar si es el mismo evento y si no fallo
+                        match ledger_state.current_sn {
+                            Some(current_sn) => {
+                                if event.content.event_proposal.proposal.sn <= current_sn {
+                                    return Err(LedgerError::EventAlreadyExists);
+                                }
                             }
                             None => {
-                                // Comprobar que es el siguiente evento o si es LCE
+                                // Es LCE y tenemos otro LCE para un sujeto en el que no tenemos génesis ... TODO:
+                                return Err(LedgerError::LCEBiggerSN);
                             }
+                        }
+                        // Debemos comprobar si el sujeto es gobernanza
+                        let mut subject = match self.database.get_subject(&eol_request.subject_id) {
+                            Ok(subject) => subject,
+                            Err(crate::DbError::EntryNotFound) => {
+                                // Pedir génesis
+                                let msg =
+                                    request_event(self.our_id.clone(), eol_request.subject_id, 0);
+                                self.message_channel
+                                    .tell(MessageTaskCommand::Request(
+                                        None,
+                                        msg,
+                                        vec![sender],
+                                        MessageConfig {
+                                            timeout: 2000,
+                                            replication_factor: 1.0,
+                                        },
+                                    ))
+                                    .await?;
+                                return Err(LedgerError::SubjectNotFound("aaa".into()));
+                            }
+                            Err(error) => {
+                                return Err(LedgerError::DatabaseError(error));
+                            }
+                        };
+                        if !subject.active {
+                            return Err(LedgerError::SubjectLifeEnd(subject.subject_id.to_str()));
+                        }
+                        let is_gov = self.subject_is_gov.get(&eol_request.subject_id).unwrap();
+                        log::warn!("EL SUJETO ES  IS GOV: {}", is_gov);
+                        if *is_gov {
+                            // Al ser gov no tiene HEAD. Debemos comprobar si se trata del sn + 1
+                            if event.content.event_proposal.proposal.sn > subject.sn + 1 {
+                                // Pedimos el siguiente evento al que nosotros tenemos
+                                let msg = request_gov_event(
+                                    self.our_id.clone(),
+                                    subject.subject_id.clone(),
+                                    subject.sn + 1,
+                                );
+                                self.message_channel
+                                    .tell(MessageTaskCommand::Request(
+                                        None,
+                                        msg,
+                                        vec![sender],
+                                        MessageConfig {
+                                            timeout: 2000,
+                                            replication_factor: 1.0,
+                                        },
+                                    ))
+                                    .await?;
+                                return Err(LedgerError::GovernanceLCE(
+                                    eol_request.subject_id.to_str(),
+                                ));
+                            }
+                        }
+                        // Comprobar que las firmas son válidas y suficientes
+                        // Si es el evento siguiente puedo obtener metadata de mi sistema, si es LCE lo tengo que obtener de la prueba de validación por si ha habido cambios de propietario u otros cambios
+                        log::warn!(
+                            "ME LLEGA EL EVENTO CON SN {}",
+                            event.content.event_proposal.proposal.sn
+                        );
+                        let mut witnesses = self.get_witnesses(metadata.clone()).await?;
+                        log::warn!("GET TESTIGOS");
+                        if !witnesses.contains(&self.our_id) {
+                            match self
+                                .database
+                                .get_preauthorized_subject_and_providers(&metadata.subject_id)
+                            {
+                                Ok(_) => {}
+                                Err(error) => match error {
+                                    crate::DbError::EntryNotFound => {
+                                        return Err(LedgerError::WeAreNotWitnesses(
+                                            eol_request.subject_id.to_str(),
+                                        ));
+                                    }
+                                    _ => {
+                                        return Err(LedgerError::DatabaseError(error));
+                                    }
+                                },
+                            }
+                        }
+                        self.check_event(event.clone(), metadata.clone()).await?;
+                        log::warn!("CHECK EVENT");
+                        // Si no está en el mapa, añadirlo y enviar mensaje a gov de subject updated con el id y el sn
+                        let subject_id = eol_request.subject_id.clone();
+                        let (signers, quorum) = self
+                            .get_signers_and_quorum(metadata.clone(), ValidationStage::Validate)
+                            .await?;
+                        log::warn!("GET SIGNERS AND QUORUM");
+                        let state_hash = subject.state_hash_after_apply(
+                            &event.content.event_proposal.proposal.json_patch,
+                        )?;
+
+                        let notary_hash = DigestIdentifier::from_serializable_borsh(
+                            &validation_proof,
+                        )
+                        .map_err(|_| {
+                            LedgerError::CryptoError(String::from(
+                                "Error calculating the hash of the serializable",
+                            ))
+                        })?;
+
+                        log::warn!("NOTARY HASH QUE ME LLEGA {}", notary_hash.to_str());
+                        log::warn!("VALIDATION PROOF {:?}", validation_proof);
+                        let notary_hash = DigestIdentifier::from_serializable_borsh(
+                            &validation_proof,
+                        )
+                        .map_err(|_| {
+                            LedgerError::CryptoError(String::from(
+                                "Error calculating the hash of the serializable",
+                            ))
+                        })?;
+                        log::warn!("SIGNATURES SIZE: {}", signatures.len());
+                        log::warn!("SIGNERS SIZE {}", signers.len());
+                        verify_signatures(&signatures, &signers, quorum, &notary_hash)?;
+                        log::warn!("PASA POR VERIFY");
+                        // Comprobar si es evento siguiente o LCE
+                        if event.content.event_proposal.proposal.sn == subject.sn + 1
+                            && ledger_state.head.is_none()
+                        {
+                            // Caso Evento Siguiente
+                            // Comprobar ValidationProof
+                            self.check_validation_proof(
+                                &validation_proof,
+                                &subject,
+                                &event.signature.content.event_content_hash,
+                                &state_hash,
+                            )?;
+                            check_context(&event, metadata, subject.properties.clone())?;
+                            let sn: u64 = event.content.event_proposal.proposal.sn;
+                            subject.eol_event();
+                            self.database.set_signatures(
+                                &eol_request.subject_id,
+                                sn,
+                                signatures,
+                            )?;
+                            self.database.set_event(&eol_request.subject_id, event)?;
+                            self.database
+                                .set_subject(&eol_request.subject_id, subject)?;
+                            if self.subject_is_gov.get(&subject_id).unwrap().to_owned() {
+                                // Enviar mensaje a gov de governance updated con el id y el sn
+                                let msg = request_gov_event(
+                                    self.our_id.clone(),
+                                    subject_id.clone(),
+                                    sn + 1,
+                                );
+                                self.message_channel
+                                    .tell(MessageTaskCommand::Request(
+                                        None,
+                                        msg,
+                                        vec![sender],
+                                        MessageConfig {
+                                            timeout: 2000,
+                                            replication_factor: 1.0,
+                                        },
+                                    ))
+                                    .await?;
+                                self.gov_api
+                                    .governance_updated(subject_id.clone(), sn)
+                                    .await?;
+                            } else {
+                                self.database
+                                    .del_signatures(&eol_request.subject_id, sn - 1)?;
+                            }
+                            self.ledger_state.insert(
+                                eol_request.subject_id.clone(),
+                                LedgerState {
+                                    current_sn: Some(sn),
+                                    head: ledger_state.head,
+                                },
+                            );
+                            // Mandar firma de testificacion a distribution manager o el evento en sí
+                            self.distribution_channel
+                                .tell(DistributionMessagesNew::SignaturesNeeded {
+                                    subject_id: eol_request.subject_id,
+                                    sn,
+                                })
+                                .await?;
+                        // } else if event.content.event_proposal.proposal.sn == subject.sn + 1 {
+                        // Caso en el que el LCE es S + 1
+                        // TODO:
+                        } else if event.content.event_proposal.proposal.sn > subject.sn {
+                            // Caso LCE
+                            let is_gov = self.subject_is_gov.get(&subject_id).unwrap().to_owned();
+                            if is_gov {
+                                // No me valen los LCE de Gov
+                                let msg = request_gov_event(
+                                    self.our_id.clone(),
+                                    subject_id,
+                                    subject.sn + 1,
+                                );
+                                self.message_channel
+                                    .tell(MessageTaskCommand::Request(
+                                        None,
+                                        msg,
+                                        vec![sender],
+                                        MessageConfig {
+                                            timeout: 2000,
+                                            replication_factor: 1.0,
+                                        },
+                                    ))
+                                    .await?;
+                                return Err(LedgerError::GovernanceLCE(
+                                    eol_request.subject_id.to_str(),
+                                ));
+                            }
+                            // Comprobar que LCE es mayor y quedarnos con el mas peque si tenemos otro
+                            let last_lce = match ledger_state.head {
+                                Some(head) => {
+                                    if event.content.event_proposal.proposal.sn > head {
+                                        return Err(LedgerError::LCEBiggerSN);
+                                    } else {
+                                        return Err(LedgerError::EOLWhenActiveLCE(
+                                            eol_request.subject_id.to_str(),
+                                        ));
+                                    }
+                                }
+                                None => {
+                                    // Va a ser el nuevo LCE
+                                    None
+                                }
+                            };
+                            // Si hemos llegado aquí es porque va a ser nuevo LCE
+                            let sn = event.content.event_proposal.proposal.sn;
+                            self.database.set_signatures(
+                                &eol_request.subject_id,
+                                sn,
+                                signatures,
+                            )?;
+                            self.database.set_lce_validation_proof(
+                                &eol_request.subject_id,
+                                validation_proof,
+                            )?;
+                            self.database.set_event(&eol_request.subject_id, event)?;
+                            if last_lce.is_some() {
+                                let last_lce_sn = last_lce.unwrap();
+                                self.database
+                                    .del_signatures(&eol_request.subject_id, last_lce_sn)?;
+                                self.database
+                                    .del_event(&eol_request.subject_id, last_lce_sn)?;
+                            } else {
+                                // Borrar firmas de último evento validado
+                                self.database
+                                    .del_signatures(&eol_request.subject_id, subject.sn)?;
+                            }
+                            self.ledger_state.insert(
+                                eol_request.subject_id.clone(),
+                                LedgerState {
+                                    current_sn: ledger_state.current_sn,
+                                    head: Some(sn),
+                                },
+                            );
+                            // Pedir evento siguiente a current_sn
+                            witnesses.insert(subject.owner);
+                            let msg = request_event(self.our_id.clone(), eol_request.subject_id, 0);
+                            self.message_channel
+                                .tell(MessageTaskCommand::Request(
+                                    None,
+                                    msg,
+                                    witnesses.into_iter().collect(),
+                                    MessageConfig {
+                                        timeout: 2000,
+                                        replication_factor: 0.8,
+                                    },
+                                ))
+                                .await?;
+                        } else {
+                            // Caso evento repetido
+                            return Err(LedgerError::EventAlreadyExists);
                         }
                     }
                     None => {
                         // Es LCE
+                        // Hacer comprobaciones con la ValidationProof
+                        // Comprobar que las firmas son válidas y suficientes
+                        let subject_id = eol_request.subject_id.clone();
+                        let metadata = validation_proof.get_metadata();
+                        if &metadata.schema_id == "governance" {
+                            self.subject_is_gov.insert(subject_id.clone(), true);
+                            // PEDIR GÉNESIS
+                            let msg = request_gov_event(self.our_id.clone(), subject_id, 0);
+                            self.message_channel
+                                .tell(MessageTaskCommand::Request(
+                                    None,
+                                    msg,
+                                    vec![sender],
+                                    MessageConfig {
+                                        timeout: 2000,
+                                        replication_factor: 1.0,
+                                    },
+                                ))
+                                .await?;
+                            return Err(LedgerError::GovernanceLCE(
+                                eol_request.subject_id.to_str(),
+                            ));
+                        } else {
+                            self.subject_is_gov.insert(subject_id.clone(), false);
+                        }
+                        let mut witnesses = self.get_witnesses(metadata.clone()).await?;
+                        if !witnesses.contains(&self.our_id) {
+                            match self
+                                .database
+                                .get_preauthorized_subject_and_providers(&metadata.subject_id)
+                            {
+                                Ok(_) => {}
+                                Err(error) => match error {
+                                    crate::DbError::EntryNotFound => {
+                                        return Err(LedgerError::WeAreNotWitnesses(
+                                            eol_request.subject_id.to_str(),
+                                        ));
+                                    }
+                                    _ => {
+                                        return Err(LedgerError::DatabaseError(error));
+                                    }
+                                },
+                            }
+                        }
+                        self.check_event(event.clone(), metadata.clone()).await?;
+                        // Si no está en el mapa, añadirlo y enviar mensaje a gov de subject updated con el id y el sn
+                        let notary_hash = DigestIdentifier::from_serializable_borsh(
+                            &validation_proof,
+                        )
+                        .map_err(|_| {
+                            LedgerError::CryptoError(String::from(
+                                "Error calculating the hash of the serializable",
+                            ))
+                        })?;
+                        let (signers, quorum) = self
+                            .get_signers_and_quorum(metadata.clone(), ValidationStage::Validate)
+                            .await?;
+                        verify_signatures(&signatures, &signers, quorum, &notary_hash)?;
+                        let sn = event.content.event_proposal.proposal.sn;
+                        self.database
+                            .set_signatures(&eol_request.subject_id, sn, signatures)?;
+                        self.database.set_event(&eol_request.subject_id, event)?;
+                        self.ledger_state.insert(
+                            eol_request.subject_id.clone(),
+                            LedgerState {
+                                current_sn: None,
+                                head: Some(sn),
+                            },
+                        );
+                        // Pedir evento 0
+                        let msg = request_event(self.our_id.clone(), eol_request.subject_id, 0);
+                        self.message_channel
+                            .tell(MessageTaskCommand::Request(
+                                None,
+                                msg,
+                                vec![sender],
+                                MessageConfig {
+                                    timeout: 2000,
+                                    replication_factor: 1.0,
+                                },
+                            ))
+                            .await?;
                     }
                 }
             }
@@ -1464,6 +1824,11 @@ impl<C: DatabaseCollection> Ledger<C> {
             }
             EventRequestType::State(state_request) => state_request.subject_id.clone(),
             EventRequestType::Transfer(transfer_request) => transfer_request.subject_id.clone(),
+            EventRequestType::EOL(eol_request) => {
+                return Err(LedgerError::IntermediateEOL(
+                    eol_request.subject_id.to_str(),
+                ))
+            }
         };
         let ledger_state = self.ledger_state.get(&subject_id);
         match ledger_state {
@@ -1520,6 +1885,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                         EventRequestType::Transfer(_) => {
                                             self.check_transfer_event(event.clone())?;
                                         }
+                                        EventRequestType::EOL(_) => unreachable!(),
                                     }
                                     self.database.set_event(&subject_id, event.clone())?;
                                     self.event_sourcing(event.clone())?;
@@ -1989,6 +2355,35 @@ impl<C: DatabaseCollection> Ledger<C> {
         Ok(metadata)
     }
 
+    fn event_sourcing_eol(&self, event: Event) -> Result<(), LedgerError> {
+        let subject_id = {
+            match event.content.event_proposal.proposal.event_request.request {
+                EventRequestType::EOL(eol_request) => eol_request.subject_id.clone(),
+                _ => return Err(LedgerError::EventDoesNotFitHash),
+            }
+        };
+        let sn = event.content.event_proposal.proposal.sn;
+        let prev_event =
+            self.database
+                .get_event(&subject_id, sn - 1)
+                .map_err(|error| match error {
+                    crate::database::Error::EntryNotFound => {
+                        LedgerError::UnexpectEventMissingInEventSourcing
+                    }
+                    _ => LedgerError::DatabaseError(error),
+                })?;
+        // Comprobar evento previo encaja
+        if event.content.event_proposal.proposal.hash_prev_event
+            != prev_event.signature.content.event_content_hash
+        {
+            return Err(LedgerError::EventDoesNotFitHash);
+        }
+        let mut subject = self.database.get_subject(&subject_id)?;
+        subject.eol_event();
+        self.database.set_subject(&subject_id, subject)?;
+        Ok(())
+    }
+
     fn event_sourcing_transfer(
         &self,
         subject_id: DigestIdentifier,
@@ -2070,6 +2465,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                 event.content.event_proposal.proposal.sn,
                 event,
             ),
+            EventRequestType::EOL(eol_request) => self.event_sourcing_eol(event),
         }
     }
 

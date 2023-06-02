@@ -70,4 +70,8 @@ pub enum LedgerError {
     ValidationProofError(String),
     #[error("EOL when active LCE for subject: {0}")]
     EOLWhenActiveLCE(String),
+    #[error("Intermediate EOL for subject: {0}")]
+    IntermediateEOL(String),
+    #[error("Subject Life Ended: {0}")]
+    SubjectLifeEnd(String),
 }
