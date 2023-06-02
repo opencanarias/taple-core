@@ -127,6 +127,7 @@ impl<C: DatabaseCollection> EventManager<C> {
         &mut self,
         command: ChannelData<LedgerCommand, LedgerResponse>,
     ) -> Result<(), LedgerError> {
+        log::warn!("MENSAJE EN EL LEDGER RECIBIDO");
         let (sender, data) = match command {
             ChannelData::AskData(data) => {
                 let (sender, data) = data.get();
@@ -177,7 +178,9 @@ impl<C: DatabaseCollection> EventManager<C> {
                                 self.shutdown_sender.send(()).expect("Channel Closed");
                                 return Err(LedgerError::ChannelClosed);
                             }
-                            _ => {}
+                            _ => {
+                                log::error!("ERROR EN LEDGER {}", error);
+                            }
                         },
                         _ => {}
                     }
@@ -211,6 +214,7 @@ impl<C: DatabaseCollection> EventManager<C> {
                     signatures,
                     validation_proof,
                 } => {
+                    log::error!("EXTERNAL EVENT RECIVED");
                     let response = self
                         .inner_ledger
                         .external_event(event, signatures, sender, validation_proof)
@@ -237,6 +241,7 @@ impl<C: DatabaseCollection> EventManager<C> {
                     LedgerResponse::NoResponse
                 }
                 LedgerCommand::ExternalIntermediateEvent { event } => {
+                    log::error!("EXTERNAL INTERMEDIATE EVENT");
                     let response = self.inner_ledger.external_intermediate_event(event).await;
                     match response {
                         Err(error) => match error {
@@ -313,7 +318,6 @@ impl<C: DatabaseCollection> EventManager<C> {
                         .inner_ledger
                         .get_next_gov(who_asked, subject_id, sn)
                         .await;
-                    log::warn!("GetNextGov Response: {:?}", response);
                     let response = match response {
                         Err(error) => match error.clone() {
                             LedgerError::ChannelClosed => {

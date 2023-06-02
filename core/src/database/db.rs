@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use crate::commons::models::notary::NotaryEventResponse;
 use crate::commons::models::state::Subject;
 use crate::crypto::KeyPair;
 use crate::event_request::EventRequest;
@@ -13,7 +12,7 @@ use super::error::Error;
 use super::{
     layers::{
         contract::ContractDb, controller_id::ControllerIdDb, event::EventDb, notary::NotaryDb,
-        notary_signatures::NotarySignaturesDb, prevalidated_event::PrevalidatedEventDb,
+        prevalidated_event::PrevalidatedEventDb,
         request::RequestDb, signature::SignatureDb, subject::SubjectDb,
         subject_by_governance::SubjectByGovernanceDb, witness_signatures::WitnessSignaturesDb,
         preauthorized_subjects_and_providers::PreauthorizedSbujectsAndProovidersDb, transfer_events::TransferEventsDb
@@ -30,7 +29,6 @@ pub struct DB<C: DatabaseCollection> {
     controller_id_db: ControllerIdDb<C>,
     notary_db: NotaryDb<C>,
     contract_db: ContractDb<C>,
-    notary_signatures_db: NotarySignaturesDb<C>,
     witness_signatures_db: WitnessSignaturesDb<C>,
     subject_by_governance_db: SubjectByGovernanceDb<C>,
     transfer_events_db: TransferEventsDb<C>,
@@ -47,7 +45,6 @@ impl<C: DatabaseCollection> DB<C> {
         let controller_id_db = ControllerIdDb::new(&manager);
         let notary_db = NotaryDb::new(&manager);
         let contract_db = ContractDb::new(&manager);
-        let notary_signatures_db = NotarySignaturesDb::new(&manager);
         let witness_signatures_db = WitnessSignaturesDb::new(&manager);
         let subject_by_governance_db = SubjectByGovernanceDb::new(&manager);
         let transfer_events_db = TransferEventsDb::new(&manager);
@@ -61,12 +58,10 @@ impl<C: DatabaseCollection> DB<C> {
             controller_id_db,
             notary_db,
             contract_db,
-            notary_signatures_db,
             witness_signatures_db,
             subject_by_governance_db,
             transfer_events_db,
-            preauthorized_subjects_and_providers_db
-
+            preauthorized_subjects_and_providers_db,
         }
     }
 
@@ -74,7 +69,7 @@ impl<C: DatabaseCollection> DB<C> {
         &self,
         subject_id: &DigestIdentifier,
         sn: u64,
-    ) -> Result<HashSet<Signature>, Error> {
+    ) -> Result<(HashSet<Signature>, KeyIdentifier), Error> {
         self.signature_db.get_signatures(subject_id, sn)
     }
 
@@ -83,8 +78,9 @@ impl<C: DatabaseCollection> DB<C> {
         subject_id: &DigestIdentifier,
         sn: u64,
         signatures: HashSet<Signature>,
+        owner: KeyIdentifier,
     ) -> Result<(), Error> {
-        self.signature_db.set_signatures(subject_id, sn, signatures)
+        self.signature_db.set_signatures(subject_id, sn, signatures, owner)
     }
 
     pub fn del_signatures(&self, subject_id: &DigestIdentifier, sn: u64) -> Result<(), Error> {
@@ -243,30 +239,6 @@ impl<C: DatabaseCollection> DB<C> {
         self.contract_db.put_governance_contract(contract)
     }
 
-    pub fn get_notary_signatures(
-        &self,
-        subject_id: &DigestIdentifier,
-        sn: u64,
-    ) -> Result<(u64, HashSet<NotaryEventResponse>), Error> {
-        self.notary_signatures_db
-            .get_notary_signatures(subject_id, sn)
-    }
-
-    pub fn set_notary_signatures(
-        &self,
-        subject_id: &DigestIdentifier,
-        sn: u64,
-        signatures: HashSet<NotaryEventResponse>,
-    ) -> Result<(), Error> {
-        self.notary_signatures_db
-            .set_notary_signatures(subject_id, sn, signatures)
-    }
-
-    pub fn delete_notary_signatures(&self, subject_id: &DigestIdentifier) -> Result<(), Error> {
-        self.notary_signatures_db
-            .delete_notary_signatures(subject_id)
-    }
-
     pub fn get_witness_signatures(
         &self,
         subject_id: &DigestIdentifier,
@@ -315,6 +287,10 @@ impl<C: DatabaseCollection> DB<C> {
 
     pub fn get_expecting_transfer(&self, subject_id: &DigestIdentifier) -> Result<KeyPair, Error> {
         self.transfer_events_db.get_expecting_transfer(subject_id)
+    }
+
+    pub fn get_all_expecting_transfers(&self) -> Result<Vec<(DigestIdentifier, HashSet<KeyIdentifier>)>, Error> {
+        self.transfer_events_db.get_all_expecting_transfers()
     }
 
     pub fn set_expecting_transfer(

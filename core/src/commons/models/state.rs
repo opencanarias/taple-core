@@ -1,11 +1,10 @@
 use crate::{
     commons::{
-        crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair, Payload, DSA},
+        crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair},
         errors::SubjectError,
         identifier::{
-            derive::KeyDerivator, Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier,
+            DigestIdentifier, KeyIdentifier,
         },
-        schema_handler::{get_governance_schema, Schema},
     },
     event_request::EventRequest,
 };
@@ -189,10 +188,20 @@ impl Subject {
         owner: KeyIdentifier,
         public_key: KeyIdentifier,
         keys: Option<KeyPair>,
+        sn: u64
     ) {
         self.owner = owner;
         self.public_key = public_key;
         self.keys = keys;
+        self.sn = sn;
+    }
+
+    pub fn get_state_hash(&self) -> Result<DigestIdentifier, SubjectError> {
+        Ok(
+            DigestIdentifier::from_serializable_borsh(&self.properties).map_err(|_| {
+                SubjectError::CryptoError(String::from("Error calculating the hash of the state"))
+            })?,
+        )
     }
 
     pub fn state_hash_after_apply(

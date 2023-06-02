@@ -140,7 +140,6 @@ impl<C: DatabaseCollection> EventManager<C> {
         &mut self,
         command: ChannelData<EventCommand, EventResponse>,
     ) -> Result<(), EventError> {
-        log::info!("EVENT MANAGER MSG RECEIVED");
         let (sender, data) = match command {
             ChannelData::AskData(data) => {
                 let (sender, data) = data.get();
@@ -254,7 +253,9 @@ impl<C: DatabaseCollection> EventManager<C> {
                                 log::error!("VALIDATION ERROR: {:?}", error);
                             }
                         },
-                        _ => {}
+                        _ => {
+                            log::error!("VALIDATION ACCEPTED");
+                        }
                     }
                     EventResponse::NoResponse
                 }

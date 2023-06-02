@@ -277,6 +277,7 @@ impl ValidationProof {
         event_hash: DigestIdentifier,
         state_hash: DigestIdentifier,
         governance_version: u64,
+        owner: KeyIdentifier
     ) -> Self {
         Self {
             governance_id: subject.governance_id.clone(),
@@ -289,7 +290,7 @@ impl ValidationProof {
             event_hash,
             state_hash,
             subject_public_key: subject.public_key.clone(),
-            owner: subject.owner.clone(),
+            owner,
             creator: subject.creator.clone(),
         }
     }
