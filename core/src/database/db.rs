@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use crate::commons::models::event::ValidationProof;
 use crate::commons::models::state::Subject;
 use crate::crypto::KeyPair;
 use crate::event_request::EventRequest;
@@ -69,7 +70,7 @@ impl<C: DatabaseCollection> DB<C> {
         &self,
         subject_id: &DigestIdentifier,
         sn: u64,
-    ) -> Result<(HashSet<Signature>, KeyIdentifier), Error> {
+    ) -> Result<(HashSet<Signature>, ValidationProof), Error> {
         self.signature_db.get_signatures(subject_id, sn)
     }
 
@@ -78,9 +79,9 @@ impl<C: DatabaseCollection> DB<C> {
         subject_id: &DigestIdentifier,
         sn: u64,
         signatures: HashSet<Signature>,
-        owner: KeyIdentifier,
+        validation_proof: ValidationProof,
     ) -> Result<(), Error> {
-        self.signature_db.set_signatures(subject_id, sn, signatures, owner)
+        self.signature_db.set_signatures(subject_id, sn, signatures, validation_proof)
     }
 
     pub fn del_signatures(&self, subject_id: &DigestIdentifier, sn: u64) -> Result<(), Error> {

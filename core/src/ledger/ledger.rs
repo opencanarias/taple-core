@@ -258,6 +258,7 @@ impl<C: DatabaseCollection> Ledger<C> {
         &mut self,
         event: Event,
         signatures: HashSet<Signature>,
+        validation_proof: ValidationProof
     ) -> Result<(), LedgerError> {
         let sn = event.content.event_proposal.proposal.sn;
         let subject_id = match &event.content.event_proposal.proposal.event_request.request {
@@ -277,7 +278,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                     &subject_id,
                     event.content.event_proposal.proposal.sn,
                     signatures,
-                    subject.owner.clone(), // Current Owner
+                    validation_proof, // Current Owner
                 )?;
                 let json_patch = event.content.event_proposal.proposal.json_patch.as_str();
                 subject.update_subject(json_patch, event.content.event_proposal.proposal.sn)?;
@@ -328,7 +329,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                     &subject_id,
                     event.content.event_proposal.proposal.sn,
                     signatures,
-                    subject.owner.clone(),
+                    validation_proof,
                 )?;
                 self.database.set_event(&subject_id, event.clone())?;
                 // Cambiar clave pública del sujeto y eliminar material criptográfico
@@ -629,7 +630,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 &transfer_request.subject_id,
                                 sn,
                                 signatures,
-                                subject.owner.clone(),
+                                validation_proof,
                             )?;
                             self.database
                                 .set_event(&transfer_request.subject_id, event)?;
@@ -724,7 +725,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 &transfer_request.subject_id,
                                 sn,
                                 signatures,
-                                subject.owner.clone(),
+                                validation_proof,
                             )?;
                             self.database
                                 .set_event(&transfer_request.subject_id, event)?;
@@ -832,7 +833,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                             &transfer_request.subject_id,
                             sn,
                             signatures,
-                            metadata.owner.clone(),
+                            validation_proof,
                         )?;
                         self.database
                             .set_event(&transfer_request.subject_id, event)?;
@@ -1168,7 +1169,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 &state_request.subject_id,
                                 sn,
                                 signatures,
-                                subject.owner.clone(),
+                                validation_proof,
                             )?;
                             self.database.set_event(&state_request.subject_id, event)?;
                             self.database
@@ -1263,7 +1264,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 &state_request.subject_id,
                                 sn,
                                 signatures,
-                                subject.owner.clone(),
+                                validation_proof,
                             )?;
                             self.database.set_event(&state_request.subject_id, event)?;
                             if last_lce.is_some() {
@@ -1368,7 +1369,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                             &state_request.subject_id,
                             sn,
                             signatures,
-                            metadata.owner.clone(),
+                            validation_proof,
                         )?;
                         self.database.set_event(&state_request.subject_id, event)?;
                         self.ledger_state.insert(
@@ -1653,37 +1654,11 @@ impl<C: DatabaseCollection> Ledger<C> {
         log::warn!("GET NEXT GOV");
         log::info!("Getting NG: {}..............{}", subject_id.to_str(), sn);
         log::info!("Who Asked: {}", who_asked.to_str());
-        let subject = self.database.get_subject(&subject_id)?;
         let event = self.database.get_event(&subject_id, sn)?;
-        let (signatures, owner) = match self.database.get_signatures(&subject_id, sn) {
-            Ok((s, owner)) => (s, owner),
-            Err(error) => match error {
-                crate::DbError::EntryNotFound => (HashSet::new(), subject.owner.clone()),
-                _ => return Err(LedgerError::DatabaseError(error)),
-            },
+        let (signatures, validation_proof) = match self.database.get_signatures(&subject_id, sn) {
+            Ok((s, validation_proof)) => (s, validation_proof),
+            Err(error) => return Err(LedgerError::DatabaseError(error))
         };
-        let prev_event_hash = if sn == 0 {
-            DigestIdentifier::default()
-        } else {
-            self.database
-                .get_event(&subject.subject_id, sn - 1)?
-                .signature
-                .content
-                .event_content_hash
-        };
-        let state_hash =
-            DigestIdentifier::from_serializable_borsh(&subject.properties).map_err(|_| {
-                LedgerError::CryptoError(String::from("Error calculating the hash of the state"))
-            })?;
-        let validation_proof = ValidationProof::new(
-            &subject,
-            subject.sn,
-            prev_event_hash,
-            event.signature.content.event_content_hash.clone(),
-            state_hash,
-            event.content.event_proposal.proposal.gov_version,
-            owner,
-        );
         self.message_channel
             .tell(MessageTaskCommand::Request(
                 None,
@@ -1709,37 +1684,10 @@ impl<C: DatabaseCollection> Ledger<C> {
         log::info!("Who Asked: {}", who_asked.to_str());
         let subject = self.database.get_subject(&subject_id)?;
         let event = self.database.get_event(&subject_id, subject.sn)?;
-        let (signatures, owner) = match self.database.get_signatures(&subject_id, subject.sn) {
-            Ok((s, owner)) => (s, owner),
-            Err(error) => match error {
-                crate::DbError::EntryNotFound => (HashSet::new(), subject.owner.clone()),
-                _ => return Err(LedgerError::DatabaseError(error)),
-            },
+        let (signatures, validation_proof) = match self.database.get_signatures(&subject_id, subject.sn) {
+            Ok((s, validation_proof)) => (s, validation_proof),
+            Err(error) => return Err(LedgerError::DatabaseError(error))
         };
-        let prev_event_hash = if event.content.event_proposal.proposal.sn == 0 {
-            DigestIdentifier::default()
-        } else {
-            self.database
-                .get_event(
-                    &subject.subject_id,
-                    event.content.event_proposal.proposal.sn - 1,
-                )?
-                .signature
-                .content
-                .event_content_hash
-        };
-
-        let state_hash = subject.get_state_hash()?;
-
-        let validation_proof = ValidationProof::new(
-            &subject,
-            subject.sn,
-            prev_event_hash,
-            event.signature.content.event_content_hash.clone(),
-            state_hash,
-            event.content.event_proposal.proposal.gov_version,
-            owner,
-        );
 
         self.message_channel
             .tell(MessageTaskCommand::Request(

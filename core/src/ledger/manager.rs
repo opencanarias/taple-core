@@ -162,8 +162,8 @@ impl<C: DatabaseCollection> EventManager<C> {
                     }
                     LedgerResponse::ExpectingTransfer(response)
                 }
-                LedgerCommand::OwnEvent { event, signatures } => {
-                    let response = self.inner_ledger.event_validated(event, signatures).await;
+                LedgerCommand::OwnEvent { event, signatures, validation_proof } => {
+                    let response = self.inner_ledger.event_validated(event, signatures, validation_proof).await;
                     match response {
                         Err(error) => match error {
                             LedgerError::ChannelClosed => {

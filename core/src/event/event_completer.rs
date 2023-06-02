@@ -1071,6 +1071,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 .tell(LedgerCommand::OwnEvent {
                     event: event.clone(),
                     signatures: validation_signatures,
+                    validation_proof: notary_event.proof.clone()
                 })
                 .await?;
             self.database
