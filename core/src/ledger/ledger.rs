@@ -599,7 +599,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                             event.content.event_proposal.proposal.sn,
                             prev_event_hash,
                             event.signature.content.event_content_hash.clone(),
-                            state_hash,
+                            state_hash.clone(),
                             event.content.event_proposal.proposal.gov_version,
                             subject.owner.clone(),
                             transfer_request.public_key.clone(),
@@ -675,7 +675,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 &transfer_request.subject_id,
                                 sn,
                                 signatures,
-                                validation_proof,
+                                validation_proof.clone(),
                             )?;
                             self.database
                                 .set_event(&transfer_request.subject_id, event)?;
@@ -770,7 +770,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 &transfer_request.subject_id,
                                 sn,
                                 signatures,
-                                validation_proof,
+                                validation_proof.clone(),
                             )?;
                             self.database
                                 .set_event(&transfer_request.subject_id, event)?;
@@ -1220,16 +1220,6 @@ impl<C: DatabaseCollection> Ledger<C> {
 
                         log::warn!("NOTARY HASH QUE ME LLEGA {}", notary_hash.to_str());
                         log::warn!("VALIDATION PROOF {:?}", validation_proof);
-
-                        let validation_proof = ValidationProof::new(
-                            &subject,
-                            event.content.event_proposal.proposal.sn,
-                            prev_event_hash,
-                            event.signature.content.event_content_hash.clone(),
-                            state_hash,
-                            event.content.event_proposal.proposal.gov_version,
-                            metadata.owner.clone(),
-                        );
                         let notary_hash = DigestIdentifier::from_serializable_borsh(
                             &validation_proof,
                         )
@@ -1363,7 +1353,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 &state_request.subject_id,
                                 sn,
                                 signatures,
-                                validation_proof,
+                                validation_proof.clone(),
                             )?;
                             self.database.set_lce_validation_proof(
                                 &state_request.subject_id,
@@ -1771,7 +1761,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 &eol_request.subject_id,
                                 sn,
                                 signatures,
-                                validation_proof,
+                                validation_proof.clone(),
                             )?;
                             self.database.set_lce_validation_proof(
                                 &eol_request.subject_id,

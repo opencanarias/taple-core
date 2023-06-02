@@ -15,7 +15,6 @@ use super::layers::lce_validation_proofs::{self, LceValidationProofs};
 use super::{
     layers::{
         contract::ContractDb, controller_id::ControllerIdDb, event::EventDb, notary::NotaryDb,
-        notary_signatures::NotarySignaturesDb,
         preauthorized_subjects_and_providers::PreauthorizedSbujectsAndProovidersDb,
         prevalidated_event::PrevalidatedEventDb, request::RequestDb, signature::SignatureDb,
         subject::SubjectDb, subject_by_governance::SubjectByGovernanceDb,

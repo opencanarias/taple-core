@@ -15,10 +15,10 @@ use crate::{
             state::Subject,
             Acceptance,
         },
-        self_signature_manager::{SelfSignatureManager},
+        self_signature_manager::SelfSignatureManager,
     },
     event_content::Metadata,
-    event_request::{EventRequest},
+    event_request::EventRequest,
     governance::{stage::ValidationStage, GovernanceAPI, GovernanceInterface},
     identifier::{Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier},
     ledger::{LedgerCommand, LedgerResponse},
@@ -35,7 +35,7 @@ use crate::{
 use std::hash::Hash;
 
 use super::errors::EventError;
-use crate::database::{DatabaseCollection, DB};
+use crate::database::DB;
 
 const TIMEOUT: u32 = 2000;
 // const GET_ALL: isize = 200;
@@ -1238,7 +1238,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 .tell(LedgerCommand::OwnEvent {
                     event: event.clone(),
                     signatures: validation_signatures,
-                    validation_proof: notary_event.proof.clone()
+                    validation_proof: notary_event.proof.clone(),
                 })
                 .await?;
             self.database
@@ -1246,9 +1246,12 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 .map_err(|error| EventError::DatabaseError(error.to_string()))?;
             // Cancelar pedir firmas
             self.message_channel
-                .tell(MessageTaskCommand::Cancel(
-                    String::from(format!("{}", subject_id.to_str())
-            ))).await.map_err(EventError::ChannelError)?;
+                .tell(MessageTaskCommand::Cancel(String::from(format!(
+                    "{}",
+                    subject_id.to_str()
+                ))))
+                .await
+                .map_err(EventError::ChannelError)?;
             // Limpiar HashMaps
             self.events_to_validate.remove(&event_hash);
             self.event_validations.remove(&event_hash);
