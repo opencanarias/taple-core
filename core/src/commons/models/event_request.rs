@@ -31,7 +31,8 @@ pub struct EventRequest {
 pub enum EventRequestType {
     Create(CreateRequest),
     State(StateRequest),
-    Transfer(TransferRequest)
+    Transfer(TransferRequest),
+    EOL(EOLRequest),
 }
 
 #[derive(
@@ -57,6 +58,15 @@ pub struct StateRequest {
     Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
 )]
 pub struct TransferRequest {
+    #[schema(value_type = String)]
+    pub subject_id: DigestIdentifier,
+    pub public_key: KeyIdentifier,
+}
+
+#[derive(
+    Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
+)]
+pub struct EOLRequest {
     #[schema(value_type = String)]
     pub subject_id: DigestIdentifier,
     pub public_key: KeyIdentifier,

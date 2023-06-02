@@ -138,6 +138,7 @@ impl<C: DatabaseCollection> EventManager<C> {
                 (None, data)
             }
         };
+        log::error!("MENSAJE RECIBIDO EN EL LEDGER: {:?}", data);
         let response = {
             match data {
                 LedgerCommand::ExpectingTransfer { subject_id } => {
