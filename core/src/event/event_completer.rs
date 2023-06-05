@@ -30,7 +30,7 @@ use crate::{
         approval::create_approval_request, evaluator::create_evaluator_request,
         ledger::request_gov_event, validation::create_validator_request,
     },
-    Event, EventRequestType, Notification, TimeStamp, DatabaseCollection,
+    DatabaseCollection, Event, EventRequestType, Notification, TimeStamp,
 };
 use std::hash::Hash;
 
@@ -154,6 +154,22 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 )
             }
         };
+        let (prev_event_validation_signatures, previous_proof) = {
+            if subject.sn <= 1 {
+                (HashSet::new(), None)
+            } else {
+                let (prev_event_validation_signatures, previous_proof) = self
+                    .database
+                    .get_signatures(&subject.subject_id, subject.sn)
+                    .map_err(|e| {
+                        EventError::DatabaseError(format!(
+                            "Error getting the signatures of the previous event: {}",
+                            e
+                        ))
+                    })?;
+                (prev_event_validation_signatures, Some(previous_proof))
+            }
+        };
         match &subject.keys {
             Some(keys) => {
                 let proof_hash =
@@ -180,6 +196,8 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                             &signature,
                         ),
                     },
+                    previous_proof,
+                    prev_event_validation_signatures,
                 })
             }
             None => Err(EventError::SubjectNotOwned(subject.subject_id.to_str()))?,

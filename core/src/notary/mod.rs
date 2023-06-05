@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -26,4 +28,6 @@ pub enum NotaryResponse {
 pub struct NotaryEvent {
     pub proof: ValidationProof,
     pub subject_signature: Signature,
+    pub previous_proof: Option<ValidationProof>,
+    pub prev_event_validation_signatures: HashSet<Signature>,
 }
