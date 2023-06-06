@@ -246,9 +246,6 @@ impl NetworkProcessor {
         };
         let peer_id = local_key.public().to_peer_id();
 
-        // DNS
-        let transport = dns::GenDnsConfig::system(transport)?.boxed();
-
         // Swarm creation
         let swarm = SwarmBuilder::new(
             transport,
