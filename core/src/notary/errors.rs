@@ -1,6 +1,9 @@
 use thiserror::Error;
 
-use crate::{commons::errors::ChannelErrors, commons::errors::ProtocolErrors};
+use crate::{
+    commons::errors::ChannelErrors, commons::errors::ProtocolErrors,
+    governance::error::RequestError,
+};
 
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum NotaryError {
@@ -8,6 +11,8 @@ pub enum NotaryError {
     ProtocolErrors(#[from] ProtocolErrors),
     #[error("Channel Error")]
     ChannelError(#[from] ChannelErrors),
+    #[error("Governance Error: {0}")]
+    GovernanceError(#[from] RequestError),
     #[error("Input Channel Error")]
     InputChannelError,
     #[error("Owner Not Known")]
@@ -30,4 +35,12 @@ pub enum NotaryError {
     DatabaseError,
     #[error("Previuous Proof Left")]
     PreviousProofLeft,
+    #[error("Invalid Signature")]
+    InvalidSignature,
+    #[error("Invalid Signer")]
+    InvalidSigner,
+    #[error("Quorum Not Reached")]
+    QuorumNotReached,
+    #[error("Subject Signature Not Valid")]
+    SubjectSignatureNotValid
 }

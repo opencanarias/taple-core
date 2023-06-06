@@ -8,7 +8,8 @@ use crate::{
         self_signature_manager::{SelfSignatureInterface, SelfSignatureManager},
     },
     event::EventCommand,
-    governance::{GovernanceAPI, GovernanceInterface},
+    event_content::Metadata,
+    governance::{stage::ValidationStage, GovernanceAPI, GovernanceInterface},
     identifier::DigestIdentifier,
     message::{MessageConfig, MessageTaskCommand},
     protocol::protocol_message_manager::TapleMessages,
@@ -97,15 +98,30 @@ impl<C: DatabaseCollection> Notary<C> {
                 },
             }
         };
-        let subject_pk = self
+        // Verificar firma de sujecto sobre proof
+        let proof_hash = DigestIdentifier::from_serializable_borsh(&notary_event.proof)
+            .map_err(|_| NotaryError::SubjectSignatureNotValid)?;
+        if notary_event.subject_signature.verify().is_err()
+            || proof_hash != notary_event.subject_signature.content.event_content_hash
+        {
+            return Err(NotaryError::SubjectSignatureNotValid);
+        }
+        match self
             .check_proofs(
                 &notary_event.proof,
                 notary_event.previous_proof,
                 &notary_event.prev_event_validation_signatures,
                 last_proof,
             )
-            .await?;
-        // Get in DB, it is important that this goes first to ensure that we dont sign 2 different event_hash for the same event sn and subject
+            .await?
+        {
+            Some(subject_pk) => {
+                if notary_event.subject_signature.content.signer != subject_pk {
+                    return Err(NotaryError::SubjectSignatureNotValid);
+                }
+            }
+            None => {}
+        }
         self.database
             .set_notary_register(&notary_event.proof.subject_id, &notary_event.proof)
             .map_err(|_| NotaryError::DatabaseError)?;
@@ -156,7 +172,7 @@ impl<C: DatabaseCollection> Notary<C> {
                     if !last_proof.is_similar(&new_proof) {
                         Err(NotaryError::DifferentProofForEvent)
                     } else {
-                        Ok(last_proof.subject_public_key)
+                        Ok(Some(last_proof.subject_public_key))
                     }
                 } else if last_proof.sn + 1 == new_proof.sn {
                     // Comprobar que es similar a la prueba del evento anterior que nos llega en el mensaje
@@ -165,7 +181,7 @@ impl<C: DatabaseCollection> Notary<C> {
                     {
                         Err(NotaryError::DifferentProofForEvent)
                     } else {
-                        Ok(last_proof.subject_public_key)
+                        Ok(Some(last_proof.subject_public_key))
                     }
                 } else {
                     // Mismo caso que en not found, no tengo la prueba anterior
@@ -179,6 +195,7 @@ impl<C: DatabaseCollection> Notary<C> {
                         }
                         Ok(Some(
                             self.validate_previous_proof(
+                                new_proof,
                                 previous_proof.unwrap(),
                                 validation_signatures,
                             )
@@ -193,8 +210,12 @@ impl<C: DatabaseCollection> Notary<C> {
                     return Err(NotaryError::PreviousProofLeft);
                 }
                 Ok(Some(
-                    self.validate_previous_proof(previous_proof.unwrap(), validation_signatures)
-                        .await?,
+                    self.validate_previous_proof(
+                        new_proof,
+                        previous_proof.unwrap(),
+                        validation_signatures,
+                    )
+                    .await?,
                 ))
             }
         }
@@ -202,11 +223,60 @@ impl<C: DatabaseCollection> Notary<C> {
 
     async fn validate_previous_proof(
         &self,
+        new_proof: &ValidationProof,
         previous_proof: ValidationProof,
         validation_signatures: &HashSet<Signature>,
     ) -> Result<KeyIdentifier, NotaryError> {
         // Comprobar que la previous encaja con la nueva
-        Ok(())
+        if previous_proof.event_hash != new_proof.prev_event_hash {
+            return Err(NotaryError::DifferentProofForEvent);
+        }
+        if previous_proof.sn + 1 != new_proof.sn {
+            return Err(NotaryError::DifferentProofForEvent);
+        }
+        for signature in validation_signatures.iter() {
+            signature
+                .verify()
+                .map_err(|_| NotaryError::InvalidSignature)?;
+        }
+        let actual_signers: Result<HashSet<KeyIdentifier>, NotaryError> = validation_signatures
+            .iter()
+            .map(|signature| {
+                if signature.verify().is_err() {
+                    return Err(NotaryError::InvalidSignature);
+                }
+                Ok(signature.content.signer.clone())
+            })
+            .collect();
+        let actual_signers = actual_signers?;
+        let (signers, quorum_size) = self
+            .get_signers_and_quorum(previous_proof.get_metadata(), ValidationStage::Validate)
+            .await?;
+        if !actual_signers.is_subset(&signers) {
+            return Err(NotaryError::InvalidSigner);
+        }
+        if actual_signers.len() < quorum_size as usize {
+            return Err(NotaryError::QuorumNotReached);
+        }
+        Ok(previous_proof.subject_public_key)
+    }
+
+    async fn get_signers_and_quorum(
+        &self,
+        metadata: Metadata,
+        stage: ValidationStage,
+    ) -> Result<(HashSet<KeyIdentifier>, u32), NotaryError> {
+        let signers = self
+            .gov_api
+            .get_signers(metadata.clone(), stage.clone())
+            .await
+            .map_err(NotaryError::GovernanceError)?;
+        let quorum_size = self
+            .gov_api
+            .get_quorum(metadata, stage)
+            .await
+            .map_err(NotaryError::GovernanceError)?;
+        Ok((signers, quorum_size))
     }
 }
 
