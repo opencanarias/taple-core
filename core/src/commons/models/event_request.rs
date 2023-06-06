@@ -69,7 +69,6 @@ pub struct TransferRequest {
 pub struct EOLRequest {
     #[schema(value_type = String)]
     pub subject_id: DigestIdentifier,
-    pub public_key: KeyIdentifier,
 }
 
 impl EventRequest {
