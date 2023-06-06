@@ -87,7 +87,8 @@ impl<C: DatabaseCollection> DB<C> {
         signatures: HashSet<Signature>,
         validation_proof: ValidationProof,
     ) -> Result<(), Error> {
-        self.signature_db.set_signatures(subject_id, sn, signatures, validation_proof)
+        self.signature_db
+            .set_signatures(subject_id, sn, signatures, validation_proof)
     }
 
     pub fn del_signatures(&self, subject_id: &DigestIdentifier, sn: u64) -> Result<(), Error> {
@@ -201,21 +202,18 @@ impl<C: DatabaseCollection> DB<C> {
 
     pub fn get_notary_register(
         &self,
-        owner: &KeyIdentifier,
         subject_id: &DigestIdentifier,
-    ) -> Result<(DigestIdentifier, u64), Error> {
-        self.notary_db.get_notary_register(owner, subject_id)
+    ) -> Result<ValidationProof, Error> {
+        self.notary_db.get_notary_register(subject_id)
     }
 
     pub fn set_notary_register(
         &self,
-        owner: &KeyIdentifier,
         subject_id: &DigestIdentifier,
-        event_hash: DigestIdentifier,
-        sn: u64,
+        validation_proof: &ValidationProof,
     ) -> Result<(), Error> {
         self.notary_db
-            .set_notary_register(owner, subject_id, event_hash, sn)
+            .set_notary_register(subject_id, validation_proof)
     }
 
     pub fn get_contract(
@@ -296,7 +294,9 @@ impl<C: DatabaseCollection> DB<C> {
         self.transfer_events_db.get_expecting_transfer(subject_id)
     }
 
-    pub fn get_all_expecting_transfers(&self) -> Result<Vec<(DigestIdentifier, HashSet<KeyIdentifier>)>, Error> {
+    pub fn get_all_expecting_transfers(
+        &self,
+    ) -> Result<Vec<(DigestIdentifier, HashSet<KeyIdentifier>)>, Error> {
         self.transfer_events_db.get_all_expecting_transfers()
     }
 

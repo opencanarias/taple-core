@@ -277,7 +277,7 @@ impl ValidationProof {
         event_hash: DigestIdentifier,
         state_hash: DigestIdentifier,
         governance_version: u64,
-        owner: KeyIdentifier
+        owner: KeyIdentifier,
     ) -> Self {
         Self {
             governance_id: subject.governance_id.clone(),
@@ -305,6 +305,20 @@ impl ValidationProof {
             subject_id: self.subject_id.clone(),
             creator: self.creator.clone(),
         }
+    }
+
+    pub fn is_similar(&self, other: &ValidationProof) -> bool {
+        self.governance_id == other.governance_id
+            && self.subject_id == other.subject_id
+            && self.sn == other.sn
+            && self.schema_id == other.schema_id
+            && self.namespace == other.namespace
+            && self.prev_event_hash == other.prev_event_hash
+            && self.event_hash == other.event_hash
+            && self.state_hash == other.state_hash
+            && self.subject_public_key == other.subject_public_key
+            && self.owner == other.owner
+            && self.creator == other.creator
     }
 }
 

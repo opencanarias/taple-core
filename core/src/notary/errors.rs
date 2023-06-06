@@ -18,12 +18,16 @@ pub enum NotaryError {
     GovApiUnexpectedResponse,
     #[error("Governance Version too High")]
     GovernanceVersionTooHigh,
+    #[error("Governance Version too Low")]
+    GovernanceVersionTooLow,
     #[error("Event SN lower than last signed")]
     EventSnLowerThanLastSigned,
-    #[error("Trying to sign same sn with different hash")]
-    DifferentHashForEvent,
+    #[error("Trying to sign same sn with different Proof")]
+    DifferentProofForEvent,
     #[error("Serializing Error")]
     SerializingError,
     #[error("Database Error")]
     DatabaseError,
+    #[error("Previuous Proof Left")]
+    PreviousProofLeft,
 }
