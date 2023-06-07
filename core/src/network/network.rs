@@ -138,7 +138,7 @@ impl TapleNetworkBehavior {
 
 /// Network Structure for connect message-sender, message-receiver and LibP2P network stack
 pub struct NetworkProcessor {
-    addr: Multiaddr,
+    addr: Option<Multiaddr>,
     swarm: Swarm<TapleNetworkBehavior>,
     command_sender: mpsc::Sender<Command>,
     command_receiver: mpsc::Receiver<Command>,
@@ -174,76 +174,17 @@ impl NetworkProcessor {
             Keypair::Ed25519(sk.into())
         };
         // Create a keypair for authenticated encryption of the transport.
-        let noise_key = noise::Keypair::<noise::X25519Spec>::new()
-            .into_authentic(&local_key)
-            .expect("Signing libp2p-noise static DH keypair failed.");
+        let noise_key: noise::AuthenticKeypair<noise::X25519Spec> =
+            noise::Keypair::<noise::X25519Spec>::new()
+                .into_authentic(&local_key)
+                .expect("Signing libp2p-noise static DH keypair failed.");
 
-        let addr: Multiaddr = match addr {
-            Some(add) => add.parse().expect("String para multiaddress es válida"),
-            None => String::from("/ip4/0.0.0.0/tcp/0").parse().unwrap(),
+        let addr: Option<Multiaddr> = match addr {
+            Some(add) => Some(add.parse().expect("String para multiaddress es válida")),
+            None => None,
         };
 
-        let transport = {
-            let mut transport: Option<Boxed<(PeerId, StreamMuxerBox)>> = None;
-            for protocol in addr.clone().iter() {
-                if let Protocol::Ip4(_) | Protocol::Ip6(_) = protocol {
-                    transport = Some(
-                        TokioTcpConfig::new()
-                            .nodelay(true)
-                            .upgrade(upgrade::Version::V1)
-                            .authenticate(
-                                noise::NoiseConfig::xx(noise_key.clone()).into_authenticated(),
-                            )
-                            .multiplex(mplex::MplexConfig::new())
-                            .boxed(),
-                    );
-                    // DNS
-                    transport = {
-                        match dns::GenDnsConfig::system(transport.unwrap()) {
-                            Ok(t) => Some(t.boxed()),
-                            Err(_) => { 
-                                // TODO: vuelvo a crear el transporte porque no tiene clone, quizás sería interesante poner una variable de entorno que diga si estamos en android y hacer lo segundo directamente en ese caso 
-                                let transport = Some(
-                                    TokioTcpConfig::new()
-                                        .nodelay(true)
-                                        .upgrade(upgrade::Version::V1)
-                                        .authenticate(
-                                            noise::NoiseConfig::xx(noise_key.clone())
-                                                .into_authenticated(),
-                                        )
-                                        .multiplex(mplex::MplexConfig::new())
-                                        .boxed(),
-                                );
-                                Some(
-                                    dns::GenDnsConfig::custom(
-                                        transport.unwrap(),
-                                        dns::ResolverConfig::cloudflare(),
-                                        dns::ResolverOpts::default(),
-                                    )
-                                    .expect("DNS wont fail")
-                                    .boxed(),
-                                )
-                            }
-                        }
-                    };
-                    break;
-                } else if let Protocol::Memory(_) = protocol {
-                    transport = Some(
-                        MemoryTransport
-                            .upgrade(upgrade::Version::V1)
-                            .authenticate(
-                                noise::NoiseConfig::xx(noise_key.clone()).into_authenticated(),
-                            )
-                            .multiplex(yamux::YamuxConfig::default())
-                            .boxed(),
-                    );
-                    break;
-                }
-            }
-            transport.expect(
-                "String for address in constructor is valid and has ipv4 or memory protocol",
-            )
-        };
+        let transport = create_transport_by_protocol(addr.clone(), noise_key);
         let peer_id = local_key.public().to_peer_id();
 
         // Swarm creation
@@ -292,9 +233,11 @@ impl NetworkProcessor {
     /// Run network processor.
     pub async fn run(mut self) {
         debug!("Running network");
-        let a = self.swarm.listen_on(self.addr.clone());
-        if a.is_err() {
-            println!("Error: {:?}", a.unwrap_err());
+        if self.addr.is_some() {
+            let a = self.swarm.listen_on(self.addr.clone().unwrap());
+            if a.is_err() {
+                println!("Error: {:?}", a.unwrap_err());
+            }
         }
         for (_peer_id, addr) in self.bootstrap_nodes.iter() {
             let Ok(()) = self.swarm.dial(addr.to_owned()) else {
@@ -798,4 +741,71 @@ impl NetworkProcessor {
     pub fn local_peer_id(&self) -> &PeerId {
         self.swarm.local_peer_id()
     }
+}
+
+fn create_ip4_ip6_transport(
+    noise_key: noise::AuthenticKeypair<noise::X25519Spec>,
+) -> Boxed<(PeerId, StreamMuxerBox)> {
+    let transport = TokioTcpConfig::new()
+        .nodelay(true)
+        .upgrade(upgrade::Version::V1)
+        .authenticate(noise::NoiseConfig::xx(noise_key.clone()).into_authenticated())
+        .multiplex(mplex::MplexConfig::new())
+        .boxed();
+    // DNS
+    match dns::GenDnsConfig::system(transport) {
+        Ok(t) => t.boxed(),
+        Err(_) => {
+            // TODO: vuelvo a crear el transporte porque no tiene clone, quizás sería interesante poner una variable de entorno que diga si estamos en android y hacer lo segundo directamente en ese caso
+            let transport = TokioTcpConfig::new()
+                .nodelay(true)
+                .upgrade(upgrade::Version::V1)
+                .authenticate(noise::NoiseConfig::xx(noise_key.clone()).into_authenticated())
+                .multiplex(mplex::MplexConfig::new())
+                .boxed();
+            // TODO: Lo mismo aquí
+            match dns::GenDnsConfig::custom(
+                transport,
+                dns::ResolverConfig::cloudflare(),
+                dns::ResolverOpts::default(),
+            ) {
+                Ok(t) => t.boxed(),
+                Err(_) => TokioTcpConfig::new()
+                    .nodelay(true)
+                    .upgrade(upgrade::Version::V1)
+                    .authenticate(noise::NoiseConfig::xx(noise_key.clone()).into_authenticated())
+                    .multiplex(mplex::MplexConfig::new())
+                    .boxed(),
+            }
+        }
+    }
+}
+
+fn create_transport_by_protocol(
+    addr: Option<Multiaddr>,
+    noise_key: noise::AuthenticKeypair<noise::X25519Spec>,
+) -> Boxed<(PeerId, StreamMuxerBox)> {
+    let mut transport: Option<Boxed<(PeerId, StreamMuxerBox)>> = None;
+    if addr.is_some() {
+        for protocol in addr.unwrap().iter() {
+            if let Protocol::Ip4(_) | Protocol::Ip6(_) = protocol {
+                transport = Some(create_ip4_ip6_transport(noise_key));
+                break;
+            } else if let Protocol::Memory(_) = protocol {
+                transport = Some(
+                    MemoryTransport
+                        .upgrade(upgrade::Version::V1)
+                        .authenticate(
+                            noise::NoiseConfig::xx(noise_key.clone()).into_authenticated(),
+                        )
+                        .multiplex(yamux::YamuxConfig::default())
+                        .boxed(),
+                );
+                break;
+            }
+        }
+    } else {
+        transport = Some(create_ip4_ip6_transport(noise_key));
+    }
+    transport.expect("String for address in constructor is valid and has ipv4 or memory protocol")
 }
