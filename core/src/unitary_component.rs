@@ -15,7 +15,7 @@ use crate::commons::identifier::derive::KeyDerivator;
 use crate::commons::identifier::{Derivable, KeyIdentifier};
 use crate::commons::models::notification::Notification;
 use crate::commons::self_signature_manager::{SelfSignatureInterface, SelfSignatureManager};
-use crate::database::{DatabaseManager, DB, DatabaseCollection};
+use crate::database::{DatabaseCollection, DatabaseManager, DB};
 use crate::distribution::error::DistributionErrorResponses;
 use crate::distribution::manager::DistributionManager;
 use crate::distribution::DistributionMessagesNew;
@@ -115,7 +115,7 @@ pub struct Taple<M: DatabaseManager<C>, C: DatabaseCollection> {
     notification_sender: tokio::sync::broadcast::Sender<Notification>,
     settings: TapleSettings,
     database: Option<M>,
-    _c: PhantomData<C>
+    _c: PhantomData<C>,
 }
 
 impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, C> {
@@ -192,7 +192,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
             notification_sender: sender,
             settings,
             database: Some(database),
-            _c: PhantomData::default()
+            _c: PhantomData::default(),
         }
     }
 
@@ -348,12 +348,19 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
         let public_key = kp.public_key_bytes();
         let key_identifier = KeyIdentifier::new(kp.get_key_derivator(), &public_key);
         // Creation Network
+        let addr = {
+            if &self.settings.network.addr == "" || self.settings.network.p2p_port == 0 {
+                None
+            } else {
+                Some(format!(
+                    "{}/{}",
+                    self.settings.network.addr.clone(),
+                    self.settings.network.p2p_port.clone()
+                ))
+            }
+        };
         let network_manager = NetworkProcessor::new(
-            Some(format!(
-                "{}/{}",
-                self.settings.network.addr.clone(),
-                self.settings.network.p2p_port.clone()
-            )),
+            addr,
             network_access_points(&self.settings.network.known_nodes)?, // TODO: Provide Bootraps nodes per configuration
             sender_network,
             kp.clone(),
