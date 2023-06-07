@@ -1,5 +1,3 @@
-use std::marker::PhantomData;
-use std::sync::Arc;
 #[cfg(feature = "aproval")]
 use crate::approval::manager::{ApprovalAPI, ApprovalManager};
 #[cfg(feature = "aproval")]
@@ -39,6 +37,8 @@ use crate::protocol::protocol_message_manager::{ProtocolManager, TapleMessages};
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use libp2p::{Multiaddr, PeerId};
+use std::marker::PhantomData;
+use std::sync::Arc;
 use tokio::sync::broadcast::error::{RecvError, TryRecvError};
 
 use crate::api::{APICommands, ApiResponses, NodeAPI, API};
@@ -205,7 +205,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
                 p2p_port: 50000u32,
                 addr: "/ip4/0.0.0.0/tcp".into(),
                 known_nodes: Vec::<String>::new(),
-                expternal_address: "".into(),
+                external_address: vec![],
             },
             node: NodeSettings {
                 key_derivator: KeyDerivator::Ed25519,
@@ -364,13 +364,6 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
                 ))
             }
         };
-        let external_addr = {
-            if &self.settings.network.expternal_address == "" {
-                None
-            } else {
-                Some(self.settings.network.expternal_address.clone())
-            }
-        };
         let network_manager = NetworkProcessor::new(
             addr,
             network_access_points(&self.settings.network.known_nodes)?, // TODO: Provide Bootraps nodes per configuration
@@ -382,7 +375,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
             } else {
                 SendMode::Tell
             },
-            external_addr,
+            external_addresses(&self.settings.network.external_address)?,
         )
         .await
         .expect("Error en creación de la capa de red");
@@ -641,6 +634,21 @@ fn network_access_points(points: &[String]) -> Result<Vec<(PeerId, Multiaddr)>, 
         }
     }
     Ok(access_points)
+}
+
+fn external_addresses(addresses: &[String]) -> Result<Vec<Multiaddr>, Error> {
+    let mut external_addresses: Vec<Multiaddr> = Vec::new();
+    for address in addresses {
+        if let Some(value) = multiaddr(address) {
+            external_addresses.push(value);
+        } else {
+            return Err(Error::AcessPointError(format!(
+                "Invalid MultiAddress conversion in External Address: {}",
+                address
+            )));
+        }
+    }
+    Ok(external_addresses)
 }
 
 fn multiaddr(addr: &str) -> Option<Multiaddr> {
