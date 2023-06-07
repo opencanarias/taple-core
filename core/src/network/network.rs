@@ -25,7 +25,7 @@ use libp2p::{
     multiaddr::Protocol,
     noise,
     request_response::{RequestResponse, RequestResponseEvent, ResponseChannel},
-    swarm::{ConnectionHandlerUpgrErr, NetworkBehaviour, SwarmBuilder, SwarmEvent, AddressScore},
+    swarm::{AddressScore, ConnectionHandlerUpgrErr, NetworkBehaviour, SwarmBuilder, SwarmEvent},
     tcp::TokioTcpConfig,
     yamux, Multiaddr, NetworkBehaviour, PeerId, Swarm, Transport,
 };
@@ -156,7 +156,7 @@ pub struct NetworkProcessor {
     open_requests: HashMap<PeerId, VecDeque<ResponseChannel<Vec<u8>>>>,
     send_mode: SendMode,
     node_public_key: Vec<u8>,
-    external_address: Option<Multiaddr>,
+    external_addresses: Vec<Multiaddr>,
 }
 
 impl NetworkProcessor {
@@ -167,7 +167,7 @@ impl NetworkProcessor {
         controller_mc: KeyPair,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
         send_mode: SendMode,
-        external_address: Option<String>,
+        external_addresses: Vec<Multiaddr>,
     ) -> Result<Self, Box<dyn Error>> {
         let public_key = controller_mc.public_key_bytes();
         let local_key = {
@@ -183,14 +183,6 @@ impl NetworkProcessor {
 
         let addr: Option<Multiaddr> = match addr {
             Some(add) => Some(add.parse().expect("String para multiaddress es válida")),
-            None => None,
-        };
-
-        let external_address: Option<Multiaddr> = match external_address {
-            Some(add) => Some(
-                add.parse()
-                    .expect("String para external multiaddress es válida"),
-            ),
             None => None,
         };
 
@@ -232,7 +224,7 @@ impl NetworkProcessor {
             bootstrap_retries_steam: futures::stream::futures_unordered::FuturesUnordered::new(),
             open_requests: HashMap::new(),
             send_mode,
-            external_address,
+            external_addresses,
         })
     }
 
@@ -244,11 +236,9 @@ impl NetworkProcessor {
     /// Run network processor.
     pub async fn run(mut self) {
         debug!("Running network");
-        if self.external_address.is_some() {
-            self.swarm.add_external_address(
-                self.external_address.clone().unwrap(),
-                AddressScore::Infinite,
-            );
+        for external_address in self.external_addresses.clone().into_iter() {
+            self.swarm
+                .add_external_address(external_address, AddressScore::Infinite);
         }
         if self.addr.is_some() {
             let a = self.swarm.listen_on(self.addr.clone().unwrap());
