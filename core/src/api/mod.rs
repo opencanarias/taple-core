@@ -1,11 +1,10 @@
 use std::collections::HashSet;
-
-use crate::KeyIdentifier;
-use crate::approval::ApprovalPetitionData;
+#[cfg(feature = "aproval")]
+use crate::{Acceptance, ApprovalPetitionData};
+use crate::{KeyIdentifier};
 use crate::commons::models::event::Event;
 use crate::commons::models::event_request::EventRequest;
 use crate::commons::models::state::SubjectData;
-use crate::commons::models::Acceptance;
 use crate::event_request::{EventRequestType};
 use crate::identifier::DigestIdentifier;
 
@@ -24,10 +23,13 @@ pub enum APICommands {
     GetAllGovernances(GetAllSubjects),
     GetSingleSubject(GetSingleSubject),
     GetEventsOfSubject(GetEventsOfSubject),
+    #[cfg(feature = "aproval")]
     VoteResolve(Acceptance, DigestIdentifier),
     HandleRequest(EventRequestType),
     ExternalRequest(EventRequest),
+    #[cfg(feature = "aproval")]
     GetPendingRequests,
+    #[cfg(feature = "aproval")]
     GetSingleRequest(DigestIdentifier),
     SetPreauthorizedSubject(DigestIdentifier, HashSet<KeyIdentifier>),
     ExpectingTransfer(DigestIdentifier),
@@ -41,9 +43,12 @@ pub enum ApiResponses {
     GetSingleSubject(Result<SubjectData, ApiError>),
     GetEventsOfSubject(Result<Vec<Event>, ApiError>),
     HandleExternalRequest(Result<DigestIdentifier, ApiError>),
+    #[cfg(feature = "aproval")]
     VoteResolve(Result<DigestIdentifier, ApiError>),
     HandleRequest(Result<DigestIdentifier, ApiError>), // Borrar RequestData
+    #[cfg(feature = "aproval")]
     GetPendingRequests(Result<Vec<ApprovalPetitionData>, ApiError>),
+    #[cfg(feature = "aproval")]
     GetSingleRequest(Result<ApprovalPetitionData, ApiError>),
     ExpectingTransfer(Result<KeyIdentifier, ApiError>),
     ShutdownCompleted,

@@ -4,14 +4,15 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     commons::models::{event::ValidationProof, notary::NotaryEventResponse},
-    identifier::{DigestIdentifier, KeyIdentifier},
     signature::Signature,
 };
 
 use self::errors::NotaryError;
 
 pub mod errors;
+#[cfg(feature = "validation")]
 pub mod manager;
+#[cfg(feature = "validation")]
 pub mod notary;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
