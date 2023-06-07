@@ -30,8 +30,10 @@ pub struct ProtocolManager {
     distribution_sx: SenderEnd<DistributionMessagesNew, Result<(), DistributionErrorResponses>>,
     #[cfg(feature = "evaluation")]
     evaluation_sx: SenderEnd<EvaluatorMessage, EvaluatorResponse>,
+    #[cfg(feature = "validation")]
     validation_sx: SenderEnd<NotaryCommand, NotaryResponse>,
     event_sx: SenderEnd<EventCommand, EventResponse>,
+    #[cfg(feature = "aproval")]
     approval_sx: SenderEnd<ApprovalMessages, ApprovalResponses>,
     ledger_sx: SenderEnd<LedgerCommand, LedgerResponse>,
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
@@ -44,8 +46,10 @@ impl ProtocolManager {
         distribution_sx: SenderEnd<DistributionMessagesNew, Result<(), DistributionErrorResponses>>,
         #[cfg(feature = "evaluation")]
         evaluation_sx: SenderEnd<EvaluatorMessage, EvaluatorResponse>,
+        #[cfg(feature = "validation")]
         validation_sx: SenderEnd<NotaryCommand, NotaryResponse>,
         event_sx: SenderEnd<EventCommand, EventResponse>,
+        #[cfg(feature = "aproval")]
         approval_sx: SenderEnd<ApprovalMessages, ApprovalResponses>,
         ledger_sx: SenderEnd<LedgerCommand, LedgerResponse>,
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
@@ -55,8 +59,10 @@ impl ProtocolManager {
             distribution_sx,
             #[cfg(feature = "evaluation")]
             evaluation_sx,
+            #[cfg(feature = "validation")]
             validation_sx,
             event_sx,
+            #[cfg(feature = "aproval")]
             approval_sx,
             ledger_sx,
             shutdown_receiver: shutdown_sender.subscribe(),
@@ -130,16 +136,30 @@ impl ProtocolManager {
                 #[cfg(not(feature = "evaluation"))]
                 log::trace!("Evaluation Message received. Current node is not able to evaluate");
             }
-            TapleMessages::ValidationMessage(data) => self
-                .validation_sx
-                .tell(data)
-                .await
-                .map_err(|_| ProtocolErrors::ChannelClosed)?,
-            TapleMessages::ApprovalMessages(data) => self
-                .approval_sx
-                .tell(data)
-                .await
-                .map_err(|_| ProtocolErrors::ChannelClosed)?,
+            TapleMessages::ValidationMessage(data) => {
+                #[cfg(feature = "validation")]
+                {
+                    return Ok(self
+                    .validation_sx
+                    .tell(data)
+                    .await
+                    .map_err(|_| ProtocolErrors::ChannelClosed)?);
+                }
+                #[cfg(not(feature = "validation"))]
+                log::trace!("Validation Message received. Current node is not able to validate");
+            }
+            TapleMessages::ApprovalMessages(data) => {
+                #[cfg(feature = "aproval")]
+                {
+                    return Ok(self
+                        .approval_sx
+                        .tell(data)
+                        .await
+                        .map_err(|_| ProtocolErrors::ChannelClosed)?);
+                }
+                #[cfg(not(feature = "aproval"))]
+                log::trace!("Aproval Message received. Current node is not able to aprove");
+            }
             TapleMessages::LedgerMessages(data) => self
             .ledger_sx
             .tell(data)

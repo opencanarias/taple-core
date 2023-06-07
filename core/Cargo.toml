@@ -11,11 +11,11 @@ license.workspace = true
 keywords.workspace = true
 
 [features]
-default = ["secp256k1", "x25519", "sha2", "sha3", "blake2", "evaluation"]
+default = ["secp256k1", "dep:sha2", "dep:sha3", "dep:blake2"]
 evaluation = [ "dep:wasmtime", "dep:wasm-gc-api" ]
-mobile = ["secp256k1", "x25519", "sha2", "sha3", "blake2"]
-secp256k1 = ["libsecp256k1"]
-x25519 = ["x25519-dalek", "curve25519-dalek"]
+aproval = []
+validation = []
+secp256k1 = ["dep:libsecp256k1"]
 
 [dependencies]
 tokio = { workspace = true, features = [
@@ -67,8 +67,6 @@ json-patch = { workspace = true }
 rand_core = { workspace = true }
 ed25519-dalek = { workspace = true, features = ["serde"] }
 libsecp256k1 = { workspace = true, optional = true }
-x25519-dalek = { workspace = true, optional = true }
-curve25519-dalek = { workspace = true, optional = true }
 blake2 = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
 sha3 = { workspace = true, optional = true }

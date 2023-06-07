@@ -6,6 +6,7 @@ use super::{
     inner_api::InnerAPI,
     APICommands, ApiResponses,
 };
+#[cfg(feature = "aproval")]
 use crate::approval::manager::ApprovalAPI;
 use crate::authorized_subjecs::manager::AuthorizedSubjectsAPI;
 use crate::commons::models::event::Event;
@@ -141,6 +142,7 @@ pub trait ApiModuleInterface {
     /// • [ApiError::InvalidParameters] if the specified request identifier does not match a valid [DigestIdentifier].<br />
     /// • [ApiError::VoteNotNeeded] if the node's vote is no longer required. <br />
     /// This occurs when the acceptance of the changes proposed by the petition has already been resolved by the rest of the nodes in the network or when the node cannot participate in the voting process because it lacks the voting role.
+    #[cfg(feature = "aproval")]
     async fn approval_request(
         &self,
         request_id: DigestIdentifier,
@@ -152,6 +154,7 @@ pub trait ApiModuleInterface {
     /// the proposed changes in order for the events to be implemented.
     /// # Possible errors
     /// • [ApiError::InternalError] if an internal error occurs during operation execution.
+    #[cfg(feature = "aproval")]
     async fn get_pending_requests(&self) -> Result<Vec<ApprovalPetitionData>, ApiError>;
     /// It allows to obtain a single voting request pending to be resolved in the node.
     /// This request is received from other nodes in the network when they try to update
@@ -160,6 +163,7 @@ pub trait ApiModuleInterface {
     /// # Possible errors
     /// • [ApiError::InternalError] if an internal error occurs during operation execution.
     /// • [ApiError::NotFound] if the requested request does not exist.
+    #[cfg(feature = "aproval")]
     async fn get_single_request(
         &self,
         id: DigestIdentifier,
@@ -222,6 +226,7 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
+    #[cfg(feature = "aproval")]
     async fn get_pending_requests(&self) -> Result<Vec<ApprovalPetitionData>, ApiError> {
         let response = self
             .sender
@@ -235,6 +240,7 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
+    #[cfg(feature = "aproval")]
     async fn get_single_request(
         &self,
         id: DigestIdentifier,
@@ -388,6 +394,7 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
+    #[cfg(feature = "aproval")]
     async fn approval_request(
         &self,
         request_id: DigestIdentifier,
@@ -463,6 +470,7 @@ impl<C: DatabaseCollection,> API<C> {
     pub fn new(
         input: MpscChannel<APICommands, ApiResponses>,
         event_api: EventAPI,
+        #[cfg(feature = "aproval")]
         approval_api: ApprovalAPI,
         authorized_subjects_api: AuthorizedSubjectsAPI,
         ledger_api: EventManagerAPI,
@@ -482,6 +490,7 @@ impl<C: DatabaseCollection,> API<C> {
                 event_api,
                 authorized_subjects_api,
                 db,
+                #[cfg(feature = "aproval")]
                 approval_api,
                 ledger_api
             ),
@@ -553,10 +562,13 @@ impl<C: DatabaseCollection,> API<C> {
                     APICommands::GetSingleSubject(data) => {
                         self.inner_api.get_single_subject(data).await
                     }
+                    #[cfg(feature = "aproval")]
                     APICommands::VoteResolve(acceptance, id) => {
                         self.inner_api.emit_vote(id, acceptance).await?
                     }
+                    #[cfg(feature = "aproval")]
                     APICommands::GetPendingRequests => self.inner_api.get_pending_request().await,
+                    #[cfg(feature = "aproval")]
                     APICommands::GetSingleRequest(data) => {
                         self.inner_api.get_single_request(data).await
                     }
