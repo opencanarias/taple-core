@@ -17,14 +17,15 @@ use crate::commons::{
     crypto::KeyPair,
 };
 use crate::event::manager::EventAPI;
-use crate::KeyIdentifier;
 use crate::ledger::manager::EventManagerAPI;
+use crate::KeyIdentifier;
+use crate::signature::Signature;
 use crate::{
     approval::ApprovalPetitionData,
     commons::models::Acceptance,
     event_request::{CreateRequest, EventRequestType, StateRequest},
     identifier::DigestIdentifier,
-    DatabaseManager, DB, DatabaseCollection
+    DatabaseCollection, DB,
 };
 use async_trait::async_trait;
 use tokio::sync::watch::Sender;
@@ -173,6 +174,11 @@ pub trait ApiModuleInterface {
         &self,
         subject_id: DigestIdentifier,
     ) -> Result<KeyIdentifier, ApiError>;
+    async fn get_validation_proof(
+        &self,
+        subject_id: DigestIdentifier
+    ) -> Result<HashSet<Signature>, ApiError>;
+
 }
 
 /// Object that allows interaction with a TAPLE node.
@@ -449,9 +455,25 @@ impl ApiModuleInterface for NodeAPI {
             unreachable!()
         }
     }
+
+    async fn get_validation_proof(
+        &self,
+        subject_id: DigestIdentifier
+    ) -> Result<HashSet<Signature>, ApiError> {
+        let response = self.
+            sender
+            .ask(APICommands::GetValidationProof(subject_id))
+            .await
+            .unwrap();
+        if let ApiResponses::GetValidationProof(data) = response {
+            data
+        } else {
+            unreachable!()
+        }
+    }
 }
 
-pub struct API<C: DatabaseCollection,> {
+pub struct API<C: DatabaseCollection> {
     input: MpscChannel<APICommands, ApiResponses>,
     _settings_sender: Sender<TapleSettings>,
     inner_api: InnerAPI<C>,
@@ -459,7 +481,7 @@ pub struct API<C: DatabaseCollection,> {
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
 }
 
-impl<C: DatabaseCollection,> API<C> {
+impl<C: DatabaseCollection> API<C> {
     pub fn new(
         input: MpscChannel<APICommands, ApiResponses>,
         event_api: EventAPI,
@@ -483,7 +505,7 @@ impl<C: DatabaseCollection,> API<C> {
                 authorized_subjects_api,
                 db,
                 approval_api,
-                ledger_api
+                ledger_api,
             ),
             shutdown_sender: Some(shutdown_sender),
             shutdown_receiver: shutdown_receiver,
@@ -571,9 +593,10 @@ impl<C: DatabaseCollection,> API<C> {
                             .await?
                     }
                     APICommands::ExpectingTransfer(subject_id) => {
-                        self.inner_api
-                            .expecting_transfer(subject_id)
-                            .await?
+                        self.inner_api.expecting_transfer(subject_id).await?
+                    }
+                    APICommands::GetValidationProof(subject_id) => {
+                        self.inner_api.get_validation_proof(subject_id).await
                     }
                 };
                 sx.send(response)

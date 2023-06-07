@@ -56,7 +56,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface + Send> TapleRunner<C, G> {
                 return Err(ExecutorErrorResponses::OurGovIsLower);
             },
             Err(error) => {
-               return Err(ExecutorErrorResponses::DatabaseError(error.to_string())) 
+                return Err(ExecutorErrorResponses::DatabaseError(error.to_string())) 
             }
         };
         if governance.sn > execute_contract.context.governance_version {

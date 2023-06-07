@@ -50,7 +50,7 @@ impl<C: DatabaseCollection> SignatureDb<C> {
         let total_signatures = match self.collection.get(&key) {
             Ok(other) => {
                 let other = bincode::deserialize::<HashSet<Signature>>(&other).map_err(|_| {
-                    DbError::SerializeError
+                    DbError::DeserializeError
                 })?;
                 signatures.union(&other).cloned().collect()
             },
@@ -73,5 +73,22 @@ impl<C: DatabaseCollection> SignatureDb<C> {
         ];
         let key = get_key(key_elements)?;
         self.collection.del(&key)
+    }
+
+    pub fn get_validation_proof(&self, subject_id: &DigestIdentifier) -> Result<HashSet<Signature>, DbError> {
+        let key_elements: Vec<Element> = vec![
+            Element::S(self.prefix.clone()),
+            Element::S(subject_id.to_str()),
+        ];
+        let key = get_key(key_elements)?;
+        let mut iter = self.collection.iter(false, format!("{}{}", key, char::MAX));
+        if let Some(vproof) = iter.next() {
+            let vproof = bincode::deserialize::<HashSet<Signature>>(&vproof.1).map_err(|_| {
+                DbError::DeserializeError
+            })?;;
+            return Ok(vproof);
+        } else {
+            return Err(DbError::EntryNotFound)
+        }
     }
 }

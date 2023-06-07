@@ -150,10 +150,9 @@ impl ConnectionHandler for TellHandler {
     ) {
         self.keep_alive = KeepAlive::No;
         match error {
-            ConnectionHandlerUpgrErr::Timeout => {
-                self.pending_events
-                    .push_back(TellHandlerEvent::InboundTimeout);
-            }
+            ConnectionHandlerUpgrErr::Timeout => self
+                .pending_events
+                .push_back(TellHandlerEvent::InboundTimeout),
             _ => {
                 self.pending_error = Some(error);
             }

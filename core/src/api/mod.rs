@@ -6,6 +6,7 @@ use crate::commons::models::event::Event;
 use crate::commons::models::event_request::EventRequest;
 use crate::commons::models::state::SubjectData;
 use crate::commons::models::Acceptance;
+use crate::commons::models::signature::Signature;
 use crate::event_request::{EventRequestType};
 use crate::identifier::DigestIdentifier;
 
@@ -31,6 +32,7 @@ pub enum APICommands {
     GetSingleRequest(DigestIdentifier),
     SetPreauthorizedSubject(DigestIdentifier, HashSet<KeyIdentifier>),
     ExpectingTransfer(DigestIdentifier),
+    GetValidationProof(DigestIdentifier),
     Shutdown,
 }
 
@@ -46,6 +48,7 @@ pub enum ApiResponses {
     GetPendingRequests(Result<Vec<ApprovalPetitionData>, ApiError>),
     GetSingleRequest(Result<ApprovalPetitionData, ApiError>),
     ExpectingTransfer(Result<KeyIdentifier, ApiError>),
+    GetValidationProof(Result<HashSet<Signature>, ApiError>),
     ShutdownCompleted,
     SetPreauthorizedSubjectCompleted
 }
