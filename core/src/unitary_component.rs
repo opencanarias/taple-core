@@ -205,6 +205,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
                 p2p_port: 50000u32,
                 addr: "/ip4/0.0.0.0/tcp".into(),
                 known_nodes: Vec::<String>::new(),
+                expternal_address: "".into(),
             },
             node: NodeSettings {
                 key_derivator: KeyDerivator::Ed25519,
@@ -363,6 +364,13 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
                 ))
             }
         };
+        let external_addr = {
+            if &self.settings.network.expternal_address == "" {
+                None
+            } else {
+                Some(self.settings.network.expternal_address.clone())
+            }
+        };
         let network_manager = NetworkProcessor::new(
             addr,
             network_access_points(&self.settings.network.known_nodes)?, // TODO: Provide Bootraps nodes per configuration
@@ -374,6 +382,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
             } else {
                 SendMode::Tell
             },
+            external_addr,
         )
         .await
         .expect("Error en creación de la capa de red");
