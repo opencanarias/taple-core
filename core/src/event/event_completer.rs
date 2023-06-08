@@ -936,6 +936,8 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 .remove(&evaluation.preevaluation_hash);
             let (signers, quorum_size) =
                 self.get_signers_and_quorum(metadata, stage.clone()).await?;
+            log::info!("SIGNERS: {:?}", signers);
+            log::info!("Quorum: {}", quorum_size);
             self.ask_signatures(&subject_id, event_message, signers.clone(), quorum_size)
                 .await?;
             // Hacer update de fase por la que va el evento

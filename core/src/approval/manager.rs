@@ -195,10 +195,12 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
 
         match data {
             ApprovalMessages::RequestApproval(message) => {
+                log::info!("menssage: {:?}", message);
                 if sender.is_some() {
                     return Err(ApprovalManagerError::AskNoAllowed);
                 }
                 let result = self.inner_manager.process_approval_request(message).await?;
+                log::info!("result: {:?}", result);
                 match result {
                     Ok(Some((approval, sender))) => {
                         let msg = create_approver_response(approval);
