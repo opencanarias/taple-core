@@ -159,9 +159,6 @@ impl<C: DatabaseCollection> Notary<C> {
         validation_signatures: &HashSet<Signature>,
         last_proof: Option<ValidationProof>,
     ) -> Result<Option<KeyIdentifier>, NotaryError> {
-        if previous_proof.is_none() && new_proof.sn != 1 {
-            return Err(NotaryError::PreviousProofLeft);
-        }
         match last_proof {
             Some(last_proof) => {
                 // Comprobar que tenemos la prueba del evento anterior, si no tenemos que hacer la comprobación de la que nos llega en el mensaje como cuando no tenemos el registro
@@ -206,17 +203,20 @@ impl<C: DatabaseCollection> Notary<C> {
             }
             None => {
                 // Comprobar la prueba de validación anterior junto con las firmas de validación de dicha prueba, su validez criptográfica y si llega a quorum
-                if previous_proof.is_none() {
+                if previous_proof.is_none() && new_proof.sn != 1 {
                     return Err(NotaryError::PreviousProofLeft);
+                } else if new_proof.sn != 1 {
+                    Ok(Some(
+                        self.validate_previous_proof(
+                            new_proof,
+                            previous_proof.unwrap(),
+                            validation_signatures,
+                        )
+                        .await?,
+                    ))
+                } else {
+                    Ok(None)
                 }
-                Ok(Some(
-                    self.validate_previous_proof(
-                        new_proof,
-                        previous_proof.unwrap(),
-                        validation_signatures,
-                    )
-                    .await?,
-                ))
             }
         }
     }
