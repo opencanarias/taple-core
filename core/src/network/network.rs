@@ -25,7 +25,7 @@ use libp2p::{
     multiaddr::Protocol,
     noise,
     request_response::{RequestResponse, RequestResponseEvent, ResponseChannel},
-    swarm::{ConnectionHandlerUpgrErr, NetworkBehaviour, SwarmBuilder, SwarmEvent},
+    swarm::{AddressScore, ConnectionHandlerUpgrErr, NetworkBehaviour, SwarmBuilder, SwarmEvent},
     tcp::TokioTcpConfig,
     yamux, Multiaddr, NetworkBehaviour, PeerId, Swarm, Transport,
 };
@@ -156,6 +156,7 @@ pub struct NetworkProcessor {
     open_requests: HashMap<PeerId, VecDeque<ResponseChannel<Vec<u8>>>>,
     send_mode: SendMode,
     node_public_key: Vec<u8>,
+    external_addresses: Vec<Multiaddr>,
 }
 
 impl NetworkProcessor {
@@ -166,6 +167,7 @@ impl NetworkProcessor {
         controller_mc: KeyPair,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
         send_mode: SendMode,
+        external_addresses: Vec<Multiaddr>,
     ) -> Result<Self, Box<dyn Error>> {
         let public_key = controller_mc.public_key_bytes();
         let local_key = {
@@ -222,6 +224,7 @@ impl NetworkProcessor {
             bootstrap_retries_steam: futures::stream::futures_unordered::FuturesUnordered::new(),
             open_requests: HashMap::new(),
             send_mode,
+            external_addresses,
         })
     }
 
@@ -233,6 +236,10 @@ impl NetworkProcessor {
     /// Run network processor.
     pub async fn run(mut self) {
         debug!("Running network");
+        for external_address in self.external_addresses.clone().into_iter() {
+            self.swarm
+                .add_external_address(external_address, AddressScore::Infinite);
+        }
         if self.addr.is_some() {
             let a = self.swarm.listen_on(self.addr.clone().unwrap());
             if a.is_err() {

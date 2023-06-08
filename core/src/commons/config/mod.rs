@@ -23,6 +23,9 @@ pub struct NetworkSettings {
     #[serde(rename = "knownnodes")]
     /// List of bootstrap nodes to connect to.
     pub known_nodes: Vec<String>,
+    #[serde(rename = "externaladdress")]
+    /// List of bootstrap nodes to connect to.
+    pub external_address: Vec<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
