@@ -30,5 +30,4 @@ pub mod timestamp;
 pub enum Acceptance {
     Ok,
     Ko,
-    Error,
 }

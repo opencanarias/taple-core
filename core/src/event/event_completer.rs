@@ -50,12 +50,12 @@ pub struct EventCompleter<C: DatabaseCollection> {
     own_identifier: KeyIdentifier,
     subjects_by_governance: HashMap<DigestIdentifier, HashSet<DigestIdentifier>>,
     subjects_completing_event:
-        HashMap<DigestIdentifier, (ValidationStage, HashSet<KeyIdentifier>, u32)>,
+        HashMap<DigestIdentifier, (ValidationStage, HashSet<KeyIdentifier>, (u32, u32))>,
     // actual_sn: HashMap<DigestIdentifier, u64>,
     // virtual_state: HashMap<DigestIdentifier, Value>,
     // Evaluation HashMaps
     event_pre_evaluations: HashMap<DigestIdentifier, EventPreEvaluation>,
-    event_evaluations: HashMap<DigestIdentifier, HashSet<UniqueSignature>>,
+    event_evaluations: HashMap<DigestIdentifier, HashSet<(UniqueSignature, Acceptance)>>,
     // Approval HashMaps
     event_proposals: HashMap<DigestIdentifier, EventProposal>,
     event_approvations: HashMap<DigestIdentifier, HashSet<UniqueApproval>>,
@@ -187,12 +187,12 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     proof,
                     subject_signature: Signature {
                         content: SignatureContent {
-                            signer: self.own_identifier.clone(),
+                            signer: subject.public_key.clone(),
                             event_content_hash: proof_hash,
                             timestamp: TimeStamp::now(),
                         },
                         signature: SignatureIdentifier::new(
-                            self.own_identifier.to_signature_derivator(),
+                            subject.public_key.to_signature_derivator(),
                             &signature,
                         ),
                     },
@@ -248,8 +248,10 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                         last_event.signature.content.event_content_hash.clone(),
                         last_event,
                     );
-                    self.subjects_completing_event
-                        .insert(subject.subject_id.clone(), (stage, signers, quorum_size));
+                    self.subjects_completing_event.insert(
+                        subject.subject_id.clone(),
+                        (stage, signers, (quorum_size, 0)),
+                    );
                     continue;
                 }
                 Err(error) => match error {
@@ -366,7 +368,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                             );
                             // Hacer update de fase por la que va el evento
                             self.subjects_completing_event
-                                .insert(subject_id.clone(), (stage, signers, quorum_size));
+                                .insert(subject_id.clone(), (stage, signers, (quorum_size, 0)));
                         }
                         Err(error) => match error {
                             crate::DbError::EntryNotFound => {}
@@ -442,7 +444,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             .await?;
         // Hacer update de fase por la que va el evento
         self.subjects_completing_event
-            .insert(subject_id.clone(), (stage, signers, quorum_size));
+            .insert(subject_id.clone(), (stage, signers, (quorum_size, 0)));
         Ok(())
     }
 
@@ -679,8 +681,11 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 //     unreachable!("Unwraped before")
                 // }
                 // Add the event to the hashset to not complete two at the same time for the same subject
-                self.subjects_completing_event
-                    .insert(subject_id.clone(), (stage, signers.clone(), quorum_size));
+                let negative_quorum_size = (signers.len() as u32 - quorum_size) + 1;
+                self.subjects_completing_event.insert(
+                    subject_id.clone(),
+                    (stage, signers.clone(), (quorum_size, negative_quorum_size)),
+                );
                 self.subjects_by_governance
                     .entry(subject.governance_id)
                     .or_insert_with(HashSet::new)
@@ -774,12 +779,16 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             .get_mut(&evaluation.preevaluation_hash)
         {
             Some(signatures_set) => {
-                insert_or_replace_and_check(signatures_set, UniqueSignature { signature });
+                insert_or_replace_and_check(
+                    signatures_set,
+                    (UniqueSignature { signature }, evaluation.acceptance.clone()),
+                );
                 signatures_set
             }
             None => {
                 let mut new_signatures_set = HashSet::new();
-                new_signatures_set.insert(UniqueSignature { signature });
+                new_signatures_set
+                    .insert((UniqueSignature { signature }, evaluation.acceptance.clone()));
                 self.event_evaluations
                     .insert(evaluation.preevaluation_hash.clone(), new_signatures_set);
                 self.event_evaluations
@@ -787,11 +796,20 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             .expect("Acabamos de insertar el conjunto de firmas, por lo que debe estar presente")
             }
         };
-        let num_signatures_hash =
-            count_signatures_with_event_content_hash(&signatures_set, &evaluation_hash) as u32;
-        let quorum_size = quorum_size.to_owned();
+        let (num_signatures_hash_ok, num_signatures_hash_ko) =
+            count_signatures_with_event_content_hash(&signatures_set, &evaluation_hash);
+        let (quorum_size, negative_quorum_size) = quorum_size.to_owned();
         // Comprobar si llegamos a Quorum
-        if num_signatures_hash < quorum_size {
+        let quorum_reached = {
+            if num_signatures_hash_ok < quorum_size {
+                Some(Acceptance::Ok)
+            } else if num_signatures_hash_ko < negative_quorum_size {
+                Some(Acceptance::Ko)
+            } else {
+                None
+            }
+        };
+        if quorum_reached.is_none() {
             let mut new_signers: HashSet<KeyIdentifier> =
                 signers.into_iter().map(|s| s.clone()).collect();
             new_signers.remove(&signer);
@@ -805,7 +823,11 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             // Hacer update de fase por la que va el evento
             self.subjects_completing_event.insert(
                 subject_id,
-                (ValidationStage::Evaluate, new_signers, quorum_size),
+                (
+                    ValidationStage::Evaluate,
+                    new_signers,
+                    (quorum_size, negative_quorum_size),
+                ),
             );
             return Ok(()); // No llegamos a quorum, no hacemos nada
         } else {
@@ -814,10 +836,11 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             // Crear Event Proposal
             let evaluator_signatures = signatures_set
                 .iter()
-                .filter(|signature| {
+                .filter(|(signature, acceptance)| {
                     signature.signature.content.event_content_hash == evaluation_hash
+                        && quorum_reached.as_ref().unwrap() == acceptance
                 })
-                .map(|signature| signature.signature.clone())
+                .map(|(signature, _)| signature.signature.clone())
                 .collect();
             let hash_prev_event = self
                 .database
@@ -884,7 +907,6 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 let execution = match evaluation.acceptance {
                     crate::commons::models::Acceptance::Ok => true,
                     crate::commons::models::Acceptance::Ko => false,
-                    crate::commons::models::Acceptance::Error => false,
                 };
                 let gov_version = self
                     .gov_api
@@ -922,8 +944,11 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 "LLEGA A ACTUALIZAR EL STAGE PARA EL SUJETO: {:?}",
                 subject_id.to_str()
             );
-            self.subjects_completing_event
-                .insert(subject_id.clone(), (stage, signers, quorum_size));
+            let negative_quorum_size = (signers.len() as u32 - quorum_size) + 1;
+            self.subjects_completing_event.insert(
+                subject_id.clone(),
+                (stage, signers, (quorum_size, negative_quorum_size)),
+            );
             let tmp = self.subjects_completing_event.get(&subject_id);
         }
         Ok(())
@@ -931,9 +956,6 @@ impl<C: DatabaseCollection> EventCompleter<C> {
 
     pub async fn approver_signatures(&mut self, approval: Approval) -> Result<(), EventError> {
         log::warn!("APPROVAL SIGNATURES");
-        if let Acceptance::Error = approval.content.acceptance {
-            return Ok(()); // Ignoramos respuestas de Error
-        }
         log::warn!("APPROVAL 1");
         // Mirar en que estado está el evento, si está en aprovación o no
         let event_proposal = match self
@@ -1027,14 +1049,11 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 unique_approval.approval.content.acceptance == approval.content.acceptance
             })
             .count() as u32;
-        let (quorum_size, execution) = match approval.content.acceptance {
-            crate::commons::models::Acceptance::Ok => (quorum_size.to_owned(), true),
-            crate::commons::models::Acceptance::Ko => {
-                (((signers.len() as u32) - *quorum_size) + 1, false)
-            }
-            crate::commons::models::Acceptance::Error => unreachable!(),
+        let (quorum_size_now, execution) = match approval.content.acceptance {
+            crate::commons::models::Acceptance::Ok => (quorum_size.0, true),
+            crate::commons::models::Acceptance::Ko => (quorum_size.1, false),
         };
-        if num_approvals_with_same_acceptance < quorum_size {
+        if num_approvals_with_same_acceptance < quorum_size_now {
             let mut new_signers: HashSet<KeyIdentifier> =
                 signers.into_iter().map(|s| s.clone()).collect();
             new_signers.remove(&signer);
@@ -1042,13 +1061,17 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 &subject_id,
                 create_approval_request(event_proposal.to_owned()),
                 signers.clone(),
-                quorum_size,
+                quorum_size_now,
             )
             .await?;
             // Hacer update de fase por la que va el evento
             self.subjects_completing_event.insert(
                 subject_id,
-                (ValidationStage::Approve, new_signers, quorum_size),
+                (
+                    ValidationStage::Approve,
+                    new_signers,
+                    quorum_size.to_owned(),
+                ),
             );
             Ok(()) // No llegamos a quorum, no hacemos nada
         } else {
@@ -1103,7 +1126,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             );
             // Hacer update de fase por la que va el evento
             self.subjects_completing_event
-                .insert(subject_id, (stage, signers, quorum_size));
+                .insert(subject_id, (stage, signers, (quorum_size, 0)));
             Ok(())
         }
     }
@@ -1220,7 +1243,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         log::warn!("PASO 5");
         let quorum_size = quorum_size.to_owned();
         // Comprobar si llegamos a Quorum y si es así dejar de pedir firmas
-        if (validation_set.len() as u32) < quorum_size {
+        if (validation_set.len() as u32) < quorum_size.0 {
             log::warn!("PASO 6 IF");
             let notary_event = match self
                 .event_notary_events
@@ -1237,8 +1260,13 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             let mut new_signers: HashSet<KeyIdentifier> =
                 signers.into_iter().map(|s| s.clone()).collect();
             new_signers.remove(&signer);
-            self.ask_signatures(&subject_id, event_message, new_signers.clone(), quorum_size)
-                .await?;
+            self.ask_signatures(
+                &subject_id,
+                event_message,
+                new_signers.clone(),
+                quorum_size.0,
+            )
+            .await?;
             // Hacer update de fase por la que va el evento
             self.subjects_completing_event.insert(
                 subject_id,
@@ -1394,15 +1422,20 @@ pub fn extend_quorum(quorum_size: u32, signers_len: usize) -> f64 {
 }
 
 fn count_signatures_with_event_content_hash(
-    signatures: &HashSet<UniqueSignature>,
+    signatures: &HashSet<(UniqueSignature, Acceptance)>,
     target_event_content_hash: &DigestIdentifier,
-) -> usize {
-    signatures
-        .iter()
-        .filter(|signature| {
-            signature.signature.content.event_content_hash == *target_event_content_hash
-        })
-        .count()
+) -> (u32, u32) {
+    let mut ok: u32 = 0;
+    let mut ko: u32 = 0;
+    for (signature, acceptance) in signatures.iter() {
+        if signature.signature.content.event_content_hash == *target_event_content_hash {
+            match acceptance {
+                Acceptance::Ok => ok += 1,
+                Acceptance::Ko => ko += 1,
+            }
+        }
+    }
+    (ok, ko)
 }
 
 fn insert_or_replace_and_check<T: PartialEq + Eq + Hash>(
