@@ -187,12 +187,12 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     proof,
                     subject_signature: Signature {
                         content: SignatureContent {
-                            signer: self.own_identifier.clone(),
+                            signer: subject.public_key.clone(),
                             event_content_hash: proof_hash,
                             timestamp: TimeStamp::now(),
                         },
                         signature: SignatureIdentifier::new(
-                            self.own_identifier.to_signature_derivator(),
+                            subject.public_key.to_signature_derivator(),
                             &signature,
                         ),
                     },
