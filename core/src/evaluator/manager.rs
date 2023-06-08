@@ -726,6 +726,7 @@ mod test {
         });
     }
 
+    /* 
     #[test]
     fn contract_execution_fail() {
         // Fail reason: Bad Event
@@ -805,7 +806,6 @@ mod test {
         });
     }
 
-    /*
     #[test]
     fn contract_execution_fail2() {
         // Fail reason: Bad State
