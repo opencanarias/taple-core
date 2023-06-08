@@ -56,7 +56,7 @@ mod tests {
                 mc1,
                 bsx.subscribe(),
                 SendMode::Tell,
-                None
+                vec![]
             )
             .await.unwrap();
             let msg_sender_boot = bootstrap_network.client();
@@ -69,7 +69,7 @@ mod tests {
                 mc2,
                 brx,
                 SendMode::Tell,
-                None
+                vec![]
             )
             .await.unwrap();
             let msg_sender_1 = node1_network.client();
@@ -140,7 +140,7 @@ mod tests {
                 mc1,
                 bsx.subscribe(),
                 SendMode::RequestResponse,
-                None
+                vec![]
             )
             .await.unwrap();
             let msg_sender_boot = bootstrap_network.client();
@@ -153,7 +153,7 @@ mod tests {
                 mc2,
                 brx,
                 SendMode::RequestResponse,
-                None
+                vec![]
             )
             .await.unwrap();
             let msg_sender_1 = node1_network.client();
