@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use crate::signature::Signature;
 #[cfg(feature = "aproval")]
 use crate::{Acceptance, ApprovalPetitionData};
 use crate::{KeyIdentifier};
@@ -33,6 +34,7 @@ pub enum APICommands {
     GetSingleRequest(DigestIdentifier),
     SetPreauthorizedSubject(DigestIdentifier, HashSet<KeyIdentifier>),
     ExpectingTransfer(DigestIdentifier),
+    GetValidationProof(DigestIdentifier),
     Shutdown,
 }
 
@@ -51,6 +53,7 @@ pub enum ApiResponses {
     #[cfg(feature = "aproval")]
     GetSingleRequest(Result<ApprovalPetitionData, ApiError>),
     ExpectingTransfer(Result<KeyIdentifier, ApiError>),
+    GetValidationProof(Result<HashSet<Signature>, ApiError>),
     ShutdownCompleted,
     SetPreauthorizedSubjectCompleted
 }

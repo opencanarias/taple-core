@@ -50,11 +50,12 @@ impl MemoryManager {
 
 impl DatabaseManager<MemoryCollection> for MemoryManager {
     fn create_collection(&self, identifier: &str) -> MemoryCollection {
-        let lock = self.data.write().unwrap();
+        let mut lock = self.data.write().unwrap();
         let db: Arc<DataStore> = match lock.get(identifier) {
             Some(map) => map.clone(),
             None => {
-                let db = Arc::new(DataStore::new());
+                let db: Arc<DataStore> = Arc::new(DataStore::new());
+                lock.insert(identifier.to_string(), db.clone());
                 db
             }
         };

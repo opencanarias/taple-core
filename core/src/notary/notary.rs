@@ -283,9 +283,12 @@ impl<C: DatabaseCollection> Notary<C> {
 /*
 #[cfg(test)]
 mod tests {
+    use crate::commons::models::event::ValidationProof;
     use crate::commons::self_signature_manager::SelfSignatureManager;
-    use crate::database::{MemoryManager, DB};
+    use crate::database::{MemoryCollection, MemoryManager, DB};
     use crate::governance::GovernanceUpdatedMessage;
+    use crate::identifier::derive::SignatureDerivator;
+    use crate::protocol::protocol_message_manager::TapleMessages;
     use crate::{
         commons::{
             channel::MpscChannel,
@@ -321,6 +324,7 @@ mod tests {
         })
     }
 
+    /*
     #[test]
     fn test_gov_not_found() {
         let rt = Runtime::new().unwrap();
@@ -393,8 +397,12 @@ mod tests {
             assert_eq!(error, NotaryError::GovernanceVersionTooHigh)
         })
     }
+    */
 
-    fn initialize() -> (Governance<MemoryManager>, Notary<MemoryManager>) {
+    fn initialize() -> (
+        Governance<MemoryManager, MemoryCollection>,
+        Notary<MemoryCollection>,
+    ) {
         let manager = MemoryManager::new();
         let manager = Arc::new(manager);
         let db = DB::new(manager.clone());
@@ -409,7 +417,6 @@ mod tests {
             schema_id: String::from("governance"),
             owner: KeyIdentifier::from_str("ED8MpwKh3OjPEw_hQdqJixrXlKzpVzdvHf2DqrPvdz7Y").unwrap(),
             properties: String::from("governance"),
-
             keys: None,
             creator: KeyIdentifier::from_str("ED8MpwKh3OjPEw_hQdqJixrXlKzpVzdvHf2DqrPvdz7Y")
                 .unwrap(),
@@ -431,6 +438,7 @@ mod tests {
         let (a, b) = MpscChannel::<GovernanceMessage, GovernanceResponse>::new(100);
         let (c, d) = MpscChannel::<GovernanceUpdatedMessage, ()>::new(100);
         let (e, f) = MpscChannel::<GovernanceUpdatedMessage, ()>::new(100);
+        let (_msg_channel_m, msg_channel_r) = MpscChannel::<TapleMessages, ()>::new(100);
         let gov_manager = Governance::new(a, bsx, _brx, db, f);
         let db = DB::new(manager);
         let notary = Notary::new(
@@ -442,38 +450,61 @@ mod tests {
                     .unwrap(),
                 digest_derivator: DigestDerivator::Blake3_256,
             },
+            msg_channel_r,
         );
         (gov_manager, notary)
     }
 
     fn not_ev(sn: u64) -> NotaryEvent {
         NotaryEvent {
-            gov_id: DigestIdentifier::from_str(
-                "JKXo-EvPxQcL_nhbd4iprzyjdNxT9YYrmeJ7p5N_IVrg",
-            )
-            .unwrap(),
-            subject_id: DigestIdentifier::from_str(
-                "JKXo-EvPxQcL_nhbd4iprzyjdNxT9YYrmeJ7p5N_IVrg",
-            )
-            .unwrap(),
-            owner: KeyIdentifier::from_str("ED8MpwKh3OjPEw_hQdqJixrXlKzpVzdvHf2DqrPvdz7Y")
-            .unwrap(),
-            event_hash: DigestIdentifier::from_str(
-                "JKXo-EvPxQcL_nhbd4iprzyjdNxT9YYrmeJ7p5N_IVrg",
-            )
-            .unwrap(),
-            sn,
-            gov_version: 0,
-            owner_signature: Signature { content: SignatureContent {
-                signer: KeyIdentifier::from_str("ED8MpwKh3OjPEw_hQdqJixrXlKzpVzdvHf2DqrPvdz7Y")
-                .unwrap(),
-                event_content_hash: DigestIdentifier::from_str(
+            proof: ValidationProof {
+                governance_id: DigestIdentifier::from_str(
                     "JKXo-EvPxQcL_nhbd4iprzyjdNxT9YYrmeJ7p5N_IVrg",
                 )
                 .unwrap(),
-                timestamp: TimeStamp::now(),
-            }, signature: SignatureIdentifier::from_str("SEB2W98DwIvqL4BPIRnHOpogfn1qkNrOoSI-KJxSaLOoudEFo_Q6-FlMJvwBDQY3iGQ7iB4bcwr8QBgP8he7HVDA").unwrap() },
+                subject_id: DigestIdentifier::from_str(
+                    "JKXo-EvPxQcL_nhbd4iprzyjdNxT9YYrmeJ7p5N_IVrg",
+                )
+                .unwrap(),
+                governance_version: 0,
+                sn,
+                schema_id: String::from("governance"),
+                namespace: String::from("governance"),
+                prev_event_hash: DigestIdentifier::from_str(
+                    "", // Vacio porque el anterior es de génesis
+                )
+                .unwrap(),
+                event_hash: DigestIdentifier::from_str(
+                    "JKXo-EvPxQcL_nhbd4iprzyjdNxT9YYrmeJ7p5N_IVrg",
+                )
+                .unwrap(),
+                state_hash: DigestIdentifier::from_str(
+                    "governance",
+                )
+                .unwrap(),
+                subject_public_key: KeyIdentifier::from_str("public_key")
+                .unwrap(),
+                owner: KeyIdentifier::from_str("ED8MpwKh3OjPEw_hQdqJixrXlKzpVzdvHf2DqrPvdz7Y")
+                    .unwrap(),
+                creator: KeyIdentifier::from_str("ED8MpwKh3OjPEw_hQdqJixrXlKzpVzdvHf2DqrPvdz7Y")
+                    .unwrap(),
+            },
+            subject_signature: Signature {
+                content: SignatureContent {
+                    signer: KeyIdentifier::from_str("ED8MpwKh3OjPEw_hQdqJixrXlKzpVzdvHf2DqrPvdz7Y")
+                    .unwrap(),
+                    event_content_hash: DigestIdentifier::from_str(
+                        "JKXo-EvPxQcL_nhbd4iprzyjdNxT9YYrmeJ7p5N_IVrg",
+                    )
+                    .unwrap(),
+                    timestamp: TimeStamp::now(),
+                },
+                signature: SignatureIdentifier {
+                    derivator: SignatureDerivator::Ed25519Sha512,
+                    signature: vec![],
+                },
+            }
         }
     }
 }
- */
+*/

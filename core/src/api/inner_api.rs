@@ -12,6 +12,7 @@ use crate::event::EventResponse;
 use crate::identifier::Derivable;
 use crate::KeyIdentifier;
 use crate::ledger::manager::{EventManagerAPI, EventManagerInterface};
+use crate::signature::Signature;
 // use crate::ledger::errors::LedgerManagerError;
 use crate::{
     commons::{
@@ -289,6 +290,21 @@ impl<C: DatabaseCollection> InnerAPI<C> {
                 Err(APIInternalError::DatabaseError(error.to_string()))
             }
         }
+    }
+
+    pub async fn get_validation_proof(
+        &self,
+        subject_id: DigestIdentifier
+    ) -> ApiResponses {
+        let result = match self.db.get_validation_proof(&subject_id) {
+            Ok(vproof) => vproof,
+            Err(error) => {
+                return ApiResponses::GetValidationProof(Err(ApiError::DatabaseError(
+                    error.to_string()
+                )))
+            } 
+        };
+        ApiResponses::GetValidationProof(Ok(result))
     }
 }
 

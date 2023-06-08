@@ -1,4 +1,4 @@
-use std::{collections::HashMap, marker::PhantomData};
+use std::collections::HashMap;
 
 use crate::{
     commons::{
@@ -16,7 +16,7 @@ use crate::{
     event_request::{EventRequest, EventRequestType},
     governance::{error::RequestError, GovernanceInterface},
     identifier::{Derivable, DigestIdentifier, KeyIdentifier},
-    DatabaseManager, Notification, DatabaseCollection
+    DatabaseCollection, Notification,
 };
 
 use super::{
@@ -65,7 +65,8 @@ impl NotifierInterface for RequestNotifier {
     }
 }
 
-pub struct InnerApprovalManager<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection> {
+pub struct InnerApprovalManager<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
+{
     governance: G,
     database: DB<C>,
     notifier: N,
@@ -118,7 +119,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
     pub async fn get_governance_version(
         &self,
         governance_id: &DigestIdentifier,
-        subject_id: &DigestIdentifier
+        subject_id: &DigestIdentifier,
     ) -> Result<Result<u64, ApprovalErrorResponse>, ApprovalManagerError> {
         match self
             .governance
@@ -475,7 +476,6 @@ fn create_metadata(subject_data: &Subject, governance_version: u64) -> Metadata 
     }
 }
 
-/*
 #[cfg(test)]
 mod test {
     use std::{collections::HashSet, str::FromStr, sync::Arc};
@@ -487,23 +487,19 @@ mod test {
     use crate::{
         approval::RequestApproval,
         commons::{
+            config::VotationType,
             crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair, Payload, DSA},
             models::state::Subject,
             schema_handler::gov_models::{Contract, Invoke},
+            self_signature_manager::{SelfSignatureInterface, SelfSignatureManager},
         },
-        database::DB,
+        database::{MemoryCollection, DB},
         event_content::Metadata,
         event_request::{CreateRequest, EventRequest, EventRequestType, StateRequest},
         governance::{error::RequestError, stage::ValidationStage, GovernanceInterface},
         identifier::{Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier},
-        protocol::{
-            command_head_manager::self_signature_manager::{
-                SelfSignatureInterface, SelfSignatureManager,
-            },
-            request_manager::VotationType,
-        },
         signature::{Signature, SignatureContent},
-        Event, MemoryManager, Notification, TimeStamp,
+        Event, MemoryManager, Notification, TimeStamp, DatabaseManager,
     };
 
     use super::{InnerApprovalManager, RequestNotifier};
@@ -514,15 +510,16 @@ mod test {
     impl GovernanceInterface for GovernanceMockup {
         async fn get_schema(
             &self,
-            governance_id: &DigestIdentifier,
+            governance_id: DigestIdentifier,
             schema_id: String,
+            governance_version: u64,
         ) -> Result<serde_json::Value, RequestError> {
             unreachable!()
         }
 
         async fn get_signers(
             &self,
-            metadata: &Metadata,
+            metadata: Metadata,
             stage: ValidationStage,
         ) -> Result<HashSet<KeyIdentifier>, RequestError> {
             match stage {
@@ -546,7 +543,7 @@ mod test {
 
         async fn get_quorum(
             &self,
-            metadata: &Metadata,
+            metadata: Metadata,
             stage: ValidationStage,
         ) -> Result<u32, RequestError> {
             Ok(1)
@@ -554,7 +551,7 @@ mod test {
 
         async fn get_invoke_info(
             &self,
-            metadata: &Metadata,
+            metadata: Metadata,
             fact: String,
         ) -> Result<Option<Invoke>, RequestError> {
             unreachable!()
@@ -562,19 +559,46 @@ mod test {
 
         async fn get_contracts(
             &self,
-            governance_id: &DigestIdentifier,
+            governance_id: DigestIdentifier,
+            governance_version: u64,
         ) -> Result<Vec<Contract>, RequestError> {
             unreachable!()
         }
 
         async fn get_governance_version(
             &self,
-            governance_id: &DigestIdentifier,
+            governance_id: DigestIdentifier,
+            subject_id: DigestIdentifier,
         ) -> Result<u64, RequestError> {
             Ok(1)
         }
 
-        async fn is_governance(&self, subject_id: &DigestIdentifier) -> Result<bool, RequestError> {
+        async fn is_governance(&self, subject_id: DigestIdentifier) -> Result<bool, RequestError> {
+            unreachable!()
+        }
+
+        async fn get_init_state(
+            &self,
+            governance_id: DigestIdentifier,
+            schema_id: String,
+            governance_version: u64,
+        ) -> Result<Value, RequestError> {
+            unreachable!()
+        }
+
+        async fn get_roles_of_invokator(
+            &self,
+            invokator: KeyIdentifier,
+            metadata: Metadata,
+        ) -> Result<Vec<String>, RequestError> {
+            unreachable!()
+        }
+
+        async fn governance_updated(
+            &self,
+            governance_id: DigestIdentifier,
+            governance_version: u64,
+        ) -> Result<(), RequestError> {
             unreachable!()
         }
     }
@@ -596,16 +620,6 @@ mod test {
             signature,
         };
         event_request
-    }
-
-    fn create_subject(
-        request: EventRequest,
-        governance_version: u64,
-        subject_schema: &Value,
-    ) -> (Subject, Event) {
-        request
-            .create_subject_from_request(governance_version, subject_schema, true)
-            .unwrap()
     }
 
     fn create_genesis_request(
@@ -703,7 +717,7 @@ mod test {
             success,
             true,
             &evaluator_signatures,
-            json_patch,
+            json_patch.clone(),
         ))
         .unwrap();
         let keys = subject.keys.as_ref().unwrap();
@@ -737,12 +751,13 @@ mod test {
     fn create_module(
         pass_votation: VotationType,
     ) -> (
-        InnerApprovalManager<GovernanceMockup, MemoryManager, RequestNotifier>,
+        InnerApprovalManager<GovernanceMockup, RequestNotifier, MemoryCollection>,
         Receiver<Notification>,
         Arc<MemoryManager>,
         SelfSignatureManager,
     ) {
-        let database = Arc::new(MemoryManager::new());
+        let collection = Arc::new(MemoryManager::new());
+        let database = DB::new(collection.clone());
         let keypair = KeyPair::Ed25519(Ed25519KeyPair::from_seed(
             &hex::decode("99beed715bf561185baaa5b3e9df8ecddcfcf7727fbc4f7e922a4cf2f9ea8c4e")
                 .unwrap(),
@@ -758,12 +773,12 @@ mod test {
         let notifier = RequestNotifier::new(notification_sx);
         let manager = InnerApprovalManager::new(
             governance,
-            DB::new(database.clone()),
+            database,
             notifier,
             signature_manager.clone(),
             pass_votation,
         );
-        (manager, notification_rx, database, signature_manager)
+        (manager, notification_rx, collection, signature_manager)
     }
 
     fn get_governance_id() -> DigestIdentifier {
@@ -778,14 +793,12 @@ mod test {
                 create_module(VotationType::AlwaysAccept);
             // Creamos los datos
             let invokator = create_invokator_signature_manager();
-            let (subject, _) = create_subject(
+            let subject = Subject::from_genesis_request(
                 create_genesis_request(create_json_state(), &invokator),
-                0,
-                &create_subject_schema(),
-            );
-            let subject_data = subject.subject_data.as_ref().unwrap();
+                create_json_state()
+            ).unwrap();
             let msg = generate_request_approve_msg(
-                create_state_request(create_json_state(), &invokator, &subject_data.subject_id),
+                create_state_request(create_json_state(), &invokator, &subject.subject_id),
                 1,
                 &get_governance_id(),
                 0,
@@ -799,9 +812,6 @@ mod test {
                 &subject,
                 "".into(),
             );
-
-            // let result = manager.
         });
     }
 }
- */

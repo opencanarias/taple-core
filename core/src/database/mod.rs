@@ -3,7 +3,7 @@ mod error;
 mod memory;
 mod layers;
 
-pub use self::memory::MemoryManager;
+pub use self::memory::{MemoryManager, MemoryCollection};
 pub use db::DB;
 pub use error::Error;
 

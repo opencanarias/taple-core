@@ -17,7 +17,7 @@ pub use secp256k1::Secp256k1KeyPair;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    identifier::{self, derive::KeyDerivator, DigestIdentifier, Derivable},
+    identifier::{self, derive::KeyDerivator, Derivable, DigestIdentifier},
     signature::Signature,
 };
 
@@ -272,7 +272,7 @@ mod tests {
         assert!(create_seed(seed).is_ok());
         let seed = "witness".as_bytes();
         assert!(create_seed(seed).is_ok());
-        let seed = "witnesssdfasfasfasfsafsafasfsafsafasfasfasdf".as_bytes();
+        let seed = "witnesssdfasfasfasfsafsafasfsafsa".as_bytes();
         assert!(create_seed(seed).is_err());
     }
 
@@ -283,7 +283,6 @@ mod tests {
         let signature = key_pair.sign(Payload::Buffer(message.to_vec())).unwrap();
         println!("Tamaño: {}", signature.len());
         let valid = key_pair.verify(Payload::Buffer(message.to_vec()), &signature);
-
         matches!(valid, Ok(()));
     }
 
@@ -295,7 +294,6 @@ mod tests {
         let signature = key_pair.sign(Payload::Buffer(message.to_vec())).unwrap();
         println!("Tamaño: {}", signature.len());
         let valid = key_pair.verify(Payload::Buffer(message.to_vec()), &signature);
-
         matches!(valid, Ok(()));
     }
 

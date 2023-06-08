@@ -801,9 +801,9 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         let (quorum_size, negative_quorum_size) = quorum_size.to_owned();
         // Comprobar si llegamos a Quorum
         let quorum_reached = {
-            if num_signatures_hash_ok >= quorum_size {
+            if num_signatures_hash_ok < quorum_size {
                 Some(Acceptance::Ok)
-            } else if num_signatures_hash_ko >= negative_quorum_size {
+            } else if num_signatures_hash_ko < negative_quorum_size {
                 Some(Acceptance::Ko)
             } else {
                 None
@@ -936,8 +936,6 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 .remove(&evaluation.preevaluation_hash);
             let (signers, quorum_size) =
                 self.get_signers_and_quorum(metadata, stage.clone()).await?;
-            log::info!("SIGNERS: {:?}", signers);
-            log::info!("Quorum: {}", quorum_size);
             self.ask_signatures(&subject_id, event_message, signers.clone(), quorum_size)
                 .await?;
             // Hacer update de fase por la que va el evento

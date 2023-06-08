@@ -44,7 +44,6 @@ impl<C: DatabaseCollection> EventDb<C> {
             Some(from) => Some(from.to_string()),
             None => None,
         };
-        log::error!("from: {:?} quantity: {}", from, quantity);
         let events_by_subject =
             get_by_range(from, quantity, &self.collection, &key)?;
         Ok(events_by_subject
