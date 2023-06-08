@@ -149,7 +149,6 @@ impl<C: DatabaseCollection, G: GovernanceInterface + Send> TapleRunner<C, G> {
                 .map_err(|_| ExecutorErrorResponses::StateHashGenerationFailed)?,
             ),
             Acceptance::Ko => (String::from(""), DigestIdentifier::default()),
-            Acceptance::Error => unreachable!(),
         };
         Ok(ExecuteContractResponse {
             json_patch: patch,
