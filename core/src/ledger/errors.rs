@@ -65,5 +65,13 @@ pub enum LedgerError {
     #[error("State event with an SN of 0 detected")]
     StateEventWithZeroSNDetected,
     #[error("Unexpected create event")]
-    UnexpectedCreateEvent
+    UnexpectedCreateEvent,
+    #[error("Validation Proof Error: {0}")]
+    ValidationProofError(String),
+    #[error("EOL when active LCE for subject: {0}")]
+    EOLWhenActiveLCE(String),
+    #[error("Intermediate EOL for subject: {0}")]
+    IntermediateEOL(String),
+    #[error("Subject Life Ended: {0}")]
+    SubjectLifeEnd(String),
 }

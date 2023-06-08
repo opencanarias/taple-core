@@ -716,8 +716,8 @@ mod test {
             };
             assert_eq!(evaluation.governance_version, 0);
             // let new_state_json = &serde_json::to_string(&new_state).unwrap();
-            //  let hash = DigestIdentifier::from_serializable_borsh(new_state_json).unwrap();
-            //  assert_eq!(hash, evaluation.state_hash); // arreglar
+            // let hash = DigestIdentifier::from_serializable_borsh(new_state_json).unwrap();
+            // assert_eq!(hash, evaluation.state_hash); // arreglar
             // let patch = generate_json_patch(&initial_state_json, &new_state_json);
             // assert_eq!(patch, json_patch); // arreglar
             // let own_identifier = signature_manager.get_own_identifier();

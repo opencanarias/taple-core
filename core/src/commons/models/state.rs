@@ -1,11 +1,10 @@
 use crate::{
     commons::{
-        crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair, Payload, DSA},
+        crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair},
         errors::SubjectError,
         identifier::{
-            derive::KeyDerivator, Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier,
+            DigestIdentifier, KeyIdentifier,
         },
-        schema_handler::{get_governance_schema, Schema},
     },
     event_request::EventRequest,
 };
@@ -41,6 +40,8 @@ pub struct Subject {
     pub creator: KeyIdentifier,
     /// Current status of the subject
     pub properties: String,
+    /// Indicates if the subject is active or not
+    pub active: bool,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
@@ -67,6 +68,8 @@ pub struct SubjectData {
     pub creator: KeyIdentifier,
     /// Current status of the subject
     pub properties: String,
+    /// Indicates if the subject is active or not
+    pub active: bool,
 }
 
 impl From<Subject> for SubjectData {
@@ -81,6 +84,7 @@ impl From<Subject> for SubjectData {
             owner: subject.owner,
             creator: subject.creator,
             properties: subject.properties,
+            active: subject.active,
         }
     }
 }
@@ -114,6 +118,7 @@ impl Subject {
             owner: event_request.signature.content.signer.clone(),
             creator: event_request.signature.content.signer.clone(),
             properties: init_state,
+            active: true,
         })
     }
 
@@ -162,6 +167,7 @@ impl Subject {
                 .signer
                 .clone(),
             properties: init_state,
+            active: true,
         })
     }
 
@@ -189,10 +195,28 @@ impl Subject {
         owner: KeyIdentifier,
         public_key: KeyIdentifier,
         keys: Option<KeyPair>,
+        sn: u64,
     ) {
         self.owner = owner;
         self.public_key = public_key;
         self.keys = keys;
+        self.sn = sn;
+    }
+
+    pub fn get_state_hash(&self) -> Result<DigestIdentifier, SubjectError> {
+        let mut subject_properties = serde_json::from_str::<Value>(&self.properties)
+            .map_err(|_| SubjectError::CryptoError(String::from("Error parsing the state")))?;
+        let subject_properties_str = serde_json::to_string(&subject_properties)
+            .map_err(|_| SubjectError::CryptoError(String::from("Error serializing the state")))?;
+        Ok(
+            DigestIdentifier::from_serializable_borsh(&subject_properties_str).map_err(|_| {
+                SubjectError::CryptoError(String::from("Error calculating the hash of the state"))
+            })?,
+        )
+    }
+
+    pub fn eol_event(&mut self) {
+        self.active = false;
     }
 
     pub fn state_hash_after_apply(

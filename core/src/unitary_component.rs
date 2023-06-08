@@ -1,7 +1,8 @@
 use std::marker::PhantomData;
 use std::sync::Arc;
-
+#[cfg(feature = "aproval")]
 use crate::approval::manager::{ApprovalAPI, ApprovalManager};
+#[cfg(feature = "aproval")]
 use crate::approval::{ApprovalMessages, ApprovalResponses};
 use crate::authorized_subjecs::manager::{AuthorizedSubjectsAPI, AuthorizedSubjectsManager};
 use crate::authorized_subjecs::{AuthorizedSubjectsCommand, AuthorizedSubjectsResponse};
@@ -15,7 +16,7 @@ use crate::commons::identifier::derive::KeyDerivator;
 use crate::commons::identifier::{Derivable, KeyIdentifier};
 use crate::commons::models::notification::Notification;
 use crate::commons::self_signature_manager::{SelfSignatureInterface, SelfSignatureManager};
-use crate::database::{DatabaseManager, DB, DatabaseCollection};
+use crate::database::{DatabaseCollection, DatabaseManager, DB};
 use crate::distribution::error::DistributionErrorResponses;
 use crate::distribution::manager::DistributionManager;
 use crate::distribution::DistributionMessagesNew;
@@ -31,6 +32,7 @@ use crate::message::{
     Message, MessageReceiver, MessageSender, MessageTaskCommand, MessageTaskManager, NetworkEvent,
 };
 use crate::network::network::{NetworkProcessor, SendMode};
+#[cfg(feature = "validation")]
 use crate::notary::manager::NotaryManager;
 use crate::notary::{NotaryCommand, NotaryResponse};
 use crate::protocol::protocol_message_manager::{ProtocolManager, TapleMessages};
@@ -115,7 +117,7 @@ pub struct Taple<M: DatabaseManager<C>, C: DatabaseCollection> {
     notification_sender: tokio::sync::broadcast::Sender<Notification>,
     settings: TapleSettings,
     database: Option<M>,
-    _c: PhantomData<C>
+    _c: PhantomData<C>,
 }
 
 impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, C> {
@@ -192,7 +194,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
             notification_sender: sender,
             settings,
             database: Some(database),
-            _c: PhantomData::default()
+            _c: PhantomData::default(),
         }
     }
 
@@ -318,6 +320,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
             Result<(), DistributionErrorResponses>,
         >::new(BUFFER_SIZE);
         // Receiver and sender of approval messages
+        #[cfg(feature = "aproval")]
         let (approval_receiver, approval_sender) =
             MpscChannel::<ApprovalMessages, ApprovalResponses>::new(BUFFER_SIZE);
         // Receiver and sender of evaluation messages
@@ -325,6 +328,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
         let (evaluation_receiver, evaluation_sender) =
             MpscChannel::<EvaluatorMessage, EvaluatorResponse>::new(BUFFER_SIZE);
         // Receiver and sender of validation messages
+        #[cfg(feature = "validation")]
         let (validation_receiver, validation_sender) =
             MpscChannel::<NotaryCommand, NotaryResponse>::new(BUFFER_SIZE);
         // Shutdown channel
@@ -348,12 +352,19 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
         let public_key = kp.public_key_bytes();
         let key_identifier = KeyIdentifier::new(kp.get_key_derivator(), &public_key);
         // Creation Network
+        let addr = {
+            if &self.settings.network.addr == "" || self.settings.network.p2p_port == 0 {
+                None
+            } else {
+                Some(format!(
+                    "{}/{}",
+                    self.settings.network.addr.clone(),
+                    self.settings.network.p2p_port.clone()
+                ))
+            }
+        };
         let network_manager = NetworkProcessor::new(
-            Some(format!(
-                "{}/{}",
-                self.settings.network.addr.clone(),
-                self.settings.network.p2p_port.clone()
-            )),
+            addr,
             network_access_points(&self.settings.network.known_nodes)?, // TODO: Provide Bootraps nodes per configuration
             sender_network,
             kp.clone(),
@@ -387,8 +398,10 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
             distribution_sender.clone(),
             #[cfg(feature = "evaluation")]
             evaluation_sender.clone(),
+            #[cfg(feature = "validation")]
             validation_sender.clone(),
             event_sender.clone(),
+            #[cfg(feature = "aproval")]
             approval_sender.clone(),
             ledger_sender.clone(),
             bsx.clone(),
@@ -440,6 +453,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
         let api = API::new(
             self.api_input.take().unwrap(),
             EventAPI::new(event_sender),
+            #[cfg(feature = "aproval")]
             ApprovalAPI::new(approval_sender),
             AuthorizedSubjectsAPI::new(as_sender),
             EventManagerAPI::new(ledger_sender),
@@ -464,6 +478,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
             task_sender.clone(),
         );
         // Creation ApprovalManager
+        #[cfg(feature = "aproval")]
         let approval_manager = ApprovalManager::new(
             GovernanceAPI::new(governance_sender.clone()),
             approval_receiver,
@@ -488,6 +503,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
             self.settings.clone(),
             DB::new(db.clone()),
         );
+        #[cfg(feature = "validation")]
         let validation_manager = NotaryManager::new(
             validation_receiver,
             GovernanceAPI::new(governance_sender),
@@ -520,12 +536,14 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
         tokio::spawn(async move {
             evaluator_manager.start().await;
         });
+        #[cfg(feature = "validation")]
         tokio::spawn(async move {
             validation_manager.start().await;
         });
         tokio::spawn(async move {
             distribution_manager.start().await;
         });
+        #[cfg(feature = "aproval")]
         tokio::spawn(async move {
             approval_manager.start().await;
         });

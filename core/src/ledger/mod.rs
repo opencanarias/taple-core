@@ -16,6 +16,7 @@ pub enum LedgerCommand {
     OwnEvent {
         event: Event,
         signatures: HashSet<Signature>,
+        validation_proof: ValidationProof
     },
     Genesis {
         event_request: EventRequest,

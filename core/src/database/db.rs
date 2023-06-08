@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use crate::commons::models::event::ValidationProof;
 use crate::commons::models::notary::NotaryEventResponse;
 use crate::commons::models::state::Subject;
 use crate::crypto::KeyPair;
@@ -10,13 +11,14 @@ use crate::signature::Signature;
 use crate::Event;
 
 use super::error::Error;
+use super::layers::lce_validation_proofs::{self, LceValidationProofs};
 use super::{
     layers::{
         contract::ContractDb, controller_id::ControllerIdDb, event::EventDb, notary::NotaryDb,
-        notary_signatures::NotarySignaturesDb, prevalidated_event::PrevalidatedEventDb,
-        request::RequestDb, signature::SignatureDb, subject::SubjectDb,
-        subject_by_governance::SubjectByGovernanceDb, witness_signatures::WitnessSignaturesDb,
-        preauthorized_subjects_and_providers::PreauthorizedSbujectsAndProovidersDb, transfer_events::TransferEventsDb
+        preauthorized_subjects_and_providers::PreauthorizedSbujectsAndProovidersDb,
+        prevalidated_event::PrevalidatedEventDb, request::RequestDb, signature::SignatureDb,
+        subject::SubjectDb, subject_by_governance::SubjectByGovernanceDb,
+        transfer_events::TransferEventsDb, witness_signatures::WitnessSignaturesDb,
     },
     DatabaseCollection, DatabaseManager,
 };
@@ -30,11 +32,11 @@ pub struct DB<C: DatabaseCollection> {
     controller_id_db: ControllerIdDb<C>,
     notary_db: NotaryDb<C>,
     contract_db: ContractDb<C>,
-    notary_signatures_db: NotarySignaturesDb<C>,
     witness_signatures_db: WitnessSignaturesDb<C>,
     subject_by_governance_db: SubjectByGovernanceDb<C>,
     transfer_events_db: TransferEventsDb<C>,
-    preauthorized_subjects_and_providers_db: PreauthorizedSbujectsAndProovidersDb<C>
+    preauthorized_subjects_and_providers_db: PreauthorizedSbujectsAndProovidersDb<C>,
+    lce_validation_proofs_db: LceValidationProofs<C>,
 }
 
 impl<C: DatabaseCollection> DB<C> {
@@ -47,11 +49,12 @@ impl<C: DatabaseCollection> DB<C> {
         let controller_id_db = ControllerIdDb::new(&manager);
         let notary_db = NotaryDb::new(&manager);
         let contract_db = ContractDb::new(&manager);
-        let notary_signatures_db = NotarySignaturesDb::new(&manager);
         let witness_signatures_db = WitnessSignaturesDb::new(&manager);
         let subject_by_governance_db = SubjectByGovernanceDb::new(&manager);
         let transfer_events_db = TransferEventsDb::new(&manager);
-        let preauthorized_subjects_and_providers_db = PreauthorizedSbujectsAndProovidersDb::new(&manager);
+        let preauthorized_subjects_and_providers_db =
+            PreauthorizedSbujectsAndProovidersDb::new(&manager);
+        let lce_validation_proofs_db = LceValidationProofs::new(&manager);
         Self {
             signature_db,
             subject_db,
@@ -61,12 +64,11 @@ impl<C: DatabaseCollection> DB<C> {
             controller_id_db,
             notary_db,
             contract_db,
-            notary_signatures_db,
             witness_signatures_db,
             subject_by_governance_db,
             transfer_events_db,
-            preauthorized_subjects_and_providers_db
-
+            preauthorized_subjects_and_providers_db,
+            lce_validation_proofs_db,
         }
     }
 
@@ -74,7 +76,7 @@ impl<C: DatabaseCollection> DB<C> {
         &self,
         subject_id: &DigestIdentifier,
         sn: u64,
-    ) -> Result<HashSet<Signature>, Error> {
+    ) -> Result<(HashSet<Signature>, ValidationProof), Error> {
         self.signature_db.get_signatures(subject_id, sn)
     }
 
@@ -83,15 +85,17 @@ impl<C: DatabaseCollection> DB<C> {
         subject_id: &DigestIdentifier,
         sn: u64,
         signatures: HashSet<Signature>,
+        validation_proof: ValidationProof,
     ) -> Result<(), Error> {
-        self.signature_db.set_signatures(subject_id, sn, signatures)
+        self.signature_db
+            .set_signatures(subject_id, sn, signatures, validation_proof)
     }
 
     pub fn del_signatures(&self, subject_id: &DigestIdentifier, sn: u64) -> Result<(), Error> {
         self.signature_db.del_signatures(subject_id, sn)
     }
 
-    pub fn get_validation_proof(&self, subject_id: &DigestIdentifier) -> Result<HashSet<Signature>, Error> {
+    pub fn get_validation_proof(&self, subject_id: &DigestIdentifier) -> Result<ValidationProof, Error> {
         self.signature_db.get_validation_proof(subject_id)
     }
 
@@ -202,21 +206,18 @@ impl<C: DatabaseCollection> DB<C> {
 
     pub fn get_notary_register(
         &self,
-        owner: &KeyIdentifier,
         subject_id: &DigestIdentifier,
-    ) -> Result<(DigestIdentifier, u64), Error> {
-        self.notary_db.get_notary_register(owner, subject_id)
+    ) -> Result<ValidationProof, Error> {
+        self.notary_db.get_notary_register(subject_id)
     }
 
     pub fn set_notary_register(
         &self,
-        owner: &KeyIdentifier,
         subject_id: &DigestIdentifier,
-        event_hash: DigestIdentifier,
-        sn: u64,
+        validation_proof: &ValidationProof,
     ) -> Result<(), Error> {
         self.notary_db
-            .set_notary_register(owner, subject_id, event_hash, sn)
+            .set_notary_register(subject_id, validation_proof)
     }
 
     pub fn get_contract(
@@ -245,30 +246,6 @@ impl<C: DatabaseCollection> DB<C> {
 
     pub fn put_governance_contract(&self, contract: Vec<u8>) -> Result<(), Error> {
         self.contract_db.put_governance_contract(contract)
-    }
-
-    pub fn get_notary_signatures(
-        &self,
-        subject_id: &DigestIdentifier,
-        sn: u64,
-    ) -> Result<(u64, HashSet<NotaryEventResponse>), Error> {
-        self.notary_signatures_db
-            .get_notary_signatures(subject_id, sn)
-    }
-
-    pub fn set_notary_signatures(
-        &self,
-        subject_id: &DigestIdentifier,
-        sn: u64,
-        signatures: HashSet<NotaryEventResponse>,
-    ) -> Result<(), Error> {
-        self.notary_signatures_db
-            .set_notary_signatures(subject_id, sn, signatures)
-    }
-
-    pub fn delete_notary_signatures(&self, subject_id: &DigestIdentifier) -> Result<(), Error> {
-        self.notary_signatures_db
-            .delete_notary_signatures(subject_id)
     }
 
     pub fn get_witness_signatures(
@@ -321,12 +298,19 @@ impl<C: DatabaseCollection> DB<C> {
         self.transfer_events_db.get_expecting_transfer(subject_id)
     }
 
+    pub fn get_all_expecting_transfers(
+        &self,
+    ) -> Result<Vec<(DigestIdentifier, HashSet<KeyIdentifier>)>, Error> {
+        self.transfer_events_db.get_all_expecting_transfers()
+    }
+
     pub fn set_expecting_transfer(
         &self,
         subject_id: &DigestIdentifier,
         keypair: KeyPair,
     ) -> Result<(), Error> {
-        self.transfer_events_db.set_expecting_transfer(subject_id, keypair)
+        self.transfer_events_db
+            .set_expecting_transfer(subject_id, keypair)
     }
 
     pub fn del_expecting_transfer(&self, subject_id: &DigestIdentifier) -> Result<(), Error> {
@@ -337,7 +321,8 @@ impl<C: DatabaseCollection> DB<C> {
         &self,
         subject_id: &DigestIdentifier,
     ) -> Result<HashSet<KeyIdentifier>, Error> {
-        self.preauthorized_subjects_and_providers_db.get_preauthorized_subject_and_providers(subject_id)
+        self.preauthorized_subjects_and_providers_db
+            .get_preauthorized_subject_and_providers(subject_id)
     }
 
     pub fn get_preauthorized_subjects_and_providers(
@@ -345,7 +330,8 @@ impl<C: DatabaseCollection> DB<C> {
         from: Option<String>,
         quantity: isize,
     ) -> Result<Vec<(DigestIdentifier, HashSet<KeyIdentifier>)>, Error> {
-        self.preauthorized_subjects_and_providers_db.get_preauthorized_subjects_and_providers(from, quantity)
+        self.preauthorized_subjects_and_providers_db
+            .get_preauthorized_subjects_and_providers(from, quantity)
     }
 
     pub fn set_preauthorized_subject_and_providers(
@@ -353,6 +339,29 @@ impl<C: DatabaseCollection> DB<C> {
         subject_id: &DigestIdentifier,
         providers: HashSet<KeyIdentifier>,
     ) -> Result<(), Error> {
-        self.preauthorized_subjects_and_providers_db.set_preauthorized_subject_and_providers(subject_id, providers)
+        self.preauthorized_subjects_and_providers_db
+            .set_preauthorized_subject_and_providers(subject_id, providers)
+    }
+
+    pub fn get_lce_validation_proof(
+        &self,
+        subject_id: &DigestIdentifier,
+    ) -> Result<ValidationProof, Error> {
+        self.lce_validation_proofs_db
+            .get_lce_validation_proof(subject_id)
+    }
+
+    pub fn set_lce_validation_proof(
+        &self,
+        subject_id: &DigestIdentifier,
+        proof: ValidationProof,
+    ) -> Result<(), Error> {
+        self.lce_validation_proofs_db
+            .set_lce_validation_proof(subject_id, proof)
+    }
+
+    pub fn del_lce_validation_proof(&self, subject_id: &DigestIdentifier) -> Result<(), Error> {
+        self.lce_validation_proofs_db
+            .del_lce_validation_proof(subject_id)
     }
 }

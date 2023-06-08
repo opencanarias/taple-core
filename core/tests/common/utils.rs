@@ -1,8 +1,9 @@
+use std::str::FromStr;
 use std::{sync::Arc, time::Duration};
 
-use taple_core::{signature::Signature, SubjectData};
-use taple_core::{ApiModuleInterface, NodeAPI};
 use futures::{future, FutureExt};
+use taple_core::{signature::Signature, SubjectData};
+use taple_core::{ApiModuleInterface, DigestIdentifier, NodeAPI};
 
 #[allow(dead_code)]
 pub async fn do_task_with_timeout<Output>(
@@ -21,7 +22,9 @@ pub async fn get_subject_with_timeout(
     do_task_with_timeout(
         async move {
             loop {
-                let subject = taple.get_subject(id.clone()).await;
+                let subject = taple
+                    .get_subject(DigestIdentifier::from_str(&id).unwrap())
+                    .await;
                 if subject.is_ok() {
                     return subject.unwrap();
                 }
@@ -42,25 +45,26 @@ pub async fn get_signatures_with_timeout(
     expected_signatures: usize,
     ms: u64,
 ) -> Result<Vec<Signature>, tokio::time::error::Elapsed> {
-    do_task_with_timeout(
-        async move {
-            loop {
-                let signatures = taple
-                    .get_signatures(subject_id.clone(), sn, None, None)
-                    .await;
-                if signatures.is_ok() {
-                    let tmp = signatures.unwrap();
-                    if tmp.len() == expected_signatures {
-                        return tmp;
-                    }
-                }
-                tokio::time::sleep(Duration::from_millis(200)).await;
-            }
-        }
-        .boxed(),
-        ms,
-    )
-    .await
+    // do_task_with_timeout(
+    //     async move {
+    //         loop {
+    //             let signatures = taple
+    //                 .get_signatures(subject_id.clone(), sn, None, None)
+    //                 .await;
+    //             if signatures.is_ok() {
+    //                 let tmp = signatures.unwrap();
+    //                 if tmp.len() == expected_signatures {
+    //                     return tmp;
+    //                 }
+    //             }
+    //             tokio::time::sleep(Duration::from_millis(200)).await;
+    //         }
+    //     }
+    //     .boxed(),
+    //     ms,
+    // )
+    // .await
+    todo!()
 }
 
 #[allow(dead_code)]
@@ -273,7 +277,6 @@ pub fn governance_two() -> serde_json::Value {
             ]
     })
 }
-
 
 #[allow(dead_code)]
 pub fn governance_two_100() -> serde_json::Value {

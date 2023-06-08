@@ -30,6 +30,7 @@ pub enum EventCommand {
     ValidatorResponse {
         event_hash: DigestIdentifier,
         signature: Signature,
+        governance_version: u64,
     },
     HigherGovernanceExpected {
         governance_id: DigestIdentifier,

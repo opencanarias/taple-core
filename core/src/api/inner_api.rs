@@ -1,6 +1,7 @@
 use super::error::APIInternalError;
 use super::ApiResponses;
 use crate::approval::error::ApprovalErrorResponse;
+#[cfg(feature = "aproval")]
 use crate::approval::manager::{ApprovalAPI, ApprovalAPIInterface};
 use crate::authorized_subjecs::manager::AuthorizedSubjectsAPI;
 use crate::commons::models::Acceptance;
@@ -37,6 +38,7 @@ use crate::database::Error as DbError;
 pub(crate) struct InnerAPI<C: DatabaseCollection> {
     signature_manager: SelfSignatureManager,
     event_api: EventAPI,
+    #[cfg(feature = "aproval")]
     approval_api: ApprovalAPI,
     authorized_subjects_api: AuthorizedSubjectsAPI,
     ledger_api: EventManagerAPI,
@@ -52,12 +54,14 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         event_api: EventAPI,
         authorized_subjects_api: AuthorizedSubjectsAPI,
         db: DB<C>,
+        #[cfg(feature = "aproval")]
         approval_api: ApprovalAPI,
         ledger_api: EventManagerAPI
     ) -> Self {
         Self {
             signature_manager: SelfSignatureManager::new(keys, settings),
             event_api,
+            #[cfg(feature = "aproval")]
             approval_api,
             authorized_subjects_api,
             db,
@@ -123,6 +127,7 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         ))
     }
 
+    #[cfg(feature = "aproval")]
     pub async fn emit_vote(
         &self,
         request_id: DigestIdentifier,
@@ -232,6 +237,7 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         }
     }
 
+    #[cfg(feature = "aproval")]
     pub async fn get_pending_request(&self) -> ApiResponses {
         match self.approval_api.get_all_requests().await {
             Ok(data) => return ApiResponses::GetPendingRequests(Ok(data)),
@@ -239,6 +245,7 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         }
     }
 
+    #[cfg(feature = "aproval")]
     pub async fn get_single_request(&self, request_id: DigestIdentifier) -> ApiResponses {
         match self
             .approval_api
@@ -261,13 +268,11 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         subject_id: DigestIdentifier,
         providers: HashSet<KeyIdentifier>,
     ) -> Result<ApiResponses, APIInternalError> {
-        log::info!("HOLA");
         if let Err(error) = self
             .authorized_subjects_api
             .new_authorized_subject(subject_id, providers)
             .await
         {
-            log::error!("ERROR FATAL: {:?}", error);
             return Err(APIInternalError::DatabaseError(error.to_string()));
         }
         Ok(ApiResponses::SetPreauthorizedSubjectCompleted)
@@ -299,10 +304,6 @@ impl<C: DatabaseCollection> InnerAPI<C> {
                 )))
             } 
         };
-        let result = result
-            .into_iter()
-            .map(|signature| signature.into())
-            .collect::<HashSet<Signature>>();
         ApiResponses::GetValidationProof(Ok(result))
     }
 }

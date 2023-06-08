@@ -1,4 +1,5 @@
 use super::utils::{get_key, Element};
+use crate::commons::models::event::ValidationProof;
 use crate::DbError;
 use crate::{DatabaseCollection, DatabaseManager, Derivable, DigestIdentifier, KeyIdentifier};
 use std::sync::Arc;
@@ -18,35 +19,29 @@ impl<C: DatabaseCollection> NotaryDb<C> {
 
     pub fn get_notary_register(
         &self,
-        owner: &KeyIdentifier,
         subject_id: &DigestIdentifier,
-    ) -> Result<(DigestIdentifier, u64), DbError> {
+    ) -> Result<ValidationProof, DbError> {
         let key_elements: Vec<Element> = vec![
             Element::S(self.prefix.clone()),
-            Element::S(owner.to_str()),
             Element::S(subject_id.to_str()),
         ];
         let key = get_key(key_elements)?;
         let notary_register = self.collection.get(&key)?;
-        Ok(bincode::deserialize::<(DigestIdentifier, u64)>(&notary_register).map_err(|_| {
-            DbError::DeserializeError
-        })?)
+        Ok(bincode::deserialize::<ValidationProof>(&notary_register)
+            .map_err(|_| DbError::DeserializeError)?)
     }
 
     pub fn set_notary_register(
         &self,
-        owner: &KeyIdentifier,
         subject_id: &DigestIdentifier,
-        event_hash: DigestIdentifier,
-        sn: u64,
+        validation_proof: &ValidationProof,
     ) -> Result<(), DbError> {
         let key_elements: Vec<Element> = vec![
             Element::S(self.prefix.clone()),
-            Element::S(owner.to_str()),
             Element::S(subject_id.to_str()),
         ];
         let key = get_key(key_elements)?;
-        let Ok(data) = bincode::serialize::<(DigestIdentifier, u64)>(&(event_hash, sn)) else {
+        let Ok(data) = bincode::serialize::<ValidationProof>(validation_proof) else {
             return Err(DbError::SerializeError);
         };
         self.collection.put(&key, data)

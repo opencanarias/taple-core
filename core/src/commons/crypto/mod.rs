@@ -6,8 +6,6 @@ pub(crate) mod ed25519;
 pub(crate) mod error;
 #[cfg(feature = "secp256k1")]
 pub(crate) mod secp256k1;
-#[cfg(feature = "x25519")]
-pub(crate) mod x25519;
 
 use borsh::BorshSerialize;
 use identifier::error::Error;
@@ -17,8 +15,6 @@ pub use ed25519::Ed25519KeyPair;
 #[cfg(feature = "secp256k1")]
 pub use secp256k1::Secp256k1KeyPair;
 use serde::{Deserialize, Serialize};
-#[cfg(feature = "x25519")]
-pub use x25519::X25519KeyPair;
 
 use crate::{
     identifier::{self, derive::KeyDerivator, Derivable, DigestIdentifier},
@@ -31,16 +27,19 @@ pub fn check_cryptography<T: BorshSerialize>(
     serializable: T,
     signature: &Signature,
 ) -> Result<DigestIdentifier, CryptoError> {
+    log::error!("AQUÍ 0");
     let hash = DigestIdentifier::from_serializable_borsh(&serializable).map_err(|_| {
         CryptoError::CryptoError(String::from(
             "Error calculating the hash of the serializable",
         ))
     })?;
+    log::error!("AQUÍ 1");
     if hash != signature.content.event_content_hash {
         return Err(CryptoError::CryptoError(String::from(
             "The hash does not match the content of the signature",
         )));
     }
+    log::error!("AQUÍ 2");
     signature
         .content
         .signer
@@ -48,6 +47,7 @@ pub fn check_cryptography<T: BorshSerialize>(
         .map_err(|_| {
             CryptoError::CryptoError(String::from("The signature does not validate the hash"))
         })?;
+    log::error!("AQUÍ 3");
     Ok(hash)
 }
 
