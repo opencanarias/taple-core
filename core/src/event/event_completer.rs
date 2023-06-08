@@ -801,9 +801,9 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         let (quorum_size, negative_quorum_size) = quorum_size.to_owned();
         // Comprobar si llegamos a Quorum
         let quorum_reached = {
-            if num_signatures_hash_ok < quorum_size {
+            if num_signatures_hash_ok >= quorum_size {
                 Some(Acceptance::Ok)
-            } else if num_signatures_hash_ko < negative_quorum_size {
+            } else if num_signatures_hash_ko >= negative_quorum_size {
                 Some(Acceptance::Ko)
             } else {
                 None
