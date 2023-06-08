@@ -1,8 +1,9 @@
 use std::collections::HashSet;
+use crate::signature::Signature;
 #[cfg(feature = "aproval")]
 use crate::{Acceptance, ApprovalPetitionData};
 use crate::{KeyIdentifier};
-use crate::commons::models::event::{Event, ValidationProof};
+use crate::commons::models::event::Event;
 use crate::commons::models::event_request::EventRequest;
 use crate::commons::models::state::SubjectData;
 use crate::event_request::{EventRequestType};
@@ -52,7 +53,7 @@ pub enum ApiResponses {
     #[cfg(feature = "aproval")]
     GetSingleRequest(Result<ApprovalPetitionData, ApiError>),
     ExpectingTransfer(Result<KeyIdentifier, ApiError>),
-    GetValidationProof(Result<ValidationProof, ApiError>),
+    GetValidationProof(Result<HashSet<Signature>, ApiError>),
     ShutdownCompleted,
     SetPreauthorizedSubjectCompleted
 }

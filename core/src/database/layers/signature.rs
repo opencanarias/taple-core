@@ -77,7 +77,7 @@ impl<C: DatabaseCollection> SignatureDb<C> {
         self.collection.del(&key)
     }
 
-    pub fn get_validation_proof(&self, subject_id: &DigestIdentifier) -> Result<ValidationProof, DbError> {
+    pub fn get_validation_proof(&self, subject_id: &DigestIdentifier) -> Result<HashSet<Signature>, DbError> {
         let key_elements: Vec<Element> = vec![
             Element::S(self.prefix.clone()),
             Element::S(subject_id.to_str()),
@@ -89,7 +89,7 @@ impl<C: DatabaseCollection> SignatureDb<C> {
             let vproof = bincode::deserialize::<(HashSet<Signature>, ValidationProof)>(&vproof.1).map_err(|_| {
                 DbError::DeserializeError
             })?;
-            return Ok(vproof.1);
+            return Ok(vproof.0);
         } else {
             return Err(DbError::EntryNotFound)
         }

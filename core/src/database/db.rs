@@ -95,7 +95,7 @@ impl<C: DatabaseCollection> DB<C> {
         self.signature_db.del_signatures(subject_id, sn)
     }
 
-    pub fn get_validation_proof(&self, subject_id: &DigestIdentifier) -> Result<ValidationProof, Error> {
+    pub fn get_validation_proof(&self, subject_id: &DigestIdentifier) -> Result<HashSet<Signature>, Error> {
         self.signature_db.get_validation_proof(subject_id)
     }
 

@@ -20,6 +20,7 @@ use crate::commons::{
 use crate::event::manager::EventAPI;
 use crate::ledger::manager::EventManagerAPI;
 use crate::KeyIdentifier;
+use crate::signature::Signature;
 use crate::{
     approval::ApprovalPetitionData,
     commons::models::Acceptance,
@@ -180,7 +181,7 @@ pub trait ApiModuleInterface {
     async fn get_validation_proof(
         &self,
         subject_id: DigestIdentifier
-    ) -> Result<ValidationProof, ApiError>;
+    ) ->  Result<HashSet<Signature>, ApiError>;
 
 }
 
@@ -465,7 +466,7 @@ impl ApiModuleInterface for NodeAPI {
     async fn get_validation_proof(
         &self,
         subject_id: DigestIdentifier
-    ) -> Result<ValidationProof, ApiError> {
+    ) -> Result<HashSet<Signature>, ApiError> {
         let response = self.
             sender
             .ask(APICommands::GetValidationProof(subject_id))
