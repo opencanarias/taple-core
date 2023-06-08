@@ -353,7 +353,6 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
                     return Ok(Err(ApprovalErrorResponse::NoQuorumReached));
                 }
             }
-            Acceptance::Error => return Ok(Err(ApprovalErrorResponse::InvalidAcceptance)),
         }
 
         // La EventRequest es correcta. Podemos pasar a guardarla en el sistema si corresponde
