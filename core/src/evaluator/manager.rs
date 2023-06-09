@@ -17,26 +17,14 @@ use crate::message::{MessageConfig, MessageTaskCommand};
 use crate::protocol::protocol_message_manager::TapleMessages;
 use crate::utils::message::event::create_evaluator_response;
 
-#[derive(Clone, Debug)]
-pub struct EvaluatorAPI {
-    sender: SenderEnd<EvaluatorMessage, EvaluatorResponse>,
-}
-
-impl EvaluatorAPI {
-    pub fn new(sender: SenderEnd<EvaluatorMessage, EvaluatorResponse>) -> Self {
-        Self { sender }
-    }
-}
-
 pub struct EvaluatorManager<
     M: DatabaseManager<C>,
     C: DatabaseCollection + 'static,
-    G: GovernanceInterface + Send + Clone + 'static,
 > {
     /// Communication channel for incoming petitions
     input_channel: MpscChannel<EvaluatorMessage, EvaluatorResponse>,
     /// Contract executioner
-    runner: TapleRunner<C, G>,
+    runner: TapleRunner<C>,
     signature_manager: SelfSignatureManager,
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
@@ -47,10 +35,9 @@ pub struct EvaluatorManager<
 impl<
         M: DatabaseManager<C>,
         C: DatabaseCollection,
-        G: GovernanceInterface + Send + Clone + 'static,
-    > EvaluatorManager<M, C, G>
+    > EvaluatorManager<M, C>
 {
-    pub fn new(
+    pub fn new<G: GovernanceInterface + Send + Clone + 'static>(
         input_channel: MpscChannel<EvaluatorMessage, EvaluatorResponse>,
         database: Arc<M>,
         signature_manager: SelfSignatureManager,
@@ -76,7 +63,7 @@ impl<
         });
         Self {
             input_channel,
-            runner: TapleRunner::new(DB::new(database.clone()), engine, gov_api),
+            runner: TapleRunner::new(DB::new(database.clone()), engine),
             signature_manager,
             shutdown_receiver,
             shutdown_sender,
@@ -235,15 +222,14 @@ mod test {
     use std::{collections::HashSet, str::FromStr, sync::Arc};
 
     use async_trait::async_trait;
-    use ed25519_dalek::ed25519::signature::Signature;
     use json_patch::diff;
     use serde::{Deserialize, Serialize};
     use serde_json::Value;
-    use tokio::{sync::broadcast::Sender, time::sleep};
+    use tokio::{sync::broadcast::Sender};
 
     use crate::{
         commons::{
-            channel::{AskData, ChannelData, MpscChannel, SenderEnd, TellData},
+            channel::{ChannelData, MpscChannel, SenderEnd},
             crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair},
             models::{
                 event_preevaluation::{Context, EventPreEvaluation},
@@ -254,7 +240,7 @@ mod test {
         },
         database::{MemoryCollection, DB},
         evaluator::{
-            compiler::ContractType, errors::CompilerErrorResponses, EvaluatorMessage,
+            compiler::ContractType, EvaluatorMessage,
             EvaluatorResponse,
         },
         event_content::Metadata,
@@ -266,10 +252,6 @@ mod test {
         identifier::{DigestIdentifier, KeyIdentifier},
         message::MessageTaskCommand,
         protocol::protocol_message_manager::TapleMessages,
-        DatabaseManager,
-        // protocol::command_head_manager::self_signature_manager::{
-        //     SelfSignatureInterface, SelfSignatureManager,
-        // },
         MemoryManager,
         TimeStamp, event::EventCommand,
     };
@@ -425,42 +407,42 @@ mod test {
     impl GovernanceInterface for GovernanceMockup {
         async fn get_init_state(
             &self,
-            governance_id: DigestIdentifier,
-            schema_id: String,
-            governance_version: u64,
+            _governance_id: DigestIdentifier,
+            _schema_id: String,
+            _governance_version: u64,
         ) -> Result<Value, RequestError> {
             unimplemented!()
         }
 
         async fn get_schema(
             &self,
-            governance_id: DigestIdentifier,
-            schema_id: String,
-            governance_version: u64,
+            _governance_id: DigestIdentifier,
+            _schema_id: String,
+            _governance_version: u64,
         ) -> Result<serde_json::Value, RequestError> {
             unimplemented!()
         }
 
         async fn get_signers(
             &self,
-            metadata: Metadata,
-            stage: ValidationStage,
+            _metadata: Metadata,
+            _stage: ValidationStage,
         ) -> Result<HashSet<KeyIdentifier>, RequestError> {
             unimplemented!()
         }
 
         async fn get_quorum(
             &self,
-            metadata: Metadata,
-            stage: ValidationStage,
+            _metadata: Metadata,
+            _stage: ValidationStage,
         ) -> Result<u32, RequestError> {
             unimplemented!()
         }
 
         async fn get_invoke_info(
             &self,
-            metadata: Metadata,
-            fact: String,
+            _metadata: Metadata,
+            _fact: String,
         ) -> Result<Option<Invoke>, RequestError> {
             unimplemented!()
         }
@@ -468,7 +450,7 @@ mod test {
         async fn get_contracts(
             &self,
             governance_id: DigestIdentifier,
-            governance_version: u64,
+            _governance_version: u64,
         ) -> Result<Vec<Contract>, RequestError> {
             if governance_id
                 == DigestIdentifier::from_str("Jg2Nuv5bNs4swQGcPQ1CXs9MtcfwMVoeQDR2Ea1YNYJw")
@@ -506,35 +488,35 @@ mod test {
 
         async fn get_governance_version(
             &self,
-            governance_id: DigestIdentifier,
-            subject_id: DigestIdentifier,
+            _governance_id: DigestIdentifier,
+            _subject_id: DigestIdentifier,
         ) -> Result<u64, RequestError> {
             unimplemented!()
         }
 
-        async fn is_governance(&self, subject_id: DigestIdentifier) -> Result<bool, RequestError> {
+        async fn is_governance(&self, _subject_id: DigestIdentifier) -> Result<bool, RequestError> {
             unimplemented!()
         }
 
         async fn get_roles_of_invokator(
             &self,
-            invokator: KeyIdentifier,
-            metadata: Metadata,
+            _invokator: KeyIdentifier,
+            _metadata: Metadata,
         ) -> Result<Vec<String>, RequestError> {
             Ok(vec![])
         }
 
         async fn governance_updated(
             &self,
-            governance_id: DigestIdentifier,
-            governance_version: u64,
+            _governance_id: DigestIdentifier,
+            _governance_version: u64,
         ) -> Result<(), RequestError> {
             Ok(())
         }
     }
 
     fn build_module() -> (
-        EvaluatorManager<MemoryManager, MemoryCollection, GovernanceMockup>,
+        EvaluatorManager<MemoryManager, MemoryCollection>,
         SenderEnd<EvaluatorMessage, EvaluatorResponse>,
         Sender<GovernanceUpdatedMessage>,
         SelfSignatureManager,

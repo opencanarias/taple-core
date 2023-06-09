@@ -1,9 +1,6 @@
 use crate::{
-    commons::models::{event_preevaluation::Context, Acceptance},
+    commons::models::{Acceptance},
     evaluator::errors::ExecutorErrorResponses,
-    event_content::Metadata,
-    governance::GovernanceInterface,
-    identifier::{DigestIdentifier, KeyIdentifier},
 };
 
 use super::context::MemoryManager;
@@ -24,39 +21,26 @@ pub struct ContractResult {
     pub success: Acceptance,
 }
 
-pub struct ContractExecutor<G: GovernanceInterface + Send> {
+pub struct ContractExecutor {
     engine: Engine,
-    gov_api: G,
 }
 
-impl<G: GovernanceInterface + Send> ContractExecutor<G> {
-    pub fn new(engine: Engine, gov_api: G) -> Self {
-        Self { engine, gov_api }
+impl ContractExecutor {
+    pub fn new(engine: Engine) -> Self {
+        Self { engine }
     }
 
     pub async fn execute_contract(
         &self,
         state: &str,
         event: &str,
-        invokator: &KeyIdentifier,
-        context: &Context,
-        governance_version: u64,
         compiled_contract: Vec<u8>,
-        subject_id: &DigestIdentifier,
+        is_owner: bool,
     ) -> Result<ContractResult, ExecutorErrorResponses> {
-        // Obtener Roles del usuario
-        let roles = self
-            .gov_api
-            .get_roles_of_invokator(
-                invokator.clone(),
-                build_metadata(&context, governance_version, &subject_id),
-            )
-            .await
-            .map_err(|_| ExecutorErrorResponses::RolesObtentionFailed)?;
         // Cargar wasm
         let module = unsafe { Module::deserialize(&self.engine, compiled_contract).unwrap() };
         // Generar contexto
-        let (context, state_ptr, event_ptr, roles_ptr) = self.generate_context(state, event, roles);
+        let (context, state_ptr, event_ptr) = self.generate_context(state, event);
         let mut store = Store::new(&self.engine, context);
         // Generar Linker
         let linker = self.generate_linker(&self.engine)?;
@@ -69,28 +53,20 @@ impl<G: GovernanceInterface + Send> ContractExecutor<G> {
             .get_typed_func::<(u32, u32, u32), u32>(&mut store, "main_function")
             .map_err(|_| ExecutorErrorResponses::ContractEntryPointNotFound)?;
         let result_ptr = contract_entrypoint
-            .call(&mut store, (state_ptr, event_ptr, roles_ptr))
+            .call(
+                &mut store,
+                (state_ptr, event_ptr, if is_owner { 1 } else { 0 }),
+            )
             .map_err(|_| ExecutorErrorResponses::ContractExecutionFailed)?;
         // Obtención "NEW STATE" almacenado en el contexto
         Ok(self.get_result(&store, result_ptr)?)
     }
 
-    fn generate_context(
-        &self,
-        state: &str,
-        event: &str,
-        roles: Vec<String>,
-    ) -> (MemoryManager, u32, u32, u32) {
+    fn generate_context(&self, state: &str, event: &str) -> (MemoryManager, u32, u32) {
         let mut context = MemoryManager::new();
         let state_ptr = context.add_date_raw(state.as_bytes());
         let event_ptr = context.add_date_raw(event.as_bytes());
-        let roles_ptr = context.add_data(roles);
-        (
-            context,
-            state_ptr as u32,
-            event_ptr as u32,
-            roles_ptr as u32,
-        )
+        (context, state_ptr as u32, event_ptr as u32)
     }
 
     fn get_result(
@@ -168,18 +144,3 @@ impl<G: GovernanceInterface + Send> ContractExecutor<G> {
     }
 }
 
-fn build_metadata(
-    context: &Context,
-    governance_version: u64,
-    subject_id: &DigestIdentifier,
-) -> Metadata {
-    Metadata {
-        namespace: context.namespace.clone(),
-        subject_id: subject_id.clone(),
-        governance_id: context.governance_id.clone(),
-        governance_version: governance_version,
-        schema_id: context.schema_id.clone(),
-        owner: context.owner.clone(),
-        creator: context.creator.clone(),
-    }
-}
