@@ -24,9 +24,7 @@ impl<C: DatabaseCollection> SubjectDb<C> {
         ];
         let key = get_key(key_elements)?;
         let subject = self.collection.get(&key)?;
-        Ok(bincode::deserialize::<Subject>(&subject).map_err(|_| {
-            DbError::DeserializeError
-        })?)
+        Ok(bincode::deserialize::<Subject>(&subject).map_err(|_| DbError::DeserializeError)?)
     }
 
     pub fn set_subject(
@@ -66,23 +64,12 @@ impl<C: DatabaseCollection> SubjectDb<C> {
             .collect())
     }
 
-    pub fn get_governances(
-        &self,
-        from: Option<String>,
-        quantity: isize,
-    ) -> Result<Vec<Subject>, DbError> {
-        // TODO: Confirmar si las gobernanzas van a tener una colección propia
-        let governances = get_by_range(from, quantity, &self.collection, &self.prefix.clone())?;
-        Ok(governances
-            .iter()
-            .map(|subject| (bincode::deserialize::<Subject>(subject).unwrap()))
-            .filter(|subject| subject.schema_id == "governance")
-            .collect())
-    }
-
     pub fn get_all_subjects(&self) -> Vec<Subject> {
         let mut result = Vec::new();
-        for (_, subject) in self.collection.iter(false, format!("{}{}", self.prefix, char::MAX)) {
+        for (_, subject) in self
+            .collection
+            .iter(false, format!("{}{}", self.prefix, char::MAX))
+        {
             let subject = bincode::deserialize::<Subject>(&subject).unwrap();
             result.push(subject);
         }

@@ -123,14 +123,6 @@ impl<C: DatabaseCollection> DB<C> {
         self.subject_db.del_subject(subject_id)
     }
 
-    pub fn get_governances(
-        &self,
-        from: Option<String>,
-        quantity: isize,
-    ) -> Result<Vec<Subject>, Error> {
-        self.subject_db.get_governances(from, quantity)
-    }
-
     pub fn get_all_subjects(&self) -> Vec<Subject> {
         self.subject_db.get_all_subjects()
     }
@@ -280,18 +272,36 @@ impl<C: DatabaseCollection> DB<C> {
     pub fn set_governance_index(
         &self,
         subject_id: &DigestIdentifier,
-        gobernance_id: &DigestIdentifier,
+        governance_id: &DigestIdentifier,
     ) -> Result<(), Error> {
         self.subject_by_governance_db
-            .set_governance_index(subject_id, gobernance_id)
+            .set_governance_index(subject_id, governance_id)
     }
 
     pub fn get_subjects_by_governance(
         &self,
-        gobernance_id: &DigestIdentifier,
+        governance_id: &DigestIdentifier,
     ) -> Result<Vec<DigestIdentifier>, Error> {
         self.subject_by_governance_db
-            .get_subjects_by_governance(gobernance_id)
+            .get_subjects_by_governance(governance_id)
+    }
+
+    pub fn get_governances(
+        &self,
+        from: Option<String>,
+        quantity: isize,
+    ) -> Result<Vec<Subject>, Error> {
+        self.subject_by_governance_db.get_governances(from, quantity)
+    }
+
+    pub fn get_governance_subjects(
+        &self,
+        governance_id: &DigestIdentifier,
+        from: Option<String>,
+        quantity: isize,
+    ) -> Result<Vec<Subject>, Error> {
+        self.subject_by_governance_db
+            .get_governance_subjects(governance_id, from, quantity)
     }
 
     pub fn get_expecting_transfer(&self, subject_id: &DigestIdentifier) -> Result<KeyPair, Error> {
