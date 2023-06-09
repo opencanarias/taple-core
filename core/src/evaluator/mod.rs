@@ -13,7 +13,7 @@ mod errors;
 #[cfg(feature = "evaluation")]
 mod manager;
 #[cfg(feature = "evaluation")]
-pub use manager::{EvaluatorAPI, EvaluatorManager};
+pub use manager::{EvaluatorManager};
 #[cfg(feature = "evaluation")]
 mod runner;
 
