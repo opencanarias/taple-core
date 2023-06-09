@@ -2,7 +2,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::commons::models::event::ValidationProof;
-use crate::commons::models::notary::NotaryEventResponse;
 use crate::commons::models::state::Subject;
 use crate::crypto::KeyPair;
 use crate::event_request::EventRequest;
@@ -11,14 +10,14 @@ use crate::signature::Signature;
 use crate::Event;
 
 use super::error::Error;
-use super::layers::lce_validation_proofs::{self, LceValidationProofs};
+use super::layers::lce_validation_proofs::{LceValidationProofs};
 use super::{
     layers::{
         contract::ContractDb, controller_id::ControllerIdDb, event::EventDb, notary::NotaryDb,
         preauthorized_subjects_and_providers::PreauthorizedSbujectsAndProovidersDb,
         prevalidated_event::PrevalidatedEventDb, request::RequestDb, signature::SignatureDb,
         subject::SubjectDb, subject_by_governance::SubjectByGovernanceDb,
-        transfer_events::TransferEventsDb, witness_signatures::WitnessSignaturesDb,
+        keys::KeysDb, witness_signatures::WitnessSignaturesDb,
     },
     DatabaseCollection, DatabaseManager,
 };
@@ -34,7 +33,7 @@ pub struct DB<C: DatabaseCollection> {
     contract_db: ContractDb<C>,
     witness_signatures_db: WitnessSignaturesDb<C>,
     subject_by_governance_db: SubjectByGovernanceDb<C>,
-    transfer_events_db: TransferEventsDb<C>,
+    keys_db: KeysDb<C>,
     preauthorized_subjects_and_providers_db: PreauthorizedSbujectsAndProovidersDb<C>,
     lce_validation_proofs_db: LceValidationProofs<C>,
 }
@@ -51,7 +50,7 @@ impl<C: DatabaseCollection> DB<C> {
         let contract_db = ContractDb::new(&manager);
         let witness_signatures_db = WitnessSignaturesDb::new(&manager);
         let subject_by_governance_db = SubjectByGovernanceDb::new(&manager);
-        let transfer_events_db = TransferEventsDb::new(&manager);
+        let transfer_events_db = KeysDb::new(&manager);
         let preauthorized_subjects_and_providers_db =
             PreauthorizedSbujectsAndProovidersDb::new(&manager);
         let lce_validation_proofs_db = LceValidationProofs::new(&manager);
@@ -66,7 +65,7 @@ impl<C: DatabaseCollection> DB<C> {
             contract_db,
             witness_signatures_db,
             subject_by_governance_db,
-            transfer_events_db,
+            keys_db: transfer_events_db,
             preauthorized_subjects_and_providers_db,
             lce_validation_proofs_db,
         }
@@ -294,27 +293,27 @@ impl<C: DatabaseCollection> DB<C> {
             .get_subjects_by_governance(gobernance_id)
     }
 
-    pub fn get_expecting_transfer(&self, subject_id: &DigestIdentifier) -> Result<KeyPair, Error> {
-        self.transfer_events_db.get_expecting_transfer(subject_id)
+    pub fn get_keys(&self, public_key: &KeyIdentifier) -> Result<KeyPair, Error> {
+        self.keys_db.get_keys(public_key)
     }
 
-    pub fn get_all_expecting_transfers(
+    pub fn get_all_keys(
         &self,
-    ) -> Result<Vec<(DigestIdentifier, HashSet<KeyIdentifier>)>, Error> {
-        self.transfer_events_db.get_all_expecting_transfers()
+    ) -> Result<Vec<KeyPair>, Error> {
+        self.keys_db.get_all_keys()
     }
 
-    pub fn set_expecting_transfer(
+    pub fn set_keys(
         &self,
-        subject_id: &DigestIdentifier,
+        public_key: &KeyIdentifier,
         keypair: KeyPair,
     ) -> Result<(), Error> {
-        self.transfer_events_db
-            .set_expecting_transfer(subject_id, keypair)
+        self.keys_db
+            .set_keys(public_key, keypair)
     }
 
-    pub fn del_expecting_transfer(&self, subject_id: &DigestIdentifier) -> Result<(), Error> {
-        self.transfer_events_db.del_expecting_transfer(subject_id)
+    pub fn del_keys(&self, public_key: &KeyIdentifier) -> Result<(), Error> {
+        self.keys_db.del_keys(public_key)
     }
 
     pub fn get_preauthorized_subject_and_providers(
