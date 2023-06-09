@@ -3,6 +3,7 @@ pub(crate) mod controller_id;
 pub(crate) mod event;
 pub(crate) mod notary;
 pub(crate) mod prevalidated_event;
+pub(crate) mod event_request;
 pub(crate) mod request;
 pub(crate) mod signature;
 pub(crate) mod subject;

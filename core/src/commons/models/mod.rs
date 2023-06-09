@@ -13,6 +13,7 @@ pub mod notification;
 pub mod signature;
 pub mod state;
 pub mod timestamp;
+pub mod request;
 
 #[derive(
     Debug,
