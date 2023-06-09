@@ -222,6 +222,25 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         ApiResponses::GetSingleSubject(Ok(subject.into()))
     }
 
+    pub async fn get_request(&self, request_id: DigestIdentifier) -> ApiResponses {
+        match self.db.get_taple_request(&request_id) {
+            Ok(request) => {
+                ApiResponses::GetRequest(Ok(request))
+            },
+            Err(DbError::EntryNotFound) => {
+                return ApiResponses::GetRequest(Err(ApiError::NotFound(format!(
+                    "Request {}",
+                    request_id.to_str()
+                ))))
+            },
+            Err(error) => {
+                return ApiResponses::GetRequest(Err(ApiError::DatabaseError(
+                    error.to_string(),
+                )))
+            }
+        }
+    }
+
     pub async fn get_events_of_subject(&self, data: GetEventsOfSubject) -> ApiResponses {
         let quantity = if data.quantity.is_none() {
             MAX_QUANTITY

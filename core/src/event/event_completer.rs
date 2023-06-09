@@ -509,6 +509,16 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         event_request
             .check_signatures()
             .map_err(EventError::SubjectError)?;
+        let request_id = DigestIdentifier::from_serializable_borsh(&event_request)
+            .map_err(|_| EventError::HashGenerationFailed)?;
+        // Comprobamos si ya tenemos la request registrada en el sistema
+        match self.database.get_taple_request(&request_id) {
+            Ok(_) => {
+                return Err(EventError::RequestAlreadyKnown);
+            }
+            Err(crate::DbError::EntryNotFound) => {}
+            Err(error) => return Err(EventError::DatabaseError(error.to_string())),
+        }
         if let EventRequestType::Create(create_request) = &event_request.request {
             // Comprobar si es governance, entonces vale todo, si no comprobar que el invoker soy yo y puedo hacerlo
             if event_request.signature.content.signer != self.own_identifier {
@@ -543,11 +553,10 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     return Err(EventError::CreatingPermissionDenied);
                 }
             }
-            let request_hash = event_request.signature.content.event_content_hash.clone();
             self.ledger_sender
                 .tell(LedgerCommand::Genesis { event_request })
                 .await?;
-            return Ok(request_hash);
+            return Ok(request_id);
         }
         let subject_id = match &event_request.request {
             EventRequestType::Transfer(tr) => {
@@ -601,10 +610,8 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 // de inmediato. Debe ser eliminado pues, después de la validación.
                 // Estos eventos ni se evaluan, ni se aprueban.
                 // No es necesario comprobar la governance, pues no se requieren permisos para la transferencia
-                let er_hash = event_request.signature.content.event_content_hash.clone();
                 self.process_transfer_or_eol_event(event_request, subject, gov_version)
                     .await?;
-                Ok(er_hash)
             }
             EventRequestType::State(state_request) => {
                 // Request evaluation signatures, sending request, sn and signature of everything about the subject
@@ -669,7 +676,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                         "Error calculating the hash of the event pre-evaluation",
                     ))
                 })?;
-                let er_hash = event_request.signature.content.event_content_hash.clone();
+                // let er_hash = event_request.signature.content.event_content_hash.clone();
                 self.database
                     .set_request(&subject.subject_id, event_request)
                     .map_err(|error| EventError::DatabaseError(error.to_string()))?;
@@ -697,10 +704,10 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     quorum_size,
                 )
                 .await?;
-                Ok(er_hash)
             }
             EventRequestType::Create(_) => unreachable!(),
         }
+        Ok(request_id)
     }
 
     pub async fn evaluator_signatures(

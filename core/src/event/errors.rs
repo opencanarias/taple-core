@@ -56,4 +56,8 @@ pub enum EventError {
     SubjectLifeEnd(String),
     #[error("Invoke permission denied for ID: {0}, Subject ID: {1}")]
     InvokePermissionDenied(String, String),
+    #[error("Hash generation failed")]
+    HashGenerationFailed,
+    #[error("Request already known")]
+    RequestAlreadyKnown
 }

@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::commons::models::event::ValidationProof;
+use crate::commons::models::request::TapleRequest;
 use crate::commons::models::state::Subject;
 use crate::crypto::KeyPair;
 use crate::event_request::EventRequest;
@@ -11,11 +12,12 @@ use crate::Event;
 
 use super::error::Error;
 use super::layers::lce_validation_proofs::{LceValidationProofs};
+use super::layers::request::RequestDb;
 use super::{
     layers::{
         contract::ContractDb, controller_id::ControllerIdDb, event::EventDb, notary::NotaryDb,
         preauthorized_subjects_and_providers::PreauthorizedSbujectsAndProovidersDb,
-        prevalidated_event::PrevalidatedEventDb, request::RequestDb, signature::SignatureDb,
+        prevalidated_event::PrevalidatedEventDb, event_request::EventRequestDb, signature::SignatureDb,
         subject::SubjectDb, subject_by_governance::SubjectByGovernanceDb,
         keys::KeysDb, witness_signatures::WitnessSignaturesDb,
     },
@@ -27,6 +29,7 @@ pub struct DB<C: DatabaseCollection> {
     subject_db: SubjectDb<C>,
     event_db: EventDb<C>,
     prevalidated_event_db: PrevalidatedEventDb<C>,
+    event_request_db: EventRequestDb<C>,
     request_db: RequestDb<C>,
     controller_id_db: ControllerIdDb<C>,
     notary_db: NotaryDb<C>,
@@ -44,6 +47,7 @@ impl<C: DatabaseCollection> DB<C> {
         let subject_db = SubjectDb::new(&manager);
         let event_db = EventDb::new(&manager);
         let prevalidated_event_db = PrevalidatedEventDb::new(&manager);
+        let event_request_db = EventRequestDb::new(&manager);
         let request_db = RequestDb::new(&manager);
         let controller_id_db = ControllerIdDb::new(&manager);
         let notary_db = NotaryDb::new(&manager);
@@ -59,6 +63,7 @@ impl<C: DatabaseCollection> DB<C> {
             subject_db,
             event_db,
             prevalidated_event_db,
+            event_request_db: event_request_db,
             request_db,
             controller_id_db,
             notary_db,
@@ -176,11 +181,11 @@ impl<C: DatabaseCollection> DB<C> {
     }
 
     pub fn get_request(&self, subject_id: &DigestIdentifier) -> Result<EventRequest, Error> {
-        self.request_db.get_request(subject_id)
+        self.event_request_db.get_request(subject_id)
     }
 
     pub fn get_all_request(&self) -> Vec<EventRequest> {
-        self.request_db.get_all_request()
+        self.event_request_db.get_all_request()
     }
 
     pub fn set_request(
@@ -188,11 +193,31 @@ impl<C: DatabaseCollection> DB<C> {
         subject_id: &DigestIdentifier,
         request: EventRequest,
     ) -> Result<(), Error> {
-        self.request_db.set_request(subject_id, request)
+        self.event_request_db.set_request(subject_id, request)
     }
 
     pub fn del_request(&self, subject_id: &DigestIdentifier) -> Result<(), Error> {
-        self.request_db.del_request(subject_id)
+        self.event_request_db.del_request(subject_id)
+    }
+
+    pub fn get_taple_request(&self, request_id: &DigestIdentifier) -> Result<TapleRequest, Error> {
+        self.request_db.get_request(request_id)
+    }
+
+    pub fn get_taple_all_request(&self) -> Vec<TapleRequest> {
+        self.request_db.get_all_request()
+    }
+
+    pub fn set_taple_request(
+        &self,
+        request_id: &DigestIdentifier,
+        request: &TapleRequest,
+    ) -> Result<(), Error> {
+        self.request_db.set_request(request_id, request)
+    }
+
+    pub fn del_taple_request(&self, request_id: &DigestIdentifier) -> Result<(), Error> {
+        self.request_db.del_request(request_id)
     }
 
     pub fn get_controller_id(&self) -> Result<String, Error> {

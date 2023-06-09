@@ -12,7 +12,7 @@ use crate::{
     message::{MessageConfig, MessageTaskCommand},
     protocol::protocol_message_manager::TapleMessages,
     utils::message::event::create_approver_response,
-    DatabaseCollection, Notification, TapleSettings
+    DatabaseCollection, Notification, TapleSettings,
 };
 
 use super::{
@@ -274,14 +274,18 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
                             .await
                             .map_err(|_| ApprovalManagerError::MessageChannelFailed)?;
                         if sender.is_some() {
-                            sender.unwrap().send(ApprovalResponses::EmitVote(Ok(())));
+                            sender
+                                .unwrap()
+                                .send(ApprovalResponses::EmitVote(Ok(())))
+                                .map_err(|_| ApprovalManagerError::ResponseChannelClosed)?;
                         }
                     }
                     Err(error) => {
                         if sender.is_some() {
                             sender
                                 .unwrap()
-                                .send(ApprovalResponses::EmitVote(Err(error)));
+                                .send(ApprovalResponses::EmitVote(Err(error)))
+                                .map_err(|_| ApprovalManagerError::ResponseChannelClosed)?;
                         }
                     }
                 }
@@ -291,7 +295,8 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
                 if sender.is_some() {
                     sender
                         .unwrap()
-                        .send(ApprovalResponses::GetAllRequest(result));
+                        .send(ApprovalResponses::GetAllRequest(result))
+                        .map_err(|_| ApprovalManagerError::ResponseChannelClosed)?;
                 }
             }
             ApprovalMessages::GetSingleRequest(request_id) => {
@@ -299,7 +304,8 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
                 if sender.is_some() {
                     sender
                         .unwrap()
-                        .send(ApprovalResponses::GetSingleRequest(result));
+                        .send(ApprovalResponses::GetSingleRequest(result))
+                        .map_err(|_| ApprovalManagerError::ResponseChannelClosed)?;
                 }
             }
         };
