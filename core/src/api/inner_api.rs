@@ -278,13 +278,12 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         Ok(ApiResponses::SetPreauthorizedSubjectCompleted)
     }
 
-    pub async fn expecting_transfer(
-        &self,
-        subject_id: DigestIdentifier,
+    pub async fn generate_keys(
+        &self
     ) -> Result<ApiResponses, APIInternalError> {
-        match self.ledger_api.expecting_transfer(subject_id).await {
+        match self.ledger_api.generate_keys().await {
             Ok(public_key) => {
-                Ok(ApiResponses::ExpectingTransfer(Ok(public_key)))
+                Ok(ApiResponses::GenerateKeys(Ok(public_key)))
             },
             Err(error) => {
                 Err(APIInternalError::DatabaseError(error.to_string()))

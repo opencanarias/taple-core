@@ -33,7 +33,7 @@ pub enum APICommands {
     #[cfg(feature = "aproval")]
     GetSingleRequest(DigestIdentifier),
     SetPreauthorizedSubject(DigestIdentifier, HashSet<KeyIdentifier>),
-    ExpectingTransfer(DigestIdentifier),
+    GenerateKeys,
     GetValidationProof(DigestIdentifier),
     Shutdown,
 }
@@ -52,7 +52,7 @@ pub enum ApiResponses {
     GetPendingRequests(Result<Vec<ApprovalPetitionData>, ApiError>),
     #[cfg(feature = "aproval")]
     GetSingleRequest(Result<ApprovalPetitionData, ApiError>),
-    ExpectingTransfer(Result<KeyIdentifier, ApiError>),
+    GenerateKeys(Result<KeyIdentifier, ApiError>),
     GetValidationProof(Result<HashSet<Signature>, ApiError>),
     ShutdownCompleted,
     SetPreauthorizedSubjectCompleted

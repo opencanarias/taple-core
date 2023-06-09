@@ -9,7 +9,7 @@ use super::{
 #[cfg(feature = "aproval")]
 use crate::approval::manager::ApprovalAPI;
 use crate::authorized_subjecs::manager::AuthorizedSubjectsAPI;
-use crate::commons::models::event::{Event, ValidationProof};
+use crate::commons::models::event::{Event};
 use crate::commons::models::event_request::EventRequest;
 use crate::commons::models::state::SubjectData;
 use crate::commons::{
@@ -174,9 +174,8 @@ pub trait ApiModuleInterface {
         subject_id: &DigestIdentifier,
         providers: &HashSet<KeyIdentifier>,
     ) -> Result<(), ApiError>;
-    async fn expecting_transfer(
-        &self,
-        subject_id: DigestIdentifier,
+    async fn generate_keys(
+        &self
     ) -> Result<KeyIdentifier, ApiError>;
     async fn get_validation_proof(
         &self,
@@ -447,16 +446,15 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
-    async fn expecting_transfer(
-        &self,
-        subject_id: DigestIdentifier,
+    async fn generate_keys(
+        &self
     ) -> Result<KeyIdentifier, ApiError> {
         let response = self
             .sender
-            .ask(APICommands::ExpectingTransfer(subject_id))
+            .ask(APICommands::GenerateKeys)
             .await
             .unwrap();
-        if let ApiResponses::ExpectingTransfer(data) = response {
+        if let ApiResponses::GenerateKeys(data) = response {
             data
         } else {
             unreachable!()
@@ -604,8 +602,8 @@ impl<C: DatabaseCollection> API<C> {
                             .set_preauthorized_subject(subject_id, providers)
                             .await?
                     }
-                    APICommands::ExpectingTransfer(subject_id) => {
-                        self.inner_api.expecting_transfer(subject_id).await?
+                    APICommands::GenerateKeys => {
+                        self.inner_api.generate_keys().await?
                     }
                     APICommands::GetValidationProof(subject_id) => {
                         self.inner_api.get_validation_proof(subject_id).await
