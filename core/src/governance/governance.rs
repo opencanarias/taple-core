@@ -10,7 +10,7 @@ use crate::{
         models::event_content::Metadata,
         schema_handler::{
             get_governance_schema,
-            gov_models::{Contract, Invoke},
+            gov_models::{Contract},
         },
     },
     DB, DatabaseCollection, DatabaseManager
@@ -227,7 +227,7 @@ pub trait GovernanceInterface: Sync + Send {
         &self,
         metadata: Metadata,
         fact: String,
-    ) -> Result<Option<Invoke>, RequestError>;
+    ) -> Result<HashSet<KeyIdentifier>, RequestError>;
 
     async fn get_contracts(
         &self,
@@ -357,7 +357,7 @@ impl GovernanceInterface for GovernanceAPI {
         &self,
         metadata: Metadata,
         fact: String,
-    ) -> Result<Option<Invoke>, RequestError> {
+    ) -> Result<HashSet<KeyIdentifier>, RequestError> {
         let response = self
             .sender
             .ask(GovernanceMessage::GetInvokeInfo { metadata, fact })

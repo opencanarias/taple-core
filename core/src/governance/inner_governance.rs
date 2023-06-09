@@ -7,7 +7,7 @@ use crate::{
         identifier::{Derivable, DigestIdentifier, KeyIdentifier},
         models::{event_content::Metadata, state::Subject},
         schema_handler::{
-            gov_models::{Contract, Invoke, Quorum, Role, Schema},
+            gov_models::{Contract, Quorum, Role, Schema},
             initial_state::get_governance_initial_state,
         },
     },
@@ -64,21 +64,13 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
             };
         let properties: Value = serde_json::from_str(&governance.properties)
             .map_err(|_| InternalError::DeserializationError)?;
-        let policies = get_as_array(&properties, "policies")?;
-        let schema_policy = get_schema_from_policies(policies, &schema_id);
         let roles_prop = properties["roles"]
             .as_array()
             .expect("Existe roles")
             .to_owned();
         let roles = get_roles(&schema_id, roles_prop, &metadata.namespace)?;
         let members = get_members_from_governance(&properties)?;
-        let mut invokator_roles = get_invokator_roles(&invokator, &members, roles)?;
-        if metadata.creator == invokator {
-            invokator_roles.push("Creator".to_string());
-        }
-        if metadata.owner == invokator {
-            invokator_roles.push("Owner".to_string());
-        }
+        let invokator_roles = get_invokator_roles(&invokator, &members, roles)?;
         Ok(Ok(invokator_roles))
     }
 
@@ -138,7 +130,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         for schema in schemas {
             let tmp = get_as_str(schema, "id")?;
             if tmp == &schema_id {
-                return Ok(Ok(schema.get("state_schema").unwrap().to_owned()));
+                return Ok(Ok(schema.get("schema").unwrap().to_owned()));
             }
         }
         return Ok(Err(RequestError::SchemaNotFound(schema_id)));
@@ -156,11 +148,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
             .expect("Existe roles")
             .to_owned();
         let roles = get_roles(&schema_id, roles_prop, &metadata.namespace)?;
-        let mut signers = get_signers_from_roles(&members, signers_roles, roles)?;
-        if signers_roles.contains(&String::from("Owner")) {
-            // Añadimos al owner
-            signers.insert(metadata.owner.clone());
-        }
+        let signers = get_signers_from_roles(&members, signers_roles, roles)?;
         Ok(Ok(signers))
     }
 
@@ -309,16 +297,16 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         let signers = get_signers_from_roles(&members, &signers_roles, roles)?;
         let quorum = get_quorum(&schema_policy, stage_str)?;
         match quorum {
-            Quorum::Majority(_) => {
+            Quorum::MAJORITY(_) => {
                 log::info!("Quorum Majority");
 
                 Ok(Ok((signers.len() as u32 / 2) + 1))
             }
-            Quorum::Fixed { fixed } => {
+            Quorum::FIXED { fixed } => {
                 log::info!("Quorum fijo: {}", fixed);
                 Ok(Ok(fixed))
             }
-            Quorum::Porcentaje { porcentaje } => {
+            Quorum::PORCENTAJE { porcentaje } => {
                 let result = (signers.len() as f64 * porcentaje).ceil() as u32;
                 Ok(Ok(result))
             }
@@ -331,7 +319,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         &self,
         metadata: Metadata,
         fact: &str,
-    ) -> Result<Result<Option<Invoke>, RequestError>, InternalError> {
+    ) -> Result<Result<HashSet<KeyIdentifier>, RequestError>, InternalError> {
         let mut governance_id = metadata.governance_id;
         if governance_id.digest.is_empty() {
             governance_id = metadata.subject_id;
@@ -355,8 +343,8 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
             return Ok(Err(schema_policy.unwrap_err()));
         }; // El return dentro de otro return es una **** que obliga a hacer cosas como esta
            // Se puede refactorizar lo de arriba de aquí y meter en una función porque es lo mismo en todos los métodos nuevos
-        let invoke = get_invoke_from_policy(schema_policy, fact)?;
-        Ok(Ok(invoke))
+        todo!();
+        // Ok(Ok(invoke))
     }
 
     // NEW
@@ -529,8 +517,8 @@ fn get_members_from_governance(
         .to_owned();
     for member in members.into_iter() {
         let member_id = member
-            .get("key")
-            .expect("Se ha validado que tiene key")
+            .get("id")
+            .expect("Se ha validado que tiene id")
             .as_str()
             .expect("Hay id y es str");
         let member_id = KeyIdentifier::from_str(member_id)
@@ -549,19 +537,17 @@ fn get_signers_from_roles(
 ) -> Result<HashSet<KeyIdentifier>, InternalError> {
     let mut signers: HashSet<KeyIdentifier> = HashSet::new();
     for role in roles_schema {
-        if contains_common_element(&role.roles, roles) {
+        if roles.contains(&role.role) {
             match role.who {
-                crate::commons::schema_handler::gov_models::Who::Id { id } => {
-                    signers.insert(KeyIdentifier::from_str(&id).map_err(|_| InternalError::InvalidGovernancePayload("14".into()))?);
+                crate::commons::schema_handler::gov_models::Who::ID { ID } => {
+                    signers.insert(KeyIdentifier::from_str(&ID).map_err(|_| InternalError::InvalidGovernancePayload("14".into()))?);
                 }
-                crate::commons::schema_handler::gov_models::Who::Members => {
+                crate::commons::schema_handler::gov_models::Who::MEMBERS => {
                     return Ok(members.clone())
                 }
                 _ => {
                 }
                 // Entiendo que con esto no se hace nada de cara a validación
-                // crate::commons::schema_handler::gov_models::Who::All => todo!(),
-                // crate::commons::schema_handler::gov_models::Who::External => todo!(),
             }
         }
     }
@@ -584,8 +570,8 @@ fn get_roles(
             continue;
         }
         match &role_data.schema {
-            Schema::Id { id } => {
-                if &id == &schema_id {
+            Schema::ID { ID } => {
+                if &ID == &schema_id {
                     roles.push(role_data)
                 }
             }
@@ -608,22 +594,22 @@ fn get_invokator_roles(
     let invokator_str = invokator.to_str();
     for role in roles_schema {
         match role.who {
-            crate::commons::schema_handler::gov_models::Who::Id { id } => {
-                if !is_external && &id == &invokator_str {
-                    roles.extend(role.roles.into_iter());
+            crate::commons::schema_handler::gov_models::Who::ID { ID } => {
+                if !is_external && &ID == &invokator_str {
+                    roles.push(role.role);
                 }
             }
-            crate::commons::schema_handler::gov_models::Who::Members => {
+            crate::commons::schema_handler::gov_models::Who::MEMBERS => {
                 if !is_external {
-                    roles.extend(role.roles.into_iter());
+                    roles.push(role.role);
                 }
             }
-            crate::commons::schema_handler::gov_models::Who::All => {
-                roles.extend(role.roles.into_iter());
+            crate::commons::schema_handler::gov_models::Who::ALL => {
+                roles.push(role.role);
             }
-            crate::commons::schema_handler::gov_models::Who::External => {
+            crate::commons::schema_handler::gov_models::Who::NOT_MEMBERS => {
                 if is_external {
-                    roles.extend(role.roles.into_iter());
+                    roles.push(role.role);
                 }
             }
         }
@@ -633,18 +619,6 @@ fn get_invokator_roles(
 
 fn contains_common_element(set1: &HashSet<String>, vec2: &[String]) -> bool {
     vec2.iter().any(|s| set1.contains(s))
-}
-
-fn get_invoke_from_policy(policy: &Value, fact: &str) -> Result<Option<Invoke>, InternalError> {
-    let invokes = policy["Invoke"].as_array().expect("Invoke Exists");
-    for invoke in invokes {
-        let invoke: Invoke = serde_json::from_value(invoke.to_owned())
-            .map_err(|_| InternalError::InvalidGovernancePayload("16".into()))?;
-        if &invoke.fact == fact {
-            return Ok(Some(invoke));
-        }
-    }
-    Ok(None)
 }
 
 fn namespace_contiene(namespace_padre: &str, namespace_hijo: &str) -> bool {

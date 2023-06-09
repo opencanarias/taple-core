@@ -26,7 +26,12 @@ impl Schema {
     pub fn validate(&self, value: &Value) -> bool {
         match self.json_schema.validate(value) {
             Ok(_) => true,
-            Err(_) => false,
+            Err(e) => {
+                for error in e {
+                    println!("schema validation error: {:?}", error);
+                }
+                false
+            }
         }
     }
 }
@@ -41,39 +46,38 @@ fn validate_gov_keyidentifiers(key: &str) -> bool {
 pub fn get_governance_schema() -> Value {
     json!({
       "$defs": {
-        "roles": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
+        "role": {
+          "type": "string",
+          "enum": ["VALIDATOR", "CREATOR", "INVOKER", "WITNESS", "APPROVER", "EVALUATOR"]
         },
         "quorum": {
           "oneOf": [
             {
-              "const": "majority"
+              "type": "string",
+              "enum": ["MAJORITY"]
             },
             {
               "type": "object",
               "properties": {
-                "fixed": {
+                "FIXED": {
                   "type": "number",
                   "minimum": 1,
                   "multipleOf": 1
                 }
               },
-              "required": ["Fixed"],
+              "required": ["FIXED"],
               "additionalProperties": false
             },
             {
               "type": "object",
               "properties": {
-                "porcentaje": {
+                "PORCENTAJE": {
                   "type": "number",
                   "minimum": 0,
                   "maximum": 1
                 }
               },
-              "required": ["Porcentaje"],
+              "required": ["PORCENTAJE"],
               "additionalProperties": false
             },
             {
@@ -89,17 +93,6 @@ pub fn get_governance_schema() -> Value {
               "additionalProperties": false
             }
           ]
-        },
-        "validation": {
-          "type": "object",
-                "additionalProperties": false,
-                "required": ["roles", "quorum"],
-                "roles": {
-                  "$ref": "#/$defs/roles"
-                },
-                "quorum": {
-                  "$ref": "#/$defs/quorum"
-                }
         }
       },
       "type": "object",
@@ -116,20 +109,17 @@ pub fn get_governance_schema() -> Value {
           "items": {
             "type": "object",
             "properties": {
+              "name": {
+                "type": "string"
+              },
               "id": {
-                "type": "string"
-              },
-              "description": {
-                "type": "string"
-              },
-              "key": {
                 "type": "string",
                 "format": "keyidentifier"
               }
             },
             "required": [
               "id",
-              "key"
+              "name"
             ],
             "additionalProperties": false
           }
@@ -144,49 +134,49 @@ pub fn get_governance_schema() -> Value {
                 {
                   "type": "object",
                   "properties": {
-                    "id": {
+                    "ID": {
                       "type": "string"
                     }
                   },
-                  "required": ["id"],
+                  "required": ["ID"],
                   "additionalProperties": false
                 },
                 {
-                  "const": "members"
+                  "const": "MEMBERS"
                 },
                 {
-                  "const": "all"
+                  "const": "ALL"
                 },
                 {
-                  "const": "external"
+                  "const": "NOT_MEMBERS"
                 }
               ]
             },
             "namespace": {
               "type": "string"
             },
-            "roles": {
-              "$ref": "#/$defs/roles"
+            "role": {
+              "$ref": "#/$defs/role"
             },
             "schema": {
               "oneOf": [
                 {
                   "type": "object",
                   "properties": {
-                    "id": {
+                    "ID": {
                       "type": "string"
                     }
                   },
-                  "required": ["id"],
+                  "required": ["ID"],
                   "additionalProperties": false
                 },
                 {
-                  "const": "all_schemas"
+                  "const": "ALL"
                 }
                 ]
               }
             },
-            "required": ["who", "roles", "schema", "namespace"],
+            "required": ["who", "role", "schema", "namespace"],
             "additionalProperties": false
           }
         },
@@ -199,7 +189,7 @@ pub fn get_governance_schema() -> Value {
               "id": {
                 "type": "string"
               },
-              "state_schema": {
+              "schema": {
                 "$schema": "http://json-schema.org/draft/2020-12/schema",
                 "$id": "http://json-schema.org/draft/2020-12/schema",
                 "$vocabulary": {
@@ -646,27 +636,12 @@ pub fn get_governance_schema() -> Value {
                 "additionalProperties": false,
                 "required": ["name", "content"]
               },
-              "facts": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string"
-                  },
-                  "description": {
-                    "type": "string"
-                  },
-                  "schema":{}
-                },
-                "additionalProperties": false,
-                "required": ["name", "schema"]
-              }
             },
             "required": [
               "id",
-              "state_schema",
+              "schema",
               "initial_value",
-              "contract",
-              "facts"
+              "contract"
             ],
             "additionalProperties": false
           }
@@ -677,33 +652,56 @@ pub fn get_governance_schema() -> Value {
             "type": "object",
             "additionalProperties": false,
             "required": [
-              "id", "approve", "evaluate", "validate", "create", "witness", "close"
+              "id", "approve", "evaluate", "validate"
             ],
             "properties": {
               "id": {
                 "type": "string"
               },
               "approve": {
-                "$ref": "#/$defs/validation"
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["quorum"],
+                "properties": {
+                  "quorum": {
+                    "$ref": "#/$defs/quorum"
+                  }
+                }
               },
               "evaluate": {
-                "$ref": "#/$defs/validation"
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["quorum"],
+                "properties": {
+                  "quorum": {
+                    "$ref": "#/$defs/quorum"
+                  }
+                }
               },
               "validate": {
-                "$ref": "#/$defs/validation"
-              },
-              "create": {
-                "$ref": "#/$defs/roles"
-              },
-              "witness": {
-                "$ref": "#/$defs/roles"
-              },
-              "close": {
-                "$ref": "#/$defs/roles"
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["quorum"],
+                "properties": {
+                  "quorum": {
+                    "$ref": "#/$defs/quorum"
+                  }
+                }
               }
             }
           }
-        }
+        }        
       }
     })
+}
+
+#[cfg(test)]
+mod test {
+    use super::Schema;
+
+    #[test]
+    fn compile_gov_schema() {
+        let gov_schema = super::get_governance_schema();
+        let schema = Schema::compile(&gov_schema).expect("gov schema compiles");
+    }
 }

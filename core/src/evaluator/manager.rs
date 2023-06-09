@@ -249,7 +249,7 @@ mod test {
                 event_preevaluation::{Context, EventPreEvaluation},
                 state::Subject,
             },
-            schema_handler::gov_models::{Contract, Invoke},
+            schema_handler::gov_models::{Contract},
             self_signature_manager::{SelfSignatureInterface, SelfSignatureManager},
         },
         database::{MemoryCollection, DB},
@@ -461,7 +461,7 @@ mod test {
             &self,
             metadata: Metadata,
             fact: String,
-        ) -> Result<Option<Invoke>, RequestError> {
+        ) -> Result<HashSet<KeyIdentifier>, RequestError> {
             unimplemented!()
         }
 

@@ -490,7 +490,7 @@ mod test {
             config::VotationType,
             crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair, Payload, DSA},
             models::state::Subject,
-            schema_handler::gov_models::{Contract, Invoke},
+            schema_handler::gov_models::Contract,
             self_signature_manager::{SelfSignatureInterface, SelfSignatureManager},
         },
         database::{MemoryCollection, DB},
@@ -499,7 +499,7 @@ mod test {
         governance::{error::RequestError, stage::ValidationStage, GovernanceInterface},
         identifier::{Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier},
         signature::{Signature, SignatureContent},
-        Event, MemoryManager, Notification, TimeStamp, DatabaseManager,
+        DatabaseManager, Event, MemoryManager, Notification, TimeStamp,
     };
 
     use super::{InnerApprovalManager, RequestNotifier};
@@ -553,7 +553,7 @@ mod test {
             &self,
             metadata: Metadata,
             fact: String,
-        ) -> Result<Option<Invoke>, RequestError> {
+        ) -> Result<HashSet<KeyIdentifier>, RequestError> {
             unreachable!()
         }
 
@@ -795,8 +795,9 @@ mod test {
             let invokator = create_invokator_signature_manager();
             let subject = Subject::from_genesis_request(
                 create_genesis_request(create_json_state(), &invokator),
-                create_json_state()
-            ).unwrap();
+                create_json_state(),
+            )
+            .unwrap();
             let msg = generate_request_approve_msg(
                 create_state_request(create_json_state(), &invokator, &subject.subject_id),
                 1,
