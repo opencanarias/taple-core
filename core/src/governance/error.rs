@@ -33,6 +33,10 @@ pub enum RequestError {
     InvalidGovernanceID,
     #[error("Unexpect Payload")]
     UnexpectedPayloadType,
+    #[error("Searching signers quorum in wrong stage")]
+    SearchingSignersQuorumInWrongStage(String),
+    #[error("Searching invoke info in wrong stage")]
+    SearchingInvokeInfoInWrongStage(String),
 }
 
 #[derive(Error, Debug)]

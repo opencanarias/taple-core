@@ -61,7 +61,8 @@ pub enum GovernanceMessage {
     },
     GetInvokeInfo {
         metadata: Metadata,
-        fact: String,
+        stage: ValidationStage,
+        invoker: KeyIdentifier,
     },
     GetContracts {
         governance_id: DigestIdentifier,
@@ -86,7 +87,7 @@ pub enum GovernanceResponse {
     GetSchema(Result<Value, RequestError>),
     GetSigners(Result<HashSet<KeyIdentifier>, RequestError>),
     GetQuorum(Result<u32, RequestError>),
-    GetInvokeInfo(Result<HashSet<KeyIdentifier>, RequestError>),
+    GetInvokeInfo(Result<bool, RequestError>),
     GetContracts(Result<Vec<Contract>, RequestError>),
     GetGovernanceVersion(Result<u64, RequestError>),
     IsGovernance(Result<bool, RequestError>),

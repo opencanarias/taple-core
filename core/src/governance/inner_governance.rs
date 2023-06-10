@@ -2,7 +2,6 @@ use std::{collections::HashSet, str::FromStr};
 
 use crate::{
     commons::{
-        self,
         errors::ChannelErrors,
         identifier::{Derivable, DigestIdentifier, KeyIdentifier},
         models::{event_content::Metadata, state::Subject},
@@ -122,6 +121,11 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                         continue;
                     }
                 }
+                ValidationStage::Create | ValidationStage::Invoke => {
+                    return Err(RequestError::SearchingSignersQuorumInWrongStage(
+                        stage.to_str().to_owned(),
+                    ))
+                }
                 _ => {
                     if role.role != stage.to_str() {
                         continue;
@@ -219,6 +223,11 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         metadata: Metadata,
         stage: ValidationStage,
     ) -> Result<Result<u32, RequestError>, InternalError> {
+        if ValidationStage::Witness == stage {
+            return Ok(Err(RequestError::SearchingSignersQuorumInWrongStage(
+                stage.to_str().to_owned(),
+            )));
+        }
         let mut governance_id = metadata.governance_id;
         log::info!("Quorum de: {}", metadata.subject_id.to_str());
         if governance_id.digest.is_empty() {
@@ -266,14 +275,24 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
     }
 
     // NEW
-    pub fn get_invoke_info(
+    pub fn get_invoke_create_info(
         &self,
         metadata: Metadata,
-        fact: &str,
-    ) -> Result<Result<HashSet<KeyIdentifier>, RequestError>, InternalError> {
+        stage: ValidationStage,
+        invoker: KeyIdentifier,
+    ) -> Result<Result<bool, RequestError>, InternalError> {
+        if ValidationStage::Create != stage && ValidationStage::Invoke != stage {
+            return Ok(Err(RequestError::SearchingInvokeInfoInWrongStage(
+                stage.to_str().to_owned(),
+            )));
+        }
         let mut governance_id = metadata.governance_id;
+        let is_gov: bool;
         if governance_id.digest.is_empty() {
             governance_id = metadata.subject_id;
+            is_gov = true;
+        } else {
+            is_gov = false;
         }
         let schema_id = metadata.schema_id;
         let governance =
@@ -288,14 +307,66 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
             };
         let properties: Value = serde_json::from_str(&governance.properties)
             .map_err(|_| InternalError::DeserializationError)?;
-        let policies = get_as_array(&properties, "policies")?;
-        let schema_policy = get_schema_from_policies(policies, &schema_id);
-        let Ok(schema_policy) = schema_policy else {
-            return Ok(Err(schema_policy.unwrap_err()));
-        }; // El return dentro de otro return es una **** que obliga a hacer cosas como esta
-           // Se puede refactorizar lo de arriba de aquí y meter en una función porque es lo mismo en todos los métodos nuevos
-        todo!();
-        // Ok(Ok(invoke))
+        let roles: Vec<Role> = serde_json::from_value(properties.get("roles").unwrap().to_owned())
+            .map_err(|_| InternalError::DeserializationError)?;
+        let members = get_members_from_governance(&properties)?;
+        let invoke_create_info_result = Self::invoke_create_info(
+            roles,
+            &schema_id,
+            &metadata.namespace,
+            stage,
+            members,
+            is_gov,
+            invoker,
+        );
+        Ok(invoke_create_info_result)
+    }
+
+    fn invoke_create_info(
+        roles: Vec<Role>,
+        schema_id: &str,
+        namespace: &str,
+        stage: ValidationStage,
+        members: HashSet<KeyIdentifier>,
+        is_gov: bool,
+        invoker: KeyIdentifier,
+    ) -> Result<bool, RequestError> {
+        let is_member = members.contains(&invoker);
+        for role in roles {
+            if role.role != stage.to_str() {
+                continue;
+            }
+            match role.schema {
+                Schema::ID { ID } => {
+                    if &ID != schema_id {
+                        continue;
+                    }
+                }
+                Schema::NOT_GOVERNANCE => {
+                    if is_gov {
+                        continue;
+                    }
+                }
+                Schema::ALL => {}
+            }
+            if !namespace_contiene(&role.namespace, namespace) {
+                continue;
+            }
+            match role.who {
+                Who::ID { ID } => {
+                    if is_member && ID == invoker.to_str() {
+                        return Ok(true);
+                    }
+                }
+                Who::MEMBERS | Who::ALL => return Ok(true),
+                Who::NOT_MEMBERS => {
+                    if !is_member {
+                        return Ok(true);
+                    }
+                }
+            }
+        }
+        Ok(false)
     }
 
     // NEW

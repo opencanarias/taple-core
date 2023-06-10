@@ -8,12 +8,9 @@ use crate::{
         channel::{ChannelData, MpscChannel, SenderEnd},
         identifier::{DigestIdentifier, KeyIdentifier},
         models::event_content::Metadata,
-        schema_handler::{
-            get_governance_schema,
-            gov_models::{Contract},
-        },
+        schema_handler::{get_governance_schema, gov_models::Contract},
     },
-    DB, DatabaseCollection, DatabaseManager
+    DatabaseCollection, DatabaseManager, DB,
 };
 
 use super::{
@@ -28,7 +25,7 @@ pub struct Governance<M: DatabaseManager<C>, C: DatabaseCollection> {
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
     inner_governance: InnerGovernance<C>,
-    _m: PhantomData<M>
+    _m: PhantomData<M>,
 }
 
 impl<M: DatabaseManager<C>, C: DatabaseCollection> Governance<M, C> {
@@ -48,7 +45,7 @@ impl<M: DatabaseManager<C>, C: DatabaseCollection> Governance<M, C> {
                 get_governance_schema(),
                 update_channel,
             ),
-            _m: PhantomData::default()
+            _m: PhantomData::default(),
         }
     }
 
@@ -110,7 +107,10 @@ impl<M: DatabaseManager<C>, C: DatabaseCollection> Governance<M, C> {
                         let to_send = self.inner_governance.get_quorum(metadata, stage)?;
                         Ok(sender.send(GovernanceResponse::GetQuorum(to_send)).unwrap())
                     }
-                    GovernanceMessage::GetGovernanceVersion { governance_id, subject_id } => {
+                    GovernanceMessage::GetGovernanceVersion {
+                        governance_id,
+                        subject_id,
+                    } => {
                         let version = self
                             .inner_governance
                             .get_governance_version(subject_id, governance_id)?;
@@ -124,8 +124,14 @@ impl<M: DatabaseManager<C>, C: DatabaseCollection> Governance<M, C> {
                             .send(GovernanceResponse::IsGovernance(to_send))
                             .map_err(|_| InternalError::OneshotClosed)?)
                     }
-                    GovernanceMessage::GetInvokeInfo { fact, metadata } => {
-                        let to_send = self.inner_governance.get_invoke_info(metadata, &fact)?;
+                    GovernanceMessage::GetInvokeInfo {
+                        metadata,
+                        stage,
+                        invoker,
+                    } => {
+                        let to_send = self
+                            .inner_governance
+                            .get_invoke_create_info(metadata, stage, invoker)?;
                         Ok(sender
                             .send(GovernanceResponse::GetInvokeInfo(to_send))
                             .map_err(|_| InternalError::OneshotClosed)?)
@@ -215,8 +221,9 @@ pub trait GovernanceInterface: Sync + Send {
     async fn get_invoke_info(
         &self,
         metadata: Metadata,
-        fact: String,
-    ) -> Result<HashSet<KeyIdentifier>, RequestError>;
+        stage: ValidationStage,
+        invoker: KeyIdentifier,
+    ) -> Result<bool, RequestError>;
 
     async fn get_contracts(
         &self,
@@ -339,11 +346,16 @@ impl GovernanceInterface for GovernanceAPI {
     async fn get_invoke_info(
         &self,
         metadata: Metadata,
-        fact: String,
-    ) -> Result<HashSet<KeyIdentifier>, RequestError> {
+        stage: ValidationStage,
+        invoker: KeyIdentifier,
+    ) -> Result<bool, RequestError> {
         let response = self
             .sender
-            .ask(GovernanceMessage::GetInvokeInfo { metadata, fact })
+            .ask(GovernanceMessage::GetInvokeInfo {
+                metadata,
+                stage,
+                invoker,
+            })
             .await
             .map_err(|_| RequestError::ChannelClosed)?;
         if let GovernanceResponse::GetInvokeInfo(invoke_info) = response {
@@ -376,11 +388,14 @@ impl GovernanceInterface for GovernanceAPI {
     async fn get_governance_version(
         &self,
         governance_id: DigestIdentifier,
-        subject_id: DigestIdentifier
+        subject_id: DigestIdentifier,
     ) -> Result<u64, RequestError> {
         let response = self
             .sender
-            .ask(GovernanceMessage::GetGovernanceVersion { governance_id, subject_id })
+            .ask(GovernanceMessage::GetGovernanceVersion {
+                governance_id,
+                subject_id,
+            })
             .await
             .map_err(|_| RequestError::ChannelClosed)?;
         if let GovernanceResponse::GetGovernanceVersion(version) = response {
