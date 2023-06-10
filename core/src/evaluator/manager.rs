@@ -460,9 +460,10 @@ mod test {
         async fn get_invoke_info(
             &self,
             metadata: Metadata,
-            fact: String,
-        ) -> Result<HashSet<KeyIdentifier>, RequestError> {
-            unimplemented!()
+            stage: ValidationStage,
+            invoker: KeyIdentifier,
+        ) -> Result<bool, RequestError> {
+            unreachable!()
         }
 
         async fn get_contracts(
@@ -514,14 +515,6 @@ mod test {
 
         async fn is_governance(&self, subject_id: DigestIdentifier) -> Result<bool, RequestError> {
             unimplemented!()
-        }
-
-        async fn get_roles_of_invokator(
-            &self,
-            invokator: KeyIdentifier,
-            metadata: Metadata,
-        ) -> Result<Vec<String>, RequestError> {
-            Ok(vec![])
         }
 
         async fn governance_updated(

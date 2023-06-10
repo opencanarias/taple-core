@@ -1492,34 +1492,6 @@ impl<C: DatabaseCollection> Ledger<C> {
                 let ledger_state = self.ledger_state.get(&eol_request.subject_id);
                 let metadata = validation_proof.get_metadata();
                 // Comprobar que invoker tiene permisos de invocación
-                let closers = self
-                    .gov_api
-                    .get_signers(metadata.clone(), ValidationStage::Close)
-                    .await
-                    .map_err(LedgerError::GovernanceError)?;
-                if !closers.contains(
-                    &event
-                        .content
-                        .event_proposal
-                        .proposal
-                        .event_request
-                        .signature
-                        .content
-                        .signer,
-                ) {
-                    return Err(LedgerError::Unauthorized(format!(
-                        "Close unauthorized for KeyId: {}",
-                        event
-                            .content
-                            .event_proposal
-                            .proposal
-                            .event_request
-                            .signature
-                            .content
-                            .signer
-                            .to_str()
-                    )));
-                }
                 match ledger_state {
                     Some(ledger_state) => {
                         match ledger_state.current_sn {
@@ -1559,6 +1531,28 @@ impl<C: DatabaseCollection> Ledger<C> {
                         };
                         if !subject.active {
                             return Err(LedgerError::SubjectLifeEnd(subject.subject_id.to_str()));
+                        }
+                        if subject.creator
+                            != event
+                                .content
+                                .event_proposal
+                                .proposal
+                                .event_request
+                                .signature
+                                .content
+                                .signer
+                        {
+                            return Err(LedgerError::Unauthorized(
+                                event
+                                    .content
+                                    .event_proposal
+                                    .proposal
+                                    .event_request
+                                    .signature
+                                    .content
+                                    .signer
+                                    .to_str(),
+                            ));
                         }
                         let is_gov = self.subject_is_gov.get(&eol_request.subject_id).unwrap();
                         log::warn!("EL SUJETO ES  IS GOV: {}", is_gov);

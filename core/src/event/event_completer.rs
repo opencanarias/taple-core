@@ -410,11 +410,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         match &event_request.request {
             EventRequestType::Transfer(_) => {}
             EventRequestType::EOL(_) => {
-                let closers = self
-                    .gov_api
-                    .get_signers(metadata.clone(), ValidationStage::Close)
-                    .await?;
-                if !closers.contains(&event_request.signature.content.signer) {
+                if subject.creator != event_request.signature.content.signer {
                     return Err(EventError::CloseNotAuthorized(
                         event_request.signature.content.signer.to_str(),
                     ));

@@ -228,10 +228,10 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                 stage.to_str().to_owned(),
             )));
         }
-        let mut governance_id = metadata.governance_id;
+        let mut governance_id = metadata.governance_id.clone();
         log::info!("Quorum de: {}", metadata.subject_id.to_str());
         if governance_id.digest.is_empty() {
-            governance_id = metadata.subject_id;
+            governance_id = metadata.subject_id.clone();
         }
         let schema_id = &metadata.schema_id;
         let governance =

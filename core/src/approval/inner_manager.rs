@@ -552,8 +552,9 @@ mod test {
         async fn get_invoke_info(
             &self,
             metadata: Metadata,
-            fact: String,
-        ) -> Result<HashSet<KeyIdentifier>, RequestError> {
+            stage: ValidationStage,
+            invoker: KeyIdentifier,
+        ) -> Result<bool, RequestError> {
             unreachable!()
         }
 
@@ -583,14 +584,6 @@ mod test {
             schema_id: String,
             governance_version: u64,
         ) -> Result<Value, RequestError> {
-            unreachable!()
-        }
-
-        async fn get_roles_of_invokator(
-            &self,
-            invokator: KeyIdentifier,
-            metadata: Metadata,
-        ) -> Result<Vec<String>, RequestError> {
             unreachable!()
         }
 
