@@ -155,17 +155,6 @@ impl<M: DatabaseManager<C>, C: DatabaseCollection> Governance<M, C> {
                             .send(GovernanceResponse::GetInitState(to_send))
                             .map_err(|_| InternalError::OneshotClosed)?)
                     }
-                    GovernanceMessage::GetRolesOfInvokator {
-                        invokator,
-                        metadata,
-                    } => {
-                        let to_send = self
-                            .inner_governance
-                            .get_roles_of_invokator(invokator, metadata)?;
-                        Ok(sender
-                            .send(GovernanceResponse::GetRolesOfInvokator(to_send))
-                            .map_err(|_| InternalError::OneshotClosed)?)
-                    }
                     _ => unreachable!(),
                 }
             } else {
@@ -242,12 +231,6 @@ pub trait GovernanceInterface: Sync + Send {
     ) -> Result<u64, RequestError>;
 
     async fn is_governance(&self, subject_id: DigestIdentifier) -> Result<bool, RequestError>;
-
-    async fn get_roles_of_invokator(
-        &self,
-        invokator: KeyIdentifier,
-        metadata: Metadata,
-    ) -> Result<Vec<String>, RequestError>;
 
     async fn governance_updated(
         &self,
@@ -414,26 +397,6 @@ impl GovernanceInterface for GovernanceAPI {
             .await
             .map_err(|_| RequestError::ChannelClosed)?;
         if let GovernanceResponse::IsGovernance(result) = response {
-            result
-        } else {
-            Err(RequestError::UnexpectedResponse)
-        }
-    }
-
-    async fn get_roles_of_invokator(
-        &self,
-        invokator: KeyIdentifier,
-        metadata: Metadata,
-    ) -> Result<Vec<String>, RequestError> {
-        let response = self
-            .sender
-            .ask(GovernanceMessage::GetRolesOfInvokator {
-                invokator,
-                metadata,
-            })
-            .await
-            .map_err(|_| RequestError::ChannelClosed)?;
-        if let GovernanceResponse::GetRolesOfInvokator(result) = response {
             result
         } else {
             Err(RequestError::UnexpectedResponse)

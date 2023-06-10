@@ -8,11 +8,17 @@ use serde::{de::Visitor, Deserialize, Serialize};
 pub enum Quorum {
     MAJORITY(String),
     #[serde(rename_all = "PascalCase")]
-    FIXED { fixed: u32 },
+    FIXED {
+        fixed: u32,
+    },
     #[serde(rename_all = "PascalCase")]
-    PORCENTAJE { porcentaje: f64 },
+    PORCENTAJE {
+        porcentaje: f64,
+    },
     #[serde(rename_all = "PascalCase")]
-    BFT { BFT: f64 },
+    BFT {
+        BFT: f64,
+    },
 }
 
 #[derive(Debug)]
@@ -78,9 +84,12 @@ impl<'de> Deserialize<'de> for Who {
 }
 
 #[derive(Debug)]
+#[allow(non_snake_case)]
+#[allow(non_camel_case_types)]
 pub enum Schema {
     ID { ID: String },
-    AllSchemas,
+    NOT_GOVERNANCE,
+    ALL,
 }
 
 impl Serialize for Schema {
@@ -90,7 +99,8 @@ impl Serialize for Schema {
     {
         match self {
             Schema::ID { ID } => serializer.serialize_str(&ID),
-            Schema::AllSchemas => serializer.serialize_str("all_schemas"),
+            Schema::NOT_GOVERNANCE => serializer.serialize_str("NOT_GOVERNANCE"),
+            Schema::ALL => serializer.serialize_str("ALL"),
         }
     }
 }
@@ -111,7 +121,8 @@ impl<'de> Deserialize<'de> for Schema {
                 E: serde::de::Error,
             {
                 match v.as_str() {
-                    "all_schemas" => Ok(Self::Value::AllSchemas),
+                    "ALL" => Ok(Self::Value::ALL),
+                    "NOT_GOVERNANCE" => Ok(Self::Value::NOT_GOVERNANCE),
                     &_ => Ok(Self::Value::ID { ID: v }),
                 }
             }
@@ -120,7 +131,8 @@ impl<'de> Deserialize<'de> for Schema {
                 E: serde::de::Error,
             {
                 match v {
-                    "all_schemas" => Ok(Self::Value::AllSchemas),
+                    "ALL" => Ok(Self::Value::ALL),
+                    "NOT_GOVERNANCE" => Ok(Self::Value::NOT_GOVERNANCE),
                     &_ => Ok(Self::Value::ID { ID: v.to_string() }),
                 }
             }
