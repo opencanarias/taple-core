@@ -1,4 +1,7 @@
-use std::{collections::HashSet, str::FromStr};
+use std::{
+    collections::{HashMap, HashSet},
+    str::FromStr,
+};
 
 use crate::{
     commons::{
@@ -108,7 +111,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         schema_id: &str,
         namespace: &str,
         stage: ValidationStage,
-        members: HashSet<KeyIdentifier>,
+        members: (HashSet<KeyIdentifier>, HashMap<String, KeyIdentifier>),
         is_gov: bool,
     ) -> Result<HashSet<KeyIdentifier>, RequestError> {
         let mut signers: HashSet<KeyIdentifier> = HashSet::new();
@@ -152,12 +155,21 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                 Who::ID { ID } => {
                     let id = KeyIdentifier::from_str(&ID)
                         .map_err(|_| RequestError::InvalidKeyIdentifier(ID))?;
-                    if !members.contains(&id) {
+                    if !members.0.contains(&id) {
                         continue;
                     }
                     signers.insert(id);
                 }
-                Who::MEMBERS | Who::ALL => return Ok(members),
+                Who::NAME { NAME } => {
+                    let id = members.1.get(&NAME.to_owned()).ok_or_else(|| {
+                        RequestError::InvalidName(format!(
+                            "Invalid Name in roles: {}",
+                            NAME.to_owned()
+                        ))
+                    })?;
+                    signers.insert(id.clone());
+                }
+                Who::MEMBERS | Who::ALL => return Ok(members.0),
                 Who::NOT_MEMBERS => continue,
             }
         }
@@ -327,11 +339,11 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         schema_id: &str,
         namespace: &str,
         stage: ValidationStage,
-        members: HashSet<KeyIdentifier>,
+        members: (HashSet<KeyIdentifier>, HashMap<String, KeyIdentifier>),
         is_gov: bool,
         invoker: KeyIdentifier,
     ) -> Result<bool, RequestError> {
-        let is_member = members.contains(&invoker);
+        let is_member = members.0.contains(&invoker);
         for role in roles {
             if role.role != stage.to_str() {
                 continue;
@@ -355,6 +367,17 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
             match role.who {
                 Who::ID { ID } => {
                     if is_member && ID == invoker.to_str() {
+                        return Ok(true);
+                    }
+                }
+                Who::NAME { NAME } => {
+                    let id = members.1.get(&NAME.to_owned()).ok_or_else(|| {
+                        RequestError::InvalidName(format!(
+                            "Invalid Name in roles: {}",
+                            NAME.to_owned()
+                        ))
+                    })?;
+                    if is_member && id.to_str() == invoker.to_str() {
                         return Ok(true);
                     }
                 }
@@ -529,8 +552,9 @@ fn get_quorum<'a>(data: &'a Value, key: &str) -> Result<Quorum, InternalError> {
 
 fn get_members_from_governance(
     properties: &Value,
-) -> Result<HashSet<KeyIdentifier>, InternalError> {
-    let mut member_ids: HashSet<KeyIdentifier> = HashSet::new();
+) -> Result<(HashSet<KeyIdentifier>, HashMap<String, KeyIdentifier>), InternalError> {
+    let mut member_ids_names: (HashSet<KeyIdentifier>, HashMap<String, KeyIdentifier>) =
+        (HashSet::new(), HashMap::new());
     let members = properties
         .get("members")
         .unwrap()
@@ -543,13 +567,23 @@ fn get_members_from_governance(
             .expect("Se ha validado que tiene id")
             .as_str()
             .expect("Hay id y es str");
-        let member_id = KeyIdentifier::from_str(member_id)
-            .map_err(|_| InternalError::InvalidGovernancePayload("12".into()))?;
-        let true = member_ids.insert(member_id) else {
-            return Err(InternalError::InvalidGovernancePayload("13".into()));
+        let member_name = member
+            .get("name")
+            .expect("Se ha validado que tiene name")
+            .as_str()
+            .expect("Hay name y es str")
+            .to_owned();
+        let member_id = KeyIdentifier::from_str(member_id).map_err(|_| {
+            InternalError::InvalidGovernancePayload("12: Invalid Keyidentifier in member".into())
+        })?;
+        let true = member_ids_names.0.insert(member_id.clone()) else {
+            return Err(InternalError::InvalidGovernancePayload("13: Repeated Id in members".into()));
+        };
+        let None = member_ids_names.1.insert(member_name, member_id) else {
+            return Err(InternalError::InvalidGovernancePayload("14: Repeated Name in members".into()));
         };
     }
-    Ok(member_ids)
+    Ok(member_ids_names)
 }
 
 fn contains_common_element(set1: &HashSet<String>, vec2: &[String]) -> bool {

@@ -26,6 +26,7 @@ pub enum Quorum {
 #[allow(non_camel_case_types)]
 pub enum Who {
     ID { ID: String },
+    NAME { NAME: String },
     MEMBERS,
     ALL,
     NOT_MEMBERS,
@@ -38,6 +39,7 @@ impl Serialize for Who {
     {
         match self {
             Who::ID { ID } => serializer.serialize_str(&ID),
+            Who::NAME { NAME } => serializer.serialize_str(&NAME),
             Who::MEMBERS => serializer.serialize_str("MEMBERS"),
             Who::ALL => serializer.serialize_str("ALL"),
             Who::NOT_MEMBERS => serializer.serialize_str("NOT_MEMBERS"),
