@@ -7,23 +7,22 @@ use crate::{
     database::DB,
     evaluator::errors::ExecutorErrorResponses,
     event_request::StateRequest,
-    governance::GovernanceInterface,
     identifier::DigestIdentifier,
-    DatabaseCollection, EventRequestType
+    DatabaseCollection, EventRequestType,
 };
 
 use super::{executor::ContractExecutor, ExecuteContractResponse};
 use crate::database::Error as DbError;
-pub struct TapleRunner<C: DatabaseCollection, G: GovernanceInterface + Send> {
+pub struct TapleRunner<C: DatabaseCollection> {
     database: DB<C>,
-    executor: ContractExecutor<G>,
+    executor: ContractExecutor,
 }
 
-impl<C: DatabaseCollection, G: GovernanceInterface + Send> TapleRunner<C, G> {
-    pub fn new(database: DB<C>, engine: Engine, gov_api: G) -> Self {
+impl<C: DatabaseCollection> TapleRunner<C> {
+    pub fn new(database: DB<C>, engine: Engine) -> Self {
         Self {
             database,
-            executor: ContractExecutor::new(engine, gov_api),
+            executor: ContractExecutor::new(engine),
         }
     }
 
@@ -54,10 +53,8 @@ impl<C: DatabaseCollection, G: GovernanceInterface + Send> TapleRunner<C, G> {
             Err(DbError::EntryNotFound) => {
                 // Pedimos LCE
                 return Err(ExecutorErrorResponses::OurGovIsLower);
-            },
-            Err(error) => {
-                return Err(ExecutorErrorResponses::DatabaseError(error.to_string())) 
             }
+            Err(error) => return Err(ExecutorErrorResponses::DatabaseError(error.to_string())),
         };
         if governance.sn > execute_contract.context.governance_version {
             // Nuestra gov es mayor: mandamos mensaje para que actualice el emisor
@@ -130,11 +127,9 @@ impl<C: DatabaseCollection, G: GovernanceInterface + Send> TapleRunner<C, G> {
             .execute_contract(
                 &execute_contract.context.actual_state,
                 &state_data.invokation,
-                &execute_contract.event_request.signature.content.signer,
-                &execute_contract.context,
-                governance_version,
                 contract,
-                &state_data.subject_id,
+                execute_contract.event_request.signature.content.signer
+                    == execute_contract.context.owner,
             )
             .await?;
         log::warn!("Contract result: {:?}", contract_result);
@@ -172,9 +167,4 @@ fn generate_json_patch(
     let patch = diff(&prev_state, &new_state);
     Ok(serde_json::to_string(&patch)
         .map_err(|_| ExecutorErrorResponses::JSONPATCHDeserializationFailed)?)
-}
-
-fn generera_state_hash(state: &str) -> Result<DigestIdentifier, ExecutorErrorResponses> {
-    DigestIdentifier::from_serializable_borsh(state)
-        .map_err(|_| ExecutorErrorResponses::StateHashGenerationFailed)
 }

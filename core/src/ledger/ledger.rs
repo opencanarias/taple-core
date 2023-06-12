@@ -66,29 +66,29 @@ impl<C: DatabaseCollection> Ledger<C> {
         }
     }
 
-    async fn init_preautorized(&mut self) -> Result<(), LedgerError> {
-        let data = self.database.get_all_expecting_transfers()?;
-        for (subject_id, _providers) in data {
-            // All expecting subjects should be preauthorized
-            match self
-                .database
-                .get_preauthorized_subject_and_providers(&subject_id)
-            {
-                Ok(_) => {}
-                Err(DbError::EntryNotFound) => {
-                    // Añadimos sujeto como preautorizado
-                    self.database
-                        .set_preauthorized_subject_and_providers(&subject_id, HashSet::new())?;
-                }
-                Err(error) => return Err(LedgerError::DatabaseError(error)),
-            }
-        }
-        Ok(())
-    }
+    // async fn init_preautorized(&mut self) -> Result<(), LedgerError> {
+    //     let data = self.database.get_all_keys()?;
+    //     for (subject_id, _providers) in data {
+    //         // All expecting subjects should be preauthorized
+    //         match self
+    //             .database
+    //             .get_preauthorized_subject_and_providers(&subject_id)
+    //         {
+    //             Ok(_) => {}
+    //             Err(DbError::EntryNotFound) => {
+    //                 // Añadimos sujeto como preautorizado
+    //                 self.database
+    //                     .set_preauthorized_subject_and_providers(&subject_id, HashSet::new())?;
+    //             }
+    //             Err(error) => return Err(LedgerError::DatabaseError(error)),
+    //         }
+    //     }
+    //     Ok(())
+    // }
 
     pub async fn init(&mut self) -> Result<(), LedgerError> {
         // Revisamos posibles sujetos a recibir en transferencias sin preautorizar
-        self.init_preautorized().await?;
+        // self.init_preautorized().await?;
         // Revisar si tengo sujetos a medio camino entre estado actual y LCE
         // Actualizar hashmaps
         let subjects = self.database.get_all_subjects();
@@ -231,31 +231,19 @@ impl<C: DatabaseCollection> Ledger<C> {
         Ok(())
     }
 
-    pub async fn expecting_transfer(
-        &self,
-        subject_id: DigestIdentifier,
-    ) -> Result<KeyIdentifier, LedgerError> {
+    pub async fn generate_key(&self) -> Result<KeyIdentifier, LedgerError> {
         // Generar material criptográfico y guardarlo en BBDD asociado al subject_id
         // TODO: Hacer la eleccion del MC dinámica. Es necesario primero hacer el cambio a nivel de state.rs
-        let public_key = match self.database.get_expecting_transfer(&subject_id) {
-            Ok(keypair) => {
-                let public_key =
-                    KeyIdentifier::new(keypair.get_key_derivator(), &keypair.public_key_bytes());
-                public_key
-            }
-            Err(DbError::EntryNotFound) => {
-                let keys = KeyPair::Ed25519(Ed25519KeyPair::new());
-                let public_key =
-                    KeyIdentifier::new(keys.get_key_derivator(), &keys.public_key_bytes());
-                self.database.set_expecting_transfer(&subject_id, keys)?;
-                public_key
-            }
-            Err(error) => return Err(LedgerError::DatabaseError(error)),
-        };
-        // Así mismo, ponemos el sujeto como preautorizado
-        self.database
-            .set_preauthorized_subject_and_providers(&subject_id, HashSet::new())?;
+        let keys = KeyPair::Ed25519(Ed25519KeyPair::new());
+        let public_key =
+            KeyIdentifier::new(keys.get_key_derivator(), &keys.public_key_bytes());
+        self.database.set_keys(&public_key, keys)?;
         Ok(public_key)
+
+        // Así mismo, ponemos el sujeto como preautorizado
+        // self.database
+        //     .set_preauthorized_subject_and_providers(&subject_id, HashSet::new())?;
+        // Ok(public_key)
     }
 
     pub async fn event_validated(
@@ -647,7 +635,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                             {
                                 // TODO: ANALIZAR QUE DEBERÍAMOS HACER SI SE NOS TRANSFIERE Y NO LO QUEREMOS
                                 // La transferencia es a nosotros
-                                match self.database.get_expecting_transfer(&subject_id) {
+                                match self.database.get_keys(&transfer_request.public_key) {
                                     Ok(keypair) => (Some(keypair), true),
                                     Err(DbError::EntryNotFound) => {
                                         return Err(LedgerError::UnexpectedTransfer);
@@ -682,7 +670,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                             self.database
                                 .set_subject(&transfer_request.subject_id, subject)?;
                             if to_delete {
-                                self.database.del_expecting_transfer(&subject_id)?;
+                                self.database.del_keys(&transfer_request.public_key)?;
                             }
                             if self.subject_is_gov.get(&subject_id).unwrap().to_owned() {
                                 // Enviar mensaje a gov de governance updated con el id y el sn
@@ -2459,7 +2447,7 @@ impl<C: DatabaseCollection> Ledger<C> {
         {
             // TODO: ANALIZAR QUE DEBERÍAMOS HACER SI SE NOS TRANSFIERE Y NO LO QUEREMOS
             // La transferencia es a nosotros
-            match self.database.get_expecting_transfer(&subject_id) {
+            match self.database.get_keys(&public_key) {
                 Ok(keypair) => (Some(keypair), true),
                 Err(DbError::EntryNotFound) => {
                     return Err(LedgerError::UnexpectedTransfer);
@@ -2471,13 +2459,13 @@ impl<C: DatabaseCollection> Ledger<C> {
         };
         subject.transfer_subject(
             owner,
-            public_key,
+            public_key.clone(),
             keypair,
             event.content.event_proposal.proposal.sn,
         );
         self.database.set_subject(&subject_id, subject)?;
         if to_delete {
-            self.database.del_expecting_transfer(&subject_id)?;
+            self.database.del_keys(&public_key)?;
         }
         Ok(())
     }

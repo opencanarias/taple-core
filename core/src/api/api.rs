@@ -9,8 +9,9 @@ use super::{
 #[cfg(feature = "aproval")]
 use crate::approval::manager::ApprovalAPI;
 use crate::authorized_subjecs::manager::AuthorizedSubjectsAPI;
-use crate::commons::models::event::{Event, ValidationProof};
+use crate::commons::models::event::Event;
 use crate::commons::models::event_request::EventRequest;
+use crate::commons::models::request::TapleRequest;
 use crate::commons::models::state::SubjectData;
 use crate::commons::{
     channel::{ChannelData, MpscChannel, SenderEnd},
@@ -19,8 +20,8 @@ use crate::commons::{
 };
 use crate::event::manager::EventAPI;
 use crate::ledger::manager::EventManagerAPI;
-use crate::KeyIdentifier;
 use crate::signature::Signature;
+use crate::KeyIdentifier;
 use crate::{
     approval::ApprovalPetitionData,
     commons::models::Acceptance,
@@ -174,15 +175,12 @@ pub trait ApiModuleInterface {
         subject_id: &DigestIdentifier,
         providers: &HashSet<KeyIdentifier>,
     ) -> Result<(), ApiError>;
-    async fn expecting_transfer(
-        &self,
-        subject_id: DigestIdentifier,
-    ) -> Result<KeyIdentifier, ApiError>;
+    async fn generate_keys(&self) -> Result<KeyIdentifier, ApiError>;
     async fn get_validation_proof(
         &self,
-        subject_id: DigestIdentifier
-    ) ->  Result<HashSet<Signature>, ApiError>;
-
+        subject_id: DigestIdentifier,
+    ) -> Result<HashSet<Signature>, ApiError>;
+    async fn get_request(&self, request_id: DigestIdentifier) -> Result<TapleRequest, ApiError>;
 }
 
 /// Object that allows interaction with a TAPLE node.
@@ -210,6 +208,19 @@ impl ApiModuleInterface for NodeAPI {
             .await
             .unwrap();
         if let ApiResponses::HandleRequest(data) = response {
+            data
+        } else {
+            unreachable!()
+        }
+    }
+
+    async fn get_request(&self, request_id: DigestIdentifier) -> Result<TapleRequest, ApiError> {
+        let response = self
+            .sender
+            .ask(APICommands::GetRequest(request_id))
+            .await
+            .unwrap();
+        if let ApiResponses::GetRequest(data) = response {
             data
         } else {
             unreachable!()
@@ -447,16 +458,9 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
-    async fn expecting_transfer(
-        &self,
-        subject_id: DigestIdentifier,
-    ) -> Result<KeyIdentifier, ApiError> {
-        let response = self
-            .sender
-            .ask(APICommands::ExpectingTransfer(subject_id))
-            .await
-            .unwrap();
-        if let ApiResponses::ExpectingTransfer(data) = response {
+    async fn generate_keys(&self) -> Result<KeyIdentifier, ApiError> {
+        let response = self.sender.ask(APICommands::GenerateKeys).await.unwrap();
+        if let ApiResponses::GenerateKeys(data) = response {
             data
         } else {
             unreachable!()
@@ -465,10 +469,10 @@ impl ApiModuleInterface for NodeAPI {
 
     async fn get_validation_proof(
         &self,
-        subject_id: DigestIdentifier
+        subject_id: DigestIdentifier,
     ) -> Result<HashSet<Signature>, ApiError> {
-        let response = self.
-            sender
+        let response = self
+            .sender
             .ask(APICommands::GetValidationProof(subject_id))
             .await
             .unwrap();
@@ -492,8 +496,7 @@ impl<C: DatabaseCollection> API<C> {
     pub fn new(
         input: MpscChannel<APICommands, ApiResponses>,
         event_api: EventAPI,
-        #[cfg(feature = "aproval")]
-        approval_api: ApprovalAPI,
+        #[cfg(feature = "aproval")] approval_api: ApprovalAPI,
         authorized_subjects_api: AuthorizedSubjectsAPI,
         ledger_api: EventManagerAPI,
         settings_sender: Sender<TapleSettings>,
@@ -584,6 +587,9 @@ impl<C: DatabaseCollection> API<C> {
                     APICommands::GetSingleSubject(data) => {
                         self.inner_api.get_single_subject(data).await
                     }
+                    APICommands::GetRequest(request_id) => {
+                        self.inner_api.get_request(request_id).await
+                    }
                     #[cfg(feature = "aproval")]
                     APICommands::VoteResolve(acceptance, id) => {
                         self.inner_api.emit_vote(id, acceptance).await?
@@ -604,9 +610,7 @@ impl<C: DatabaseCollection> API<C> {
                             .set_preauthorized_subject(subject_id, providers)
                             .await?
                     }
-                    APICommands::ExpectingTransfer(subject_id) => {
-                        self.inner_api.expecting_transfer(subject_id).await?
-                    }
+                    APICommands::GenerateKeys => self.inner_api.generate_keys().await?,
                     APICommands::GetValidationProof(subject_id) => {
                         self.inner_api.get_validation_proof(subject_id).await
                     }

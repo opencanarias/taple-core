@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use crate::commons::models::request::TapleRequest;
 use crate::signature::Signature;
 #[cfg(feature = "aproval")]
 use crate::{Acceptance, ApprovalPetitionData};
@@ -33,8 +34,9 @@ pub enum APICommands {
     #[cfg(feature = "aproval")]
     GetSingleRequest(DigestIdentifier),
     SetPreauthorizedSubject(DigestIdentifier, HashSet<KeyIdentifier>),
-    ExpectingTransfer(DigestIdentifier),
+    GenerateKeys,
     GetValidationProof(DigestIdentifier),
+    GetRequest(DigestIdentifier),
     Shutdown,
 }
 
@@ -52,8 +54,9 @@ pub enum ApiResponses {
     GetPendingRequests(Result<Vec<ApprovalPetitionData>, ApiError>),
     #[cfg(feature = "aproval")]
     GetSingleRequest(Result<ApprovalPetitionData, ApiError>),
-    ExpectingTransfer(Result<KeyIdentifier, ApiError>),
+    GenerateKeys(Result<KeyIdentifier, ApiError>),
     GetValidationProof(Result<HashSet<Signature>, ApiError>),
+    GetRequest(Result<TapleRequest, ApiError>),
     ShutdownCompleted,
     SetPreauthorizedSubjectCompleted
 }

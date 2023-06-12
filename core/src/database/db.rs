@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::commons::models::event::ValidationProof;
-use crate::commons::models::notary::NotaryEventResponse;
+use crate::commons::models::request::TapleRequest;
 use crate::commons::models::state::Subject;
 use crate::crypto::KeyPair;
 use crate::event_request::EventRequest;
@@ -11,14 +11,15 @@ use crate::signature::Signature;
 use crate::Event;
 
 use super::error::Error;
-use super::layers::lce_validation_proofs::{self, LceValidationProofs};
+use super::layers::lce_validation_proofs::{LceValidationProofs};
+use super::layers::request::RequestDb;
 use super::{
     layers::{
         contract::ContractDb, controller_id::ControllerIdDb, event::EventDb, notary::NotaryDb,
         preauthorized_subjects_and_providers::PreauthorizedSbujectsAndProovidersDb,
-        prevalidated_event::PrevalidatedEventDb, request::RequestDb, signature::SignatureDb,
+        prevalidated_event::PrevalidatedEventDb, event_request::EventRequestDb, signature::SignatureDb,
         subject::SubjectDb, subject_by_governance::SubjectByGovernanceDb,
-        transfer_events::TransferEventsDb, witness_signatures::WitnessSignaturesDb,
+        keys::KeysDb, witness_signatures::WitnessSignaturesDb,
     },
     DatabaseCollection, DatabaseManager,
 };
@@ -28,13 +29,14 @@ pub struct DB<C: DatabaseCollection> {
     subject_db: SubjectDb<C>,
     event_db: EventDb<C>,
     prevalidated_event_db: PrevalidatedEventDb<C>,
+    event_request_db: EventRequestDb<C>,
     request_db: RequestDb<C>,
     controller_id_db: ControllerIdDb<C>,
     notary_db: NotaryDb<C>,
     contract_db: ContractDb<C>,
     witness_signatures_db: WitnessSignaturesDb<C>,
     subject_by_governance_db: SubjectByGovernanceDb<C>,
-    transfer_events_db: TransferEventsDb<C>,
+    keys_db: KeysDb<C>,
     preauthorized_subjects_and_providers_db: PreauthorizedSbujectsAndProovidersDb<C>,
     lce_validation_proofs_db: LceValidationProofs<C>,
 }
@@ -45,13 +47,14 @@ impl<C: DatabaseCollection> DB<C> {
         let subject_db = SubjectDb::new(&manager);
         let event_db = EventDb::new(&manager);
         let prevalidated_event_db = PrevalidatedEventDb::new(&manager);
+        let event_request_db = EventRequestDb::new(&manager);
         let request_db = RequestDb::new(&manager);
         let controller_id_db = ControllerIdDb::new(&manager);
         let notary_db = NotaryDb::new(&manager);
         let contract_db = ContractDb::new(&manager);
         let witness_signatures_db = WitnessSignaturesDb::new(&manager);
         let subject_by_governance_db = SubjectByGovernanceDb::new(&manager);
-        let transfer_events_db = TransferEventsDb::new(&manager);
+        let transfer_events_db = KeysDb::new(&manager);
         let preauthorized_subjects_and_providers_db =
             PreauthorizedSbujectsAndProovidersDb::new(&manager);
         let lce_validation_proofs_db = LceValidationProofs::new(&manager);
@@ -60,13 +63,14 @@ impl<C: DatabaseCollection> DB<C> {
             subject_db,
             event_db,
             prevalidated_event_db,
+            event_request_db: event_request_db,
             request_db,
             controller_id_db,
             notary_db,
             contract_db,
             witness_signatures_db,
             subject_by_governance_db,
-            transfer_events_db,
+            keys_db: transfer_events_db,
             preauthorized_subjects_and_providers_db,
             lce_validation_proofs_db,
         }
@@ -177,11 +181,11 @@ impl<C: DatabaseCollection> DB<C> {
     }
 
     pub fn get_request(&self, subject_id: &DigestIdentifier) -> Result<EventRequest, Error> {
-        self.request_db.get_request(subject_id)
+        self.event_request_db.get_request(subject_id)
     }
 
     pub fn get_all_request(&self) -> Vec<EventRequest> {
-        self.request_db.get_all_request()
+        self.event_request_db.get_all_request()
     }
 
     pub fn set_request(
@@ -189,11 +193,31 @@ impl<C: DatabaseCollection> DB<C> {
         subject_id: &DigestIdentifier,
         request: EventRequest,
     ) -> Result<(), Error> {
-        self.request_db.set_request(subject_id, request)
+        self.event_request_db.set_request(subject_id, request)
     }
 
     pub fn del_request(&self, subject_id: &DigestIdentifier) -> Result<(), Error> {
-        self.request_db.del_request(subject_id)
+        self.event_request_db.del_request(subject_id)
+    }
+
+    pub fn get_taple_request(&self, request_id: &DigestIdentifier) -> Result<TapleRequest, Error> {
+        self.request_db.get_request(request_id)
+    }
+
+    pub fn get_taple_all_request(&self) -> Vec<TapleRequest> {
+        self.request_db.get_all_request()
+    }
+
+    pub fn set_taple_request(
+        &self,
+        request_id: &DigestIdentifier,
+        request: &TapleRequest,
+    ) -> Result<(), Error> {
+        self.request_db.set_request(request_id, request)
+    }
+
+    pub fn del_taple_request(&self, request_id: &DigestIdentifier) -> Result<(), Error> {
+        self.request_db.del_request(request_id)
     }
 
     pub fn get_controller_id(&self) -> Result<String, Error> {
@@ -294,27 +318,27 @@ impl<C: DatabaseCollection> DB<C> {
             .get_subjects_by_governance(gobernance_id)
     }
 
-    pub fn get_expecting_transfer(&self, subject_id: &DigestIdentifier) -> Result<KeyPair, Error> {
-        self.transfer_events_db.get_expecting_transfer(subject_id)
+    pub fn get_keys(&self, public_key: &KeyIdentifier) -> Result<KeyPair, Error> {
+        self.keys_db.get_keys(public_key)
     }
 
-    pub fn get_all_expecting_transfers(
+    pub fn get_all_keys(
         &self,
-    ) -> Result<Vec<(DigestIdentifier, HashSet<KeyIdentifier>)>, Error> {
-        self.transfer_events_db.get_all_expecting_transfers()
+    ) -> Result<Vec<KeyPair>, Error> {
+        self.keys_db.get_all_keys()
     }
 
-    pub fn set_expecting_transfer(
+    pub fn set_keys(
         &self,
-        subject_id: &DigestIdentifier,
+        public_key: &KeyIdentifier,
         keypair: KeyPair,
     ) -> Result<(), Error> {
-        self.transfer_events_db
-            .set_expecting_transfer(subject_id, keypair)
+        self.keys_db
+            .set_keys(public_key, keypair)
     }
 
-    pub fn del_expecting_transfer(&self, subject_id: &DigestIdentifier) -> Result<(), Error> {
-        self.transfer_events_db.del_expecting_transfer(subject_id)
+    pub fn del_keys(&self, public_key: &KeyIdentifier) -> Result<(), Error> {
+        self.keys_db.del_keys(public_key)
     }
 
     pub fn get_preauthorized_subject_and_providers(
