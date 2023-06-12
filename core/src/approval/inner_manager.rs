@@ -471,8 +471,6 @@ fn create_metadata(subject_data: &Subject, governance_version: u64) -> Metadata 
         governance_id: subject_data.governance_id.clone(),
         governance_version,
         schema_id: subject_data.schema_id.clone(),
-        owner: subject_data.owner.clone(),
-        creator: subject_data.creator.clone(),
     }
 }
 

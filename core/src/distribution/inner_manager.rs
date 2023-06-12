@@ -18,7 +18,7 @@ use crate::TapleSettings;
 use crate::{
     database::{Error as DbError, DB},
     governance::GovernanceInterface,
-    DatabaseCollection
+    DatabaseCollection,
 };
 
 use super::error::{DistributionErrorResponses, DistributionManagerError};
@@ -70,7 +70,7 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
                 .map_err(|error| DistributionManagerError::DatabaseError(error.to_string()))?;
             let owner = subject.owner.clone();
             let metadata = build_metadata(&subject, governance.sn);
-            let mut witnesses = self.get_targets(metadata).await?;
+            let mut witnesses = self.get_targets(metadata, &subject).await?;
             if !witnesses.contains(&self.signature_manager.get_own_identifier()) {
                 // Ya no somos testigos
                 self.db
@@ -200,7 +200,7 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
             };
             // Comprobamos si seguimos siendo testigos para los sujetos de esta gobernanza
             let mut witnesses = self
-                .get_targets(build_metadata(&subject, governance_version))
+                .get_targets(build_metadata(&subject, governance_version), &subject)
                 .await?;
             if witnesses.contains(&self.signature_manager.get_own_identifier()) {
                 // Seguimos siendo testigos
@@ -259,7 +259,7 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
             .map_err(|_| DistributionManagerError::GovernanceChannelNotAvailable)?;
         // Empezamos la distribución
         let metadata = build_metadata(&subject, governance_version);
-        let mut targets = self.get_targets(metadata).await?;
+        let mut targets = self.get_targets(metadata, &subject).await?;
         log::warn!("REMAIMING SIGNATURES: {}", targets.len());
         for signer in targets.iter() {
             log::warn!("REMAIMING SIGNER: {}", signer.to_str());
@@ -320,9 +320,10 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
     async fn get_targets(
         &self,
         metadata: Metadata,
+        subject: &Subject,
     ) -> Result<HashSet<KeyIdentifier>, DistributionManagerError> {
         // Owner of subject must be included
-        let owner = metadata.owner.clone();
+        let owner = subject.owner.clone();
         let mut targets = self
             .governance
             .get_signers(metadata, ValidationStage::Witness)
@@ -451,7 +452,7 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
                     .await
                     .map_err(|_| DistributionManagerError::GovernanceChannelNotAvailable)?;
                 let metadata = build_metadata(&subject, governance_version);
-                let mut targets = self.get_targets(metadata).await?;
+                let mut targets = self.get_targets(metadata, &subject).await?;
                 let hash_signed = DigestIdentifier::from_serializable_borsh(&event)
                     .map_err(|_| DistributionManagerError::HashGenerationFailed)?;
                 for signature in msg.signatures.iter() {
@@ -508,7 +509,5 @@ fn build_metadata(subject: &Subject, governance_version: u64) -> Metadata {
         governance_id: subject.governance_id.clone(),
         governance_version: governance_version,
         schema_id: subject.schema_id.clone(),
-        owner: subject.owner.clone(),
-        creator: subject.creator.clone(),
     }
 }

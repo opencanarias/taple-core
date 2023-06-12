@@ -235,8 +235,7 @@ impl<C: DatabaseCollection> Ledger<C> {
         // Generar material criptográfico y guardarlo en BBDD asociado al subject_id
         // TODO: Hacer la eleccion del MC dinámica. Es necesario primero hacer el cambio a nivel de state.rs
         let keys = KeyPair::Ed25519(Ed25519KeyPair::new());
-        let public_key =
-            KeyIdentifier::new(keys.get_key_derivator(), &keys.public_key_bytes());
+        let public_key = KeyIdentifier::new(keys.get_key_derivator(), &keys.public_key_bytes());
         self.database.set_keys(&public_key, keys)?;
         Ok(public_key)
 
@@ -934,24 +933,6 @@ impl<C: DatabaseCollection> Ledger<C> {
                     governance_id: create_request.governance_id,
                     governance_version: our_gov_version,
                     schema_id: create_request.schema_id.clone(),
-                    owner: event
-                        .content
-                        .event_proposal
-                        .proposal
-                        .event_request
-                        .signature
-                        .content
-                        .signer
-                        .clone(),
-                    creator: event
-                        .content
-                        .event_proposal
-                        .proposal
-                        .event_request
-                        .signature
-                        .content
-                        .signer
-                        .clone(),
                 };
                 if &create_request.schema_id == "governance" {
                     match self
@@ -1234,7 +1215,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 &event.signature.content.event_content_hash,
                                 &state_hash,
                             )?;
-                            check_context(&event, metadata, subject.properties.clone())?;
+                            check_context(&event, &subject, metadata, subject.properties.clone())?;
                             let sn: u64 = event.content.event_proposal.proposal.sn;
                             let json_patch =
                                 event.content.event_proposal.proposal.json_patch.as_str();
@@ -1642,7 +1623,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 &event.signature.content.event_content_hash,
                                 &state_hash,
                             )?;
-                            check_context(&event, metadata, subject.properties.clone())?;
+                            check_context(&event, &subject, metadata, subject.properties.clone())?;
                             let sn: u64 = event.content.event_proposal.proposal.sn;
                             subject.eol_event();
                             self.database.set_signatures(
@@ -1926,8 +1907,6 @@ impl<C: DatabaseCollection> Ledger<C> {
                                         .proposal
                                         .gov_version,
                                     schema_id: subject.schema_id.clone(),
-                                    owner: subject.owner.clone(),
-                                    creator: subject.creator.clone(),
                                 };
                                 // Comprobar que el evento es el siguiente
                                 if event.content.event_proposal.proposal.sn == current_sn + 1 {
@@ -1947,6 +1926,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                                 .await?;
                                             check_context(
                                                 &event,
+                                                &subject,
                                                 metadata.clone(),
                                                 subject.properties.clone(),
                                             )?;
@@ -2007,11 +1987,13 @@ impl<C: DatabaseCollection> Ledger<C> {
                                                 head: Some(head),
                                             },
                                         );
+                                        let subject_owner =
+                                            self.database.get_subject(&subject_id)?.owner;
                                         // No se llega hasta el LCE con el event sourcing
                                         // Pedir siguiente evento
                                         let mut witnesses =
                                             self.get_witnesses(metadata.clone()).await?;
-                                        witnesses.insert(metadata.owner);
+                                        witnesses.insert(subject.owner);
                                         let msg = request_event(
                                             self.our_id.clone(),
                                             subject_id,
@@ -2114,7 +2096,17 @@ impl<C: DatabaseCollection> Ledger<C> {
                                         // Pedir siguiente evento
                                         let mut witnesses =
                                             self.get_witnesses(metadata.clone()).await?;
-                                        witnesses.insert(metadata.owner);
+                                        // Añadir owner
+                                        witnesses.insert(
+                                            event
+                                                .content
+                                                .event_proposal
+                                                .proposal
+                                                .event_request
+                                                .signature
+                                                .content
+                                                .signer,
+                                        );
                                         let msg = request_event(self.our_id.clone(), subject_id, 1);
                                         self.message_channel
                                             .tell(MessageTaskCommand::Request(
@@ -2341,8 +2333,6 @@ impl<C: DatabaseCollection> Ledger<C> {
             governance_id: create_request.governance_id.clone(),
             governance_version: event.content.event_proposal.proposal.gov_version,
             schema_id: create_request.schema_id.clone(),
-            owner: invoker.clone(),
-            creator: invoker.clone(),
         };
         // Ignoramos las firmas por ahora
         // Comprobar que el creador tiene permisos de creación
@@ -2591,6 +2581,7 @@ impl<C: DatabaseCollection> Ledger<C> {
 
 fn check_context(
     event: &Event,
+    subject: &Subject,
     metadata: Metadata,
     prev_properties: String,
 ) -> Result<(), LedgerError> {
@@ -2599,8 +2590,8 @@ fn check_context(
         context: Context {
             governance_id: metadata.governance_id,
             schema_id: metadata.schema_id,
-            creator: metadata.creator,
-            owner: metadata.owner,
+            creator: subject.creator.clone(),
+            owner: subject.owner.clone(),
             actual_state: prev_properties,
             namespace: metadata.namespace,
             governance_version: event.content.event_proposal.proposal.gov_version,

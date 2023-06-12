@@ -301,9 +301,7 @@ impl ValidationProof {
             governance_id: self.governance_id.clone(),
             governance_version: self.governance_version,
             schema_id: self.schema_id.clone(),
-            owner: self.owner.clone(),
             subject_id: self.subject_id.clone(),
-            creator: self.creator.clone(),
         }
     }
 

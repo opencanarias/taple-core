@@ -224,8 +224,6 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                         governance_id: subject.governance_id.clone(),
                         governance_version: gov_version, // Not needed
                         schema_id: subject.schema_id.clone(),
-                        owner: subject.owner.clone(),
-                        creator: subject.creator.clone(),
                     };
                     let stage = ValidationStage::Validate;
                     let (signers, quorum_size) =
@@ -335,8 +333,6 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                                 governance_id: subject.governance_id.clone(),
                                 governance_version: new_version,
                                 schema_id: subject.schema_id.clone(),
-                                owner: subject.owner.clone(),
-                                creator: subject.creator.clone(),
                             };
                             let notary_event = self.create_notary_event(
                                 &subject,
@@ -404,8 +400,6 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             governance_id: subject.governance_id.clone(),
             governance_version: gov_version,
             schema_id: subject.schema_id.clone(),
-            owner: event_request.signature.content.signer.clone(),
-            creator: subject.creator.clone(),
         };
         match &event_request.request {
             EventRequestType::Transfer(_) => {}
@@ -538,8 +532,6 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                             governance_id: create_request.governance_id.clone(),
                             governance_version,
                             schema_id: create_request.schema_id.clone(),
-                            owner: self.own_identifier.clone(),
-                            creator: self.own_identifier.clone(),
                         },
                         ValidationStage::Create,
                     )
@@ -619,8 +611,6 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                         governance_id: subject.governance_id.clone(),
                         governance_version: gov_version,
                         schema_id: subject.schema_id,
-                        owner: subject.owner,
-                        creator: subject.creator.clone(),
                     },
                     ValidationStage::Evaluate,
                 );
@@ -642,7 +632,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                         governance_id: metadata.governance_id.clone(),
                         schema_id: metadata.schema_id.clone(),
                         creator: subject.creator,
-                        owner: metadata.owner.clone(),
+                        owner: subject.owner.clone(),
                         actual_state: subject.properties,
                         // serde_json::to_string(self.virtual_state.get(&subject_id).unwrap())
                         //     .map_err(|_| EventError::ErrorParsingValue)?, // Must be Some, filled in init function
@@ -894,8 +884,6 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 governance_id: subject.governance_id.clone(),
                 governance_version,
                 schema_id: subject.schema_id.clone(),
-                owner: subject.owner.clone(),
-                creator: subject.creator.clone(),
             };
             // Añadir al hashmap para poder acceder a él cuando lleguen las firmas de los evaluadores
             self.event_proposals
@@ -1090,8 +1078,6 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 governance_id: subject.governance_id.clone(),
                 governance_version,
                 schema_id: subject.schema_id.clone(),
-                owner: subject.owner.clone(),
-                creator: subject.creator.clone(),
             };
             // Creamos el evento final
             let approvals = approval_set
