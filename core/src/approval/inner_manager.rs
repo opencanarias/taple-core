@@ -191,7 +191,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         }
 
         // Comprobamos si la request es de tipo State
-        let EventRequestType::State(state_request) = &approval_request.proposal.event_request.request else {
+        let EventRequestType::Fact(state_request) = &approval_request.proposal.event_request.request else {
                 return Ok(Err(ApprovalErrorResponse::NoFactEvent));
             };
 
@@ -405,11 +405,8 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         &self,
         event_request: &EventRequest,
     ) -> Result<Result<(), ApprovalErrorResponse>, ApprovalManagerError> {
-        let hash_request = DigestIdentifier::from_serializable_borsh((
-            &event_request.request,
-            &event_request.timestamp,
-        ))
-        .map_err(|_| ApprovalManagerError::HashGenerationFailed)?;
+        let hash_request = DigestIdentifier::from_serializable_borsh(&event_request.request)
+            .map_err(|_| ApprovalManagerError::HashGenerationFailed)?;
         // Check that the hash is the same
         if hash_request != event_request.signature.content.event_content_hash {
             return Ok(Err(ApprovalErrorResponse::NoHashCorrelation));
@@ -493,7 +490,7 @@ mod test {
         },
         database::{MemoryCollection, DB},
         event_content::Metadata,
-        event_request::{CreateRequest, EventRequest, EventRequestType, StateRequest},
+        event_request::{CreateRequest, EventRequest, EventRequestType, FactRequest},
         governance::{error::RequestError, stage::ValidationStage, GovernanceInterface},
         identifier::{Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier},
         signature::{Signature, SignatureContent},
@@ -599,17 +596,12 @@ mod test {
         signature_manager: &SelfSignatureManager,
         subject_id: &DigestIdentifier,
     ) -> EventRequest {
-        let request = EventRequestType::State(StateRequest {
+        let request = EventRequestType::Fact(FactRequest {
             subject_id: subject_id.clone(),
-            invokation: json,
+            payload: json,
         });
-        let timestamp = TimeStamp::now();
-        let signature = signature_manager.sign(&(&request, &timestamp)).unwrap();
-        let event_request = EventRequest {
-            request,
-            timestamp,
-            signature,
-        };
+        let signature = signature_manager.sign(&request).unwrap();
+        let event_request = EventRequest { request, signature };
         event_request
     }
 
@@ -625,13 +617,8 @@ mod test {
             schema_id: "test".to_owned(),
             namespace: "test".to_owned(),
         });
-        let timestamp = TimeStamp::now();
-        let signature = signature_manager.sign(&(&request, &timestamp)).unwrap();
-        let event_request = EventRequest {
-            request,
-            timestamp,
-            signature,
-        };
+        let signature = signature_manager.sign(&request).unwrap();
+        let event_request = EventRequest { request, signature };
         event_request
     }
 

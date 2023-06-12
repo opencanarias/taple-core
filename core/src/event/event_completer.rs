@@ -109,7 +109,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             EventRequestType::Create(_) => {
                 unreachable!();
             }
-            EventRequestType::State(_) => {
+            EventRequestType::Fact(_) => {
                 subject.state_hash_after_apply(&event.content.event_proposal.proposal.json_patch)?
             }
             EventRequestType::Transfer(_) => subject.get_state_hash()?,
@@ -130,7 +130,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         };
         let event_hash = event.signature.content.event_content_hash.clone();
         let proof = match &event.content.event_proposal.proposal.event_request.request {
-            EventRequestType::Create(_) | EventRequestType::State(_) | EventRequestType::EOL(_) => {
+            EventRequestType::Create(_) | EventRequestType::Fact(_) | EventRequestType::EOL(_) => {
                 ValidationProof::new(
                     subject,
                     event.content.event_proposal.proposal.sn,
@@ -286,7 +286,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 for subject_id in subjects_affected.iter() {
                     match self.database.get_request(subject_id) {
                         Ok(event_request) => {
-                            let EventRequestType::State(state_request) = &event_request.request else {
+                            let EventRequestType::Fact(state_request) = &event_request.request else {
                                 return Err(EventError::GenesisInGovUpdate)
                             };
                             let subject_id = state_request.subject_id.clone();
@@ -523,7 +523,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 log::warn!("Processing EOL event");
                 eolr.subject_id.clone()
             }
-            EventRequestType::State(sr) => {
+            EventRequestType::Fact(sr) => {
                 log::warn!("Processing state event");
                 sr.subject_id.clone()
             }
@@ -569,7 +569,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 self.process_transfer_or_eol_event(event_request, subject, gov_version)
                     .await?;
             }
-            EventRequestType::State(state_request) => {
+            EventRequestType::Fact(state_request) => {
                 // Request evaluation signatures, sending request, sn and signature of everything about the subject
                 // Get the list of evaluators
                 let (metadata, stage) = (
@@ -692,7 +692,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             crate::event_request::EventRequestType::Create(_) => {
                 return Err(EventError::EvaluationOrApprovationInCreationEvent)
             } // Que hago aquí?? devuelvo error?
-            crate::event_request::EventRequestType::State(state_request) => {
+            crate::event_request::EventRequestType::Fact(state_request) => {
                 state_request.subject_id.clone()
             }
         };
@@ -929,7 +929,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             crate::event_request::EventRequestType::Create(_) => {
                 return Err(EventError::EvaluationOrApprovationInCreationEvent)
             } // Que hago aquí?? devuelvo error?
-            crate::event_request::EventRequestType::State(state_request) => {
+            crate::event_request::EventRequestType::Fact(state_request) => {
                 state_request.subject_id.clone()
             }
         };
@@ -1108,7 +1108,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             crate::event_request::EventRequestType::Create(_) => {
                 return Err(EventError::EvaluationOrApprovationInCreationEvent)
             } // Que hago aquí?? devuelvo error?
-            crate::event_request::EventRequestType::State(state_request) => {
+            crate::event_request::EventRequestType::Fact(state_request) => {
                 state_request.subject_id.clone()
             }
         };

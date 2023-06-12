@@ -22,7 +22,6 @@ use super::{
 )]
 pub struct EventRequest {
     pub request: EventRequestType,
-    pub timestamp: TimeStamp,
     pub signature: Signature,
 }
 
@@ -30,7 +29,7 @@ pub struct EventRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema)]
 pub enum EventRequestType {
     Create(CreateRequest),
-    State(StateRequest),
+    Fact(FactRequest),
     Transfer(TransferRequest),
     EOL(EOLRequest),
 }
@@ -48,10 +47,10 @@ pub struct CreateRequest {
 #[derive(
     Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
 )]
-pub struct StateRequest {
+pub struct FactRequest {
     #[schema(value_type = String)]
     pub subject_id: DigestIdentifier,
-    pub invokation: String,
+    pub payload: String,
 }
 
 #[derive(
@@ -75,13 +74,12 @@ impl EventRequest {
     pub fn new(request: EventRequestType, signature: Signature) -> Self {
         Self {
             request,
-            timestamp: TimeStamp::now(),
             signature,
         }
     }
 
     pub fn check_signatures(&self) -> Result<(), SubjectError> {
-        check_cryptography((&self.request, &self.timestamp), &self.signature)
+        check_cryptography(&self.request, &self.signature)
             .map_err(|error| SubjectError::CryptoError(error.to_string()))?;
         Ok(())
     }

@@ -17,10 +17,7 @@ use crate::message::{MessageConfig, MessageTaskCommand};
 use crate::protocol::protocol_message_manager::TapleMessages;
 use crate::utils::message::event::create_evaluator_response;
 
-pub struct EvaluatorManager<
-    M: DatabaseManager<C>,
-    C: DatabaseCollection + 'static,
-> {
+pub struct EvaluatorManager<M: DatabaseManager<C>, C: DatabaseCollection + 'static> {
     /// Communication channel for incoming petitions
     input_channel: MpscChannel<EvaluatorMessage, EvaluatorResponse>,
     /// Contract executioner
@@ -32,11 +29,7 @@ pub struct EvaluatorManager<
     _m: PhantomData<M>,
 }
 
-impl<
-        M: DatabaseManager<C>,
-        C: DatabaseCollection,
-    > EvaluatorManager<M, C>
-{
+impl<M: DatabaseManager<C>, C: DatabaseCollection> EvaluatorManager<M, C> {
     pub fn new<G: GovernanceInterface + Send + Clone + 'static>(
         input_channel: MpscChannel<EvaluatorMessage, EvaluatorResponse>,
         database: Arc<M>,
@@ -113,7 +106,7 @@ impl<
         let response = 'response: {
             match data {
                 EvaluatorMessage::AskForEvaluation(data) => {
-                    let EventRequestType::State(state_data) = &data.event_request.request else {
+                    let EventRequestType::Fact(state_data) = &data.event_request.request else {
                         break 'response EvaluatorResponse::AskForEvaluation(Err(super::errors::EvaluatorErrorResponses::CreateRequestNotAllowed));
                     };
                     let result = self.runner.execute_contract(&data, state_data).await;
@@ -225,7 +218,7 @@ mod test {
     use json_patch::diff;
     use serde::{Deserialize, Serialize};
     use serde_json::Value;
-    use tokio::{sync::broadcast::Sender};
+    use tokio::sync::broadcast::Sender;
 
     use crate::{
         commons::{
@@ -235,16 +228,14 @@ mod test {
                 event_preevaluation::{Context, EventPreEvaluation},
                 state::Subject,
             },
-            schema_handler::gov_models::{Contract},
+            schema_handler::gov_models::Contract,
             self_signature_manager::{SelfSignatureInterface, SelfSignatureManager},
         },
         database::{MemoryCollection, DB},
-        evaluator::{
-            compiler::ContractType, EvaluatorMessage,
-            EvaluatorResponse,
-        },
+        evaluator::{compiler::ContractType, EvaluatorMessage, EvaluatorResponse},
+        event::EventCommand,
         event_content::Metadata,
-        event_request::{EventRequest, EventRequestType, StateRequest},
+        event_request::{EventRequest, EventRequestType, FactRequest},
         governance::{
             error::RequestError, stage::ValidationStage, GovernanceInterface,
             GovernanceUpdatedMessage,
@@ -252,8 +243,7 @@ mod test {
         identifier::{DigestIdentifier, KeyIdentifier},
         message::MessageTaskCommand,
         protocol::protocol_message_manager::TapleMessages,
-        MemoryManager,
-        TimeStamp, event::EventCommand,
+        MemoryManager, TimeStamp,
     };
 
     use crate::evaluator::manager::EvaluatorManager;
@@ -571,7 +561,7 @@ mod test {
             creator: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg")
                 .unwrap(),
             properties: initial_state_json,
-            active: true
+            active: true,
         }
     }
 
@@ -579,18 +569,13 @@ mod test {
         json: String,
         signature_manager: &SelfSignatureManager,
     ) -> EventRequest {
-        let request = EventRequestType::State(StateRequest {
+        let request = EventRequestType::Fact(FactRequest {
             subject_id: DigestIdentifier::from_str("JXtZRpNgBWVg9v5YG9AaTNfCpPd-rCTTKrFW9cV8-JKs")
                 .unwrap(),
-            invokation: json,
+            payload: json,
         });
-        let timestamp = TimeStamp::now();
-        let signature = signature_manager.sign(&(&request, &timestamp)).unwrap();
-        let event_request = EventRequest {
-            request,
-            timestamp,
-            signature,
-        };
+        let signature = signature_manager.sign(&request).unwrap();
+        let event_request = EventRequest { request, signature };
         event_request
     }
 
@@ -633,33 +618,31 @@ mod test {
                 .unwrap();
             tokio::time::sleep(tokio::time::Duration::from_secs(5)).await; // Pausa para compilar el contrato
             let response = sx_evaluator
-                .ask(EvaluatorMessage::AskForEvaluation(
-                    EventPreEvaluation {
-                        event_request: create_event_request(
-                            serde_json::to_string(&event).unwrap(),
-                            &signature_manager,
-                        ),
-                        context: Context {
-                            governance_id: DigestIdentifier::from_str(
-                                "JGSPR6FL-vE7iZxWMd17o09qn7NeTqlcImDVWmijXczw",
-                            )
-                            .unwrap(),
-                            schema_id: "test".into(),
-                            creator: KeyIdentifier::from_str(
-                                "EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg",
-                            )
-                            .unwrap(),
-                            owner: KeyIdentifier::from_str(
-                                "EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg",
-                            )
-                            .unwrap(),
-                            actual_state: initial_state_json.clone(),
-                            namespace: "namespace1".into(),
-                            governance_version: 0,
-                        },
-                        sn: 1,
+                .ask(EvaluatorMessage::AskForEvaluation(EventPreEvaluation {
+                    event_request: create_event_request(
+                        serde_json::to_string(&event).unwrap(),
+                        &signature_manager,
+                    ),
+                    context: Context {
+                        governance_id: DigestIdentifier::from_str(
+                            "JGSPR6FL-vE7iZxWMd17o09qn7NeTqlcImDVWmijXczw",
+                        )
+                        .unwrap(),
+                        schema_id: "test".into(),
+                        creator: KeyIdentifier::from_str(
+                            "EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg",
+                        )
+                        .unwrap(),
+                        owner: KeyIdentifier::from_str(
+                            "EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg",
+                        )
+                        .unwrap(),
+                        actual_state: initial_state_json.clone(),
+                        namespace: "namespace1".into(),
+                        governance_version: 0,
                     },
-                ))
+                    sn: 1,
+                }))
                 .await
                 .unwrap();
             let EvaluatorResponse::AskForEvaluation(result) = response;
@@ -673,18 +656,21 @@ mod test {
             } else {
                 panic!("Unexpected");
             };
-            let (evaluation, json_patch, signature) = if let TapleMessages::EventMessage(event) = message {
-                match event {
-                    EventCommand::EvaluatorResponse { evaluation, json_patch, signature } => {
-                        (evaluation, json_patch, signature)
+            let (evaluation, json_patch, signature) =
+                if let TapleMessages::EventMessage(event) = message {
+                    match event {
+                        EventCommand::EvaluatorResponse {
+                            evaluation,
+                            json_patch,
+                            signature,
+                        } => (evaluation, json_patch, signature),
+                        _ => {
+                            panic!("Unexpected 4");
+                        }
                     }
-                    _ => {
-                        panic!("Unexpected 4");
-                    }
-                }
-            } else {
-                panic!("Unexpected 3");
-            };
+                } else {
+                    panic!("Unexpected 3");
+                };
             let new_state = Data {
                 one: 10,
                 two: 100,
@@ -697,13 +683,13 @@ mod test {
             println!("{:#?}\n{:#?}", initial_state_json, new_state_json);
             let patch = generate_json_patch(&initial_state_json, &new_state_json);
             assert_eq!(patch, json_patch); // arreglar
-            // let own_identifier = signature_manager.get_own_identifier();
-            // assert_eq!(evaluation..signer, own_identifier); // arreglar
+                                           // let own_identifier = signature_manager.get_own_identifier();
+                                           // assert_eq!(evaluation..signer, own_identifier); // arreglar
             handler.abort();
         });
     }
 
-    /* 
+    /*
     #[test]
     fn contract_execution_fail() {
         // Fail reason: Bad Event

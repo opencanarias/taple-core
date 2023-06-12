@@ -10,9 +10,9 @@ use crate::event::errors::EventError;
 use crate::event::manager::{EventAPI, EventAPIInterface};
 use crate::event::EventResponse;
 use crate::identifier::Derivable;
-use crate::KeyIdentifier;
 use crate::ledger::manager::{EventManagerAPI, EventManagerInterface};
 use crate::signature::Signature;
+use crate::KeyIdentifier;
 // use crate::ledger::errors::LedgerManagerError;
 use crate::{
     commons::{
@@ -25,7 +25,7 @@ use crate::{
             timestamp::TimeStamp,
         },
     },
-    DB, DatabaseCollection
+    DatabaseCollection, DB,
 };
 use std::collections::HashSet;
 
@@ -54,9 +54,8 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         event_api: EventAPI,
         authorized_subjects_api: AuthorizedSubjectsAPI,
         db: DB<C>,
-        #[cfg(feature = "aproval")]
-        approval_api: ApprovalAPI,
-        ledger_api: EventManagerAPI
+        #[cfg(feature = "aproval")] approval_api: ApprovalAPI,
+        ledger_api: EventManagerAPI,
     ) -> Self {
         Self {
             signature_manager: SelfSignatureManager::new(keys, settings),
@@ -65,7 +64,7 @@ impl<C: DatabaseCollection> InnerAPI<C> {
             approval_api,
             authorized_subjects_api,
             db,
-            ledger_api
+            ledger_api,
         }
     }
 
@@ -73,16 +72,11 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         &self,
         request: EventRequestType,
     ) -> Result<ApiResponses, APIInternalError> {
-        let timestamp = TimeStamp::now();
         let signature = self
             .signature_manager
-            .sign(&(&request, &timestamp))
+            .sign(&request)
             .map_err(|_| APIInternalError::SignError)?;
-        let request = EventRequest {
-            request,
-            timestamp,
-            signature,
-        };
+        let request = EventRequest { request, signature };
         let EventResponse::Event(response) = self.event_api.send_event_request(request).await else {
             return Err(APIInternalError::UnexpectedManagerResponse);
         };
@@ -224,19 +218,15 @@ impl<C: DatabaseCollection> InnerAPI<C> {
 
     pub async fn get_request(&self, request_id: DigestIdentifier) -> ApiResponses {
         match self.db.get_taple_request(&request_id) {
-            Ok(request) => {
-                ApiResponses::GetRequest(Ok(request))
-            },
+            Ok(request) => ApiResponses::GetRequest(Ok(request)),
             Err(DbError::EntryNotFound) => {
                 return ApiResponses::GetRequest(Err(ApiError::NotFound(format!(
                     "Request {}",
                     request_id.to_str()
                 ))))
-            },
+            }
             Err(error) => {
-                return ApiResponses::GetRequest(Err(ApiError::DatabaseError(
-                    error.to_string(),
-                )))
+                return ApiResponses::GetRequest(Err(ApiError::DatabaseError(error.to_string())))
             }
         }
     }
@@ -297,30 +287,21 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         Ok(ApiResponses::SetPreauthorizedSubjectCompleted)
     }
 
-    pub async fn generate_keys(
-        &self
-    ) -> Result<ApiResponses, APIInternalError> {
+    pub async fn generate_keys(&self) -> Result<ApiResponses, APIInternalError> {
         match self.ledger_api.generate_keys().await {
-            Ok(public_key) => {
-                Ok(ApiResponses::GenerateKeys(Ok(public_key)))
-            },
-            Err(error) => {
-                Err(APIInternalError::DatabaseError(error.to_string()))
-            }
+            Ok(public_key) => Ok(ApiResponses::GenerateKeys(Ok(public_key))),
+            Err(error) => Err(APIInternalError::DatabaseError(error.to_string())),
         }
     }
 
-    pub async fn get_validation_proof(
-        &self,
-        subject_id: DigestIdentifier
-    ) -> ApiResponses {
+    pub async fn get_validation_proof(&self, subject_id: DigestIdentifier) -> ApiResponses {
         let result = match self.db.get_validation_proof(&subject_id) {
             Ok(vproof) => vproof,
             Err(error) => {
                 return ApiResponses::GetValidationProof(Err(ApiError::DatabaseError(
-                    error.to_string()
+                    error.to_string(),
                 )))
-            } 
+            }
         };
         ApiResponses::GetValidationProof(Ok(result))
     }

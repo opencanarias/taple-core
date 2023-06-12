@@ -6,7 +6,7 @@ use crate::{
     commons::models::{event_preevaluation::EventPreEvaluation, Acceptance},
     database::DB,
     evaluator::errors::ExecutorErrorResponses,
-    event_request::StateRequest,
+    event_request::FactRequest,
     identifier::DigestIdentifier,
     DatabaseCollection, EventRequestType,
 };
@@ -36,11 +36,11 @@ impl<C: DatabaseCollection> TapleRunner<C> {
     pub async fn execute_contract(
         &self,
         execute_contract: &EventPreEvaluation,
-        state_data: &StateRequest,
+        state_data: &FactRequest,
     ) -> Result<ExecuteContractResponse, ExecutorErrorResponses> {
         // Check governance version
         let governance_id = if &execute_contract.context.schema_id == "governance" {
-            if let EventRequestType::State(data) = &execute_contract.event_request.request {
+            if let EventRequestType::Fact(data) = &execute_contract.event_request.request {
                 data.subject_id.clone()
             } else {
                 return Err(ExecutorErrorResponses::CreateRequestNotAllowed);
@@ -126,7 +126,7 @@ impl<C: DatabaseCollection> TapleRunner<C> {
             .executor
             .execute_contract(
                 &execute_contract.context.actual_state,
-                &state_data.invokation,
+                &state_data.payload,
                 contract,
                 execute_contract.event_request.signature.content.signer
                     == execute_contract.context.owner,

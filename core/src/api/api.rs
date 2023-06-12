@@ -25,7 +25,7 @@ use crate::KeyIdentifier;
 use crate::{
     approval::ApprovalPetitionData,
     commons::models::Acceptance,
-    event_request::{CreateRequest, EventRequestType, StateRequest},
+    event_request::{CreateRequest, EventRequestType, FactRequest},
     identifier::DigestIdentifier,
     DatabaseCollection, DB,
 };
@@ -279,9 +279,9 @@ impl ApiModuleInterface for NodeAPI {
         subject_id: DigestIdentifier,
         payload: String,
     ) -> Result<DigestIdentifier, ApiError> {
-        let request = EventRequestType::State(StateRequest {
+        let request = EventRequestType::Fact(FactRequest {
             subject_id,
-            invokation: payload,
+            payload: payload,
         });
         let response = self
             .sender

@@ -253,7 +253,7 @@ impl<C: DatabaseCollection> Ledger<C> {
     ) -> Result<(), LedgerError> {
         let sn = event.content.event_proposal.proposal.sn;
         let subject_id = match &event.content.event_proposal.proposal.event_request.request {
-            EventRequestType::State(state_request) => {
+            EventRequestType::Fact(state_request) => {
                 let subject_id = state_request.subject_id.clone();
                 // Aplicar event sourcing
                 let mut subject =
@@ -1028,7 +1028,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                     .tell(DistributionMessagesNew::SignaturesNeeded { subject_id, sn: 0 })
                     .await?;
             }
-            EventRequestType::State(state_request) => {
+            EventRequestType::Fact(state_request) => {
                 // Comprobaciones criptográficas
                 let ledger_state = self.ledger_state.get(&state_request.subject_id);
                 let metadata = validation_proof.get_metadata();
@@ -1872,7 +1872,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                 // Comprobar si había un LCE previo o es genesis puro, si es genesis puro rechazar y que manden por la otra petición aunque sea con hashset de firmas vacío
                 create_subject_id(&event)?
             }
-            EventRequestType::State(state_request) => state_request.subject_id.clone(),
+            EventRequestType::Fact(state_request) => state_request.subject_id.clone(),
             EventRequestType::Transfer(transfer_request) => transfer_request.subject_id.clone(),
             EventRequestType::EOL(eol_request) => {
                 return Err(LedgerError::IntermediateEOL(
@@ -1921,7 +1921,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                         EventRequestType::Create(_) => {
                                             return Err(LedgerError::UnexpectedCreateEvent)
                                         }
-                                        EventRequestType::State(_) => {
+                                        EventRequestType::Fact(_) => {
                                             self.check_event(event.clone(), metadata.clone())
                                                 .await?;
                                             check_context(
@@ -2477,7 +2477,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                 transfer_request.public_key.clone(),
             ),
             EventRequestType::Create(_) => return Err(LedgerError::UnexpectedCreateEvent),
-            EventRequestType::State(state_request) => self.event_sourcing_state(
+            EventRequestType::Fact(state_request) => self.event_sourcing_state(
                 state_request.subject_id.clone(),
                 event.content.event_proposal.proposal.sn,
                 event,
