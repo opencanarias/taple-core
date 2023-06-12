@@ -172,30 +172,10 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         };
         match &subject.keys {
             Some(keys) => {
-                let proof_hash =
-                    DigestIdentifier::from_serializable_borsh(&proof).map_err(|_| {
-                        EventError::CryptoError(String::from(
-                            "Error calculating the hash of the proof",
-                        ))
-                    })?;
-                let signature = keys
-                    .sign(Payload::Buffer(proof_hash.derivative()))
-                    .map_err(|_| {
-                        EventError::CryptoError(String::from("Error signing the proof"))
-                    })?;
+                let subject_signature = Signature::new(&proof, subject.public_key.clone(), keys)?;
                 Ok(NotaryEvent {
                     proof,
-                    subject_signature: Signature {
-                        content: SignatureContent {
-                            signer: subject.public_key.clone(),
-                            event_content_hash: proof_hash,
-                            timestamp: TimeStamp::now(),
-                        },
-                        signature: SignatureIdentifier::new(
-                            subject.public_key.to_signature_derivator(),
-                            &signature,
-                        ),
-                    },
+                    subject_signature,
                     previous_proof,
                     prev_event_validation_signatures,
                 })
@@ -467,22 +447,10 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             .keys
             .clone()
             .expect("Llegados a aquí tenemos que ser owner");
-        let subject_signature = subject_keys
-            .sign(Payload::Buffer(proposal_hash.derivative()))
-            .map_err(|_| {
+        let subject_signature =
+            Signature::new(&proposal, subject.public_key.clone(), &subject_keys).map_err(|_| {
                 EventError::CryptoError(String::from("Error signing the hash of the proposal"))
             })?;
-        let subject_signature = Signature {
-            content: SignatureContent {
-                signer: subject.public_key.clone(),
-                event_content_hash: proposal_hash.clone(),
-                timestamp: TimeStamp::now(),
-            },
-            signature: SignatureIdentifier::new(
-                subject.public_key.to_signature_derivator(),
-                &subject_signature,
-            ),
-        };
         Ok((
             EventProposal::new(proposal, subject_signature),
             proposal_hash,
@@ -861,22 +829,10 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 .keys
                 .clone()
                 .expect("Llegados a aquí tenemos que ser owner");
-            let subject_signature = subject_keys
-                .sign(Payload::Buffer(proposal_hash.derivative()))
-                .map_err(|_| {
-                    EventError::CryptoError(String::from("Error signing the hash of the proposal"))
-                })?;
-            let subject_signature = Signature {
-                content: SignatureContent {
-                    signer: subject.public_key.clone(),
-                    event_content_hash: proposal_hash.clone(),
-                    timestamp: TimeStamp::now(),
-                },
-                signature: SignatureIdentifier::new(
-                    subject.public_key.to_signature_derivator(),
-                    &subject_signature,
-                ),
-            };
+            let subject_signature =
+                Signature::new(&proposal, subject.public_key.clone(), &subject_keys).map_err(
+                    |_| EventError::CryptoError(String::from("Error signing the proposal")),
+                )?;
             let event_proposal = EventProposal::new(proposal, subject_signature);
             let metadata = Metadata {
                 namespace: subject.namespace.clone(),
@@ -1372,22 +1328,14 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 EventError::CryptoError(String::from("Error calculating the hash of the event"))
             })?;
         let subject_keys = subject.keys.as_ref().expect("Somos propietario");
-        let event_signature = subject_keys
-            .sign(Payload::Buffer(event_content_hash.derivative()))
-            .map_err(|_| {
-                EventError::CryptoError(String::from("Error signing the hash of the event content"))
-            })?;
-        let event_signature = Signature {
-            content: SignatureContent {
-                signer: subject.public_key.clone(),
-                event_content_hash: event_content_hash.clone(),
-                timestamp: TimeStamp::now(),
-            },
-            signature: SignatureIdentifier::new(
-                subject.public_key.to_signature_derivator(),
-                &event_signature,
-            ),
-        };
+        let event_signature = Signature::new(
+            &event_content,
+            subject.public_key.clone(),
+            &subject_keys,
+        )
+        .map_err(|_| {
+            EventError::CryptoError(String::from("Error signing the hash of the event content"))
+        })?;
         let event = Event {
             content: event_content,
             signature: event_signature,

@@ -1,7 +1,9 @@
 //! Define the data structures related to signatures
 use crate::{
     commons::errors::SubjectError,
+    crypto::{KeyPair, Payload, DSA},
     identifier::{DigestIdentifier, KeyIdentifier, SignatureIdentifier},
+    Derivable,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
@@ -61,11 +63,40 @@ impl Hash for Signature {
 }
 
 impl Signature {
+    pub fn new<T: BorshSerialize>(
+        content: &T,
+        signer: KeyIdentifier,
+        keys: &KeyPair,
+    ) -> Result<Self, SubjectError> {
+        let content_hash = DigestIdentifier::from_serializable_borsh(content)
+            .map_err(|_| SubjectError::SignatureCreationFails("Content hash fails".to_string()))?;
+        let timestamp = TimeStamp::now();
+        let signature_hash = DigestIdentifier::from_serializable_borsh((&content_hash, &timestamp))
+            .map_err(|_| {
+                SubjectError::SignatureCreationFails("Signature hash fails".to_string())
+            })?;
+        let signature = keys
+            .sign(Payload::Buffer(signature_hash.derivative()))
+            .map_err(|_| SubjectError::SignatureCreationFails("Keys sign fails".to_owned()))?;
+        Ok(Signature {
+            content: SignatureContent {
+                signer: signer.clone(),
+                event_content_hash: content_hash,
+                timestamp,
+            },
+            signature: SignatureIdentifier::new(signer.to_signature_derivator(), &signature),
+        })
+    }
     pub fn verify(&self) -> Result<(), SubjectError> {
+        let hash_signed = DigestIdentifier::from_serializable_borsh((
+            &self.content.event_content_hash,
+            &self.content.timestamp,
+        ))
+        .map_err(|_| SubjectError::SignatureVerifyFails("Signature hash fails".to_owned()))?;
         self.content
             .signer
-            .verify(&self.content.event_content_hash.digest, &self.signature)
-            .map_err(|_| SubjectError::InvalidSignature)
+            .verify(&hash_signed.digest, &self.signature)
+            .map_err(|_| SubjectError::SignatureVerifyFails("Signature verify fails".to_owned()))
     }
 }
 

@@ -487,7 +487,7 @@ mod test {
         commons::{
             config::VotationType,
             crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair, Payload, DSA},
-            models::state::Subject,
+            models::{state::Subject, timestamp},
             schema_handler::gov_models::Contract,
             self_signature_manager::{SelfSignatureInterface, SelfSignatureManager},
         },
@@ -698,7 +698,7 @@ mod test {
         subject: &Subject,
         json_patch: String,
     ) -> RequestApproval {
-        let hash: DigestIdentifier = DigestIdentifier::from_serializable_borsh(&(
+        let content_hash: DigestIdentifier = DigestIdentifier::from_serializable_borsh(&(
             &request,
             sn,
             DigestIdentifier::from_str("").unwrap(),
@@ -713,7 +713,23 @@ mod test {
         .unwrap();
         let keys = subject.keys.as_ref().unwrap();
         let identifier = KeyIdentifier::new(keys.get_key_derivator(), &keys.public_key_bytes());
-        let signature = keys.sign(Payload::Buffer(hash.derivative())).unwrap();
+        let subject_signature = Signature::new(
+            &(
+                &request,
+                sn,
+                DigestIdentifier::from_str("").unwrap(),
+                DigestIdentifier::from_str("").unwrap(),
+                &governance_id,
+                governance_version,
+                success,
+                true,
+                &evaluator_signatures,
+                json_patch.clone(),
+            ),
+            identifier.clone(),
+            &keys,
+        )
+        .unwrap();
         RequestApproval {
             request,
             sn,
@@ -725,17 +741,7 @@ mod test {
             approval_required: true,
             evaluator_signatures,
             json_patch,
-            subject_signature: Signature {
-                content: SignatureContent {
-                    signer: identifier.clone(),
-                    event_content_hash: hash,
-                    timestamp: TimeStamp::now(),
-                },
-                signature: SignatureIdentifier::new(
-                    identifier.to_signature_derivator(),
-                    &signature,
-                ),
-            },
+            subject_signature,
         }
     }
 

@@ -171,8 +171,10 @@ pub enum SubjectError {
     ApproversAreNotValidators,
     #[error("Error creating subject id")]
     ErrorCreatingSubjectId,
-    #[error("Invalid Signature")]
-    InvalidSignature,
+    #[error("Signature Creation Fails: {0}")]
+    SignatureCreationFails(String),
+    #[error("Signature Verify Fails: {0}")]
+    SignatureVerifyFails(String),
 }
 
 #[derive(Error, Debug, Clone, PartialEq)]
