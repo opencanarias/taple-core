@@ -30,7 +30,7 @@ use crate::{
 use std::collections::HashSet;
 
 use super::{
-    error::ApiError, GetAllSubjects, GetEventsOfSubject, GetSingleSubject as GetSingleSubjectAPI,
+    error::ApiError, GetAllSubjects, GetEventsOfSubject, GetSingleSubject as GetSingleSubjectAPI, GetGovernanceSubjects
 };
 
 use crate::database::Error as DbError;
@@ -304,6 +304,35 @@ impl<C: DatabaseCollection> InnerAPI<C> {
             }
         };
         ApiResponses::GetValidationProof(Ok(result))
+    }
+
+    pub async fn get_governance_subjects(
+        &self,
+        data: GetGovernanceSubjects
+    ) -> ApiResponses {
+        let from = if data.from.is_none() {
+            None
+        } else {
+            Some(format!("{}", data.from.unwrap()))
+        };
+        let quantity = if data.quantity.is_none() {
+            MAX_QUANTITY
+        } else {
+            (data.quantity.unwrap() as isize).min(MAX_QUANTITY)
+        };
+        let result = match self.db.get_governance_subjects(&data.governance_id, from, quantity) {
+            Ok(subjects) => subjects,
+            Err(error) => {
+                return ApiResponses::GetGovernanceSubjects(Err(ApiError::DatabaseError(
+                    error.to_string()
+                )))
+            } 
+        };
+        let result = result
+            .into_iter()
+            .map(|subject| subject.into())
+            .collect::<Vec<SubjectData>>();
+        ApiResponses::GetGovernanceSubjects(Ok(result))
     }
 }
 

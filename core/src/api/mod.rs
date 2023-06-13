@@ -37,6 +37,7 @@ pub enum APICommands {
     GenerateKeys,
     GetValidationProof(DigestIdentifier),
     GetRequest(DigestIdentifier),
+    GetGovernanceSubjects(GetGovernanceSubjects),
     Shutdown,
 }
 
@@ -57,6 +58,7 @@ pub enum ApiResponses {
     GenerateKeys(Result<KeyIdentifier, ApiError>),
     GetValidationProof(Result<HashSet<Signature>, ApiError>),
     GetRequest(Result<TapleRequest, ApiError>),
+    GetGovernanceSubjects(Result<Vec<SubjectData>, ApiError>),
     ShutdownCompleted,
     SetPreauthorizedSubjectCompleted
 }
@@ -65,7 +67,7 @@ pub enum ApiResponses {
 pub struct GetAllSubjects {
     pub namespace: String,
     pub from: Option<String>,
-    pub quantity: Option<usize>,
+    pub quantity: Option<i64>,
 }
 
 #[derive(Debug, Clone)]
@@ -77,5 +79,12 @@ pub struct GetSingleSubject {
 pub struct GetEventsOfSubject {
     pub subject_id: DigestIdentifier,
     pub from: Option<i64>,
+    pub quantity: Option<i64>,
+}
+
+#[derive(Debug, Clone)]
+pub struct GetGovernanceSubjects {
+    pub governance_id: DigestIdentifier,
+    pub from: Option<String>,
     pub quantity: Option<i64>,
 }

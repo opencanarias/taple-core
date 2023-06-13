@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use super::GetEventsOfSubject;
+use super::{GetEventsOfSubject, GetGovernanceSubjects};
 use super::{
     error::{APIInternalError, ApiError},
     inner_api::InnerAPI,
@@ -84,7 +84,7 @@ pub trait ApiModuleInterface {
         &self,
         namespace: String,
         from: Option<String>,
-        quantity: Option<usize>,
+        quantity: Option<i64>,
     ) -> Result<Vec<SubjectData>, ApiError>;
     /// It allows to obtain all the subjects that model existing governance in the node.
     /// # Possible errors
@@ -93,7 +93,7 @@ pub trait ApiModuleInterface {
         &self,
         namespace: String,
         from: Option<String>,
-        quantity: Option<usize>,
+        quantity: Option<i64>,
     ) -> Result<Vec<SubjectData>, ApiError>;
     /// Allows to obtain events from a specific subject previously existing in the node.
     /// Paging can be performed by means of the optional arguments `from` and `quantity`.
@@ -181,6 +181,12 @@ pub trait ApiModuleInterface {
         subject_id: DigestIdentifier,
     ) -> Result<HashSet<Signature>, ApiError>;
     async fn get_request(&self, request_id: DigestIdentifier) -> Result<TapleRequest, ApiError>;
+    async fn get_governance_subjects(
+        &self,
+        governance_id: DigestIdentifier,
+        from: Option<String>,
+        quantity: Option<i64>,
+    ) -> Result<Vec<SubjectData>, ApiError>;
 }
 
 /// Object that allows interaction with a TAPLE node.
@@ -298,7 +304,7 @@ impl ApiModuleInterface for NodeAPI {
         &self,
         namespace: String,
         from: Option<String>,
-        quantity: Option<usize>,
+        quantity: Option<i64>,
     ) -> Result<Vec<SubjectData>, ApiError> {
         let response = self
             .sender
@@ -319,7 +325,7 @@ impl ApiModuleInterface for NodeAPI {
         &self,
         namespace: String,
         from: Option<String>,
-        quantity: Option<usize>,
+        quantity: Option<i64>,
     ) -> Result<Vec<SubjectData>, ApiError> {
         let response = self
             .sender
@@ -482,6 +488,28 @@ impl ApiModuleInterface for NodeAPI {
             unreachable!()
         }
     }
+
+    async fn get_governance_subjects(
+        &self,
+        governance_id: DigestIdentifier,
+        from: Option<String>,
+        quantity: Option<i64>,
+    ) -> Result<Vec<SubjectData>, ApiError> {
+        let response = self.
+            sender
+            .ask(APICommands::GetGovernanceSubjects(GetGovernanceSubjects {
+                governance_id,
+                from,
+                quantity
+            }))
+            .await
+            .unwrap();
+        if let ApiResponses::GetGovernanceSubjects(data) = response {
+            data
+        } else {
+            unreachable!()
+        }
+    }
 }
 
 pub struct API<C: DatabaseCollection> {
@@ -613,6 +641,9 @@ impl<C: DatabaseCollection> API<C> {
                     APICommands::GenerateKeys => self.inner_api.generate_keys().await?,
                     APICommands::GetValidationProof(subject_id) => {
                         self.inner_api.get_validation_proof(subject_id).await
+                    }
+                    APICommands::GetGovernanceSubjects(data) => {
+                        self.inner_api.get_governance_subjects(data).await
                     }
                 };
                 sx.send(response)

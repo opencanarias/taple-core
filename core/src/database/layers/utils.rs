@@ -90,3 +90,55 @@ pub(crate) fn get_by_range<C: DatabaseCollection>(
     }
     Ok(result)
 }
+
+pub(crate) fn get_by_range_governances<C: DatabaseCollection>(
+    from: Option<String>,
+    quantity: isize,
+    collection: &C,
+    prefix: &str,
+) -> Result<Vec<Vec<u8>>, DbError> {
+    fn convert<'a>(
+        iter: impl Iterator<Item = (String, Vec<u8>)> + 'a,
+    ) -> Box<dyn Iterator<Item = (String, Vec<u8>)> + 'a> {
+        Box::new(iter)
+    }
+    let (mut iter, quantity) = match from {
+        Some(key) => {
+            // Find the key
+            let iter = if quantity >= 0 {
+                collection.iter(false, format!("{}{}", prefix, char::MAX))
+            } else {
+                collection.iter(true, format!("{}{}", prefix, char::MAX))
+            };
+            let mut iter = iter.peekable();
+            loop {
+                let Some((current_key, _)) = iter.peek() else {
+                    return Err(DbError::EntryNotFound);
+                };
+                if current_key == &key {
+                    break;
+                }
+                iter.next();
+            }
+            iter.next(); // Exclusive From
+            (convert(iter), quantity.abs())
+        }
+        None => {
+            if quantity >= 0 {
+                (collection.iter(false, prefix.to_string()), quantity)
+            } else {
+                (collection.iter(true, prefix.to_string()), quantity.abs())
+            }
+        }
+    };
+    let mut result = Vec::new();
+    let mut counter = 0;
+    while counter < quantity {
+        let Some((_, event)) = iter.next() else {
+            break;
+        };
+        result.push(event);
+        counter += 1;
+    }
+    Ok(result)
+}
