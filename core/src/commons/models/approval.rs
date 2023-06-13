@@ -60,8 +60,8 @@ impl Hash for UniqueApproval {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub enum ApprovalStatus {
     Pending,
-    Voted
+    Voted,
 }
