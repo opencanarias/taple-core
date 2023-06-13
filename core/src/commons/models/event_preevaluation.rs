@@ -6,29 +6,21 @@ use crate::{
     identifier::{DigestIdentifier, KeyIdentifier},
 };
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 
 use super::state::SubjectData;
 
-#[derive(
-    Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
-)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct EventPreEvaluation {
     pub event_request: EventRequest,
     pub context: Context,
     pub sn: u64,
 }
 
-#[derive(
-    Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
-)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct Context {
-    #[schema(value_type = String)]
     pub governance_id: DigestIdentifier,
     pub schema_id: String,
-    #[schema(value_type = String)]
     pub creator: KeyIdentifier,
-    #[schema(value_type = String)]
     pub owner: KeyIdentifier,
     pub actual_state: String,
     pub namespace: String,

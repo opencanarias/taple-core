@@ -2,41 +2,33 @@ use crate::{
     commons::{
         crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair},
         errors::SubjectError,
-        identifier::{
-            DigestIdentifier, KeyIdentifier,
-        },
+        identifier::{DigestIdentifier, KeyIdentifier},
     },
     event_request::EventRequest,
 };
 use json_patch::{patch, Patch};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use utoipa::ToSchema;
 
 use super::{event::Event, event_request::EventRequestType};
 
-#[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Subject {
     pub keys: Option<KeyPair>,
     /// Subject identifier
-    #[schema(value_type = String)]
     pub subject_id: DigestIdentifier,
     /// Governance identifier
-    #[schema(value_type = String)]
     pub governance_id: DigestIdentifier,
     /// Current sequence number of the subject
     pub sn: u64,
     /// Public key of the subject
-    #[schema(value_type = String)]
     pub public_key: KeyIdentifier,
     pub namespace: String,
     /// Identifier of the schema used by the subject and defined in associated governance
     pub schema_id: String,
     /// Subject owner identifier
-    #[schema(value_type = String)]
     pub owner: KeyIdentifier,
     /// Subject creator identifier
-    #[schema(value_type = String)]
     pub creator: KeyIdentifier,
     /// Current status of the subject
     pub properties: String,
@@ -44,27 +36,22 @@ pub struct Subject {
     pub active: bool,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct SubjectData {
     /// Subject identifier
-    #[schema(value_type = String)]
     pub subject_id: DigestIdentifier,
     /// Governance identifier
-    #[schema(value_type = String)]
     pub governance_id: DigestIdentifier,
     /// Current sequence number of the subject
     pub sn: u64,
     /// Public key of the subject
-    #[schema(value_type = String)]
     pub public_key: KeyIdentifier,
     pub namespace: String,
     /// Identifier of the schema used by the subject and defined in associated governance
     pub schema_id: String,
     /// Subject owner identifier
-    #[schema(value_type = String)]
     pub owner: KeyIdentifier,
     /// Subject creator identifier
-    #[schema(value_type = String)]
     pub creator: KeyIdentifier,
     /// Current status of the subject
     pub properties: String,

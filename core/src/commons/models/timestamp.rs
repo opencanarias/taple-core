@@ -1,9 +1,8 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Deserializer, Serialize};
 use time::OffsetDateTime;
-use utoipa::ToSchema;
 
-#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, BorshSerialize, BorshDeserialize, ToSchema)]
+#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, BorshSerialize, BorshDeserialize)]
 pub struct TimeStamp {
     pub time: u64,
 }

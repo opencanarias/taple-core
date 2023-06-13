@@ -202,7 +202,6 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use json_patch::{diff, Patch};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use utoipa::ToSchema;
 
 use super::{
     approval::Approval,
@@ -210,17 +209,13 @@ use super::{
     state::Subject,
 };
 
-#[derive(
-    Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
-)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct Event {
     pub content: EventContent,
     pub signature: Signature,
 }
 
-#[derive(
-    Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
-)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct EventContent {
     pub event_proposal: EventProposal,
     pub approvals: HashSet<Approval>,

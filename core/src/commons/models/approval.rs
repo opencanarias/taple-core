@@ -6,7 +6,6 @@ use crate::{identifier::DigestIdentifier, signature::Signature};
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 use std::hash::Hash;
-use utoipa::ToSchema;
 
 #[derive(
     Debug,
@@ -16,7 +15,6 @@ use utoipa::ToSchema;
     Eq,
     BorshSerialize,
     BorshDeserialize,
-    ToSchema,
     PartialOrd,
     PartialEq,
     Hash,
@@ -34,19 +32,17 @@ pub struct Approval {
     Eq,
     BorshSerialize,
     BorshDeserialize,
-    ToSchema,
     PartialOrd,
     PartialEq,
     Hash,
 )]
 pub struct ApprovalContent {
-    #[schema(value_type = String)]
     pub event_proposal_hash: DigestIdentifier,
     pub acceptance: Acceptance,
 }
 
 #[derive(
-    Debug, Clone, Serialize, Deserialize, Eq, BorshSerialize, BorshDeserialize, ToSchema, PartialOrd,
+    Debug, Clone, Serialize, Deserialize, Eq, BorshSerialize, BorshDeserialize, PartialOrd,
 )]
 pub struct UniqueApproval {
     pub approval: Approval,
