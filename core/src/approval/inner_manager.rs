@@ -243,11 +243,9 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             Err(error) => return Ok(Err(error)),
         };
 
-        let evaluation = approval_request
-            .proposal
-            .evaluation
-            .clone()
-            .expect("los genesis no se aprueban");
+        let Some(evaluation) = &approval_request.proposal.evaluation else {
+            return Ok(Err(ApprovalErrorResponse::NotEvaluationInRequest));
+        };
 
         if version > evaluation.governance_version {
             // Nuestra gov es mayor: mandamos mensaje para que actualice el emisor
