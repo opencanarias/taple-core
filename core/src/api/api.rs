@@ -107,6 +107,8 @@ pub trait ApiModuleInterface {
         from: Option<i64>,
         quantity: Option<i64>,
     ) -> Result<Vec<Event>, ApiError>;
+
+    async fn get_event(&self, subject_id: DigestIdentifier, sn: u64) -> Result<Event, ApiError>;
     /// Allows to create a new subject in the node, being its owner the node in question.
     /// # Possible errors
     /// • [ApiError::InternalError] if an internal error occurred during the execution of the operation.<br />
@@ -342,6 +344,20 @@ impl ApiModuleInterface for NodeAPI {
             unreachable!()
         }
     }
+
+    async fn get_event(&self, subject_id: DigestIdentifier, sn: u64) -> Result<Event, ApiError> {
+        let response = self
+            .sender
+            .ask(APICommands::GetEvent(subject_id, sn))
+            .await
+            .unwrap();
+        if let ApiResponses::GetEvent(data) = response {
+            data
+        } else {
+            unreachable!()
+        }
+    }
+
     async fn get_event_of_subject(
         &self,
         subject_id: DigestIdentifier,
@@ -617,6 +633,9 @@ impl<C: DatabaseCollection> API<C> {
                     }
                     APICommands::GetRequest(request_id) => {
                         self.inner_api.get_request(request_id).await
+                    }
+                    APICommands::GetEvent(subject_id, sn) => {
+                        self.inner_api.get_event(subject_id, sn)
                     }
                     #[cfg(feature = "aproval")]
                     APICommands::VoteResolve(acceptance, id) => {

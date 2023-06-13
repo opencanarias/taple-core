@@ -142,6 +142,16 @@ pub fn get_governance_schema() -> Value {
                   "additionalProperties": false
                 },
                 {
+                  "type": "object",
+                  "properties": {
+                    "NAME": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["NAME"],
+                  "additionalProperties": false
+                },
+                {
                   "const": "MEMBERS"
                 },
                 {

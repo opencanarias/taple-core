@@ -36,7 +36,7 @@ impl<C: DatabaseCollection> TapleRunner<C> {
     pub async fn execute_contract(
         &self,
         execute_contract: &EventPreEvaluation,
-        state_data: &FactRequest,
+        state_data: &FactRequest
     ) -> Result<ExecuteContractResponse, ExecutorErrorResponses> {
         // Check governance version
         let governance_id = if &execute_contract.context.schema_id == "governance" {

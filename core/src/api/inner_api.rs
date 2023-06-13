@@ -231,6 +231,20 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         }
     }
 
+    pub fn get_event(&self, subject_id: DigestIdentifier, sn: u64) -> ApiResponses {
+        match self.db.get_event(&subject_id, sn) {
+            Ok(event) => {
+                ApiResponses::GetEvent(Ok(event))
+            },
+            Err(DbError::EntryNotFound) => {
+                ApiResponses::GetEvent(Err(ApiError::NotFound(format!("Event {} of subejct {}", sn, subject_id.to_str()))))
+            },
+            Err(error) => {
+                ApiResponses::GetEvent(Err(ApiError::DatabaseError(error.to_string())))
+            }
+        }
+    }
+
     pub async fn get_events_of_subject(&self, data: GetEventsOfSubject) -> ApiResponses {
         let quantity = if data.quantity.is_none() {
             MAX_QUANTITY

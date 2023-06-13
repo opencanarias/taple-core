@@ -24,6 +24,7 @@ pub enum APICommands {
     GetAllSubjects(GetAllSubjects),
     GetAllGovernances(GetAllSubjects),
     GetSingleSubject(GetSingleSubject),
+    GetEvent(DigestIdentifier, u64),
     GetEventsOfSubject(GetEventsOfSubject),
     #[cfg(feature = "aproval")]
     VoteResolve(Acceptance, DigestIdentifier),
@@ -55,6 +56,7 @@ pub enum ApiResponses {
     GetPendingRequests(Result<Vec<ApprovalPetitionData>, ApiError>),
     #[cfg(feature = "aproval")]
     GetSingleRequest(Result<ApprovalPetitionData, ApiError>),
+    GetEvent(Result<Event, ApiError>),
     GenerateKeys(Result<KeyIdentifier, ApiError>),
     GetValidationProof(Result<HashSet<Signature>, ApiError>),
     GetRequest(Result<TapleRequest, ApiError>),
