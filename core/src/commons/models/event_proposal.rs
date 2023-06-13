@@ -9,21 +9,16 @@ use crate::{
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 
 use super::Acceptance;
 
-#[derive(
-    Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
-)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct EventProposal {
     pub proposal: Proposal,
     pub subject_signature: Signature,
 }
 
-#[derive(
-    Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
-)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct Proposal {
     pub event_request: EventRequest,
     pub sn: u64,
@@ -56,13 +51,9 @@ impl Proposal {
     }
 }
 
-#[derive(
-    Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
-)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct Evaluation {
-    #[schema(value_type = String)]
     pub preevaluation_hash: DigestIdentifier,
-    #[schema(value_type = String)]
     pub state_hash: DigestIdentifier,
     pub governance_version: u64,
     pub acceptance: Acceptance,

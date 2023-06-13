@@ -9,25 +9,17 @@ use crate::commons::{
     identifier::{Derivable, DigestIdentifier, KeyIdentifier},
     schema_handler::Schema,
 };
-use utoipa::ToSchema;
 
-use super::{
-    signature::Signature,
-    state::Subject,
-    timestamp::TimeStamp,
-};
+use super::{signature::Signature, state::Subject, timestamp::TimeStamp};
 
-#[derive(
-    Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
-)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct EventRequest {
     pub request: EventRequestType,
     pub timestamp: TimeStamp,
     pub signature: Signature,
 }
 
-
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub enum EventRequestType {
     Create(CreateRequest),
     State(StateRequest),
@@ -35,39 +27,27 @@ pub enum EventRequestType {
     EOL(EOLRequest),
 }
 
-#[derive(
-    Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
-)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct CreateRequest {
-    #[schema(value_type = String)]
     pub governance_id: DigestIdentifier,
     pub schema_id: String,
     pub namespace: String,
 }
 
-#[derive(
-    Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
-)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct StateRequest {
-    #[schema(value_type = String)]
     pub subject_id: DigestIdentifier,
     pub invokation: String,
 }
 
-#[derive(
-    Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
-)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct TransferRequest {
-    #[schema(value_type = String)]
     pub subject_id: DigestIdentifier,
     pub public_key: KeyIdentifier,
 }
 
-#[derive(
-    Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
-)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct EOLRequest {
-    #[schema(value_type = String)]
     pub subject_id: DigestIdentifier,
 }
 

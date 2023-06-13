@@ -1,6 +1,5 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 
 pub mod approval;
 pub mod event;
@@ -23,7 +22,6 @@ pub mod timestamp;
     PartialEq,
     BorshSerialize,
     BorshDeserialize,
-    ToSchema,
     PartialOrd,
     Hash,
 )]
