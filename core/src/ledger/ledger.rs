@@ -397,6 +397,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                     validation_proof,
                 )?;
                 self.database.set_event(&subject_id, event.clone())?;
+                self.set_finished_request(
+                    &request_id,
+                    event_request.clone(),
+                    sn,
+                    subject_id.clone(),
+                )?;
                 subject.eol_event();
                 self.database.set_subject(&subject_id, subject)?;
                 // Comprobar is_gov
@@ -703,14 +709,14 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 signatures,
                                 validation_proof.clone(),
                             )?;
+                            self.database
+                                .set_event(&transfer_request.subject_id, event)?;
                             self.set_finished_request(
                                 &request_id,
                                 event_request.clone(),
-                                event.content.event_proposal.proposal.sn,
+                                sn,
                                 subject_id.clone(),
                             )?;
-                            self.database
-                                .set_event(&transfer_request.subject_id, event)?;
                             self.database
                                 .set_subject(&transfer_request.subject_id, subject)?;
                             if to_delete {
@@ -804,14 +810,14 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 signatures,
                                 validation_proof.clone(),
                             )?;
+                            self.database
+                                .set_event(&transfer_request.subject_id, event)?;
                             self.set_finished_request(
                                 &request_id,
                                 event_request.clone(),
-                                event.content.event_proposal.proposal.sn,
+                                sn,
                                 subject_id.clone(),
                             )?;
-                            self.database
-                                .set_event(&transfer_request.subject_id, event)?;
                             self.database.set_lce_validation_proof(
                                 &transfer_request.subject_id,
                                 validation_proof,
@@ -922,14 +928,14 @@ impl<C: DatabaseCollection> Ledger<C> {
                             signatures,
                             validation_proof,
                         )?;
-                        let mut taple_request: TapleRequest = event_request.clone().try_into()?;
-                        taple_request.sn = Some(event.content.event_proposal.proposal.sn);
-                        taple_request.subject_id = Some(subject_id.clone());
-                        taple_request.state = RequestState::Finished;
-                        self.database
-                            .set_taple_request(&request_id, &taple_request)?;
                         self.database
                             .set_event(&transfer_request.subject_id, event)?;
+                        self.set_finished_request(
+                            &request_id,
+                            event_request.clone(),
+                            sn,
+                            subject_id.clone(),
+                        )?;
                         self.ledger_state.insert(
                             transfer_request.subject_id.clone(),
                             LedgerState {
@@ -1286,13 +1292,13 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 signatures,
                                 validation_proof,
                             )?;
+                            self.database.set_event(&state_request.subject_id, event)?;
                             self.set_finished_request(
                                 &request_id,
                                 event_request.clone(),
-                                event.content.event_proposal.proposal.sn,
+                                sn,
                                 subject_id.clone(),
                             )?;
-                            self.database.set_event(&state_request.subject_id, event)?;
                             self.database
                                 .set_subject(&state_request.subject_id, subject)?;
                             if self.subject_is_gov.get(&subject_id).unwrap().to_owned() {
@@ -1391,13 +1397,13 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 &state_request.subject_id,
                                 validation_proof,
                             )?;
+                            self.database.set_event(&state_request.subject_id, event)?;
                             self.set_finished_request(
                                 &request_id,
                                 event_request.clone(),
-                                event.content.event_proposal.proposal.sn,
+                                sn,
                                 subject_id.clone(),
                             )?;
-                            self.database.set_event(&state_request.subject_id, event)?;
                             if last_lce.is_some() {
                                 let last_lce_sn = last_lce.unwrap();
                                 self.database
@@ -1502,13 +1508,13 @@ impl<C: DatabaseCollection> Ledger<C> {
                             signatures,
                             validation_proof,
                         )?;
-                        let mut taple_request: TapleRequest = event_request.clone().try_into()?;
-                        taple_request.sn = Some(event.content.event_proposal.proposal.sn);
-                        taple_request.subject_id = Some(subject_id.clone());
-                        taple_request.state = RequestState::Finished;
-                        self.database
-                            .set_taple_request(&request_id, &taple_request)?;
                         self.database.set_event(&state_request.subject_id, event)?;
+                        self.set_finished_request(
+                            &request_id,
+                            event_request.clone(),
+                            sn,
+                            subject_id.clone(),
+                        )?;
                         self.ledger_state.insert(
                             state_request.subject_id.clone(),
                             LedgerState {
@@ -1707,13 +1713,13 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 signatures,
                                 validation_proof,
                             )?;
+                            self.database.set_event(&eol_request.subject_id, event)?;
                             self.set_finished_request(
                                 &request_id,
                                 event_request.clone(),
-                                event.content.event_proposal.proposal.sn,
+                                sn,
                                 subject_id.clone(),
                             )?;
-                            self.database.set_event(&eol_request.subject_id, event)?;
                             self.database
                                 .set_subject(&eol_request.subject_id, subject)?;
                             if self.subject_is_gov.get(&subject_id).unwrap().to_owned() {
@@ -1811,13 +1817,13 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 &eol_request.subject_id,
                                 validation_proof,
                             )?;
+                            self.database.set_event(&eol_request.subject_id, event)?;
                             self.set_finished_request(
                                 &request_id,
                                 event_request.clone(),
-                                event.content.event_proposal.proposal.sn,
+                                sn,
                                 subject_id.clone(),
                             )?;
-                            self.database.set_event(&eol_request.subject_id, event)?;
                             if last_lce.is_some() {
                                 let last_lce_sn = last_lce.unwrap();
                                 self.database
@@ -1922,13 +1928,14 @@ impl<C: DatabaseCollection> Ledger<C> {
                             signatures,
                             validation_proof,
                         )?;
+                        let sn = event.content.event_proposal.proposal.sn;
+                        self.database.set_event(&eol_request.subject_id, event)?;
                         self.set_finished_request(
                             &request_id,
                             event_request.clone(),
-                            event.content.event_proposal.proposal.sn,
+                            sn,
                             subject_id.clone(),
                         )?;
-                        self.database.set_event(&eol_request.subject_id, event)?;
                         self.ledger_state.insert(
                             eol_request.subject_id.clone(),
                             LedgerState {
@@ -2039,13 +2046,13 @@ impl<C: DatabaseCollection> Ledger<C> {
                                         }
                                         EventRequestType::EOL(_) => unreachable!(),
                                     }
+                                    self.database.set_event(&subject_id, event.clone())?;
                                     self.set_finished_request(
                                         &request_id,
                                         event_request.clone(),
                                         event.content.event_proposal.proposal.sn,
                                         subject_id.clone(),
                                     )?;
-                                    self.database.set_event(&subject_id, event.clone())?;
                                     self.event_sourcing(event.clone())?;
                                     if head == current_sn + 2 {
                                         // Hacer event sourcing del LCE tambien y actualizar subject
@@ -2471,13 +2478,9 @@ impl<C: DatabaseCollection> Ledger<C> {
         let event_request = event.content.event_proposal.proposal.event_request.clone();
         let request_id = DigestIdentifier::from_serializable_borsh(&event_request)
             .map_err(|_| LedgerError::CryptoError("Error generating request hash".to_owned()))?;
-        self.set_finished_request(
-            &request_id,
-            event_request.clone(),
-            event.content.event_proposal.proposal.sn,
-            subject_id.clone(),
-        )?;
+        let sn = event.content.event_proposal.proposal.sn;
         self.database.set_event(&subject_id, event)?;
+        self.set_finished_request(&request_id, event_request.clone(), sn, subject_id.clone())?;
         self.database.set_subject(&subject_id, subject)?;
         Ok(metadata)
     }

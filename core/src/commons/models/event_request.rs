@@ -11,11 +11,7 @@ use crate::commons::{
 };
 use utoipa::ToSchema;
 
-use super::{
-    signature::Signature,
-    state::Subject,
-    timestamp::TimeStamp,
-};
+use super::{signature::Signature, state::Subject, timestamp::TimeStamp};
 
 #[derive(
     Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
@@ -25,8 +21,9 @@ pub struct EventRequest {
     pub signature: Signature,
 }
 
-
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema)]
+#[derive(
+    Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema,
+)]
 pub enum EventRequestType {
     Create(CreateRequest),
     Fact(FactRequest),
@@ -42,6 +39,8 @@ pub struct CreateRequest {
     pub governance_id: DigestIdentifier,
     pub schema_id: String,
     pub namespace: String,
+    pub name: String,
+    pub public_key: KeyIdentifier,
 }
 
 #[derive(
@@ -72,10 +71,7 @@ pub struct EOLRequest {
 
 impl EventRequest {
     pub fn new(request: EventRequestType, signature: Signature) -> Self {
-        Self {
-            request,
-            signature,
-        }
+        Self { request, signature }
     }
 
     pub fn check_signatures(&self) -> Result<(), SubjectError> {

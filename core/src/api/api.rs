@@ -1,11 +1,11 @@
 use std::collections::HashSet;
 
-use super::{GetEventsOfSubject, GetGovernanceSubjects};
 use super::{
     error::{APIInternalError, ApiError},
     inner_api::InnerAPI,
     APICommands, ApiResponses,
 };
+use super::{GetEventsOfSubject, GetGovernanceSubjects};
 #[cfg(feature = "aproval")]
 use crate::approval::manager::ApprovalAPI;
 use crate::authorized_subjecs::manager::AuthorizedSubjectsAPI;
@@ -122,6 +122,8 @@ pub trait ApiModuleInterface {
         governance_id: DigestIdentifier,
         schema_id: String,
         namespace: String,
+        name: String,
+        public_key: KeyIdentifier,
     ) -> Result<DigestIdentifier, ApiError>;
     /// Allows to obtain a specified subject by specifying its identifier.
     /// # Possible errors
@@ -134,7 +136,11 @@ pub trait ApiModuleInterface {
     /// • [ApiError::SignError] if it has not been possible to create the signature that accompanies
     /// the creation of the event with the identity of the node.<br />
     /// • [ApiError::EventCreationError] if it has not been possible to create the governance.
-    async fn create_governance(&self) -> Result<DigestIdentifier, ApiError>;
+    async fn create_governance(
+        &self,
+        name: String,
+        public_key: KeyIdentifier,
+    ) -> Result<DigestIdentifier, ApiError>;
     /// Stops the node, consuming the instance on the fly. This implies that any previously created API
     /// or [NotificationHandler] instances will no longer be functional.
     async fn shutdown(self) -> Result<(), ApiError>;
@@ -384,11 +390,15 @@ impl ApiModuleInterface for NodeAPI {
         governance_id: DigestIdentifier,
         schema_id: String,
         namespace: String,
+        name: String,
+        public_key: KeyIdentifier,
     ) -> Result<DigestIdentifier, ApiError> {
         let request = EventRequestType::Create(CreateRequest {
             governance_id,
             schema_id,
             namespace,
+            name,
+            public_key,
         });
         let response = self
             .sender
@@ -415,11 +425,17 @@ impl ApiModuleInterface for NodeAPI {
             unreachable!()
         }
     }
-    async fn create_governance(&self) -> Result<DigestIdentifier, ApiError> {
+    async fn create_governance(
+        &self,
+        name: String,
+        public_key: KeyIdentifier,
+    ) -> Result<DigestIdentifier, ApiError> {
         let request = EventRequestType::Create(CreateRequest {
             governance_id: DigestIdentifier::default(),
-            schema_id: "".into(),
+            schema_id: "governance".into(),
             namespace: "".into(),
+            name,
+            public_key,
         });
         let response = self
             .sender
@@ -511,12 +527,12 @@ impl ApiModuleInterface for NodeAPI {
         from: Option<String>,
         quantity: Option<i64>,
     ) -> Result<Vec<SubjectData>, ApiError> {
-        let response = self.
-            sender
+        let response = self
+            .sender
             .ask(APICommands::GetGovernanceSubjects(GetGovernanceSubjects {
                 governance_id,
                 from,
-                quantity
+                quantity,
             }))
             .await
             .unwrap();

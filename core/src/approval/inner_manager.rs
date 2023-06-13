@@ -614,6 +614,9 @@ mod test {
             .unwrap(),
             schema_id: "test".to_owned(),
             namespace: "test".to_owned(),
+            name: "test".to_owned(),
+            public_key: KeyIdentifier::from_str("EceWPmTsy2oXYsAhnWqTpBKtpobsnWM0QT8sNUTtV_Pw")
+                .unwrap(), // TODO: Revisar, lo puse a voleo
         });
         let signature = signature_manager.sign(&request).unwrap();
         let event_request = EventRequest { request, signature };

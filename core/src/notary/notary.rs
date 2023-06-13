@@ -228,6 +228,7 @@ impl<C: DatabaseCollection> Notary<C> {
         validation_signatures: &HashSet<Signature>,
     ) -> Result<KeyIdentifier, NotaryError> {
         // Comprobar que la previous encaja con la nueva
+        // TODO: Comprobar los demás campos, como subject_id, namespace...
         if previous_proof.event_hash != new_proof.prev_event_hash {
             return Err(NotaryError::DifferentProofForEvent);
         }

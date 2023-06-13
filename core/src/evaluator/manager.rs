@@ -562,6 +562,7 @@ mod test {
                 .unwrap(),
             properties: initial_state_json,
             active: true,
+            name: "".to_owned(),
         }
     }
 
