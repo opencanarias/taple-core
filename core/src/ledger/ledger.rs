@@ -468,8 +468,11 @@ impl<C: DatabaseCollection> Ledger<C> {
         let request_id = DigestIdentifier::from_serializable_borsh(&event_request)
             .map_err(|_| LedgerError::CryptoError("Error generating request hash".to_owned()))?;
         match self.database.get_taple_request(&request_id) {
-            Ok(_) => todo!(),
-            Err(_) => todo!(),
+            Ok(_) => return Err(LedgerError::RepeatedRequestId(request_id.to_str())),
+            Err(error) => match error {
+                DbError::EntryNotFound => {}
+                _ => return Err(LedgerError::DatabaseError(error)),
+            },
         }
         // Comprobaciones criptográficas
         log::warn!("ANTES DE CHECK SIGNATURES");
@@ -1954,6 +1957,16 @@ impl<C: DatabaseCollection> Ledger<C> {
     }
 
     pub async fn external_intermediate_event(&mut self, event: Event) -> Result<(), LedgerError> {
+        let event_request = event.content.event_proposal.proposal.event_request.clone();
+        let request_id = DigestIdentifier::from_serializable_borsh(&event_request)
+            .map_err(|_| LedgerError::CryptoError("Error generating request hash".to_owned()))?;
+        match self.database.get_taple_request(&request_id) {
+            Ok(_) => return Err(LedgerError::RepeatedRequestId(request_id.to_str())),
+            Err(error) => match error {
+                DbError::EntryNotFound => {}
+                _ => return Err(LedgerError::DatabaseError(error)),
+            },
+        }
         // Comprobaciones criptográficas
         event.check_signatures()?;
         // Comprobar si es genesis o state
@@ -2026,6 +2039,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                                         }
                                         EventRequestType::EOL(_) => unreachable!(),
                                     }
+                                    self.set_finished_request(
+                                        &request_id,
+                                        event_request.clone(),
+                                        event.content.event_proposal.proposal.sn,
+                                        subject_id.clone(),
+                                    )?;
                                     self.database.set_event(&subject_id, event.clone())?;
                                     self.event_sourcing(event.clone())?;
                                     if head == current_sn + 2 {
@@ -2449,6 +2468,15 @@ impl<C: DatabaseCollection> Ledger<C> {
         let subject = Subject::from_genesis_event(event.clone(), init_state)?;
         self.database
             .set_governance_index(&subject_id, &subject.governance_id)?;
+        let event_request = event.content.event_proposal.proposal.event_request.clone();
+        let request_id = DigestIdentifier::from_serializable_borsh(&event_request)
+            .map_err(|_| LedgerError::CryptoError("Error generating request hash".to_owned()))?;
+        self.set_finished_request(
+            &request_id,
+            event_request.clone(),
+            event.content.event_proposal.proposal.sn,
+            subject_id.clone(),
+        )?;
         self.database.set_event(&subject_id, event)?;
         self.database.set_subject(&subject_id, subject)?;
         Ok(metadata)

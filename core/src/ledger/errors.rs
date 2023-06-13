@@ -74,4 +74,6 @@ pub enum LedgerError {
     IntermediateEOL(String),
     #[error("Subject Life Ended: {0}")]
     SubjectLifeEnd(String),
+    #[error("Repeated Request ID: {0}")]
+    RepeatedRequestId(String),
 }
