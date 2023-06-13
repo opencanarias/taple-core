@@ -9,7 +9,8 @@ use super::{
 #[cfg(feature = "aproval")]
 use crate::approval::manager::ApprovalAPI;
 use crate::authorized_subjecs::manager::AuthorizedSubjectsAPI;
-use crate::commons::models::event::{Event, ValidationProof};
+use crate::commons::models::approval::ApprovalStatus;
+use crate::commons::models::event::Event;
 use crate::commons::models::event_request::EventRequest;
 use crate::commons::models::state::SubjectData;
 use crate::commons::{
@@ -188,6 +189,14 @@ pub trait ApiModuleInterface {
         from: Option<String>,
         quantity: Option<i64>,
     ) -> Result<Vec<SubjectData>, ApiError>;
+    async fn get_approval(
+        &self,
+        request_id: DigestIdentifier
+    ) -> Result<(ApprovalPetitionData, ApprovalStatus), ApiError>;
+    async fn get_approvals(
+        &self,
+        status: Option<String>,
+    ) -> Result<Vec<ApprovalPetitionData>, ApiError>;
 }
 
 /// Object that allows interaction with a TAPLE node.
@@ -505,6 +514,38 @@ impl ApiModuleInterface for NodeAPI {
             unreachable!()
         }
     }
+
+    async fn get_approval(
+        &self,
+        request_id: DigestIdentifier
+    ) -> Result<(ApprovalPetitionData, ApprovalStatus), ApiError> {
+        let response = self.
+        sender
+            .ask(APICommands::GetApproval(request_id))
+            .await
+            .unwrap();
+        if let ApiResponses::GetApproval(data) = response {
+            data
+        } else {
+            unreachable!()
+        }
+    }
+
+    async fn get_approvals(
+        &self,
+        status: Option<String>,
+    ) -> Result<Vec<ApprovalPetitionData>, ApiError> {
+        let response = self.
+        sender
+            .ask(APICommands::GetApprovals(status))
+            .await
+            .unwrap();
+        if let ApiResponses::GetApprovals(data) = response {
+            data
+        } else {
+            unreachable!()
+        }
+    }
 }
 
 pub struct API<C: DatabaseCollection> {
@@ -639,6 +680,12 @@ impl<C: DatabaseCollection> API<C> {
                     }
                     APICommands::GetGovernanceSubjects(data) => {
                         self.inner_api.get_governance_subjects(data).await
+                    }
+                    APICommands::GetApproval(request_id) => {
+                        self.inner_api.get_approval(request_id).await
+                    }
+                    APICommands::GetApprovals(status) => {
+                        self.inner_api.get_approvals(status).await
                     }
                 };
                 sx.send(response)
