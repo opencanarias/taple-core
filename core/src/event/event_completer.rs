@@ -632,6 +632,9 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 })?;
                 // let er_hash = event_request.signature.content.event_content_hash.clone();
                 self.database
+                    .set_taple_request(&request_id, &event_request.clone().try_into()?)
+                    .map_err(|error| EventError::DatabaseError(error.to_string()))?;
+                self.database
                     .set_request(&subject.subject_id, event_request)
                     .map_err(|error| EventError::DatabaseError(error.to_string()))?;
                 self.event_pre_evaluations

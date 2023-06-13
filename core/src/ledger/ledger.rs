@@ -1,6 +1,7 @@
 use std::collections::{hash_map::Entry, HashMap, HashSet};
 
 use crate::commons::crypto::KeyGenerator;
+use crate::request::{RequestState, TapleRequest};
 use crate::{
     commons::{
         channel::SenderEnd,
@@ -157,7 +158,25 @@ impl<C: DatabaseCollection> Ledger<C> {
         Ok(())
     }
 
+    fn set_finished_request(
+        &self,
+        request_id: &DigestIdentifier,
+        event_request: EventRequest,
+        sn: u64,
+        subject_id: DigestIdentifier,
+    ) -> Result<(), LedgerError> {
+        let mut taple_request: TapleRequest = event_request.clone().try_into()?;
+        taple_request.sn = Some(sn);
+        taple_request.subject_id = Some(subject_id.clone());
+        taple_request.state = RequestState::Finished;
+        self.database
+            .set_taple_request(&request_id, &taple_request)?;
+        Ok(())
+    }
+
     pub async fn genesis(&mut self, event_request: EventRequest) -> Result<(), LedgerError> {
+        let request_id = DigestIdentifier::from_serializable_borsh(&event_request)
+            .map_err(|_| LedgerError::CryptoError("Error generating request hash".to_owned()))?;
         // Añadir a subject_is_gov si es una governance y no está
         let EventRequestType::Create(create_request) = event_request.request.clone() else {
             return Err(LedgerError::StateInGenesis)
@@ -189,7 +208,7 @@ impl<C: DatabaseCollection> Ledger<C> {
             .map_err(LedgerError::SubjectError)?;
         // Crear evento a partir de event_request
         let event = Event::from_genesis_request(
-            event_request,
+            event_request.clone(),
             subject.keys.clone().unwrap(),
             governance_version,
             &init_state,
@@ -210,6 +229,7 @@ impl<C: DatabaseCollection> Ledger<C> {
         self.database
             .set_governance_index(&subject_id, &subject.governance_id)?;
         self.database.set_subject(&subject_id, subject)?;
+        self.set_finished_request(&request_id, event_request, sn, subject_id.clone())?;
         self.database.set_event(&subject_id, event)?;
         // Actualizar Ledger State
         match self.ledger_state.entry(subject_id.clone()) {
@@ -251,8 +271,11 @@ impl<C: DatabaseCollection> Ledger<C> {
         signatures: HashSet<Signature>,
         validation_proof: ValidationProof,
     ) -> Result<(), LedgerError> {
+        let event_request = event.content.event_proposal.proposal.event_request.clone();
+        let request_id = DigestIdentifier::from_serializable_borsh(&event_request)
+            .map_err(|_| LedgerError::CryptoError("Error generating request hash".to_owned()))?;
         let sn = event.content.event_proposal.proposal.sn;
-        let subject_id = match &event.content.event_proposal.proposal.event_request.request {
+        let subject_id = match &event_request.request {
             EventRequestType::Fact(state_request) => {
                 let subject_id = state_request.subject_id.clone();
                 // Aplicar event sourcing
@@ -405,6 +428,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                 subject_id
             }
         };
+        self.set_finished_request(
+            &request_id,
+            event_request.clone(),
+            event.content.event_proposal.proposal.sn,
+            subject_id.clone(),
+        )?;
         // Actualizar Ledger State
         match self.ledger_state.entry(subject_id.clone()) {
             Entry::Occupied(mut ledger_state) => {
@@ -423,7 +452,6 @@ impl<C: DatabaseCollection> Ledger<C> {
         self.distribution_channel
             .tell(DistributionMessagesNew::SignaturesNeeded { subject_id, sn })
             .await?;
-
         Ok(())
     }
 
@@ -435,6 +463,14 @@ impl<C: DatabaseCollection> Ledger<C> {
         validation_proof: ValidationProof,
     ) -> Result<(), LedgerError> {
         // log::error!("External event: Event: {:?}", event);
+        // Comprobar que no existe una request con el mismo hash
+        let event_request = event.content.event_proposal.proposal.event_request.clone();
+        let request_id = DigestIdentifier::from_serializable_borsh(&event_request)
+            .map_err(|_| LedgerError::CryptoError("Error generating request hash".to_owned()))?;
+        match self.database.get_taple_request(&request_id) {
+            Ok(_) => todo!(),
+            Err(_) => todo!(),
+        }
         // Comprobaciones criptográficas
         log::warn!("ANTES DE CHECK SIGNATURES");
         event.check_signatures()?;
@@ -664,6 +700,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 signatures,
                                 validation_proof.clone(),
                             )?;
+                            self.set_finished_request(
+                                &request_id,
+                                event_request.clone(),
+                                event.content.event_proposal.proposal.sn,
+                                subject_id.clone(),
+                            )?;
                             self.database
                                 .set_event(&transfer_request.subject_id, event)?;
                             self.database
@@ -758,6 +800,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 sn,
                                 signatures,
                                 validation_proof.clone(),
+                            )?;
+                            self.set_finished_request(
+                                &request_id,
+                                event_request.clone(),
+                                event.content.event_proposal.proposal.sn,
+                                subject_id.clone(),
                             )?;
                             self.database
                                 .set_event(&transfer_request.subject_id, event)?;
@@ -871,6 +919,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                             signatures,
                             validation_proof,
                         )?;
+                        let mut taple_request: TapleRequest = event_request.clone().try_into()?;
+                        taple_request.sn = Some(event.content.event_proposal.proposal.sn);
+                        taple_request.subject_id = Some(subject_id.clone());
+                        taple_request.state = RequestState::Finished;
+                        self.database
+                            .set_taple_request(&request_id, &taple_request)?;
                         self.database
                             .set_event(&transfer_request.subject_id, event)?;
                         self.ledger_state.insert(
@@ -1229,6 +1283,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 signatures,
                                 validation_proof,
                             )?;
+                            self.set_finished_request(
+                                &request_id,
+                                event_request.clone(),
+                                event.content.event_proposal.proposal.sn,
+                                subject_id.clone(),
+                            )?;
                             self.database.set_event(&state_request.subject_id, event)?;
                             self.database
                                 .set_subject(&state_request.subject_id, subject)?;
@@ -1327,6 +1387,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                             self.database.set_lce_validation_proof(
                                 &state_request.subject_id,
                                 validation_proof,
+                            )?;
+                            self.set_finished_request(
+                                &request_id,
+                                event_request.clone(),
+                                event.content.event_proposal.proposal.sn,
+                                subject_id.clone(),
                             )?;
                             self.database.set_event(&state_request.subject_id, event)?;
                             if last_lce.is_some() {
@@ -1433,6 +1499,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                             signatures,
                             validation_proof,
                         )?;
+                        let mut taple_request: TapleRequest = event_request.clone().try_into()?;
+                        taple_request.sn = Some(event.content.event_proposal.proposal.sn);
+                        taple_request.subject_id = Some(subject_id.clone());
+                        taple_request.state = RequestState::Finished;
+                        self.database
+                            .set_taple_request(&request_id, &taple_request)?;
                         self.database.set_event(&state_request.subject_id, event)?;
                         self.ledger_state.insert(
                             state_request.subject_id.clone(),
@@ -1632,6 +1704,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 signatures,
                                 validation_proof,
                             )?;
+                            self.set_finished_request(
+                                &request_id,
+                                event_request.clone(),
+                                event.content.event_proposal.proposal.sn,
+                                subject_id.clone(),
+                            )?;
                             self.database.set_event(&eol_request.subject_id, event)?;
                             self.database
                                 .set_subject(&eol_request.subject_id, subject)?;
@@ -1729,6 +1807,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                             self.database.set_lce_validation_proof(
                                 &eol_request.subject_id,
                                 validation_proof,
+                            )?;
+                            self.set_finished_request(
+                                &request_id,
+                                event_request.clone(),
+                                event.content.event_proposal.proposal.sn,
+                                subject_id.clone(),
                             )?;
                             self.database.set_event(&eol_request.subject_id, event)?;
                             if last_lce.is_some() {
@@ -1834,6 +1918,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                             sn,
                             signatures,
                             validation_proof,
+                        )?;
+                        self.set_finished_request(
+                            &request_id,
+                            event_request.clone(),
+                            event.content.event_proposal.proposal.sn,
+                            subject_id.clone(),
                         )?;
                         self.database.set_event(&eol_request.subject_id, event)?;
                         self.ledger_state.insert(
