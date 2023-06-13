@@ -59,3 +59,9 @@ impl Hash for UniqueApproval {
         self.approval.signature.content.signer.hash(state);
     }
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, ToSchema)]
+pub enum ApprovalStatus {
+    Pending,
+    Voted
+}
