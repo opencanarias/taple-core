@@ -211,6 +211,11 @@ impl<C: DatabaseCollection> Notary<C> {
                         )
                         .await?)
                 } else {
+                    if new_proof.governance_version != new_proof.genesis_governance_version {
+                        return Err(NotaryError::GenesisGovVersionsDoesNotMatch(
+                            new_proof.subject_id.to_str(),
+                        ));
+                    }
                     Ok(new_proof.subject_public_key.clone())
                 }
             }
