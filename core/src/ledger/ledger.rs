@@ -1,6 +1,7 @@
 use std::collections::{hash_map::Entry, HashMap, HashSet};
 
 use crate::commons::crypto::KeyGenerator;
+use crate::commons::models::state::generate_subject_id;
 use crate::request::{RequestState, TapleRequest};
 use crate::{
     commons::{
@@ -968,7 +969,13 @@ impl<C: DatabaseCollection> Ledger<C> {
                     ));
                 }
                 // Comprobaciones criptográficas
-                let subject_id = create_subject_id(&event)?;
+                let subject_id = generate_subject_id(
+                    &create_request.namespace,
+                    &create_request.schema_id,
+                    create_request.public_key.to_str(),
+                    create_request.governance_id.to_str(),
+                    event.content.event_proposal.proposal.gov_version,
+                )?;
                 match self.database.get_subject(&subject_id) {
                     Ok(_) => {
                         return Err(LedgerError::SubjectAlreadyExists(
@@ -1980,7 +1987,13 @@ impl<C: DatabaseCollection> Ledger<C> {
         let subject_id = match &event.content.event_proposal.proposal.event_request.request {
             EventRequestType::Create(create_request) => {
                 // Comprobar si había un LCE previo o es genesis puro, si es genesis puro rechazar y que manden por la otra petición aunque sea con hashset de firmas vacío
-                create_subject_id(&event)?
+                generate_subject_id(
+                    &create_request.namespace,
+                    &create_request.schema_id,
+                    create_request.public_key.to_str(),
+                    create_request.governance_id.to_str(),
+                    event.content.event_proposal.proposal.gov_version,
+                )?
             }
             EventRequestType::Fact(state_request) => state_request.subject_id.clone(),
             EventRequestType::Transfer(transfer_request) => transfer_request.subject_id.clone(),
@@ -2833,29 +2846,4 @@ fn verify_signatures(
         return Err(LedgerError::NotEnoughSignatures(event_hash.to_str()));
     }
     Ok(())
-}
-
-fn create_subject_id(event: &Event) -> Result<DigestIdentifier, LedgerError> {
-    match DigestIdentifier::from_serializable_borsh((
-        &event
-            .content
-            .event_proposal
-            .proposal
-            .event_request
-            .signature
-            .content
-            .event_content_hash,
-        &event
-            .content
-            .event_proposal
-            .subject_signature
-            .content
-            .signer
-            .public_key, // No estoy seguro que esto equivalga al vector de bytes pero creo que si
-    )) {
-        Ok(subject_id) => Ok(subject_id),
-        Err(_) => Err(LedgerError::CryptoError(
-            "Error creating subject_id in external event".to_owned(),
-        )),
-    }
 }
