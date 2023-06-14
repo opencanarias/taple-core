@@ -168,12 +168,11 @@ impl<C: DatabaseCollection> Notary<C> {
                     }
                 } else if last_proof.sn + 1 == new_proof.sn {
                     // Comprobar que es similar a la prueba del evento anterior que nos llega en el mensaje
-                    if !last_proof.is_similar(&previous_proof.unwrap())
-                        || last_proof.event_hash != new_proof.prev_event_hash
-                    {
+                    if !last_proof.is_similar(&previous_proof.unwrap()) {
                         Err(NotaryError::DifferentProofForEvent)
                     } else {
-                        Ok(last_proof.subject_public_key)
+                        self.validate_previous_proof(new_proof, last_proof, None)
+                            .await
                     }
                 } else {
                     // Mismo caso que en not found, no tengo la prueba anterior
@@ -188,13 +187,12 @@ impl<C: DatabaseCollection> Notary<C> {
                         if previous_proof.is_none() {
                             return Err(NotaryError::PreviousProofLeft);
                         }
-                        Ok(self
-                            .validate_previous_proof(
-                                new_proof,
-                                previous_proof.unwrap(),
-                                validation_signatures,
-                            )
-                            .await?)
+                        self.validate_previous_proof(
+                            new_proof,
+                            previous_proof.unwrap(),
+                            Some(validation_signatures),
+                        )
+                        .await
                     }
                 }
             }
@@ -203,13 +201,12 @@ impl<C: DatabaseCollection> Notary<C> {
                 if previous_proof.is_none() && new_proof.sn != 0 {
                     return Err(NotaryError::PreviousProofLeft);
                 } else if new_proof.sn != 0 {
-                    Ok(self
-                        .validate_previous_proof(
-                            new_proof,
-                            previous_proof.unwrap(),
-                            validation_signatures,
-                        )
-                        .await?)
+                    self.validate_previous_proof(
+                        new_proof,
+                        previous_proof.unwrap(),
+                        Some(validation_signatures),
+                    )
+                    .await
                 } else {
                     if new_proof.governance_version != new_proof.genesis_governance_version {
                         return Err(NotaryError::GenesisGovVersionsDoesNotMatch(
@@ -226,7 +223,7 @@ impl<C: DatabaseCollection> Notary<C> {
         &self,
         new_proof: &ValidationProof,
         previous_proof: ValidationProof,
-        validation_signatures: HashSet<Signature>,
+        validation_signatures: Option<HashSet<Signature>>,
     ) -> Result<KeyIdentifier, NotaryError> {
         // Comprobar que la previous encaja con la nueva
         // TODO: Comprobar los demás campos, como subject_id, namespace...
@@ -254,24 +251,33 @@ impl<C: DatabaseCollection> Notary<C> {
         if previous_proof.governance_id != new_proof.governance_id {
             return Err(NotaryError::DifferentProofForEvent);
         }
-        let actual_signers: Result<HashSet<KeyIdentifier>, NotaryError> = validation_signatures
-            .into_iter()
-            .map(|signature| {
-                if signature.verify().is_err() {
-                    return Err(NotaryError::InvalidSignature);
+        match validation_signatures {
+            Some(validation_signatures) => {
+                let actual_signers: Result<HashSet<KeyIdentifier>, NotaryError> =
+                    validation_signatures
+                        .into_iter()
+                        .map(|signature| {
+                            if signature.verify().is_err() {
+                                return Err(NotaryError::InvalidSignature);
+                            }
+                            Ok(signature.content.signer)
+                        })
+                        .collect();
+                let actual_signers = actual_signers?;
+                let (signers, quorum_size) = self
+                    .get_signers_and_quorum(
+                        previous_proof.get_metadata(),
+                        ValidationStage::Validate,
+                    )
+                    .await?;
+                if !actual_signers.is_subset(&signers) {
+                    return Err(NotaryError::InvalidSigner);
                 }
-                Ok(signature.content.signer)
-            })
-            .collect();
-        let actual_signers = actual_signers?;
-        let (signers, quorum_size) = self
-            .get_signers_and_quorum(previous_proof.get_metadata(), ValidationStage::Validate)
-            .await?;
-        if !actual_signers.is_subset(&signers) {
-            return Err(NotaryError::InvalidSigner);
-        }
-        if actual_signers.len() < quorum_size as usize {
-            return Err(NotaryError::QuorumNotReached);
+                if actual_signers.len() < quorum_size as usize {
+                    return Err(NotaryError::QuorumNotReached);
+                }
+            }
+            None => {}
         }
         Ok(previous_proof.subject_public_key)
     }
