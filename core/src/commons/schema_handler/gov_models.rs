@@ -1,29 +1,109 @@
 use std::collections::HashSet;
 
-use serde::{de::Visitor, Deserialize, Serialize};
+use serde::{de::Visitor, ser::SerializeMap, Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(untagged)]
-#[allow(non_snake_case)]
+#[derive(Debug)]
 pub enum Quorum {
-    MAJORITY(String),
-    #[serde(rename_all = "PascalCase")]
-    FIXED {
-        fixed: u32,
-    },
-    #[serde(rename_all = "PascalCase")]
-    PORCENTAJE {
-        porcentaje: f64,
-    },
-    #[serde(rename_all = "PascalCase")]
-    BFT {
-        BFT: f64,
-    },
+    MAJORITY,
+    FIXED { fixed: u32 },
+    PORCENTAJE { porcentaje: f64 },
+    BFT { BFT: f64 },
+}
+
+impl Serialize for Quorum {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            Quorum::MAJORITY => serializer.serialize_str("MAJOTIRY"),
+            Quorum::FIXED { fixed } => {
+                let mut map = serializer.serialize_map(Some(1))?;
+                map.serialize_entry("FIXED", fixed)?;
+                map.end()
+            }
+            Quorum::PORCENTAJE { porcentaje } => {
+                let mut map = serializer.serialize_map(Some(1))?;
+                map.serialize_entry("PORCENTAJE", porcentaje)?;
+                map.end()
+            }
+            Quorum::BFT { BFT } => {
+                let mut map = serializer.serialize_map(Some(1))?;
+                map.serialize_entry("BFT", BFT)?;
+                map.end()
+            }
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Quorum {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct QuorumEnumVisitor;
+        impl<'de> Visitor<'de> for QuorumEnumVisitor {
+            type Value = Quorum;
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("Quorum")
+            }
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::MapAccess<'de>,
+            {
+                // Solo deberían tener una entrada
+                let Some(key) = map.next_key::<String>()? else {
+                    return Err(serde::de::Error::missing_field("FIXED, BFT or PORCENTAJE"))
+                };
+                let result = match key.as_str() {
+                    "FIXED" => {
+                        let fixed: u32 = map.next_value()?;
+                        Quorum::FIXED { fixed }
+                    }
+                    "BFT" => {
+                        let BFT: f64 = map.next_value()?;
+                        Quorum::BFT { BFT }
+                    }
+                    "PORCENTAJE" => {
+                        let porcentaje: f64 = map.next_value()?;
+                        Quorum::PORCENTAJE { porcentaje }
+                    }
+                    _ => {
+                        return Err(serde::de::Error::unknown_field(
+                            &key,
+                            &["FIXED", "BFT", "PORCENTAJE"],
+                        ))
+                    }
+                };
+                let None = map.next_key::<String>()? else {
+                    return Err(serde::de::Error::custom("Input data is not valid. The data contains unkown entries"));
+                };
+                Ok(result)
+            }
+            fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                match v.as_str() {
+                    "MAJORITY" => Ok(Self::Value::MAJORITY),
+                    other => Err(serde::de::Error::unknown_variant(other, &["MAJORITY"])),
+                }
+            }
+            fn visit_borrowed_str<E>(self, v: &'de str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                match v {
+                    "MAJORITY" => Ok(Self::Value::MAJORITY),
+                    other => Err(serde::de::Error::unknown_variant(other, &["MAJORITY"])),
+                }
+            }
+        }
+        deserializer.deserialize_any(QuorumEnumVisitor {})
+    }
 }
 
 #[derive(Debug)]
-#[allow(non_snake_case)]
-#[allow(non_camel_case_types)]
 pub enum Who {
     ID { ID: String },
     NAME { NAME: String },
@@ -38,8 +118,16 @@ impl Serialize for Who {
         S: serde::Serializer,
     {
         match self {
-            Who::ID { ID } => serializer.serialize_str(&ID),
-            Who::NAME { NAME } => serializer.serialize_str(&NAME),
+            Who::ID { ID } => {
+                let mut map = serializer.serialize_map(Some(1))?;
+                map.serialize_entry("ID", ID)?;
+                map.end()
+            }
+            Who::NAME { NAME } => {
+                let mut map = serializer.serialize_map(Some(1))?;
+                map.serialize_entry("NAME", NAME)?;
+                map.end()
+            }
             Who::MEMBERS => serializer.serialize_str("MEMBERS"),
             Who::ALL => serializer.serialize_str("ALL"),
             Who::NOT_MEMBERS => serializer.serialize_str("NOT_MEMBERS"),
@@ -54,40 +142,71 @@ impl<'de> Deserialize<'de> for Who {
     {
         struct WhoVisitor;
         impl<'de> Visitor<'de> for WhoVisitor {
+            type Value = Who;
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
                 formatter.write_str("Who")
             }
-            type Value = Who;
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::MapAccess<'de>,
+            {
+                // Solo deberían tener una entrada
+                let Some(key) = map.next_key::<String>()? else {
+                    return Err(serde::de::Error::missing_field("ID or NAME"))
+                };
+                println!("KEY {}", key);
+                let result = match key.as_str() {
+                    "ID" => {
+                        let id: String = map.next_value()?;
+                        Who::ID { ID: id }
+                    }
+                    "NAME" => {
+                        let name: String = map.next_value()?;
+                        Who::NAME { NAME: name }
+                    }
+                    _ => return Err(serde::de::Error::unknown_field(&key, &["ID", "NAME"])),
+                };
+                let None = map.next_key::<String>()? else {
+                    return Err(serde::de::Error::custom("Input data is not valid. The data contains unkown entries"));
+                };
+                Ok(result)
+            }
             fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
             where
                 E: serde::de::Error,
             {
+                println!("STR");
                 match v.as_str() {
                     "MEMBERS" => Ok(Who::MEMBERS),
-                    "All" => Ok(Who::ALL),
+                    "ALL" => Ok(Who::ALL),
                     "NOT_MEMBERS" => Ok(Who::NOT_MEMBERS),
-                    &_ => Ok(Self::Value::ID { ID: v }),
+                    other => Err(serde::de::Error::unknown_variant(
+                        other,
+                        &["MEMBERS", "ALL", "NOT_MEMBERS"],
+                    )),
                 }
             }
             fn visit_borrowed_str<E>(self, v: &'de str) -> Result<Self::Value, E>
             where
                 E: serde::de::Error,
             {
+                println!("BORR STR");
                 match v {
                     "MEMBERS" => Ok(Who::MEMBERS),
                     "ALL" => Ok(Who::ALL),
                     "NOT_MEMBERS" => Ok(Who::NOT_MEMBERS),
-                    &_ => Ok(Self::Value::ID { ID: v.to_string() }),
+                    other => Err(serde::de::Error::unknown_variant(
+                        other,
+                        &["MEMBERS", "ALL", "NOT_MEMBERS"],
+                    )),
                 }
             }
         }
-        deserializer.deserialize_str(WhoVisitor {})
+        deserializer.deserialize_any(WhoVisitor {})
     }
 }
 
 #[derive(Debug)]
-#[allow(non_snake_case)]
-#[allow(non_camel_case_types)]
 pub enum Schema {
     ID { ID: String },
     NOT_GOVERNANCE,
@@ -100,7 +219,11 @@ impl Serialize for Schema {
         S: serde::Serializer,
     {
         match self {
-            Schema::ID { ID } => serializer.serialize_str(&ID),
+            Schema::ID { ID } => {
+                let mut map = serializer.serialize_map(Some(1))?;
+                map.serialize_entry("ID", ID)?;
+                map.end()
+            }
             Schema::NOT_GOVERNANCE => serializer.serialize_str("NOT_GOVERNANCE"),
             Schema::ALL => serializer.serialize_str("ALL"),
         }
@@ -114,10 +237,30 @@ impl<'de> Deserialize<'de> for Schema {
     {
         struct SchemaEnumVisitor;
         impl<'de> Visitor<'de> for SchemaEnumVisitor {
+            type Value = Schema;
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
                 formatter.write_str("Schema")
             }
-            type Value = Schema;
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::MapAccess<'de>,
+            {
+                // Solo deberían tener una entrada
+                let Some(key) = map.next_key::<String>()? else {
+                    return Err(serde::de::Error::missing_field("ID"))
+                };
+                let result = match key.as_str() {
+                    "ID" => {
+                        let id: String = map.next_value()?;
+                        Schema::ID { ID: id }
+                    }
+                    _ => return Err(serde::de::Error::unknown_field(&key, &["ID", "NAME"])),
+                };
+                let None = map.next_key::<String>()? else {
+                    return Err(serde::de::Error::custom("Input data is not valid. The data contains unkown entries"));
+                };
+                Ok(result)
+            }
             fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
             where
                 E: serde::de::Error,
@@ -125,7 +268,10 @@ impl<'de> Deserialize<'de> for Schema {
                 match v.as_str() {
                     "ALL" => Ok(Self::Value::ALL),
                     "NOT_GOVERNANCE" => Ok(Self::Value::NOT_GOVERNANCE),
-                    &_ => Ok(Self::Value::ID { ID: v }),
+                    other => Err(serde::de::Error::unknown_variant(
+                        other,
+                        &["ALL", "NOT_GOVERNANCE"],
+                    )),
                 }
             }
             fn visit_borrowed_str<E>(self, v: &'de str) -> Result<Self::Value, E>
@@ -135,11 +281,14 @@ impl<'de> Deserialize<'de> for Schema {
                 match v {
                     "ALL" => Ok(Self::Value::ALL),
                     "NOT_GOVERNANCE" => Ok(Self::Value::NOT_GOVERNANCE),
-                    &_ => Ok(Self::Value::ID { ID: v.to_string() }),
+                    other => Err(serde::de::Error::unknown_variant(
+                        other,
+                        &["ALL", "NOT_GOVERNANCE"],
+                    )),
                 }
             }
         }
-        deserializer.deserialize_str(SchemaEnumVisitor {})
+        deserializer.deserialize_any(SchemaEnumVisitor {})
     }
 }
 
