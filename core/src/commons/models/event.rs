@@ -42,18 +42,17 @@ pub struct EventContent {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct ValidationProof {
-    pub governance_id: DigestIdentifier,
-    pub governance_version: u64,
     pub subject_id: DigestIdentifier,
-    pub sn: u64,
     pub schema_id: String,
     pub namespace: String,
+    pub name: String,
+    pub subject_public_key: KeyIdentifier,
+    pub governance_id: DigestIdentifier,
+    pub genesis_governance_version: u64,
+    pub sn: u64,
     pub prev_event_hash: DigestIdentifier,
     pub event_hash: DigestIdentifier,
-    pub state_hash: DigestIdentifier,
-    pub subject_public_key: KeyIdentifier,
-    pub owner: KeyIdentifier,
-    pub creator: KeyIdentifier,
+    pub governance_version: u64,
 }
 
 impl ValidationProof {
@@ -62,9 +61,7 @@ impl ValidationProof {
         sn: u64,
         prev_event_hash: DigestIdentifier,
         event_hash: DigestIdentifier,
-        state_hash: DigestIdentifier,
         governance_version: u64,
-        owner: KeyIdentifier,
         subject_public_key: KeyIdentifier,
     ) -> Self {
         Self {
@@ -76,10 +73,9 @@ impl ValidationProof {
             namespace: subject.namespace.clone(),
             prev_event_hash,
             event_hash,
-            state_hash,
             subject_public_key,
-            owner,
-            creator: subject.creator.clone(),
+            genesis_governance_version: subject.genesis_gov_version,
+            name: subject.name.clone(),
         }
     }
 
@@ -88,9 +84,7 @@ impl ValidationProof {
         sn: u64,
         prev_event_hash: DigestIdentifier,
         event_hash: DigestIdentifier,
-        state_hash: DigestIdentifier,
         governance_version: u64,
-        owner: KeyIdentifier,
     ) -> Self {
         Self {
             governance_id: subject.governance_id.clone(),
@@ -101,10 +95,9 @@ impl ValidationProof {
             namespace: subject.namespace.clone(),
             prev_event_hash,
             event_hash,
-            state_hash,
             subject_public_key: subject.public_key.clone(),
-            owner,
-            creator: subject.creator.clone(),
+            genesis_governance_version: subject.genesis_gov_version,
+            name: subject.name.clone(),
         }
     }
 
@@ -126,10 +119,9 @@ impl ValidationProof {
             && self.namespace == other.namespace
             && self.prev_event_hash == other.prev_event_hash
             && self.event_hash == other.event_hash
-            && self.state_hash == other.state_hash
             && self.subject_public_key == other.subject_public_key
-            && self.owner == other.owner
-            && self.creator == other.creator
+            && self.genesis_governance_version == other.genesis_governance_version
+            && self.name == other.name
     }
 }
 

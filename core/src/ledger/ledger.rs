@@ -175,11 +175,18 @@ impl<C: DatabaseCollection> Ledger<C> {
         Ok(())
     }
 
-    pub async fn genesis(&mut self, event_request: EventRequest) -> Result<(), LedgerError> {
-        let request_id = DigestIdentifier::from_serializable_borsh(&event_request)
-            .map_err(|_| LedgerError::CryptoError("Error generating request hash".to_owned()))?;
+    pub async fn genesis(
+        &mut self,
+        event: Event,
+        signatures: HashSet<Signature>,
+        validation_proof: ValidationProof,
+    ) -> Result<(), LedgerError> {
+        let request_id = DigestIdentifier::from_serializable_borsh(
+            &event.content.event_proposal.proposal.event_request,
+        )
+        .map_err(|_| LedgerError::CryptoError("Error generating request hash".to_owned()))?;
         // Añadir a subject_is_gov si es una governance y no está
-        let EventRequestType::Create(create_request) = event_request.request.clone() else {
+        let EventRequestType::Create(create_request) = event.content.event_proposal.proposal.event_request.request.clone() else {
             return Err(LedgerError::StateInGenesis)
         };
         let governance_version = if create_request.schema_id == "governance"
@@ -205,11 +212,11 @@ impl<C: DatabaseCollection> Ledger<C> {
         let init_state_string = serde_json::to_string(&init_state)
             .map_err(|_| LedgerError::ErrorParsingJsonString("Init State".to_owned()))?;
         // Crear sujeto a partir de genesis y evento
-        let subject = Subject::from_genesis_request(event_request.clone(), init_state_string)
+        let subject = Subject::from_genesis_event(event.clone(), init_state_string)
             .map_err(LedgerError::SubjectError)?;
         // Crear evento a partir de event_request
         let event = Event::from_genesis_request(
-            event_request.clone(),
+            event.content.event_proposal.proposal.event_request.clone(),
             subject.keys.clone().unwrap(),
             governance_version,
             &init_state,
@@ -230,7 +237,12 @@ impl<C: DatabaseCollection> Ledger<C> {
         self.database
             .set_governance_index(&subject_id, &subject.governance_id)?;
         self.database.set_subject(&subject_id, subject)?;
-        self.set_finished_request(&request_id, event_request, sn, subject_id.clone())?;
+        self.set_finished_request(
+            &request_id,
+            event.content.event_proposal.proposal.event_request.clone(),
+            sn,
+            subject_id.clone(),
+        )?;
         self.database.set_event(&subject_id, event)?;
         // Actualizar Ledger State
         match self.ledger_state.entry(subject_id.clone()) {
@@ -632,9 +644,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                             event.content.event_proposal.proposal.sn,
                             prev_event_hash,
                             event.signature.content.event_content_hash.clone(),
-                            state_hash.clone(),
                             event.content.event_proposal.proposal.gov_version,
-                            subject.owner.clone(),
                             transfer_request.public_key.clone(),
                         );
                         // let validation_proof = ValidationProof::new(
@@ -2418,21 +2428,17 @@ impl<C: DatabaseCollection> Ledger<C> {
             return Err(LedgerError::ValidationProofError(
                 "Hash Event does not match".to_string(),
             ));
-        } else if state_hash != &validation_proof.state_hash {
-            return Err(LedgerError::ValidationProofError(
-                "Hash of State does not match".to_string(),
-            ));
         } else if validation_proof.subject_public_key != subject.public_key {
             return Err(LedgerError::ValidationProofError(
                 "Subject Public Key does not match".to_string(),
             ));
-        } else if validation_proof.owner != subject.owner {
+        } else if validation_proof.name != subject.name {
             return Err(LedgerError::ValidationProofError(
-                "Owner does not match".to_string(),
+                "Subject Name does not match".to_string(),
             ));
-        } else if validation_proof.creator != subject.creator {
+        } else if validation_proof.genesis_governance_version != subject.genesis_gov_version {
             return Err(LedgerError::ValidationProofError(
-                "Creator does not match".to_string(),
+                "Genesis gov versiob does not match".to_string(),
             ));
         }
         Ok(())

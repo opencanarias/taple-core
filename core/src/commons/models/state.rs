@@ -25,6 +25,7 @@ pub struct Subject {
     pub governance_id: DigestIdentifier,
     /// Current sequence number of the subject
     pub sn: u64,
+    pub genesis_gov_version: u64,
     /// Public key of the subject
     #[schema(value_type = String)]
     pub public_key: KeyIdentifier,
@@ -90,39 +91,39 @@ impl From<Subject> for SubjectData {
 }
 
 impl Subject {
-    // TODO: Probablemente borrar
-    pub fn from_genesis_request(
-        event_request: EventRequest,
-        init_state: String,
-    ) -> Result<Self, SubjectError> {
-        let EventRequestType::Create(create_request) = event_request.request.clone() else {
-            return Err(SubjectError::NotCreateEvent)
-        };
-        // TODO: Pasar que tipo de esquema criptográfico se quiere usar por parametros
-        let keys = KeyPair::Ed25519(Ed25519KeyPair::new());
-        let public_key = KeyIdentifier::new(keys.get_key_derivator(), &keys.public_key_bytes());
-        let subject_id = generate_subject_id(
-            &create_request.namespace,
-            &create_request.schema_id,
-            create_request.public_key.to_str(),
-            create_request.governance_id.to_str(),
-            0, // Ta mal
-        )?;
-        Ok(Subject {
-            keys: Some(keys),
-            subject_id,
-            governance_id: create_request.governance_id.clone(),
-            sn: 0,
-            public_key,
-            namespace: create_request.namespace.clone(),
-            schema_id: create_request.schema_id.clone(),
-            owner: event_request.signature.content.signer.clone(),
-            creator: event_request.signature.content.signer.clone(),
-            properties: init_state,
-            active: true,
-            name: create_request.name,
-        })
-    }
+    // // TODO: Probablemente borrar
+    // pub fn from_genesis_request(
+    //     event_request: EventRequest,
+    //     init_state: String,
+    // ) -> Result<Self, SubjectError> {
+    //     let EventRequestType::Create(create_request) = event_request.request.clone() else {
+    //         return Err(SubjectError::NotCreateEvent)
+    //     };
+    //     // TODO: Pasar que tipo de esquema criptográfico se quiere usar por parametros
+    //     let keys = KeyPair::Ed25519(Ed25519KeyPair::new());
+    //     let public_key = KeyIdentifier::new(keys.get_key_derivator(), &keys.public_key_bytes());
+    //     let subject_id = generate_subject_id(
+    //         &create_request.namespace,
+    //         &create_request.schema_id,
+    //         create_request.public_key.to_str(),
+    //         create_request.governance_id.to_str(),
+    //         0, // Ta mal
+    //     )?;
+    //     Ok(Subject {
+    //         keys: Some(keys),
+    //         subject_id,
+    //         governance_id: create_request.governance_id.clone(),
+    //         sn: 0,
+    //         public_key,
+    //         namespace: create_request.namespace.clone(),
+    //         schema_id: create_request.schema_id.clone(),
+    //         owner: event_request.signature.content.signer.clone(),
+    //         creator: event_request.signature.content.signer.clone(),
+    //         properties: init_state,
+    //         active: true,
+    //         name: create_request.name,
+    //     })
+    // }
 
     pub fn from_genesis_event(event: Event, init_state: String) -> Result<Self, SubjectError> {
         let EventRequestType::Create(create_request) = event.content.event_proposal.proposal.event_request.request.clone() else {
@@ -164,6 +165,7 @@ impl Subject {
             properties: init_state,
             active: true,
             name: create_request.name,
+            genesis_gov_version: event.content.event_proposal.proposal.gov_version,
         })
     }
 

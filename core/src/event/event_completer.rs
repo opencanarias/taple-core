@@ -136,9 +136,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     event.content.event_proposal.proposal.sn,
                     prev_event_hash,
                     event_hash,
-                    state_hash,
                     gov_version,
-                    subject.owner.clone(),
                 )
             }
             EventRequestType::Transfer(transfer_request) => {
@@ -147,9 +145,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     event.content.event_proposal.proposal.sn,
                     prev_event_hash,
                     event_hash,
-                    state_hash,
                     gov_version,
-                    subject.owner.clone(),
                     transfer_request.public_key.clone(),
                 )
             }

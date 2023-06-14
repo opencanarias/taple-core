@@ -563,6 +563,7 @@ mod test {
             properties: initial_state_json,
             active: true,
             name: "".to_owned(),
+            genesis_gov_version: 3,
         }
     }
 

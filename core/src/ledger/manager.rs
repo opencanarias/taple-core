@@ -188,8 +188,15 @@ impl<C: DatabaseCollection> EventManager<C> {
                     }
                     LedgerResponse::NoResponse
                 }
-                LedgerCommand::Genesis { event_request } => {
-                    let response = self.inner_ledger.genesis(event_request).await;
+                LedgerCommand::Genesis {
+                    event,
+                    signatures,
+                    validation_proof,
+                } => {
+                    let response = self
+                        .inner_ledger
+                        .genesis(event, signatures, validation_proof)
+                        .await;
                     match response {
                         Err(error) => match error {
                             LedgerError::ChannelClosed => {
