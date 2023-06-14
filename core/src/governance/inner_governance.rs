@@ -269,7 +269,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
             return Ok(Err(signers.unwrap_err()));
         };
         match quorum {
-            Quorum::MAJORITY(_) => {
+            Quorum::MAJORITY => {
                 log::info!("Quorum Majority");
 
                 Ok(Ok((signers.len() as u32 / 2) + 1))

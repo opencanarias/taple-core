@@ -182,6 +182,9 @@ pub fn get_governance_schema() -> Value {
                 },
                 {
                   "const": "ALL"
+                },
+                {
+                  "const": "NOT_GOVERNANCE"
                 }
                 ]
               }
