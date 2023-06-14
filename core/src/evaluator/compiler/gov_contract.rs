@@ -1,13 +1,14 @@
 pub fn get_gov_contract() -> String {
     r#"mod sdk;
-    use serde::{Deserialize, Serialize};
+    use serde::{de::Visitor, Deserialize, Serialize, ser::SerializeMap};
     
     #[derive(Clone)]
     pub enum Who {
-        Id { id: String }, // TODO: QUIZÁS DEBERÍA SER UNA STRUCT ANÓNIMA CON STRING, YA QUE EN EL SCHEMA SE PONE COMO OBJECT
-        Members,
-        All,
-        External,
+        ID { ID: String },
+        NAME { NAME: String },
+        MEMBERS,
+        ALL,
+        NOT_MEMBERS,
     }
     
     impl Serialize for Who {
@@ -16,10 +17,19 @@ pub fn get_gov_contract() -> String {
             S: serde::Serializer,
         {
             match self {
-                Who::Id { id } => serializer.serialize_str(&id),
-                Who::Members => serializer.serialize_str("Members"),
-                Who::All => serializer.serialize_str("All"),
-                Who::External => serializer.serialize_str("External"),
+                Who::ID { ID } => {
+                    let mut map = serializer.serialize_map(Some(1))?;
+                    map.serialize_entry("ID", ID)?;
+                    map.end()
+                }
+                Who::NAME { NAME } => {
+                    let mut map = serializer.serialize_map(Some(1))?;
+                    map.serialize_entry("NAME", NAME)?;
+                    map.end()
+                }
+                Who::MEMBERS => serializer.serialize_str("MEMBERS"),
+                Who::ALL => serializer.serialize_str("ALL"),
+                Who::NOT_MEMBERS => serializer.serialize_str("NOT_MEMBERS"),
             }
         }
     }
@@ -30,42 +40,76 @@ pub fn get_gov_contract() -> String {
             D: serde::Deserializer<'de>,
         {
             struct WhoVisitor;
-            impl<'de> serde::de::Visitor<'de> for WhoVisitor {
+            impl<'de> Visitor<'de> for WhoVisitor {
+                type Value = Who;
                 fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
                     formatter.write_str("Who")
                 }
-                type Value = Who;
+                fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+                where
+                    A: serde::de::MapAccess<'de>,
+                {
+                    // Solo deberían tener una entrada
+                    let Some(key) = map.next_key::<String>()? else {
+                        return Err(serde::de::Error::missing_field("ID or NAME"))
+                    };
+                    println!("KEY {}", key);
+                    let result = match key.as_str() {
+                        "ID" => {
+                            let id: String = map.next_value()?;
+                            Who::ID { ID: id }
+                        }
+                        "NAME" => {
+                            let name: String = map.next_value()?;
+                            Who::NAME { NAME: name }
+                        }
+                        _ => return Err(serde::de::Error::unknown_field(&key, &["ID", "NAME"])),
+                    };
+                    let None = map.next_key::<String>()? else {
+                        return Err(serde::de::Error::custom("Input data is not valid. The data contains unkown entries"));
+                    };
+                    Ok(result)
+                }
                 fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
                 where
                     E: serde::de::Error,
                 {
+                    println!("STR");
                     match v.as_str() {
-                        "Members" => Ok(Who::Members),
-                        "All" => Ok(Who::All),
-                        "External" => Ok(Who::External),
-                        &_ => Ok(Self::Value::Id { id: v }),
+                        "MEMBERS" => Ok(Who::MEMBERS),
+                        "ALL" => Ok(Who::ALL),
+                        "NOT_MEMBERS" => Ok(Who::NOT_MEMBERS),
+                        other => Err(serde::de::Error::unknown_variant(
+                            other,
+                            &["MEMBERS", "ALL", "NOT_MEMBERS"],
+                        )),
                     }
                 }
                 fn visit_borrowed_str<E>(self, v: &'de str) -> Result<Self::Value, E>
                 where
                     E: serde::de::Error,
                 {
+                    println!("BORR STR");
                     match v {
-                        "Members" => Ok(Who::Members),
-                        "All" => Ok(Who::All),
-                        "External" => Ok(Who::External),
-                        &_ => Ok(Self::Value::Id { id: v.to_string() }),
+                        "MEMBERS" => Ok(Who::MEMBERS),
+                        "ALL" => Ok(Who::ALL),
+                        "NOT_MEMBERS" => Ok(Who::NOT_MEMBERS),
+                        other => Err(serde::de::Error::unknown_variant(
+                            other,
+                            &["MEMBERS", "ALL", "NOT_MEMBERS"],
+                        )),
                     }
                 }
             }
-            deserializer.deserialize_str(WhoVisitor {})
+            deserializer.deserialize_any(WhoVisitor {})
         }
     }
     
     #[derive(Clone)]
     pub enum SchemaEnum {
-        Id { id: String }, // TODO: QUIZÁS DEBERÍA SER UNA STRUCT ANÓNIMA CON STRING, YA QUE EN EL SCHEMA SE PONE COMO OBJECT
-        AllSchemas,
+        ID { ID: String },
+        NOT_GOVERNANCE,
+        ALL,
     }
     
     impl Serialize for SchemaEnum {
@@ -74,8 +118,13 @@ pub fn get_gov_contract() -> String {
             S: serde::Serializer,
         {
             match self {
-                SchemaEnum::Id { id } => serializer.serialize_str(&id),
-                SchemaEnum::AllSchemas => serializer.serialize_str("all_schemas"),
+                SchemaEnum::ID { ID } => {
+                    let mut map = serializer.serialize_map(Some(1))?;
+                    map.serialize_entry("ID", ID)?;
+                    map.end()
+                }
+                SchemaEnum::NOT_GOVERNANCE => serializer.serialize_str("NOT_GOVERNANCE"),
+                SchemaEnum::ALL => serializer.serialize_str("ALL"),
             }
         }
     }
@@ -86,18 +135,42 @@ pub fn get_gov_contract() -> String {
             D: serde::Deserializer<'de>,
         {
             struct SchemaEnumVisitor;
-            impl<'de> serde::de::Visitor<'de> for SchemaEnumVisitor {
-                fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                    formatter.write_str("SchemaEnum")
-                }
+            impl<'de> Visitor<'de> for SchemaEnumVisitor {
                 type Value = SchemaEnum;
+                fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                    formatter.write_str("Schema")
+                }
+                fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+                where
+                    A: serde::de::MapAccess<'de>,
+                {
+                    // Solo deberían tener una entrada
+                    let Some(key) = map.next_key::<String>()? else {
+                        return Err(serde::de::Error::missing_field("ID"))
+                    };
+                    let result = match key.as_str() {
+                        "ID" => {
+                            let id: String = map.next_value()?;
+                            SchemaEnum::ID { ID: id }
+                        }
+                        _ => return Err(serde::de::Error::unknown_field(&key, &["ID", "NAME"])),
+                    };
+                    let None = map.next_key::<String>()? else {
+                        return Err(serde::de::Error::custom("Input data is not valid. The data contains unkown entries"));
+                    };
+                    Ok(result)
+                }
                 fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
                 where
                     E: serde::de::Error,
                 {
                     match v.as_str() {
-                        "all_schemas" => Ok(Self::Value::AllSchemas),
-                        &_ => Ok(Self::Value::Id { id: v }),
+                        "ALL" => Ok(Self::Value::ALL),
+                        "NOT_GOVERNANCE" => Ok(Self::Value::NOT_GOVERNANCE),
+                        other => Err(serde::de::Error::unknown_variant(
+                            other,
+                            &["ALL", "NOT_GOVERNANCE"],
+                        )),
                     }
                 }
                 fn visit_borrowed_str<E>(self, v: &'de str) -> Result<Self::Value, E>
@@ -105,12 +178,16 @@ pub fn get_gov_contract() -> String {
                     E: serde::de::Error,
                 {
                     match v {
-                        "all_schemas" => Ok(Self::Value::AllSchemas),
-                        &_ => Ok(Self::Value::Id { id: v.to_string() }),
+                        "ALL" => Ok(Self::Value::ALL),
+                        "NOT_GOVERNANCE" => Ok(Self::Value::NOT_GOVERNANCE),
+                        other => Err(serde::de::Error::unknown_variant(
+                            other,
+                            &["ALL", "NOT_GOVERNANCE"],
+                        )),
                     }
                 }
             }
-            deserializer.deserialize_str(SchemaEnumVisitor {})
+            deserializer.deserialize_any(SchemaEnumVisitor {})
         }
     }
     
@@ -118,28 +195,30 @@ pub fn get_gov_contract() -> String {
     pub struct Role {
         who: Who,
         namespace: String,
-        roles: Vec<String>,
+        roles: Vec<RoleEnum>,
         schema: SchemaEnum,
+    }
+    
+    #[derive(Serialize, Deserialize, Clone)]
+    pub enum RoleEnum {
+        VALIDATOR,
+        CREATOR,
+        INVOKER,
+        WITNESS,
+        APPROVER,
+        EVALUATOR
     }
     
     #[derive(Serialize, Deserialize, Clone)]
     pub struct Member {
         id: String,
-        description: String,
-        key: String,
+        name: String,
     }
     
     #[derive(Serialize, Deserialize, Clone)]
     pub struct Contract {
         name: String,
         content: String,
-    }
-    
-    #[derive(Serialize, Deserialize, Clone)]
-    pub struct Fact {
-        name: String,
-        description: String,
-        schema: serde_json::Value,
     }
     
     #[derive(Serialize, Deserialize, Clone)]
@@ -152,7 +231,6 @@ pub fn get_gov_contract() -> String {
     
     #[derive(Serialize, Deserialize, Clone)]
     pub struct Validation {
-        roles: Vec<String>,
         quorum: Quorum,
     }
     
@@ -162,10 +240,6 @@ pub fn get_gov_contract() -> String {
         approve: Validation,
         evaluate: Validation,
         validate: Validation,
-        create: Vec<String>,
-        witness: Vec<String>,
-        close: Vec<String>,
-        invoke: Vec<String>,
     }
     
     #[derive(Serialize, Deserialize, Clone)]
@@ -175,7 +249,6 @@ pub fn get_gov_contract() -> String {
         // #[serde(rename = "Initial-Value")]
         initial_value: serde_json::Value,
         contract: Contract,
-        facts: Vec<Fact>,
     }
     
     #[repr(C)]
@@ -219,6 +292,6 @@ pub fn get_gov_contract() -> String {
         }
         contract_result.success = true;
         contract_result.approval_required = true;
-    }    
+    }
   "#.into()
 }
