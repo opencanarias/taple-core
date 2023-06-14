@@ -26,6 +26,7 @@ use crate::{
     message::{MessageConfig, MessageTaskCommand},
     notary::NotaryEvent,
     protocol::protocol_message_manager::TapleMessages,
+    request::TapleRequest,
     signature::{Signature, SignatureContent, UniqueSignature},
     utils::message::{
         approval::create_approval_request, evaluator::create_evaluator_request,
@@ -601,10 +602,10 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 event.clone(),
             );
             self.database
-                .set_prevalidated_event(&subject_id, event)
+                .set_taple_request(&request_id, &event_request.clone().try_into()?)
                 .map_err(|error| EventError::DatabaseError(error.to_string()))?;
             self.database
-                .set_taple_request(&request_id, &event_request.clone().try_into()?)
+                .set_request(&subject_id, event_request)
                 .map_err(|error| EventError::DatabaseError(error.to_string()))?;
             self.subjects_completing_event
                 .insert(subject_id, (stage, signers, (quorum_size, 0)));
@@ -662,8 +663,12 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 // de inmediato. Debe ser eliminado pues, después de la validación.
                 // Estos eventos ni se evaluan, ni se aprueban.
                 // No es necesario comprobar la governance, pues no se requieren permisos para la transferencia
-                self.process_transfer_or_eol_event(event_request, subject, gov_version)
-                    .await?;
+                self.process_transfer_or_eol_event(
+                    event_request.clone(),
+                    subject.clone(),
+                    gov_version,
+                )
+                .await?;
             }
             EventRequestType::Fact(state_request) => {
                 // Request evaluation signatures, sending request, sn and signature of everything about the subject
@@ -727,12 +732,6 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     ))
                 })?;
                 // let er_hash = event_request.signature.content.event_content_hash.clone();
-                self.database
-                    .set_taple_request(&request_id, &event_request.clone().try_into()?)
-                    .map_err(|error| EventError::DatabaseError(error.to_string()))?;
-                self.database
-                    .set_request(&subject.subject_id, event_request)
-                    .map_err(|error| EventError::DatabaseError(error.to_string()))?;
                 self.event_pre_evaluations
                     .insert(event_preevaluation_hash, event_preevaluation.clone());
                 // if let Some(sn) = self.actual_sn.get_mut(&subject_id) {
@@ -746,10 +745,6 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     subject_id.clone(),
                     (stage, signers.clone(), (quorum_size, negative_quorum_size)),
                 );
-                self.subjects_by_governance
-                    .entry(subject.governance_id)
-                    .or_insert_with(HashSet::new)
-                    .insert(subject_id.clone());
                 self.ask_signatures(
                     &subject_id,
                     create_evaluator_request(event_preevaluation.clone()),
@@ -760,6 +755,19 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             }
             EventRequestType::Create(_) => unreachable!(),
         }
+        self.subjects_by_governance
+            .entry(subject.governance_id)
+            .or_insert_with(HashSet::new)
+            .insert(subject_id.clone());
+        let mut request_data: TapleRequest = event_request.clone().try_into()?;
+        request_data.sn = Some(subject.sn + 1);
+        request_data.subject_id = Some(subject.subject_id.clone());
+        self.database
+            .set_taple_request(&request_id, &request_data)
+            .map_err(|error| EventError::DatabaseError(error.to_string()))?;
+        self.database
+            .set_request(&subject.subject_id, event_request)
+            .map_err(|error| EventError::DatabaseError(error.to_string()))?;
         Ok(request_id)
     }
 
@@ -1333,6 +1341,10 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 .await?;
             self.database
                 .del_prevalidated_event(&subject_id)
+                .map_err(|error| EventError::DatabaseError(error.to_string()))?;
+            // Por si es Create, Florentín dice que no da error si no existe lo que hay que borrar
+            self.database
+                .del_request(&subject_id)
                 .map_err(|error| EventError::DatabaseError(error.to_string()))?;
             // Cancelar pedir firmas
             self.message_channel

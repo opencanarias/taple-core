@@ -214,14 +214,6 @@ impl<C: DatabaseCollection> Ledger<C> {
         // Crear sujeto a partir de genesis y evento
         let subject = Subject::from_genesis_event(event.clone(), init_state_string)
             .map_err(LedgerError::SubjectError)?;
-        // Crear evento a partir de event_request
-        let event = Event::from_genesis_request(
-            event.content.event_proposal.proposal.event_request.clone(),
-            subject.keys.clone().unwrap(),
-            governance_version,
-            &init_state,
-        )
-        .map_err(LedgerError::SubjectError)?;
         let sn = event.content.event_proposal.proposal.sn;
         // Añadir sujeto y evento a base de datos
         let subject_id = subject.subject_id.clone();
