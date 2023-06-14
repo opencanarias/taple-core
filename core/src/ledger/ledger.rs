@@ -226,16 +226,18 @@ impl<C: DatabaseCollection> Ledger<C> {
         } else {
             self.subject_is_gov.insert(subject_id.clone(), false);
         }
+        let ev_request = event.content.event_proposal.proposal.event_request.clone();
         self.database
             .set_governance_index(&subject_id, &subject.governance_id)?;
         self.database.set_subject(&subject_id, subject)?;
-        self.set_finished_request(
-            &request_id,
-            event.content.event_proposal.proposal.event_request.clone(),
-            sn,
-            subject_id.clone(),
+        self.database.set_signatures(
+            &subject_id,
+            event.content.event_proposal.proposal.sn,
+            signatures,
+            validation_proof, // Current Owner
         )?;
         self.database.set_event(&subject_id, event)?;
+        self.set_finished_request(&request_id, ev_request, sn, subject_id.clone())?;
         // Actualizar Ledger State
         match self.ledger_state.entry(subject_id.clone()) {
             Entry::Occupied(mut ledger_state) => {
@@ -2118,8 +2120,6 @@ impl<C: DatabaseCollection> Ledger<C> {
                                                 head: Some(head),
                                             },
                                         );
-                                        let subject_owner =
-                                            self.database.get_subject(&subject_id)?.owner;
                                         // No se llega hasta el LCE con el event sourcing
                                         // Pedir siguiente evento
                                         let mut witnesses =

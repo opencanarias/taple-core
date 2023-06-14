@@ -106,21 +106,16 @@ impl<C: DatabaseCollection> Notary<C> {
         {
             return Err(NotaryError::SubjectSignatureNotValid);
         }
-        match self
+        let subject_pk = self
             .check_proofs(
                 &notary_event.proof,
                 notary_event.previous_proof,
-                &notary_event.prev_event_validation_signatures,
+                notary_event.prev_event_validation_signatures,
                 last_proof,
             )
-            .await?
-        {
-            Some(subject_pk) => {
-                if notary_event.subject_signature.content.signer != subject_pk {
-                    return Err(NotaryError::SubjectSignatureNotValid);
-                }
-            }
-            None => {}
+            .await?;
+        if notary_event.subject_signature.content.signer != subject_pk {
+            return Err(NotaryError::SubjectSignatureNotValid);
         }
         self.database
             .set_notary_register(&notary_event.proof.subject_id, &notary_event.proof)
@@ -156,20 +151,20 @@ impl<C: DatabaseCollection> Notary<C> {
         &self,
         new_proof: &ValidationProof,
         previous_proof: Option<ValidationProof>,
-        validation_signatures: &HashSet<Signature>,
+        validation_signatures: HashSet<Signature>,
         last_proof: Option<ValidationProof>,
-    ) -> Result<Option<KeyIdentifier>, NotaryError> {
+    ) -> Result<KeyIdentifier, NotaryError> {
         match last_proof {
             Some(last_proof) => {
                 // Comprobar que tenemos la prueba del evento anterior, si no tenemos que hacer la comprobación de la que nos llega en el mensaje como cuando no tenemos el registro
                 if last_proof.sn > new_proof.sn {
                     Err(NotaryError::EventSnLowerThanLastSigned)
-                } else if last_proof.sn == new_proof.sn {
+                } else if last_proof.sn == new_proof.sn && last_proof.sn != 0 {
                     // Comprobar que solo cambia la versión de la governanza
                     if !last_proof.is_similar(&new_proof) {
                         Err(NotaryError::DifferentProofForEvent)
                     } else {
-                        Ok(Some(last_proof.subject_public_key))
+                        Ok(last_proof.subject_public_key)
                     }
                 } else if last_proof.sn + 1 == new_proof.sn {
                     // Comprobar que es similar a la prueba del evento anterior que nos llega en el mensaje
@@ -178,44 +173,45 @@ impl<C: DatabaseCollection> Notary<C> {
                     {
                         Err(NotaryError::DifferentProofForEvent)
                     } else {
-                        Ok(Some(last_proof.subject_public_key))
+                        Ok(last_proof.subject_public_key)
                     }
                 } else {
                     // Mismo caso que en not found, no tengo la prueba anterior
-                    if new_proof.sn == 1 {
-                        // Nos tenemos que fiar:
-                        // TODO: actualmente si el evento 0 no lo validamos no existe la prueba de sn 0, con lo que si el evento 1 es de transferencia ya se va a cambiar la public key del sujeto en la prueba (se pone la nueva), con lo que no puedo validar la firma del sujeto que viene en el evento 1 en este caso porque se va a firmar con otro material criptográfico (el que tenía previamente) entonces no me queda otra que fiarme de los eventos 1
-                        Ok(None)
+                    if new_proof.sn == 0 {
+                        // Comprobar que es exactamente la misma, no se puede cambiar la gov version y no el subject_id, porque éste último depende de ella
+                        if &last_proof != new_proof {
+                            Err(NotaryError::DifferentProofForEvent)
+                        } else {
+                            Ok(new_proof.subject_public_key.clone())
+                        }
                     } else {
                         if previous_proof.is_none() {
                             return Err(NotaryError::PreviousProofLeft);
                         }
-                        Ok(Some(
-                            self.validate_previous_proof(
+                        Ok(self
+                            .validate_previous_proof(
                                 new_proof,
                                 previous_proof.unwrap(),
                                 validation_signatures,
                             )
-                            .await?,
-                        ))
+                            .await?)
                     }
                 }
             }
             None => {
                 // Comprobar la prueba de validación anterior junto con las firmas de validación de dicha prueba, su validez criptográfica y si llega a quorum
-                if previous_proof.is_none() && new_proof.sn != 1 {
+                if previous_proof.is_none() && new_proof.sn != 0 {
                     return Err(NotaryError::PreviousProofLeft);
-                } else if new_proof.sn != 1 {
-                    Ok(Some(
-                        self.validate_previous_proof(
+                } else if new_proof.sn != 0 {
+                    Ok(self
+                        .validate_previous_proof(
                             new_proof,
                             previous_proof.unwrap(),
                             validation_signatures,
                         )
-                        .await?,
-                    ))
+                        .await?)
                 } else {
-                    Ok(None)
+                    Ok(new_proof.subject_public_key.clone())
                 }
             }
         }
@@ -225,7 +221,7 @@ impl<C: DatabaseCollection> Notary<C> {
         &self,
         new_proof: &ValidationProof,
         previous_proof: ValidationProof,
-        validation_signatures: &HashSet<Signature>,
+        validation_signatures: HashSet<Signature>,
     ) -> Result<KeyIdentifier, NotaryError> {
         // Comprobar que la previous encaja con la nueva
         // TODO: Comprobar los demás campos, como subject_id, namespace...
@@ -235,18 +231,31 @@ impl<C: DatabaseCollection> Notary<C> {
         if previous_proof.sn + 1 != new_proof.sn {
             return Err(NotaryError::DifferentProofForEvent);
         }
-        for signature in validation_signatures.iter() {
-            signature
-                .verify()
-                .map_err(|_| NotaryError::InvalidSignature)?;
+        if previous_proof.genesis_governance_version != new_proof.genesis_governance_version {
+            return Err(NotaryError::DifferentProofForEvent);
+        }
+        if previous_proof.namespace != new_proof.namespace {
+            return Err(NotaryError::DifferentProofForEvent);
+        }
+        if previous_proof.name != new_proof.name {
+            return Err(NotaryError::DifferentProofForEvent);
+        }
+        if previous_proof.subject_id != new_proof.subject_id {
+            return Err(NotaryError::DifferentProofForEvent);
+        }
+        if previous_proof.schema_id != new_proof.schema_id {
+            return Err(NotaryError::DifferentProofForEvent);
+        }
+        if previous_proof.governance_id != new_proof.governance_id {
+            return Err(NotaryError::DifferentProofForEvent);
         }
         let actual_signers: Result<HashSet<KeyIdentifier>, NotaryError> = validation_signatures
-            .iter()
+            .into_iter()
             .map(|signature| {
                 if signature.verify().is_err() {
                     return Err(NotaryError::InvalidSignature);
                 }
-                Ok(signature.content.signer.clone())
+                Ok(signature.content.signer)
             })
             .collect();
         let actual_signers = actual_signers?;
