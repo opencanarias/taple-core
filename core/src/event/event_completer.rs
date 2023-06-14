@@ -12,13 +12,14 @@ use crate::{
             event::{EventContent, ValidationProof},
             event_preevaluation::{Context, EventPreEvaluation},
             event_proposal::{Evaluation, EventProposal, Proposal},
-            state::Subject,
+            state::{generate_subject_id, Subject},
             Acceptance,
         },
         self_signature_manager::SelfSignatureManager,
     },
+    crypto::{KeyMaterial, KeyPair},
     event_content::Metadata,
-    event_request::EventRequest,
+    event_request::{CreateRequest, EventRequest},
     governance::{stage::ValidationStage, GovernanceAPI, GovernanceInterface},
     identifier::{Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier},
     ledger::{LedgerCommand, LedgerResponse},
@@ -99,22 +100,39 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         }
     }
 
+    fn create_notary_event_from_genesis(
+        &self,
+        create_request: CreateRequest,
+        event_hash: DigestIdentifier,
+        governance_version: u64,
+        subject_id: DigestIdentifier,
+        subject_keys: &KeyPair,
+    ) -> Result<NotaryEvent, EventError> {
+        let validation_proof = ValidationProof::new_from_genesis_event(
+            create_request,
+            event_hash,
+            governance_version,
+            subject_id,
+        );
+        let public_key = KeyIdentifier::new(
+            subject_keys.get_key_derivator(),
+            &subject_keys.public_key_bytes(),
+        );
+        let subject_signature = Signature::new(&validation_proof, public_key, subject_keys)?;
+        Ok(NotaryEvent {
+            proof: validation_proof,
+            subject_signature,
+            previous_proof: None,
+            prev_event_validation_signatures: HashSet::new(),
+        })
+    }
+
     fn create_notary_event(
         &self,
         subject: &Subject,
         event: &Event,
         gov_version: u64,
     ) -> Result<NotaryEvent, EventError> {
-        let state_hash = match &event.content.event_proposal.proposal.event_request.request {
-            EventRequestType::Create(_) => {
-                unreachable!();
-            }
-            EventRequestType::Fact(_) => {
-                subject.state_hash_after_apply(&event.content.event_proposal.proposal.json_patch)?
-            }
-            EventRequestType::Transfer(_) => subject.get_state_hash()?,
-            EventRequestType::EOL(_) => subject.get_state_hash()?,
-        };
         let prev_event_hash = if event.content.event_proposal.proposal.sn == 0 {
             DigestIdentifier::default()
         } else {
@@ -453,8 +471,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         ))
     }
 
-    /// Function that is called when a new event request arrives at the system, either invoked by the controller or externally
-    pub async fn new_event(
+    pub async fn pre_new_event(
         &mut self,
         event_request: EventRequest,
     ) -> Result<DigestIdentifier, EventError> {
@@ -473,12 +490,32 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             Err(crate::DbError::EntryNotFound) => {}
             Err(error) => return Err(EventError::DatabaseError(error.to_string())),
         }
+        self.new_event(event_request).await
+    }
+
+    /// Function that is called when a new event request arrives at the system, either invoked by the controller or externally
+    pub async fn new_event(
+        &mut self,
+        event_request: EventRequest,
+    ) -> Result<DigestIdentifier, EventError> {
+        let request_id = DigestIdentifier::from_serializable_borsh(&event_request)
+            .map_err(|_| EventError::HashGenerationFailed)?;
         if let EventRequestType::Create(create_request) = &event_request.request {
             // Comprobar si es governance, entonces vale todo, si no comprobar que el invoker soy yo y puedo hacerlo
             if event_request.signature.content.signer != self.own_identifier {
                 return Err(EventError::ExternalGenesisEvent);
             }
-            if &create_request.schema_id != "governance" {
+            // Check if i have the keys
+            let subject_keys = match self.database.get_keys(&create_request.public_key) {
+                Ok(keys) => keys,
+                Err(crate::DbError::EntryNotFound) => {
+                    return Err(EventError::SubjectKeysNotFound(
+                        create_request.public_key.to_str(),
+                    ));
+                }
+                Err(error) => return Err(EventError::DatabaseError(error.to_string())),
+            };
+            let (governance_version, initial_state) = if &create_request.schema_id != "governance" {
                 let governance_version = self
                     .gov_api
                     .get_governance_version(
@@ -487,9 +524,9 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     )
                     .await
                     .map_err(EventError::GovernanceError)?;
-                let creators = self
+                let creation_premission = self
                     .gov_api
-                    .get_signers(
+                    .get_invoke_info(
                         Metadata {
                             namespace: create_request.namespace.clone(),
                             subject_id: DigestIdentifier::default(), // Not necessary for this method
@@ -498,16 +535,79 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                             schema_id: create_request.schema_id.clone(),
                         },
                         ValidationStage::Create,
+                        self.own_identifier.clone(),
                     )
                     .await
                     .map_err(EventError::GovernanceError)?;
-                if !creators.contains(&self.own_identifier) {
+                if !creation_premission {
                     return Err(EventError::CreatingPermissionDenied);
                 }
-            }
-            self.ledger_sender
-                .tell(LedgerCommand::Genesis { event_request })
+                let initial_state = self
+                    .gov_api
+                    .get_init_state(
+                        create_request.governance_id.clone(),
+                        create_request.schema_id.clone(),
+                        governance_version,
+                    )
+                    .await?;
+                (governance_version, initial_state)
+            } else {
+                let initial_state = self
+                    .gov_api
+                    .get_init_state(
+                        create_request.governance_id.clone(),
+                        create_request.schema_id.clone(),
+                        0,
+                    )
+                    .await?;
+                (0, initial_state)
+            };
+            let subject_id = generate_subject_id(
+                &create_request.namespace,
+                &create_request.schema_id,
+                create_request.public_key.to_str(),
+                create_request.governance_id.to_str(),
+                governance_version,
+            )?;
+            // Una vez que todo va bien creamos el evento prevalidado y lo mandamos a validación
+            let event = Event::from_genesis_request(
+                event_request.clone(),
+                &subject_keys,
+                governance_version,
+                &initial_state,
+            )
+            .map_err(EventError::SubjectError)?;
+            let notary_event = self.create_notary_event_from_genesis(
+                create_request.clone(),
+                event.signature.content.event_content_hash.clone(),
+                governance_version,
+                subject_id.clone(),
+                &subject_keys,
+            )?;
+            let metadata = notary_event.proof.get_metadata();
+            let event_message = create_validator_request(notary_event.clone());
+            let stage = ValidationStage::Validate;
+            let (signers, quorum_size) =
+                self.get_signers_and_quorum(metadata, stage.clone()).await?;
+            self.ask_signatures(&subject_id, event_message, signers.clone(), quorum_size)
                 .await?;
+            self.event_notary_events.insert(
+                event.signature.content.event_content_hash.clone(),
+                notary_event,
+            );
+            // Hacer update de fase por la que va el evento
+            self.events_to_validate.insert(
+                event.signature.content.event_content_hash.clone(),
+                event.clone(),
+            );
+            self.database
+                .set_prevalidated_event(&subject_id, event)
+                .map_err(|error| EventError::DatabaseError(error.to_string()))?;
+            self.database
+                .set_taple_request(&request_id, &event_request.clone().try_into()?)
+                .map_err(|error| EventError::DatabaseError(error.to_string()))?;
+            self.subjects_completing_event
+                .insert(subject_id, (stage, signers, (quorum_size, 0)));
             return Ok(request_id);
         }
         let subject_id = match &event_request.request {

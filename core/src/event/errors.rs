@@ -59,5 +59,7 @@ pub enum EventError {
     #[error("Hash generation failed")]
     HashGenerationFailed,
     #[error("Request already known")]
-    RequestAlreadyKnown
+    RequestAlreadyKnown,
+    #[error("Subject Keys Not Found")]
+    SubjectKeysNotFound(String),
 }

@@ -7,9 +7,9 @@ use crate::{
         errors::SubjectError,
     },
     event_content::Metadata,
-    event_request::EventRequest,
+    event_request::{CreateRequest, EventRequest},
     identifier::{Derivable, DigestIdentifier, KeyIdentifier},
-    signature::{Signature},
+    signature::Signature,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use json_patch::{diff, Patch};
@@ -56,6 +56,26 @@ pub struct ValidationProof {
 }
 
 impl ValidationProof {
+    pub fn new_from_genesis_event(
+        create_request: CreateRequest,
+        event_hash: DigestIdentifier,
+        governance_version: u64,
+        subject_id: DigestIdentifier,
+    ) -> Self {
+        Self {
+            governance_id: create_request.governance_id,
+            governance_version,
+            subject_id,
+            sn: 0,
+            schema_id: create_request.schema_id,
+            namespace: create_request.namespace,
+            prev_event_hash: DigestIdentifier::default(),
+            event_hash,
+            subject_public_key: create_request.public_key,
+            genesis_governance_version: governance_version,
+            name: create_request.name,
+        }
+    }
     pub fn new_from_transfer_event(
         subject: &Subject,
         sn: u64,
@@ -142,7 +162,7 @@ impl EventContent {
 impl Event {
     pub fn from_genesis_request(
         event_request: EventRequest,
-        subject_keys: KeyPair,
+        subject_keys: &KeyPair,
         gov_version: u64,
         init_state: &Value,
     ) -> Result<Self, SubjectError> {
