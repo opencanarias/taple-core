@@ -7,7 +7,7 @@ use crate::{
     governance::{error::RequestError, GovernanceAPI},
     message::MessageTaskCommand,
     protocol::protocol_message_manager::TapleMessages,
-    DatabaseCollection, DigestIdentifier, KeyIdentifier, Notification,
+    DatabaseCollection, KeyIdentifier, Notification,
 };
 
 use super::{errors::LedgerError, ledger::Ledger, LedgerCommand, LedgerResponse};

@@ -6,7 +6,6 @@ mod message_task_manager;
 
 use crate::{
     commons::{identifier::KeyIdentifier, self_signature_manager::{SelfSignatureManager, SelfSignatureInterface}},
-    crypto::KeyPair,
     signature::Signature,
     DigestIdentifier,
 };

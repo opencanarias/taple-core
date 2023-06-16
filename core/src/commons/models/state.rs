@@ -1,10 +1,9 @@
 use crate::{
     commons::{
-        crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair},
+        crypto::{KeyPair},
         errors::SubjectError,
         identifier::{DigestIdentifier, KeyIdentifier},
     },
-    event_request::EventRequest,
     Derivable,
 };
 use json_patch::{patch, Patch};
@@ -141,7 +140,7 @@ impl Subject {
             subject_id,
             governance_id: create_request.governance_id.clone(),
             sn: 0,
-            public_key: event.signature.content.signer,
+            public_key: create_request.public_key,
             namespace: create_request.namespace.clone(),
             schema_id: create_request.schema_id.clone(),
             owner: event
@@ -202,7 +201,7 @@ impl Subject {
     }
 
     pub fn get_state_hash(&self) -> Result<DigestIdentifier, SubjectError> {
-        let mut subject_properties = serde_json::from_str::<Value>(&self.properties)
+        let subject_properties = serde_json::from_str::<Value>(&self.properties)
             .map_err(|_| SubjectError::CryptoError(String::from("Error parsing the state")))?;
         let subject_properties_str = serde_json::to_string(&subject_properties)
             .map_err(|_| SubjectError::CryptoError(String::from("Error serializing the state")))?;

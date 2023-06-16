@@ -632,7 +632,6 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 .content
                                 .event_content_hash
                         };
-                        let state_hash = subject.get_state_hash()?;
                         let validation_proof = ValidationProof::new_from_transfer_event(
                             &subject,
                             event.content.event_proposal.proposal.sn,
@@ -1247,10 +1246,6 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 .content
                                 .event_content_hash
                         };
-                        let state_hash = subject.state_hash_after_apply(
-                            &event.content.event_proposal.proposal.json_patch,
-                        )?;
-
                         let notary_hash = DigestIdentifier::from_serializable_borsh(
                             &validation_proof,
                         )
@@ -1259,17 +1254,8 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 "Error calculating the hash of the serializable",
                             ))
                         })?;
-
                         log::warn!("NOTARY HASH QUE ME LLEGA {}", notary_hash.to_str());
                         log::warn!("VALIDATION PROOF {:?}", validation_proof);
-                        let notary_hash = DigestIdentifier::from_serializable_borsh(
-                            &validation_proof,
-                        )
-                        .map_err(|_| {
-                            LedgerError::CryptoError(String::from(
-                                "Error calculating the hash of the serializable",
-                            ))
-                        })?;
                         log::warn!("SIGNATURES SIZE: {}", signatures.len());
                         log::warn!("SIGNERS SIZE {}", signers.len());
                         verify_signatures(&signatures, &signers, quorum, &notary_hash)?;

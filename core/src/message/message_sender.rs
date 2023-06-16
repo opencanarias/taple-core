@@ -1,4 +1,4 @@
-use crate::commons::identifier::{Derivable, KeyIdentifier};
+use crate::commons::identifier::KeyIdentifier;
 use crate::commons::self_signature_manager::SelfSignatureManager;
 use log::debug;
 use rmp_serde;

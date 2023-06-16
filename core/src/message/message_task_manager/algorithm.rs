@@ -2,7 +2,7 @@ use crate::commons::identifier::{Derivable, KeyIdentifier};
 use futures::{future::BoxFuture, prelude::*};
 use log::debug;
 
-use super::super::{error::Error, Message, MessageConfig, MessageSender, TaskCommandContent};
+use super::super::{error::Error, MessageConfig, MessageSender, TaskCommandContent};
 use std::time::Duration;
 
 use rand::Rng;
