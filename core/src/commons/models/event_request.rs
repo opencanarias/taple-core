@@ -37,7 +37,6 @@ pub struct CreateRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct FactRequest {
-    #[schema(value_type = String)]
     pub subject_id: DigestIdentifier,
     pub payload: String,
 }

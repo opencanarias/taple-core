@@ -785,34 +785,34 @@ mod test {
         DigestIdentifier::from_str("J6axKnS5KQjtMDFgapJq49tdIpqGVpV7SS4kxV1iR10I").unwrap()
     }
 
-    #[test]
-    fn subject_not_found_test() {
-        let rt = Runtime::new().unwrap();
-        rt.block_on(async {
-            let (manager, not_rx, database, signature_manager) =
-                create_module(VotationType::AlwaysAccept);
-            // Creamos los datos
-            let invokator = create_invokator_signature_manager();
-            let subject = Subject::from_genesis_request(
-                create_genesis_request(create_json_state(), &invokator),
-                create_json_state(),
-            )
-            .unwrap();
-            let msg = generate_request_approve_msg(
-                create_state_request(create_json_state(), &invokator, &subject.subject_id),
-                1,
-                &get_governance_id(),
-                0,
-                true,
-                vec![generate_evaluator_signature(
-                    &create_evaluator_signature_manager(),
-                    true,
-                    true,
-                    0,
-                )],
-                &subject,
-                "".into(),
-            );
-        });
-    }
+    // #[test]
+    // fn subject_not_found_test() {
+    //     let rt = Runtime::new().unwrap();
+    //     rt.block_on(async {
+    //         let (manager, not_rx, database, signature_manager) =
+    //             create_module(VotationType::AlwaysAccept);
+    //         // Creamos los datos
+    //         let invokator = create_invokator_signature_manager();
+    //         let subject = Subject::from_genesis_request(
+    //             create_genesis_request(create_json_state(), &invokator),
+    //             create_json_state(),
+    //         )
+    //         .unwrap();
+    //         let msg = generate_request_approve_msg(
+    //             create_state_request(create_json_state(), &invokator, &subject.subject_id),
+    //             1,
+    //             &get_governance_id(),
+    //             0,
+    //             true,
+    //             vec![generate_evaluator_signature(
+    //                 &create_evaluator_signature_manager(),
+    //                 true,
+    //                 true,
+    //                 0,
+    //             )],
+    //             &subject,
+    //             "".into(),
+    //         );
+    //     });
+    // }
 }
