@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use super::{GetEventsOfSubject, GetGovernanceSubjects};
+use super::{GetEvents, GetGovernanceSubjects};
 use super::{
     error::{APIInternalError, ApiError},
     inner_api::InnerAPI,
@@ -21,7 +21,7 @@ use crate::commons::{
 use crate::event::manager::EventAPI;
 use crate::ledger::manager::EventManagerAPI;
 use crate::signature::Signature;
-use crate::KeyIdentifier;
+use crate::{KeyIdentifier, KeyDerivator};
 use crate::{
     approval::ApprovalPetitionData,
     commons::models::Acceptance,
@@ -40,38 +40,10 @@ use tokio::sync::watch::Sender;
 /// to find out how many API queries have been made.
 #[async_trait]
 pub trait ApiModuleInterface {
-    /// Allows to generate a voting request in the system.
-    /// This request will be sent to the node that will be in charge of handling
-    /// the votes of the rest of the nodes belonging to the same governance.
-    /// # Possible errors
-    /// • [ApiError::InternalError] if an internal error occurs during operation execution.<br />
-    /// • [ApiError::InvalidParameters] if the specified request identifier does not match a valid [DigestIdentifier].<br />
-    async fn create_request(
-        &self,
-        request_type: EventRequestType,
-    ) -> Result<DigestIdentifier, ApiError>;
     /// Allows to make a request to the node from an external Invoker
     async fn external_request(
         &self,
         event_request: EventRequest,
-    ) -> Result<DigestIdentifier, ApiError>;
-    /// Allows adding a new event to the chain of a subject previously existing
-    /// in the node. The event identifier and its [payload](RequestPayload) are required.
-    /// This method returns the enumerated [CreateRequestResponse], being the identifier
-    /// of a request when the event intends to update a governance, in which case
-    /// it will be communicated to the rest of the nodes aware of the governance with
-    /// the intention that they vote the change contained in the request. In case the event
-    /// is from a conventional subject, the system returns the created event.
-    /// # Possible errors
-    /// This method will return [ApiError::EventCreationError] if it has not been possible
-    /// to create the event, while [ApiError::InternalError] will be obtained if an internal error
-    /// has occurred during the management of the operation. If it has not been possible to create
-    /// the signature accompanying the creation of the event with the node identity,
-    /// then [ApiError::SignError] will be obtained.
-    async fn create_event(
-        &self,
-        subject_id: DigestIdentifier,
-        payload: String,
     ) -> Result<DigestIdentifier, ApiError>;
     /// Allows to get all subjects that are known to the current node, regardless of their governance.
     /// Paging can be performed using the optional arguments `from` and `quantity`.
@@ -80,7 +52,7 @@ pub trait ApiModuleInterface {
     /// also returns the subjects that model governance.
     /// # Possible errors
     /// • [ApiError::InternalError] if an internal error occurred during the execution of the operation.
-    async fn get_all_subjects(
+    async fn get_subjects(
         &self,
         namespace: String,
         from: Option<String>,
@@ -89,7 +61,7 @@ pub trait ApiModuleInterface {
     /// It allows to obtain all the subjects that model existing governance in the node.
     /// # Possible errors
     /// • [ApiError::InternalError] if an internal error occurred during the execution of the operation.
-    async fn get_all_governances(
+    async fn get_governances(
         &self,
         namespace: String,
         from: Option<String>,
@@ -101,7 +73,7 @@ pub trait ApiModuleInterface {
     /// the paging is performed in the opposite direction starting from the end of the string.
     /// # Possible errors
     /// • [ApiError::InvalidParameters] if the specified subject identifier does not match a valid [DigestIdentifier].
-    async fn get_event_of_subject(
+    async fn get_events(
         &self,
         subject_id: DigestIdentifier,
         from: Option<i64>,
@@ -109,32 +81,11 @@ pub trait ApiModuleInterface {
     ) -> Result<Vec<Event>, ApiError>;
 
     async fn get_event(&self, subject_id: DigestIdentifier, sn: u64) -> Result<Event, ApiError>;
-    /// Allows to create a new subject in the node, being its owner the node in question.
-    /// # Possible errors
-    /// • [ApiError::InternalError] if an internal error occurred during the execution of the operation.<br />
-    /// • [ApiError::SignError] if it has not been possible to create the signature that accompanies
-    /// the creation of the event with the identity of the node.<br />
-    /// • [ApiError::EventCreationError] if it has not been possible to create the subject,
-    /// for example, because its governance does not exist.<br />
-    /// • [ApiError::InvalidParameters] if the specified governance identifier does not match a valid [DigestIdentifier].
-    async fn create_subject(
-        &self,
-        governance_id: DigestIdentifier,
-        schema_id: String,
-        namespace: String,
-    ) -> Result<DigestIdentifier, ApiError>;
     /// Allows to obtain a specified subject by specifying its identifier.
     /// # Possible errors
     /// • [ApiError::InvalidParameters] if the specified identifier does not match a valid [DigestIdentifier].<br />
     /// • [ApiError::NotFound] if the subject does not exist.
     async fn get_subject(&self, subject_id: DigestIdentifier) -> Result<SubjectData, ApiError>;
-    /// Method for creating governance in the system.
-    /// # Possible errors
-    /// • [ApiError::InternalError] if an internal error occurred during the execution of the operation.<br />
-    /// • [ApiError::SignError] if it has not been possible to create the signature that accompanies
-    /// the creation of the event with the identity of the node.<br />
-    /// • [ApiError::EventCreationError] if it has not been possible to create the governance.
-    async fn create_governance(&self) -> Result<DigestIdentifier, ApiError>;
     /// Stops the node, consuming the instance on the fly. This implies that any previously created API
     /// or [NotificationHandler] instances will no longer be functional.
     async fn shutdown(self) -> Result<(), ApiError>;
@@ -177,7 +128,7 @@ pub trait ApiModuleInterface {
         subject_id: &DigestIdentifier,
         providers: &HashSet<KeyIdentifier>,
     ) -> Result<(), ApiError>;
-    async fn generate_keys(&self) -> Result<KeyIdentifier, ApiError>;
+    async fn add_keys(&self, derivator: KeyDerivator) -> Result<KeyIdentifier, ApiError>;
     async fn get_validation_proof(
         &self,
         subject_id: DigestIdentifier,
@@ -206,21 +157,6 @@ pub struct NodeAPI {
 /// Feature that allows implementing the API Rest of an Taple node.
 #[async_trait]
 impl ApiModuleInterface for NodeAPI {
-    async fn create_request(
-        &self,
-        request_type: EventRequestType,
-    ) -> Result<DigestIdentifier, ApiError> {
-        let response = self
-            .sender
-            .ask(APICommands::HandleRequest(request_type))
-            .await
-            .unwrap();
-        if let ApiResponses::HandleRequest(data) = response {
-            data
-        } else {
-            unreachable!()
-        }
-    }
 
     async fn get_request(&self, request_id: DigestIdentifier) -> Result<TapleRequest, ApiError> {
         let response = self
@@ -282,27 +218,7 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
-    async fn create_event(
-        &self,
-        subject_id: DigestIdentifier,
-        payload: String,
-    ) -> Result<DigestIdentifier, ApiError> {
-        let request = EventRequestType::Fact(FactRequest {
-            subject_id,
-            payload: payload,
-        });
-        let response = self
-            .sender
-            .ask(APICommands::HandleRequest(request))
-            .await
-            .unwrap();
-        if let ApiResponses::HandleRequest(data) = response {
-            data
-        } else {
-            unreachable!()
-        }
-    }
-    async fn get_all_subjects(
+    async fn get_subjects(
         &self,
         namespace: String,
         from: Option<String>,
@@ -310,20 +226,20 @@ impl ApiModuleInterface for NodeAPI {
     ) -> Result<Vec<SubjectData>, ApiError> {
         let response = self
             .sender
-            .ask(APICommands::GetAllSubjects(super::GetAllSubjects {
+            .ask(APICommands::GetSubjects(super::GetSubjects {
                 namespace,
                 from,
                 quantity,
             }))
             .await
             .unwrap();
-        if let ApiResponses::GetAllSubjects(data) = response {
+        if let ApiResponses::GetSubjects(data) = response {
             data
         } else {
             unreachable!()
         }
     }
-    async fn get_all_governances(
+    async fn get_governances(
         &self,
         namespace: String,
         from: Option<String>,
@@ -331,14 +247,14 @@ impl ApiModuleInterface for NodeAPI {
     ) -> Result<Vec<SubjectData>, ApiError> {
         let response = self
             .sender
-            .ask(APICommands::GetAllGovernances(super::GetAllSubjects {
+            .ask(APICommands::GetGovernances(super::GetSubjects {
                 namespace,
                 from,
                 quantity,
             }))
             .await
             .unwrap();
-        if let ApiResponses::GetAllGovernances(data) = response {
+        if let ApiResponses::GetGovernances(data) = response {
             data
         } else {
             unreachable!()
@@ -358,7 +274,7 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
-    async fn get_event_of_subject(
+    async fn get_events(
         &self,
         subject_id: DigestIdentifier,
         from: Option<i64>,
@@ -366,67 +282,29 @@ impl ApiModuleInterface for NodeAPI {
     ) -> Result<Vec<Event>, ApiError> {
         let response = self
             .sender
-            .ask(APICommands::GetEventsOfSubject(GetEventsOfSubject {
+            .ask(APICommands::GetEvents(GetEvents {
                 subject_id,
                 from,
                 quantity,
             }))
             .await
             .unwrap();
-        if let ApiResponses::GetEventsOfSubject(data) = response {
+        if let ApiResponses::GetEvents(data) = response {
             data
         } else {
             unreachable!()
         }
     }
-    async fn create_subject(
-        &self,
-        governance_id: DigestIdentifier,
-        schema_id: String,
-        namespace: String,
-    ) -> Result<DigestIdentifier, ApiError> {
-        let request = EventRequestType::Create(CreateRequest {
-            governance_id,
-            schema_id,
-            namespace,
-        });
-        let response = self
-            .sender
-            .ask(APICommands::HandleRequest(request))
-            .await
-            .unwrap();
-        if let ApiResponses::HandleRequest(data) = response {
-            data
-        } else {
-            unreachable!()
-        }
-    }
+
     async fn get_subject(&self, subject_id: DigestIdentifier) -> Result<SubjectData, ApiError> {
         let response = self
             .sender
-            .ask(APICommands::GetSingleSubject(super::GetSingleSubject {
+            .ask(APICommands::GetSubject(super::GetSubject {
                 subject_id,
             }))
             .await
             .unwrap();
-        if let ApiResponses::GetSingleSubject(data) = response {
-            data
-        } else {
-            unreachable!()
-        }
-    }
-    async fn create_governance(&self) -> Result<DigestIdentifier, ApiError> {
-        let request = EventRequestType::Create(CreateRequest {
-            governance_id: DigestIdentifier::default(),
-            schema_id: "".into(),
-            namespace: "".into(),
-        });
-        let response = self
-            .sender
-            .ask(APICommands::HandleRequest(request))
-            .await
-            .unwrap();
-        if let ApiResponses::HandleRequest(data) = response {
+        if let ApiResponses::GetSubject(data) = response {
             data
         } else {
             unreachable!()
@@ -480,9 +358,9 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
-    async fn generate_keys(&self) -> Result<KeyIdentifier, ApiError> {
-        let response = self.sender.ask(APICommands::GenerateKeys).await.unwrap();
-        if let ApiResponses::GenerateKeys(data) = response {
+    async fn add_keys(&self, derivator: KeyDerivator) -> Result<KeyIdentifier, ApiError> {
+        let response = self.sender.ask(APICommands::AddKeys(derivator)).await.unwrap();
+        if let ApiResponses::AddKeys(data) = response {
             data
         } else {
             unreachable!()
@@ -621,14 +499,14 @@ impl<C: DatabaseCollection> API<C> {
                     APICommands::Shutdown => {
                         return Ok(Some(sx));
                     }
-                    APICommands::GetAllSubjects(data) => self.inner_api.get_all_subjects(data),
-                    APICommands::GetAllGovernances(data) => {
+                    APICommands::GetSubjects(data) => self.inner_api.get_all_subjects(data),
+                    APICommands::GetGovernances(data) => {
                         self.inner_api.get_all_governances(data).await
                     }
-                    APICommands::GetEventsOfSubject(data) => {
+                    APICommands::GetEvents(data) => {
                         self.inner_api.get_events_of_subject(data).await
                     }
-                    APICommands::GetSingleSubject(data) => {
+                    APICommands::GetSubject(data) => {
                         self.inner_api.get_single_subject(data).await
                     }
                     APICommands::GetRequest(request_id) => {
@@ -647,7 +525,6 @@ impl<C: DatabaseCollection> API<C> {
                     APICommands::GetSingleRequest(data) => {
                         self.inner_api.get_single_request(data).await
                     }
-                    APICommands::HandleRequest(data) => self.inner_api.handle_request(data).await?,
                     APICommands::ExternalRequest(event_request) => {
                         let response = self.inner_api.handle_external_request(event_request).await;
                         response?
@@ -657,7 +534,7 @@ impl<C: DatabaseCollection> API<C> {
                             .set_preauthorized_subject(subject_id, providers)
                             .await?
                     }
-                    APICommands::GenerateKeys => self.inner_api.generate_keys().await?,
+                    APICommands::AddKeys(derivator) => self.inner_api.generate_keys(derivator).await?,
                     APICommands::GetValidationProof(subject_id) => {
                         self.inner_api.get_validation_proof(subject_id).await
                     }

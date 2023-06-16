@@ -12,7 +12,7 @@ use crate::event::EventResponse;
 use crate::identifier::Derivable;
 use crate::ledger::manager::{EventManagerAPI, EventManagerInterface};
 use crate::signature::Signature;
-use crate::KeyIdentifier;
+use crate::{KeyIdentifier, KeyDerivator};
 // use crate::ledger::errors::LedgerManagerError;
 use crate::{
     commons::{
@@ -30,7 +30,7 @@ use crate::{
 use std::collections::HashSet;
 
 use super::{
-    error::ApiError, GetAllSubjects, GetEventsOfSubject, GetSingleSubject as GetSingleSubjectAPI, GetGovernanceSubjects
+    error::ApiError, GetSubjects, GetEvents, GetSubject as GetSingleSubjectAPI, GetGovernanceSubjects
 };
 
 use crate::database::Error as DbError;
@@ -68,51 +68,10 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         }
     }
 
-    pub async fn handle_request(
-        &self,
-        request: EventRequestType,
-    ) -> Result<ApiResponses, APIInternalError> {
-        let signature = self
-            .signature_manager
-            .sign(&request)
-            .map_err(|_| APIInternalError::SignError)?;
-        let request = EventRequest { request, signature };
-        let EventResponse::Event(response) = self.event_api.send_event_request(request).await else {
-            return Err(APIInternalError::UnexpectedManagerResponse);
-        };
-        match response {
-            Ok(request_id) => return Ok(ApiResponses::HandleRequest(Ok(request_id))),
-            Err(EventError::SubjectNotFound(subject_id)) => {
-                return Ok(ApiResponses::HandleRequest(Err(ApiError::NotFound(
-                    format!("Subject {} not found", subject_id),
-                ))))
-            }
-            Err(EventError::SubjectNotOwned(str)) => {
-                return Ok(ApiResponses::HandleRequest(Err(
-                    ApiError::NotEnoughPermissions(format!("{}", str)),
-                )))
-            }
-            Err(EventError::CreatingPermissionDenied) => {
-                return Ok(ApiResponses::HandleRequest(Err(
-                    ApiError::NotEnoughPermissions(format!("{}", response.unwrap_err())),
-                )))
-            }
-            Err(error) => Ok(ApiResponses::HandleRequest(Err(error.into()))),
-        }
-    }
-
     pub async fn handle_external_request(
         &self,
         request: EventRequest,
     ) -> Result<ApiResponses, APIInternalError> {
-        // Me llega una event request ya firmada. No debería ser de tipo Create. Hacemos esa comprobación y se la pasamos al manager
-        // if let EventRequestType::Create(_) = request.request {
-        //     return Ok(ApiResponses::HandleExternalRequest(Err(
-        //         ApiError::InvalidParameters(String::from(
-        //             " Event requests of type \"Create\" are not allowed",
-        //         )),
-        //     )));
-        // }
         let EventResponse::Event(response) = self.event_api.send_event_request(request).await else {
             return Err(APIInternalError::UnexpectedManagerResponse);
         };
@@ -145,7 +104,7 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         };
     }
 
-    pub fn get_all_subjects(&self, data: GetAllSubjects) -> ApiResponses {
+    pub fn get_all_subjects(&self, data: GetSubjects) -> ApiResponses {
         let from = if data.from.is_none() {
             None
         } else {
@@ -159,7 +118,7 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         let result = match self.db.get_subjects(from, quantity) {
             Ok(subjects) => subjects,
             Err(error) => {
-                return ApiResponses::GetAllSubjects(Err(ApiError::DatabaseError(
+                return ApiResponses::GetSubjects(Err(ApiError::DatabaseError(
                     error.to_string(),
                 )))
             }
@@ -168,10 +127,10 @@ impl<C: DatabaseCollection> InnerAPI<C> {
             .into_iter()
             .map(|subject| subject.into())
             .collect::<Vec<SubjectData>>();
-        ApiResponses::GetAllSubjects(Ok(result))
+        ApiResponses::GetSubjects(Ok(result))
     }
 
-    pub async fn get_all_governances(&self, data: GetAllSubjects) -> ApiResponses {
+    pub async fn get_all_governances(&self, data: GetSubjects) -> ApiResponses {
         let from = if data.from.is_none() {
             None
         } else {
@@ -185,7 +144,7 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         let result = match self.db.get_governances(from, quantity) {
             Ok(subjects) => subjects,
             Err(error) => {
-                return ApiResponses::GetAllGovernances(Err(ApiError::DatabaseError(
+                return ApiResponses::GetGovernances(Err(ApiError::DatabaseError(
                     error.to_string(),
                 )))
             }
@@ -194,7 +153,7 @@ impl<C: DatabaseCollection> InnerAPI<C> {
             .into_iter()
             .map(|subject| subject.into())
             .collect::<Vec<SubjectData>>();
-        ApiResponses::GetAllGovernances(Ok(result))
+        ApiResponses::GetGovernances(Ok(result))
     }
 
     pub async fn get_single_subject(&self, data: GetSingleSubjectAPI) -> ApiResponses {
@@ -202,18 +161,18 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         let subject = match self.db.get_subject(id) {
             Ok(subject) => subject,
             Err(DbError::EntryNotFound) => {
-                return ApiResponses::GetSingleSubject(Err(ApiError::NotFound(format!(
+                return ApiResponses::GetSubject(Err(ApiError::NotFound(format!(
                     "Subject {}",
                     data.subject_id.to_str()
                 ))))
             }
             Err(error) => {
-                return ApiResponses::GetSingleSubject(Err(ApiError::DatabaseError(
+                return ApiResponses::GetSubject(Err(ApiError::DatabaseError(
                     error.to_string(),
                 )))
             }
         };
-        ApiResponses::GetSingleSubject(Ok(subject.into()))
+        ApiResponses::GetSubject(Ok(subject.into()))
     }
 
     pub async fn get_request(&self, request_id: DigestIdentifier) -> ApiResponses {
@@ -245,7 +204,7 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         }
     }
 
-    pub async fn get_events_of_subject(&self, data: GetEventsOfSubject) -> ApiResponses {
+    pub async fn get_events_of_subject(&self, data: GetEvents) -> ApiResponses {
         let quantity = if data.quantity.is_none() {
             MAX_QUANTITY
         } else {
@@ -253,9 +212,9 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         };
         let id = &data.subject_id;
         match self.db.get_events_by_range(id, data.from, quantity) {
-            Ok(events) => ApiResponses::GetEventsOfSubject(Ok(events)),
+            Ok(events) => ApiResponses::GetEvents(Ok(events)),
             Err(error) => {
-                ApiResponses::GetEventsOfSubject(Err(ApiError::DatabaseError(error.to_string())))
+                ApiResponses::GetEvents(Err(ApiError::DatabaseError(error.to_string())))
             }
         }
     }
@@ -301,9 +260,9 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         Ok(ApiResponses::SetPreauthorizedSubjectCompleted)
     }
 
-    pub async fn generate_keys(&self) -> Result<ApiResponses, APIInternalError> {
-        match self.ledger_api.generate_keys().await {
-            Ok(public_key) => Ok(ApiResponses::GenerateKeys(Ok(public_key))),
+    pub async fn generate_keys(&self, derivator: KeyDerivator) -> Result<ApiResponses, APIInternalError> {
+        match self.ledger_api.generate_keys(derivator).await {
+            Ok(public_key) => Ok(ApiResponses::AddKeys(Ok(public_key))),
             Err(error) => Err(APIInternalError::DatabaseError(error.to_string())),
         }
     }

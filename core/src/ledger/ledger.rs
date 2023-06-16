@@ -1,7 +1,9 @@
 use std::collections::{hash_map::Entry, HashMap, HashSet};
 
 use crate::commons::crypto::KeyGenerator;
+use crate::crypto::Secp256k1KeyPair;
 use crate::request::{RequestState, TapleRequest};
+use crate::KeyDerivator;
 use crate::{
     commons::{
         channel::SenderEnd,
@@ -251,10 +253,16 @@ impl<C: DatabaseCollection> Ledger<C> {
         Ok(())
     }
 
-    pub async fn generate_key(&self) -> Result<KeyIdentifier, LedgerError> {
+    pub async fn generate_key(
+        &self,
+        derivator: KeyDerivator,
+    ) -> Result<KeyIdentifier, LedgerError> {
         // Generar material criptográfico y guardarlo en BBDD asociado al subject_id
         // TODO: Hacer la eleccion del MC dinámica. Es necesario primero hacer el cambio a nivel de state.rs
-        let keys = KeyPair::Ed25519(Ed25519KeyPair::new());
+        let keys = match derivator {
+            KeyDerivator::Ed25519 => KeyPair::Ed25519(Ed25519KeyPair::new()),
+            KeyDerivator::Secp256k1 => KeyPair::Secp256k1(Secp256k1KeyPair::new()),
+        };
         let public_key = KeyIdentifier::new(keys.get_key_derivator(), &keys.public_key_bytes());
         self.database.set_keys(&public_key, keys)?;
         Ok(public_key)
