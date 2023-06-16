@@ -7,14 +7,14 @@ use crate::{
     governance::{error::RequestError, GovernanceAPI},
     message::MessageTaskCommand,
     protocol::protocol_message_manager::TapleMessages,
-    DatabaseCollection, DigestIdentifier, KeyIdentifier, Notification,
+    DatabaseCollection, KeyIdentifier, Notification, KeyDerivator,
 };
 
 use super::{errors::LedgerError, ledger::Ledger, LedgerCommand, LedgerResponse};
 
 #[async_trait]
 pub trait EventManagerInterface {
-    async fn generate_keys(&self) -> Result<KeyIdentifier, LedgerError>;
+    async fn generate_keys(&self, derivator: KeyDerivator) -> Result<KeyIdentifier, LedgerError>;
 }
 
 #[derive(Debug, Clone)]
@@ -30,10 +30,10 @@ impl EventManagerAPI {
 
 #[async_trait]
 impl EventManagerInterface for EventManagerAPI {
-    async fn generate_keys(&self) -> Result<KeyIdentifier, LedgerError> {
+    async fn generate_keys(&self, derivator: KeyDerivator) -> Result<KeyIdentifier, LedgerError> {
         let response = self
             .sender
-            .ask(LedgerCommand::GenerateKey)
+            .ask(LedgerCommand::GenerateKey(derivator))
             .await
             .map_err(|_| LedgerError::ChannelClosed)?;
         if let LedgerResponse::GenerateKey(public_key) = response {
@@ -135,8 +135,8 @@ impl<C: DatabaseCollection> EventManager<C> {
         log::error!("MENSAJE RECIBIDO EN EL LEDGER: {:?}", data);
         let response = {
             match data {
-                LedgerCommand::GenerateKey => {
-                    let response = self.inner_ledger.generate_key().await;
+                LedgerCommand::GenerateKey(derivator) => {
+                    let response = self.inner_ledger.generate_key(derivator).await;
                     match &response {
                         Err(error) => match error {
                             LedgerError::ChannelClosed => {

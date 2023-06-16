@@ -96,8 +96,8 @@ pub mod protocol;
 
 mod unitary_component;
 pub use api::{
-    APICommands, ApiError, ApiModuleInterface, ApiResponses, GetAllSubjects, GetEventsOfSubject,
-    GetSingleSubject, NodeAPI,
+    APICommands, ApiError, ApiModuleInterface, ApiResponses, GetSubjects, GetEvents,
+    GetSubject, NodeAPI,
 };
 pub use approval::ApprovalPetitionData;
 pub use commons::identifier;
