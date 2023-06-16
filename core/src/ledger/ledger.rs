@@ -1882,7 +1882,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                         } else {
                             self.subject_is_gov.insert(subject_id.clone(), false);
                         }
-                        let mut witnesses = self.get_witnesses(metadata.clone()).await?;
+                        let witnesses = self.get_witnesses(metadata.clone()).await?;
                         if !witnesses.contains(&self.our_id) {
                             match self
                                 .database
@@ -1930,6 +1930,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                             sn,
                             subject_id.clone(),
                         )?;
+                        // TODO: PONER Aprobaciones como finalizadas y borrar de índice de pendientes
                         self.ledger_state.insert(
                             eol_request.subject_id.clone(),
                             LedgerState {
@@ -2053,6 +2054,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                         event.content.event_proposal.proposal.sn,
                                         subject_id.clone(),
                                     )?;
+                                    // TODO: PONER Aprobaciones como finalizadas y borrar de índice de pendientes
                                     self.event_sourcing(event.clone())?;
                                     if head == current_sn + 2 {
                                         // Hacer event sourcing del LCE tambien y actualizar subject
