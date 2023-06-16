@@ -138,7 +138,7 @@ impl<C: DatabaseCollection> EventManager<C> {
                 (None, data)
             }
         };
-        log::error!("MENSAJE RECIBIDO EN EL LEDGER: {:?}", data);
+        // log::error!("MENSAJE RECIBIDO EN EL LEDGER: {:?}", data);
         let response = {
             match data {
                 LedgerCommand::ExpectingTransfer { subject_id } => {
@@ -216,6 +216,7 @@ impl<C: DatabaseCollection> EventManager<C> {
                     validation_proof,
                 } => {
                     log::error!("EXTERNAL EVENT RECIVED");
+                    log::warn!("LLEGA EVENTO CON SN {}", event.content.event_proposal.proposal.sn);
                     let response = self
                         .inner_ledger
                         .external_event(event, signatures, sender, validation_proof)
@@ -332,7 +333,10 @@ impl<C: DatabaseCollection> EventManager<C> {
                             },
                             _ => Err(error),
                         },
-                        Ok(event) => Ok(event),
+                        Ok(event) => {
+                            log::warn!("LLEGA EVENTO CON SN {}", event.0.content.event_proposal.proposal.sn);
+                            Ok(event)
+                        },
                     };
                     LedgerResponse::GetNextGov(response)
                 }
