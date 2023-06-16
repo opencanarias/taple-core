@@ -102,7 +102,7 @@ impl ProtocolManager {
         &self,
         command: ChannelData<Message<TapleMessages>, ()>,
     ) -> Result<(), ProtocolErrors> {
-        let msg = match command {
+        let message = match command {
             ChannelData::AskData(_data) => {
                 return Err(ProtocolErrors::AskCommandDetected);
             }
@@ -111,7 +111,8 @@ impl ProtocolManager {
                 data
             }
         };
-        let msg = msg.content.content;
+        let msg = message.content.content;
+        let sender = message.content.sender_id;
         match msg {
             TapleMessages::DistributionMessage(data) => {
                 self.distribution_sx
@@ -140,9 +141,22 @@ impl ProtocolManager {
             TapleMessages::ValidationMessage(data) => {
                 #[cfg(feature = "validation")]
                 {
+                    let notary_command = match data {
+                        NotaryCommand::NotaryEvent {
+                            notary_event,
+                            sender,
+                        } => {
+                            log::error!("Notary Event Received in protocol manager");
+                            return Ok(());
+                        }
+                        NotaryCommand::AskForNotary(notary_event) => NotaryCommand::NotaryEvent {
+                            notary_event,
+                            sender,
+                        },
+                    };
                     return Ok(self
                         .validation_sx
-                        .tell(data)
+                        .tell(notary_command)
                         .await
                         .map_err(|_| ProtocolErrors::ChannelClosed)?);
                 }

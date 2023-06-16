@@ -45,6 +45,7 @@ impl<C: DatabaseCollection> Notary<C> {
     pub async fn notary_event(
         &self,
         notary_event: NotaryEvent,
+        sender: KeyIdentifier,
     ) -> Result<NotaryEventResponse, NotaryError> {
         let actual_gov_version = match self
             .gov_api
@@ -80,7 +81,7 @@ impl<C: DatabaseCollection> Notary<C> {
                             who_asked: self.signature_manager.get_own_identifier(),
                         },
                     ),
-                    vec![notary_event.proof.owner],
+                    vec![sender],
                     MessageConfig::direct_response(),
                 ))
                 .await?;
@@ -127,7 +128,7 @@ impl<C: DatabaseCollection> Notary<C> {
             .map_err(NotaryError::ProtocolErrors)?;
         log::warn!(
             "SE ENVÍA LA VALIDACIÓN A {}",
-            notary_event.proof.owner.to_str()
+            sender.to_str()
         );
         self.message_channel
             .tell(MessageTaskCommand::Request(
@@ -137,7 +138,7 @@ impl<C: DatabaseCollection> Notary<C> {
                     signature: notary_signature.clone(),
                     governance_version: actual_gov_version,
                 }),
-                vec![notary_event.proof.owner],
+                vec![sender],
                 MessageConfig::direct_response(),
             ))
             .await?;

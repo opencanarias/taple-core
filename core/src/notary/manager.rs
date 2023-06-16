@@ -1,3 +1,5 @@
+use super::{errors::NotaryError, notary::Notary, NotaryCommand, NotaryResponse};
+use crate::database::{DatabaseCollection, DB};
 use crate::message::MessageTaskCommand;
 use crate::protocol::protocol_message_manager::TapleMessages;
 use crate::{
@@ -7,8 +9,6 @@ use crate::{
     },
     governance::GovernanceAPI,
 };
-use crate::database::{DB, DatabaseCollection};
-use super::{errors::NotaryError, notary::Notary, NotaryCommand, NotaryResponse};
 
 #[derive(Clone, Debug)]
 pub struct NotaryAPI {
@@ -87,14 +87,21 @@ impl<C: DatabaseCollection> NotaryManager<C> {
         };
         let response = {
             match data {
-                NotaryCommand::NotaryEvent(notary_event) => {
+                NotaryCommand::NotaryEvent {
+                    notary_event,
+                    sender,
+                } => {
                     log::warn!("LLEGA EVENTO A VALIDAR");
-                    let result = self.inner_notary.notary_event(notary_event).await;
+                    let result = self.inner_notary.notary_event(notary_event, sender).await;
                     log::warn!("{:?}", result);
                     match result {
                         Err(NotaryError::ChannelError(_)) => return result.map(|_| ()),
                         _ => NotaryResponse::NotaryEventResponse(result),
                     }
+                }
+                NotaryCommand::AskForNotary(_) => {
+                    log::error!("Ask for Notary in Notary Manager");
+                    return Ok(());
                 }
             }
         };
