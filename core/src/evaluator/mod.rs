@@ -1,3 +1,4 @@
+use borsh::{BorshSerialize, BorshDeserialize};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -17,7 +18,7 @@ pub use manager::{EvaluatorManager};
 #[cfg(feature = "evaluation")]
 mod runner;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub enum EvaluatorMessage {
     AskForEvaluation(EventPreEvaluation),
 }

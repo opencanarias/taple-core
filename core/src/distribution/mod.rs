@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -11,7 +12,7 @@ pub(crate) mod error;
 pub(crate) mod inner_manager;
 pub(crate) mod manager;
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, BorshSerialize, BorshDeserialize)]
 pub enum DistributionMessagesNew {
     ProvideSignatures(AskForSignatures),
     SignaturesReceived(SignaturesReceived),
@@ -21,7 +22,7 @@ pub enum DistributionMessagesNew {
     },
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, BorshSerialize, BorshDeserialize)]
 pub struct AskForSignatures {
     pub subject_id: DigestIdentifier,
     pub sn: u64,
@@ -29,7 +30,7 @@ pub struct AskForSignatures {
     pub sender_id: KeyIdentifier,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, BorshSerialize, BorshDeserialize)]
 pub struct SignaturesReceived {
     pub subject_id: DigestIdentifier,
     pub sn: u64,

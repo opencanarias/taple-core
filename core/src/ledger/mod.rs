@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use borsh::{BorshSerialize, BorshDeserialize};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -11,7 +12,7 @@ pub mod errors;
 pub mod ledger;
 pub mod manager;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub enum LedgerCommand {
     OwnEvent {
         event: Event,

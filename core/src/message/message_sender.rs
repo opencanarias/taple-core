@@ -1,4 +1,5 @@
 use crate::commons::identifier::{Derivable, KeyIdentifier};
+use crate::commons::self_signature_manager::SelfSignatureManager;
 use log::debug;
 use rmp_serde;
 use tokio::sync::mpsc::{self, error::SendError};
@@ -14,15 +15,21 @@ const LOG_TARGET: &str = "MESSAGE_SENDER";
 pub struct MessageSender {
     sender: mpsc::Sender<Command>,
     controller_id: KeyIdentifier,
+    signature_manager: SelfSignatureManager,
 }
 
 /// Network MessageSender implementation
 impl MessageSender {
     /// New MessageSender
-    pub fn new(sender: mpsc::Sender<Command>, controller_id: KeyIdentifier) -> Self {
+    pub fn new(
+        sender: mpsc::Sender<Command>,
+        controller_id: KeyIdentifier,
+        signature_manager: SelfSignatureManager,
+    ) -> Self {
         Self {
             sender,
             controller_id,
+            signature_manager,
         }
     }
 
@@ -30,11 +37,16 @@ impl MessageSender {
     pub async fn send_message<T: TaskCommandContent>(
         &self,
         target: KeyIdentifier,
-        mut message: Message<T>,
+        message: T,
     ) -> Result<(), Error> {
         // TODO: Define type of invalid identifier error
-        message.sender_id = Some(self.controller_id.clone());
-        let bytes = rmp_serde::to_vec(&message).unwrap();
+        let complete_message = Message::new(
+            self.controller_id.clone(),
+            target.clone(),
+            message,
+            &self.signature_manager,
+        )?;
+        let bytes = rmp_serde::to_vec(&complete_message).unwrap();
         self.sender
             .send(Command::SendMessage {
                 receptor: target.public_key,

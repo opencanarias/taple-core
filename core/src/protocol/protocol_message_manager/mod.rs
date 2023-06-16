@@ -1,3 +1,4 @@
+use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -6,14 +7,15 @@ use crate::{
     distribution::{error::DistributionErrorResponses, DistributionMessagesNew, LedgerMessages},
     evaluator::{EvaluatorMessage, EvaluatorResponse},
     event::{EventCommand, EventResponse},
+    ledger::{LedgerCommand, LedgerResponse},
     message::{Message, TaskCommandContent},
-    notary::{NotaryCommand, NotaryResponse}, ledger::{LedgerCommand, LedgerResponse},
+    notary::{NotaryCommand, NotaryResponse},
 };
 
 mod error;
 use error::ProtocolErrors;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub enum TapleMessages {
     DistributionMessage(DistributionMessagesNew),
     EvaluationMessage(EvaluatorMessage),
@@ -44,13 +46,13 @@ impl ProtocolManager {
     pub fn new(
         input: MpscChannel<Message<TapleMessages>, ()>,
         distribution_sx: SenderEnd<DistributionMessagesNew, Result<(), DistributionErrorResponses>>,
-        #[cfg(feature = "evaluation")]
-        evaluation_sx: SenderEnd<EvaluatorMessage, EvaluatorResponse>,
-        #[cfg(feature = "validation")]
-        validation_sx: SenderEnd<NotaryCommand, NotaryResponse>,
+        #[cfg(feature = "evaluation")] evaluation_sx: SenderEnd<
+            EvaluatorMessage,
+            EvaluatorResponse,
+        >,
+        #[cfg(feature = "validation")] validation_sx: SenderEnd<NotaryCommand, NotaryResponse>,
         event_sx: SenderEnd<EventCommand, EventResponse>,
-        #[cfg(feature = "aproval")]
-        approval_sx: SenderEnd<ApprovalMessages, ApprovalResponses>,
+        #[cfg(feature = "aproval")] approval_sx: SenderEnd<ApprovalMessages, ApprovalResponses>,
         ledger_sx: SenderEnd<LedgerCommand, LedgerResponse>,
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
     ) -> Self {
@@ -109,8 +111,7 @@ impl ProtocolManager {
                 data
             }
         };
-        let msg = msg.content;
-        //println!("MSG PROTOCOL {:?}", msg);
+        let msg = msg.content.content;
         match msg {
             TapleMessages::DistributionMessage(data) => {
                 self.distribution_sx
@@ -140,10 +141,10 @@ impl ProtocolManager {
                 #[cfg(feature = "validation")]
                 {
                     return Ok(self
-                    .validation_sx
-                    .tell(data)
-                    .await
-                    .map_err(|_| ProtocolErrors::ChannelClosed)?);
+                        .validation_sx
+                        .tell(data)
+                        .await
+                        .map_err(|_| ProtocolErrors::ChannelClosed)?);
                 }
                 #[cfg(not(feature = "validation"))]
                 log::trace!("Validation Message received. Current node is not able to validate");
@@ -161,10 +162,10 @@ impl ProtocolManager {
                 log::trace!("Aproval Message received. Current node is not able to aprove");
             }
             TapleMessages::LedgerMessages(data) => self
-            .ledger_sx
-            .tell(data)
-            .await
-            .map_err(|_| ProtocolErrors::ChannelClosed)?,
+                .ledger_sx
+                .tell(data)
+                .await
+                .map_err(|_| ProtocolErrors::ChannelClosed)?,
         }
         Ok(())
     }

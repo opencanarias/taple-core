@@ -668,7 +668,6 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 &validation_proof,
                                 &subject,
                                 &event.signature.content.event_content_hash,
-                                &state_hash,
                             )?;
                             let sn: u64 = event.content.event_proposal.proposal.sn;
                             // Comprobamos si estamos esperando la transferencia y si esta es a nosotros
@@ -1287,7 +1286,6 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 &validation_proof,
                                 &subject,
                                 &event.signature.content.event_content_hash,
-                                &state_hash,
                             )?;
                             check_context(&event, &subject, metadata, subject.properties.clone())?;
                             let sn: u64 = event.content.event_proposal.proposal.sn;
@@ -1713,7 +1711,6 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 &validation_proof,
                                 &subject,
                                 &event.signature.content.event_content_hash,
-                                &state_hash,
                             )?;
                             check_context(&event, &subject, metadata, subject.properties.clone())?;
                             let sn: u64 = event.content.event_proposal.proposal.sn;
@@ -2085,15 +2082,11 @@ impl<C: DatabaseCollection> Ledger<C> {
                                         // Comprobar ValidationProof
                                         let validation_proof =
                                             self.database.get_lce_validation_proof(&subject_id)?;
-                                        let state_hash = subject.state_hash_after_apply(
-                                            &head_event.content.event_proposal.proposal.json_patch,
-                                        )?;
                                         // TODO: Si falla aquí inutilizamos sujeto???
                                         self.check_validation_proof(
                                             &validation_proof,
                                             &subject,
                                             &head_event.signature.content.event_content_hash,
-                                            &state_hash,
                                         )?;
                                         self.event_sourcing(head_event)?;
                                         self.ledger_state.insert(
@@ -2187,15 +2180,11 @@ impl<C: DatabaseCollection> Ledger<C> {
                                         // Comprobar ValidationProof
                                         let validation_proof =
                                             self.database.get_lce_validation_proof(&subject_id)?;
-                                        let state_hash = subject.state_hash_after_apply(
-                                            &head_event.content.event_proposal.proposal.json_patch,
-                                        )?;
                                         // TODO: Si falla aquí inutilizamos sujeto???
                                         self.check_validation_proof(
                                             &validation_proof,
                                             &subject,
                                             &head_event.signature.content.event_content_hash,
-                                            &state_hash,
                                         )?;
                                         // Hacer event sourcing del evento 1 tambien y actualizar subject
                                         self.event_sourcing(head_event)?;
@@ -2377,7 +2366,6 @@ impl<C: DatabaseCollection> Ledger<C> {
         validation_proof: &ValidationProof,
         subject: &Subject,
         event_hash: &DigestIdentifier,
-        state_hash: &DigestIdentifier,
     ) -> Result<(), LedgerError> {
         let hash_prev_event = match self.database.get_event(&subject.subject_id, subject.sn) {
             Ok(event) => event.signature.content.event_content_hash.clone(),
