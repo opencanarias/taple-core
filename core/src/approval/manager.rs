@@ -140,6 +140,9 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
     }
 
     pub async fn start(mut self) {
+        if let Err(error) = self.inner_manager.init().await {
+            log::error!("{}", error);
+        }
         loop {
             tokio::select! {
                 command = self.input_channel.receive() => {

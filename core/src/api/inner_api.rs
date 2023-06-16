@@ -1,5 +1,5 @@
 use super::error::APIInternalError;
-use super::ApiResponses;
+use super::{ApiResponses};
 use crate::approval::error::ApprovalErrorResponse;
 #[cfg(feature = "aproval")]
 use crate::approval::manager::{ApprovalAPI, ApprovalAPIInterface};
@@ -347,6 +347,36 @@ impl<C: DatabaseCollection> InnerAPI<C> {
             .map(|subject| subject.into())
             .collect::<Vec<SubjectData>>();
         ApiResponses::GetGovernanceSubjects(Ok(result))
+    }
+
+    pub async fn get_approval(
+        &self,
+        subject_id: DigestIdentifier,
+    ) -> ApiResponses {
+        let result = match self.db.get_approval(&subject_id) {
+            Ok(approval) => approval,
+            Err(error) => {
+                return ApiResponses::GetApproval(Err(ApiError::DatabaseError(
+                    error.to_string()
+                )))
+            } 
+        };
+        ApiResponses::GetApproval(Ok(result))
+    }
+
+    pub async fn get_approvals(
+        &self,
+        status: Option<String>,
+    ) -> ApiResponses {
+        let result = match self.db.get_approvals(status) {
+            Ok(approvals) => approvals,
+            Err(error) => {
+                return ApiResponses::GetApprovals(Err(ApiError::DatabaseError(
+                    error.to_string()
+                )))
+            } 
+        };
+        ApiResponses::GetApprovals(Ok(result))
     }
 }
 

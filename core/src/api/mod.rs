@@ -1,9 +1,11 @@
 use std::collections::HashSet;
 use crate::commons::models::request::TapleRequest;
+use crate::commons::models::approval::ApprovalStatus;
 use crate::signature::Signature;
 #[cfg(feature = "aproval")]
-use crate::{Acceptance, ApprovalPetitionData};
-use crate::{KeyIdentifier};
+use crate::Acceptance;
+use crate::KeyIdentifier;
+use crate::ApprovalPetitionData;
 use crate::commons::models::event::Event;
 use crate::commons::models::event_request::EventRequest;
 use crate::commons::models::state::SubjectData;
@@ -39,6 +41,8 @@ pub enum APICommands {
     GetValidationProof(DigestIdentifier),
     GetRequest(DigestIdentifier),
     GetGovernanceSubjects(GetGovernanceSubjects),
+    GetApproval(DigestIdentifier),
+    GetApprovals(Option<String>),
     Shutdown,
 }
 
@@ -61,6 +65,8 @@ pub enum ApiResponses {
     GetValidationProof(Result<HashSet<Signature>, ApiError>),
     GetRequest(Result<TapleRequest, ApiError>),
     GetGovernanceSubjects(Result<Vec<SubjectData>, ApiError>),
+    GetApproval(Result<(ApprovalPetitionData, ApprovalStatus), ApiError>),
+    GetApprovals(Result<Vec<ApprovalPetitionData>, ApiError>),
     ShutdownCompleted,
     SetPreauthorizedSubjectCompleted
 }

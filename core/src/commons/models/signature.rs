@@ -11,7 +11,6 @@ use std::{
     collections::HashSet,
     hash::{Hash, Hasher},
 };
-use utoipa::ToSchema;
 
 use super::timestamp::TimeStamp;
 
@@ -25,13 +24,10 @@ use super::timestamp::TimeStamp;
     BorshSerialize,
     BorshDeserialize,
     PartialOrd,
-    ToSchema,
     PartialEq,
 )]
 pub struct SignatureContent {
-    #[schema(value_type = String)]
     pub signer: KeyIdentifier,
-    #[schema(value_type = String)]
     pub event_content_hash: DigestIdentifier,
     pub timestamp: TimeStamp,
 }
@@ -40,11 +36,10 @@ pub struct SignatureContent {
 /// information, namely the signer's identifier, the signature timestamp
 /// and the hash of the signed contents.
 #[derive(
-    Debug, Clone, Serialize, Deserialize, Eq, BorshSerialize, BorshDeserialize, ToSchema, PartialOrd,
+    Debug, Clone, Serialize, Deserialize, Eq, BorshSerialize, BorshDeserialize, PartialOrd,
 )]
 pub struct Signature {
     pub content: SignatureContent,
-    #[schema(value_type = String)]
     pub signature: SignatureIdentifier,
 }
 
@@ -101,7 +96,7 @@ impl Signature {
 }
 
 #[derive(
-    Debug, Clone, Serialize, Deserialize, Eq, BorshSerialize, BorshDeserialize, ToSchema, PartialOrd,
+    Debug, Clone, Serialize, Deserialize, Eq, BorshSerialize, BorshDeserialize, PartialOrd,
 )]
 pub struct UniqueSignature {
     pub signature: Signature,

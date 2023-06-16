@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use crate::commons::models::approval::ApprovalStatus;
 use crate::commons::models::event::ValidationProof;
 use crate::commons::models::request::TapleRequest;
 use crate::commons::models::state::Subject;
@@ -8,14 +9,15 @@ use crate::crypto::KeyPair;
 use crate::event_request::EventRequest;
 use crate::identifier::{DigestIdentifier, KeyIdentifier};
 use crate::signature::Signature;
-use crate::Event;
+use crate::{Event, ApprovalPetitionData};
 
 use super::error::Error;
 use super::layers::lce_validation_proofs::{LceValidationProofs};
 use super::layers::request::RequestDb;
 use super::{
     layers::{
-        contract::ContractDb, controller_id::ControllerIdDb, event::EventDb, notary::NotaryDb,
+        approvals::ApprovalsDb, contract::ContractDb, controller_id::ControllerIdDb,
+        event::EventDb, notary::NotaryDb,
         preauthorized_subjects_and_providers::PreauthorizedSbujectsAndProovidersDb,
         prevalidated_event::PrevalidatedEventDb, event_request::EventRequestDb, signature::SignatureDb,
         subject::SubjectDb, subject_by_governance::SubjectByGovernanceDb,
@@ -39,6 +41,7 @@ pub struct DB<C: DatabaseCollection> {
     keys_db: KeysDb<C>,
     preauthorized_subjects_and_providers_db: PreauthorizedSbujectsAndProovidersDb<C>,
     lce_validation_proofs_db: LceValidationProofs<C>,
+    approvals_db: ApprovalsDb<C>,
 }
 
 impl<C: DatabaseCollection> DB<C> {
@@ -58,6 +61,7 @@ impl<C: DatabaseCollection> DB<C> {
         let preauthorized_subjects_and_providers_db =
             PreauthorizedSbujectsAndProovidersDb::new(&manager);
         let lce_validation_proofs_db = LceValidationProofs::new(&manager);
+        let approvals_db = ApprovalsDb::new(&manager);
         Self {
             signature_db,
             subject_db,
@@ -73,6 +77,7 @@ impl<C: DatabaseCollection> DB<C> {
             keys_db: transfer_events_db,
             preauthorized_subjects_and_providers_db,
             lce_validation_proofs_db,
+            approvals_db,
         }
     }
 
@@ -99,7 +104,10 @@ impl<C: DatabaseCollection> DB<C> {
         self.signature_db.del_signatures(subject_id, sn)
     }
 
-    pub fn get_validation_proof(&self, subject_id: &DigestIdentifier) -> Result<HashSet<Signature>, Error> {
+    pub fn get_validation_proof(
+        &self,
+        subject_id: &DigestIdentifier,
+    ) -> Result<HashSet<Signature>, Error> {
         self.signature_db.get_validation_proof(subject_id)
     }
 
@@ -315,7 +323,8 @@ impl<C: DatabaseCollection> DB<C> {
         from: Option<String>,
         quantity: isize,
     ) -> Result<Vec<Subject>, Error> {
-        self.subject_by_governance_db.get_governances(from, quantity)
+        self.subject_by_governance_db
+            .get_governances(from, quantity)
     }
 
     pub fn get_governance_subjects(
@@ -397,5 +406,34 @@ impl<C: DatabaseCollection> DB<C> {
     pub fn del_lce_validation_proof(&self, subject_id: &DigestIdentifier) -> Result<(), Error> {
         self.lce_validation_proofs_db
             .del_lce_validation_proof(subject_id)
+    }
+
+    pub fn get_approval(
+        &self,
+        request_id: &DigestIdentifier,
+    ) -> Result<(ApprovalPetitionData, ApprovalStatus), Error> {
+        self.approvals_db.get_approval(request_id)
+    }
+
+    pub fn get_approvals(
+        &self,
+        status: Option<String>,
+    ) -> Result<Vec<ApprovalPetitionData>, Error> {
+        self.approvals_db.get_approvals(status)
+    }
+
+    pub fn set_approval(
+        &self,
+        request_id: &DigestIdentifier,
+        approval: (ApprovalPetitionData, ApprovalStatus),
+    ) -> Result<(), Error> {
+        self.approvals_db.set_approval(request_id, approval)
+    }
+
+    pub fn del_approval(
+        &self,
+        request_id: &DigestIdentifier
+    ) -> Result<(), Error> {
+        self.approvals_db.del_approval(request_id)
     }
 }

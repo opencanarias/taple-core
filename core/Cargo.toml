@@ -39,7 +39,6 @@ time = { workspace = true, features = ["std"] }
 
 # API
 thiserror = { workspace = true }
-utoipa = { workspace = true }
 
 # Protocol
 tokio-stream = { workspace = true }
