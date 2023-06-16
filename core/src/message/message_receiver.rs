@@ -5,7 +5,7 @@ use std::io::Cursor;
 use tokio::sync::mpsc::{self};
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::commons::channel::SenderEnd;
+use crate::{commons::channel::SenderEnd, KeyIdentifier};
 
 use super::{Message, TaskCommandContent};
 
@@ -21,6 +21,7 @@ where
     receiver: ReceiverStream<NetworkEvent>,
     sender: SenderEnd<Message<T>, ()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+    own_id: KeyIdentifier,
 }
 
 impl<T: TaskCommandContent + Serialize + DeserializeOwned + 'static> MessageReceiver<T> {
@@ -28,12 +29,14 @@ impl<T: TaskCommandContent + Serialize + DeserializeOwned + 'static> MessageRece
         receiver: mpsc::Receiver<NetworkEvent>,
         sender: SenderEnd<Message<T>, ()>,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+        own_id: KeyIdentifier,
     ) -> Self {
         let receiver = ReceiverStream::new(receiver);
         Self {
             receiver,
             sender,
             shutdown_receiver,
+            own_id,
         }
     }
 
@@ -47,7 +50,14 @@ impl<T: TaskCommandContent + Serialize + DeserializeOwned + 'static> MessageRece
                         let cur = Cursor::new(message);
                         let mut de = Deserializer::new(cur);
                         let message: Message<T> = Deserialize::deserialize(&mut de).expect("Fallo de deserialización");
-                        self.sender.tell(message).await.expect("Channel Error");
+                        // Check message signature
+                        if message.signature.verify().is_err() || message.content.sender_id != message.signature.content.signer {
+                            log::error!("Invalid signature in message");
+                        } else if message.content.receiver != self.own_id {
+                            log::error!("Message not for me");
+                        } else {
+                            self.sender.tell(message).await.expect("Channel Error");
+                        }
                     },
                     None => {}
                 },
