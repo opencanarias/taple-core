@@ -475,6 +475,10 @@ impl<C: DatabaseCollection> Ledger<C> {
         sender: KeyIdentifier,
         validation_proof: ValidationProof,
     ) -> Result<(), LedgerError> {
+        log::warn!(
+            "LLEGA EVENTO CON SN {}",
+            event.content.event_proposal.proposal.sn
+        );
         // log::error!("External event: Event: {:?}", event);
         // Comprobar que no existe una request con el mismo hash
         let event_request = event.content.event_proposal.proposal.event_request.clone();
@@ -1104,35 +1108,6 @@ impl<C: DatabaseCollection> Ledger<C> {
                 // Comprobaciones criptográficas
                 let ledger_state = self.ledger_state.get(&state_request.subject_id);
                 let metadata = validation_proof.get_metadata();
-                // Comprobar que invoker tiene permisos de invocación
-                let invokers = self
-                    .gov_api
-                    .get_signers(metadata.clone(), ValidationStage::Invoke)
-                    .await
-                    .map_err(LedgerError::GovernanceError)?;
-                if !invokers.contains(
-                    &event
-                        .content
-                        .event_proposal
-                        .proposal
-                        .event_request
-                        .signature
-                        .content
-                        .signer,
-                ) {
-                    return Err(LedgerError::Unauthorized(format!(
-                        "Invokation unauthorized for KeyId: {}",
-                        event
-                            .content
-                            .event_proposal
-                            .proposal
-                            .event_request
-                            .signature
-                            .content
-                            .signer
-                            .to_str()
-                    )));
-                }
                 match ledger_state {
                     Some(ledger_state) => {
                         log::warn!("Pasa por SOME");
@@ -1175,9 +1150,39 @@ impl<C: DatabaseCollection> Ledger<C> {
                         if !subject.active {
                             return Err(LedgerError::SubjectLifeEnd(subject.subject_id.to_str()));
                         }
+                        // Comprobar que invoker tiene permisos de invocación
+                        let invokers = self
+                            .gov_api
+                            .get_signers(metadata.clone(), ValidationStage::Invoke)
+                            .await
+                            .map_err(LedgerError::GovernanceError)?;
+                        if !invokers.contains(
+                            &event
+                                .content
+                                .event_proposal
+                                .proposal
+                                .event_request
+                                .signature
+                                .content
+                                .signer,
+                        ) {
+                            return Err(LedgerError::Unauthorized(format!(
+                                "Invokation unauthorized for KeyId: {}",
+                                event
+                                    .content
+                                    .event_proposal
+                                    .proposal
+                                    .event_request
+                                    .signature
+                                    .content
+                                    .signer
+                                    .to_str()
+                            )));
+                        }
                         let is_gov = self.subject_is_gov.get(&state_request.subject_id).unwrap();
                         log::warn!("EL SUJETO ES  IS GOV: {}", is_gov);
                         if *is_gov {
+                            log::error!("State NO DEBERÍA");
                             // Al ser gov no tiene HEAD. Debemos comprobar si se trata del sn + 1
                             if event.content.event_proposal.proposal.sn > subject.sn + 1 {
                                 // Pedimos el siguiente evento al que nosotros tenemos
@@ -1443,6 +1448,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                         let subject_id = state_request.subject_id.clone();
                         let metadata = validation_proof.get_metadata();
                         if &metadata.schema_id == "governance" {
+                            log::error!("State 3");
                             self.subject_is_gov.insert(subject_id.clone(), true);
                             // PEDIR GÉNESIS
                             let msg = request_gov_event(self.our_id.clone(), subject_id, 0);
@@ -1587,7 +1593,8 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 .content
                                 .signer
                         {
-                            return Err(LedgerError::Unauthorized(
+                            return Err(LedgerError::Unauthorized(format!(
+                                "Invokation unauthorized for KeyId: {}",
                                 event
                                     .content
                                     .event_proposal
@@ -1596,8 +1603,8 @@ impl<C: DatabaseCollection> Ledger<C> {
                                     .signature
                                     .content
                                     .signer
-                                    .to_str(),
-                            ));
+                                    .to_str()
+                            )));
                         }
                         let is_gov = self.subject_is_gov.get(&eol_request.subject_id).unwrap();
                         log::warn!("EL SUJETO ES  IS GOV: {}", is_gov);
