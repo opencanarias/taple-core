@@ -1,6 +1,7 @@
 use std::collections::{hash_map::Entry, HashMap, HashSet};
 
 use crate::commons::crypto::KeyGenerator;
+use crate::commons::models::approval::ApprovalStatus;
 use crate::commons::models::state::generate_subject_id;
 use crate::request::{RequestState, TapleRequest};
 use crate::{
@@ -1930,6 +1931,13 @@ impl<C: DatabaseCollection> Ledger<C> {
                             validation_proof,
                         )?;
                         let sn = event.content.event_proposal.proposal.sn;
+                        let proposal_hash = event
+                            .content
+                            .event_proposal
+                            .subject_signature
+                            .content
+                            .event_content_hash
+                            .clone();
                         self.database.set_event(&eol_request.subject_id, event)?;
                         self.set_finished_request(
                             &request_id,
@@ -1937,7 +1945,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                             sn,
                             subject_id.clone(),
                         )?;
-                        // TODO: PONER Aprobaciones como finalizadas y borrar de índice de pendientes
+                        // PONER Aprobaciones como finalizadas y borrar de índice de pendientes
+                        let data = self.database.get_approval(&proposal_hash)?;
+                        if let ApprovalStatus::Pending = data.1 {
+                            self.database
+                                .set_approval(&proposal_hash, (data.0, ApprovalStatus::Finished))?;
+                        }
                         self.ledger_state.insert(
                             eol_request.subject_id.clone(),
                             LedgerState {
@@ -2061,7 +2074,21 @@ impl<C: DatabaseCollection> Ledger<C> {
                                         event.content.event_proposal.proposal.sn,
                                         subject_id.clone(),
                                     )?;
-                                    // TODO: PONER Aprobaciones como finalizadas y borrar de índice de pendientes
+                                    // PONER Aprobaciones como finalizadas y borrar de índice de pendientes
+                                    let proposal_hash = event
+                                        .content
+                                        .event_proposal
+                                        .subject_signature
+                                        .content
+                                        .event_content_hash
+                                        .clone();
+                                    let data = self.database.get_approval(&proposal_hash)?;
+                                    if let ApprovalStatus::Pending = data.1 {
+                                        self.database.set_approval(
+                                            &proposal_hash,
+                                            (data.0, ApprovalStatus::Finished),
+                                        )?;
+                                    }
                                     self.event_sourcing(event.clone())?;
                                     if head == current_sn + 2 {
                                         // Hacer event sourcing del LCE tambien y actualizar subject
