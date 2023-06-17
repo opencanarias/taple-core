@@ -110,6 +110,7 @@ pub use commons::models::event_request::EventRequestType;
 pub use commons::models::Acceptance;
 pub use commons::models::state::SubjectData;
 pub use commons::models::{event_content, event_request, signature};
+pub use commons::models::request;
 pub use commons::{
     config::{DatabaseSettings, NetworkSettings, NodeSettings, TapleSettings},
     identifier::derive::{digest::DigestDerivator, KeyDerivator},

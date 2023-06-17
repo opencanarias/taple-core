@@ -7,17 +7,14 @@ use crate::{
     governance::{error::RequestError, GovernanceAPI},
     message::MessageTaskCommand,
     protocol::protocol_message_manager::TapleMessages,
-    DatabaseCollection, DigestIdentifier, KeyIdentifier, Notification,
+    DatabaseCollection, KeyIdentifier, Notification,
 };
 
 use super::{errors::LedgerError, ledger::Ledger, LedgerCommand, LedgerResponse};
 
 #[async_trait]
 pub trait EventManagerInterface {
-    async fn expecting_transfer(
-        &self,
-        subject_id: DigestIdentifier,
-    ) -> Result<KeyIdentifier, LedgerError>;
+    async fn generate_keys(&self) -> Result<KeyIdentifier, LedgerError>;
 }
 
 #[derive(Debug, Clone)]
@@ -33,16 +30,13 @@ impl EventManagerAPI {
 
 #[async_trait]
 impl EventManagerInterface for EventManagerAPI {
-    async fn expecting_transfer(
-        &self,
-        subject_id: DigestIdentifier,
-    ) -> Result<KeyIdentifier, LedgerError> {
+    async fn generate_keys(&self) -> Result<KeyIdentifier, LedgerError> {
         let response = self
             .sender
-            .ask(LedgerCommand::ExpectingTransfer { subject_id })
+            .ask(LedgerCommand::GenerateKey)
             .await
             .map_err(|_| LedgerError::ChannelClosed)?;
-        if let LedgerResponse::ExpectingTransfer(public_key) = response {
+        if let LedgerResponse::GenerateKey(public_key) = response {
             public_key
         } else {
             Err(LedgerError::UnexpectedResponse)
@@ -141,8 +135,8 @@ impl<C: DatabaseCollection> EventManager<C> {
         // log::error!("MENSAJE RECIBIDO EN EL LEDGER: {:?}", data);
         let response = {
             match data {
-                LedgerCommand::ExpectingTransfer { subject_id } => {
-                    let response = self.inner_ledger.expecting_transfer(subject_id).await;
+                LedgerCommand::GenerateKey => {
+                    let response = self.inner_ledger.generate_key().await;
                     match &response {
                         Err(error) => match error {
                             LedgerError::ChannelClosed => {
@@ -161,10 +155,17 @@ impl<C: DatabaseCollection> EventManager<C> {
                         },
                         _ => {}
                     }
-                    LedgerResponse::ExpectingTransfer(response)
+                    LedgerResponse::GenerateKey(response)
                 }
-                LedgerCommand::OwnEvent { event, signatures, validation_proof } => {
-                    let response = self.inner_ledger.event_validated(event, signatures, validation_proof).await;
+                LedgerCommand::OwnEvent {
+                    event,
+                    signatures,
+                    validation_proof,
+                } => {
+                    let response = self
+                        .inner_ledger
+                        .event_validated(event, signatures, validation_proof)
+                        .await;
                     match response {
                         Err(error) => match error {
                             LedgerError::ChannelClosed => {
@@ -187,8 +188,15 @@ impl<C: DatabaseCollection> EventManager<C> {
                     }
                     LedgerResponse::NoResponse
                 }
-                LedgerCommand::Genesis { event_request } => {
-                    let response = self.inner_ledger.genesis(event_request).await;
+                LedgerCommand::Genesis {
+                    event,
+                    signatures,
+                    validation_proof,
+                } => {
+                    let response = self
+                        .inner_ledger
+                        .genesis(event, signatures, validation_proof)
+                        .await;
                     match response {
                         Err(error) => match error {
                             LedgerError::ChannelClosed => {

@@ -1,25 +1,28 @@
 use std::collections::HashSet;
 
+use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    commons::models::event::ValidationProof, event_request::EventRequest,
-    identifier::DigestIdentifier, signature::Signature, Event, KeyIdentifier,
+    commons::models::event::ValidationProof, identifier::DigestIdentifier, signature::Signature,
+    Event, KeyIdentifier,
 };
 
 pub mod errors;
 pub mod ledger;
 pub mod manager;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub enum LedgerCommand {
     OwnEvent {
         event: Event,
         signatures: HashSet<Signature>,
-        validation_proof: ValidationProof
+        validation_proof: ValidationProof,
     },
     Genesis {
-        event_request: EventRequest,
+        event: Event,
+        signatures: HashSet<Signature>,
+        validation_proof: ValidationProof,
     },
     ExternalEvent {
         sender: KeyIdentifier,
@@ -44,9 +47,7 @@ pub enum LedgerCommand {
         who_asked: KeyIdentifier,
         subject_id: DigestIdentifier,
     },
-    ExpectingTransfer {
-        subject_id: DigestIdentifier,
-    }
+    GenerateKey,
 }
 
 #[derive(Debug, Clone)]
@@ -54,6 +55,6 @@ pub enum LedgerResponse {
     GetEvent(Result<Event, errors::LedgerError>),
     GetNextGov(Result<(Event, HashSet<Signature>), errors::LedgerError>),
     GetLCE(Result<(Event, HashSet<Signature>), errors::LedgerError>),
-    ExpectingTransfer(Result<KeyIdentifier, errors::LedgerError>),
+    GenerateKey(Result<KeyIdentifier, errors::LedgerError>),
     NoResponse,
 }

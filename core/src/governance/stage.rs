@@ -1,11 +1,10 @@
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ValidationStage {
     Approve,
     Evaluate,
     Validate,
     Witness,
     Create,
-    Close,
     Invoke,
 }
 
@@ -17,8 +16,18 @@ impl ValidationStage {
             ValidationStage::Validate => "validate",
             ValidationStage::Witness => "witness",
             ValidationStage::Create => "create",
-            ValidationStage::Close => "close",
             ValidationStage::Invoke => "invoke",
+        }
+    }
+
+    pub fn to_role(&self) -> &str {
+        match self {
+            ValidationStage::Approve => "APPROVER",
+            ValidationStage::Evaluate => "EVALUATOR",
+            ValidationStage::Validate => "VALIDATOR",
+            ValidationStage::Witness => "WITNESS",
+            ValidationStage::Create => "CREATOR",
+            ValidationStage::Invoke => "INVOKER",
         }
     }
 }

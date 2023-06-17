@@ -205,7 +205,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         };
 
         // Comprobamos si la request es de tipo State
-        let EventRequestType::State(state_request) = &approval_request.proposal.event_request.request else {
+        let EventRequestType::Fact(state_request) = &approval_request.proposal.event_request.request else {
                 return Ok(Err(ApprovalErrorResponse::NoFactEvent));
             };
 
@@ -417,11 +417,8 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         &self,
         event_request: &EventRequest,
     ) -> Result<Result<(), ApprovalErrorResponse>, ApprovalManagerError> {
-        let hash_request = DigestIdentifier::from_serializable_borsh((
-            &event_request.request,
-            &event_request.timestamp,
-        ))
-        .map_err(|_| ApprovalManagerError::HashGenerationFailed)?;
+        let hash_request = DigestIdentifier::from_serializable_borsh(&event_request.request)
+            .map_err(|_| ApprovalManagerError::HashGenerationFailed)?;
         // Check that the hash is the same
         if hash_request != event_request.signature.content.event_content_hash {
             return Ok(Err(ApprovalErrorResponse::NoHashCorrelation));
@@ -484,8 +481,6 @@ fn create_metadata(subject_data: &Subject, governance_version: u64) -> Metadata 
         governance_id: subject_data.governance_id.clone(),
         governance_version,
         schema_id: subject_data.schema_id.clone(),
-        owner: subject_data.owner.clone(),
-        creator: subject_data.creator.clone(),
     }
 }
 
@@ -502,17 +497,17 @@ mod test {
         commons::{
             config::VotationType,
             crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair, Payload, DSA},
-            models::state::Subject,
-            schema_handler::gov_models::{Contract, Invoke},
+            models::{state::Subject, timestamp},
+            schema_handler::gov_models::Contract,
             self_signature_manager::{SelfSignatureInterface, SelfSignatureManager},
         },
         database::{MemoryCollection, DB},
         event_content::Metadata,
-        event_request::{CreateRequest, EventRequest, EventRequestType, StateRequest},
+        event_request::{CreateRequest, EventRequest, EventRequestType, FactRequest},
         governance::{error::RequestError, stage::ValidationStage, GovernanceInterface},
         identifier::{Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier},
         signature::{Signature, SignatureContent},
-        MemoryManager, Notification, TimeStamp,
+        DatabaseManager, Event, MemoryManager, Notification, TimeStamp,
     };
 
     use super::{InnerApprovalManager, RequestNotifier};
@@ -565,8 +560,9 @@ mod test {
         async fn get_invoke_info(
             &self,
             metadata: Metadata,
-            fact: String,
-        ) -> Result<Option<Invoke>, RequestError> {
+            stage: ValidationStage,
+            invoker: KeyIdentifier,
+        ) -> Result<bool, RequestError> {
             unreachable!()
         }
 
@@ -599,14 +595,6 @@ mod test {
             unreachable!()
         }
 
-        async fn get_roles_of_invokator(
-            &self,
-            invokator: KeyIdentifier,
-            metadata: Metadata,
-        ) -> Result<Vec<String>, RequestError> {
-            unreachable!()
-        }
-
         async fn governance_updated(
             &self,
             governance_id: DigestIdentifier,
@@ -621,17 +609,12 @@ mod test {
         signature_manager: &SelfSignatureManager,
         subject_id: &DigestIdentifier,
     ) -> EventRequest {
-        let request = EventRequestType::State(StateRequest {
+        let request = EventRequestType::Fact(FactRequest {
             subject_id: subject_id.clone(),
-            invokation: json,
+            payload: json,
         });
-        let timestamp = TimeStamp::now();
-        let signature = signature_manager.sign(&(&request, &timestamp)).unwrap();
-        let event_request = EventRequest {
-            request,
-            timestamp,
-            signature,
-        };
+        let signature = signature_manager.sign(&request).unwrap();
+        let event_request = EventRequest { request, signature };
         event_request
     }
 
@@ -646,14 +629,12 @@ mod test {
             .unwrap(),
             schema_id: "test".to_owned(),
             namespace: "test".to_owned(),
+            name: "test".to_owned(),
+            public_key: KeyIdentifier::from_str("EceWPmTsy2oXYsAhnWqTpBKtpobsnWM0QT8sNUTtV_Pw")
+                .unwrap(), // TODO: Revisar, lo puse a voleo
         });
-        let timestamp = TimeStamp::now();
-        let signature = signature_manager.sign(&(&request, &timestamp)).unwrap();
-        let event_request = EventRequest {
-            request,
-            timestamp,
-            signature,
-        };
+        let signature = signature_manager.sign(&request).unwrap();
+        let event_request = EventRequest { request, signature };
         event_request
     }
 
@@ -720,7 +701,7 @@ mod test {
         subject: &Subject,
         json_patch: String,
     ) -> RequestApproval {
-        let hash: DigestIdentifier = DigestIdentifier::from_serializable_borsh(&(
+        let content_hash: DigestIdentifier = DigestIdentifier::from_serializable_borsh(&(
             &request,
             sn,
             DigestIdentifier::from_str("").unwrap(),
@@ -735,7 +716,23 @@ mod test {
         .unwrap();
         let keys = subject.keys.as_ref().unwrap();
         let identifier = KeyIdentifier::new(keys.get_key_derivator(), &keys.public_key_bytes());
-        let signature = keys.sign(Payload::Buffer(hash.derivative())).unwrap();
+        let subject_signature = Signature::new(
+            &(
+                &request,
+                sn,
+                DigestIdentifier::from_str("").unwrap(),
+                DigestIdentifier::from_str("").unwrap(),
+                &governance_id,
+                governance_version,
+                success,
+                true,
+                &evaluator_signatures,
+                json_patch.clone(),
+            ),
+            identifier.clone(),
+            &keys,
+        )
+        .unwrap();
         RequestApproval {
             request,
             sn,
@@ -747,17 +744,7 @@ mod test {
             approval_required: true,
             evaluator_signatures,
             json_patch,
-            subject_signature: Signature {
-                content: SignatureContent {
-                    signer: identifier.clone(),
-                    event_content_hash: hash,
-                    timestamp: TimeStamp::now(),
-                },
-                signature: SignatureIdentifier::new(
-                    identifier.to_signature_derivator(),
-                    &signature,
-                ),
-            },
+            subject_signature,
         }
     }
 
@@ -798,34 +785,34 @@ mod test {
         DigestIdentifier::from_str("J6axKnS5KQjtMDFgapJq49tdIpqGVpV7SS4kxV1iR10I").unwrap()
     }
 
-    #[test]
-    fn subject_not_found_test() {
-        let rt = Runtime::new().unwrap();
-        rt.block_on(async {
-            let (manager, not_rx, database, signature_manager) =
-                create_module(VotationType::AlwaysAccept);
-            // Creamos los datos
-            let invokator = create_invokator_signature_manager();
-            let subject = Subject::from_genesis_request(
-                create_genesis_request(create_json_state(), &invokator),
-                create_json_state(),
-            )
-            .unwrap();
-            let msg = generate_request_approve_msg(
-                create_state_request(create_json_state(), &invokator, &subject.subject_id),
-                1,
-                &get_governance_id(),
-                0,
-                true,
-                vec![generate_evaluator_signature(
-                    &create_evaluator_signature_manager(),
-                    true,
-                    true,
-                    0,
-                )],
-                &subject,
-                "".into(),
-            );
-        });
-    }
+    // #[test]
+    // fn subject_not_found_test() {
+    //     let rt = Runtime::new().unwrap();
+    //     rt.block_on(async {
+    //         let (manager, not_rx, database, signature_manager) =
+    //             create_module(VotationType::AlwaysAccept);
+    //         // Creamos los datos
+    //         let invokator = create_invokator_signature_manager();
+    //         let subject = Subject::from_genesis_request(
+    //             create_genesis_request(create_json_state(), &invokator),
+    //             create_json_state(),
+    //         )
+    //         .unwrap();
+    //         let msg = generate_request_approve_msg(
+    //             create_state_request(create_json_state(), &invokator, &subject.subject_id),
+    //             1,
+    //             &get_governance_id(),
+    //             0,
+    //             true,
+    //             vec![generate_evaluator_signature(
+    //                 &create_evaluator_signature_manager(),
+    //                 true,
+    //                 true,
+    //                 0,
+    //             )],
+    //             &subject,
+    //             "".into(),
+    //         );
+    //     });
+    // }
 }

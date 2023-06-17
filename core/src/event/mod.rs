@@ -1,3 +1,4 @@
+use borsh::{BorshSerialize, BorshDeserialize};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -14,7 +15,7 @@ pub mod errors;
 pub mod event_completer;
 pub mod manager;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub enum EventCommand {
     Event {
         event_request: EventRequest,

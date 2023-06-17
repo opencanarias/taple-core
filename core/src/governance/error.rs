@@ -19,6 +19,8 @@ pub enum RequestError {
     ErrorParsingJsonString(String),
     #[error("Invalid KeyIdentifier {0}")]
     InvalidKeyIdentifier(String),
+    #[error("Invalid Name {0}")]
+    InvalidName(String),
     #[error("Unexpected response")]
     UnexpectedResponse,
     #[error("Channel Closed")]
@@ -33,6 +35,10 @@ pub enum RequestError {
     InvalidGovernanceID,
     #[error("Unexpect Payload")]
     UnexpectedPayloadType,
+    #[error("Searching signers quorum in wrong stage")]
+    SearchingSignersQuorumInWrongStage(String),
+    #[error("Searching invoke info in wrong stage")]
+    SearchingInvokeInfoInWrongStage(String),
 }
 
 #[derive(Error, Debug)]

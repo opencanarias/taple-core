@@ -1,6 +1,8 @@
 use std::collections::{hash_map::Entry, HashMap, HashSet};
 
 use crate::commons::crypto::KeyGenerator;
+use crate::commons::models::state::generate_subject_id;
+use crate::request::{RequestState, TapleRequest};
 use crate::{
     commons::{
         channel::SenderEnd,
@@ -66,29 +68,29 @@ impl<C: DatabaseCollection> Ledger<C> {
         }
     }
 
-    async fn init_preautorized(&mut self) -> Result<(), LedgerError> {
-        let data = self.database.get_all_expecting_transfers()?;
-        for (subject_id, _providers) in data {
-            // All expecting subjects should be preauthorized
-            match self
-                .database
-                .get_preauthorized_subject_and_providers(&subject_id)
-            {
-                Ok(_) => {}
-                Err(DbError::EntryNotFound) => {
-                    // Añadimos sujeto como preautorizado
-                    self.database
-                        .set_preauthorized_subject_and_providers(&subject_id, HashSet::new())?;
-                }
-                Err(error) => return Err(LedgerError::DatabaseError(error)),
-            }
-        }
-        Ok(())
-    }
+    // async fn init_preautorized(&mut self) -> Result<(), LedgerError> {
+    //     let data = self.database.get_all_keys()?;
+    //     for (subject_id, _providers) in data {
+    //         // All expecting subjects should be preauthorized
+    //         match self
+    //             .database
+    //             .get_preauthorized_subject_and_providers(&subject_id)
+    //         {
+    //             Ok(_) => {}
+    //             Err(DbError::EntryNotFound) => {
+    //                 // Añadimos sujeto como preautorizado
+    //                 self.database
+    //                     .set_preauthorized_subject_and_providers(&subject_id, HashSet::new())?;
+    //             }
+    //             Err(error) => return Err(LedgerError::DatabaseError(error)),
+    //         }
+    //     }
+    //     Ok(())
+    // }
 
     pub async fn init(&mut self) -> Result<(), LedgerError> {
         // Revisamos posibles sujetos a recibir en transferencias sin preautorizar
-        self.init_preautorized().await?;
+        // self.init_preautorized().await?;
         // Revisar si tengo sujetos a medio camino entre estado actual y LCE
         // Actualizar hashmaps
         let subjects = self.database.get_all_subjects();
@@ -157,9 +159,34 @@ impl<C: DatabaseCollection> Ledger<C> {
         Ok(())
     }
 
-    pub async fn genesis(&mut self, event_request: EventRequest) -> Result<(), LedgerError> {
+    fn set_finished_request(
+        &self,
+        request_id: &DigestIdentifier,
+        event_request: EventRequest,
+        sn: u64,
+        subject_id: DigestIdentifier,
+    ) -> Result<(), LedgerError> {
+        let mut taple_request: TapleRequest = event_request.clone().try_into()?;
+        taple_request.sn = Some(sn);
+        taple_request.subject_id = Some(subject_id.clone());
+        taple_request.state = RequestState::Finished;
+        self.database
+            .set_taple_request(&request_id, &taple_request)?;
+        Ok(())
+    }
+
+    pub async fn genesis(
+        &mut self,
+        event: Event,
+        signatures: HashSet<Signature>,
+        validation_proof: ValidationProof,
+    ) -> Result<(), LedgerError> {
+        let request_id = DigestIdentifier::from_serializable_borsh(
+            &event.content.event_proposal.proposal.event_request,
+        )
+        .map_err(|_| LedgerError::CryptoError("Error generating request hash".to_owned()))?;
         // Añadir a subject_is_gov si es una governance y no está
-        let EventRequestType::Create(create_request) = event_request.request.clone() else {
+        let EventRequestType::Create(create_request) = event.content.event_proposal.proposal.event_request.request.clone() else {
             return Err(LedgerError::StateInGenesis)
         };
         let governance_version = if create_request.schema_id == "governance"
@@ -185,16 +212,8 @@ impl<C: DatabaseCollection> Ledger<C> {
         let init_state_string = serde_json::to_string(&init_state)
             .map_err(|_| LedgerError::ErrorParsingJsonString("Init State".to_owned()))?;
         // Crear sujeto a partir de genesis y evento
-        let subject = Subject::from_genesis_request(event_request.clone(), init_state_string)
+        let subject = Subject::from_genesis_event(event.clone(), init_state_string)
             .map_err(LedgerError::SubjectError)?;
-        // Crear evento a partir de event_request
-        let event = Event::from_genesis_request(
-            event_request,
-            subject.keys.clone().unwrap(),
-            governance_version,
-            &init_state,
-        )
-        .map_err(LedgerError::SubjectError)?;
         let sn = event.content.event_proposal.proposal.sn;
         // Añadir sujeto y evento a base de datos
         let subject_id = subject.subject_id.clone();
@@ -207,10 +226,18 @@ impl<C: DatabaseCollection> Ledger<C> {
         } else {
             self.subject_is_gov.insert(subject_id.clone(), false);
         }
+        let ev_request = event.content.event_proposal.proposal.event_request.clone();
         self.database
             .set_governance_index(&subject_id, &subject.governance_id)?;
         self.database.set_subject(&subject_id, subject)?;
+        self.database.set_signatures(
+            &subject_id,
+            event.content.event_proposal.proposal.sn,
+            signatures,
+            validation_proof, // Current Owner
+        )?;
         self.database.set_event(&subject_id, event)?;
+        self.set_finished_request(&request_id, ev_request, sn, subject_id.clone())?;
         // Actualizar Ledger State
         match self.ledger_state.entry(subject_id.clone()) {
             Entry::Occupied(mut ledger_state) => {
@@ -231,31 +258,18 @@ impl<C: DatabaseCollection> Ledger<C> {
         Ok(())
     }
 
-    pub async fn expecting_transfer(
-        &self,
-        subject_id: DigestIdentifier,
-    ) -> Result<KeyIdentifier, LedgerError> {
+    pub async fn generate_key(&self) -> Result<KeyIdentifier, LedgerError> {
         // Generar material criptográfico y guardarlo en BBDD asociado al subject_id
         // TODO: Hacer la eleccion del MC dinámica. Es necesario primero hacer el cambio a nivel de state.rs
-        let public_key = match self.database.get_expecting_transfer(&subject_id) {
-            Ok(keypair) => {
-                let public_key =
-                    KeyIdentifier::new(keypair.get_key_derivator(), &keypair.public_key_bytes());
-                public_key
-            }
-            Err(DbError::EntryNotFound) => {
-                let keys = KeyPair::Ed25519(Ed25519KeyPair::new());
-                let public_key =
-                    KeyIdentifier::new(keys.get_key_derivator(), &keys.public_key_bytes());
-                self.database.set_expecting_transfer(&subject_id, keys)?;
-                public_key
-            }
-            Err(error) => return Err(LedgerError::DatabaseError(error)),
-        };
-        // Así mismo, ponemos el sujeto como preautorizado
-        self.database
-            .set_preauthorized_subject_and_providers(&subject_id, HashSet::new())?;
+        let keys = KeyPair::Ed25519(Ed25519KeyPair::new());
+        let public_key = KeyIdentifier::new(keys.get_key_derivator(), &keys.public_key_bytes());
+        self.database.set_keys(&public_key, keys)?;
         Ok(public_key)
+
+        // Así mismo, ponemos el sujeto como preautorizado
+        // self.database
+        //     .set_preauthorized_subject_and_providers(&subject_id, HashSet::new())?;
+        // Ok(public_key)
     }
 
     pub async fn event_validated(
@@ -264,9 +278,12 @@ impl<C: DatabaseCollection> Ledger<C> {
         signatures: HashSet<Signature>,
         validation_proof: ValidationProof,
     ) -> Result<(), LedgerError> {
+        let event_request = event.content.event_proposal.proposal.event_request.clone();
+        let request_id = DigestIdentifier::from_serializable_borsh(&event_request)
+            .map_err(|_| LedgerError::CryptoError("Error generating request hash".to_owned()))?;
         let sn = event.content.event_proposal.proposal.sn;
-        let subject_id = match &event.content.event_proposal.proposal.event_request.request {
-            EventRequestType::State(state_request) => {
+        let subject_id = match &event_request.request {
+            EventRequestType::Fact(state_request) => {
                 let subject_id = state_request.subject_id.clone();
                 // Aplicar event sourcing
                 let mut subject =
@@ -387,6 +404,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                     validation_proof,
                 )?;
                 self.database.set_event(&subject_id, event.clone())?;
+                self.set_finished_request(
+                    &request_id,
+                    event_request.clone(),
+                    sn,
+                    subject_id.clone(),
+                )?;
                 subject.eol_event();
                 self.database.set_subject(&subject_id, subject)?;
                 // Comprobar is_gov
@@ -418,6 +441,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                 subject_id
             }
         };
+        self.set_finished_request(
+            &request_id,
+            event_request.clone(),
+            event.content.event_proposal.proposal.sn,
+            subject_id.clone(),
+        )?;
         // Actualizar Ledger State
         match self.ledger_state.entry(subject_id.clone()) {
             Entry::Occupied(mut ledger_state) => {
@@ -436,7 +465,6 @@ impl<C: DatabaseCollection> Ledger<C> {
         self.distribution_channel
             .tell(DistributionMessagesNew::SignaturesNeeded { subject_id, sn })
             .await?;
-
         Ok(())
     }
 
@@ -452,6 +480,17 @@ impl<C: DatabaseCollection> Ledger<C> {
             event.content.event_proposal.proposal.sn
         );
         // log::error!("External event: Event: {:?}", event);
+        // Comprobar que no existe una request con el mismo hash
+        let event_request = event.content.event_proposal.proposal.event_request.clone();
+        let request_id = DigestIdentifier::from_serializable_borsh(&event_request)
+            .map_err(|_| LedgerError::CryptoError("Error generating request hash".to_owned()))?;
+        match self.database.get_taple_request(&request_id) {
+            Ok(_) => return Err(LedgerError::RepeatedRequestId(request_id.to_str())),
+            Err(error) => match error {
+                DbError::EntryNotFound => {}
+                _ => return Err(LedgerError::DatabaseError(error)),
+            },
+        }
         // Comprobaciones criptográficas
         log::warn!("ANTES DE CHECK SIGNATURES");
         event.check_signatures()?;
@@ -597,15 +636,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 .content
                                 .event_content_hash
                         };
-                        let state_hash = subject.get_state_hash()?;
                         let validation_proof = ValidationProof::new_from_transfer_event(
                             &subject,
                             event.content.event_proposal.proposal.sn,
                             prev_event_hash,
                             event.signature.content.event_content_hash.clone(),
-                            state_hash.clone(),
                             event.content.event_proposal.proposal.gov_version,
-                            subject.owner.clone(),
                             transfer_request.public_key.clone(),
                         );
                         // let validation_proof = ValidationProof::new(
@@ -635,7 +671,6 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 &validation_proof,
                                 &subject,
                                 &event.signature.content.event_content_hash,
-                                &state_hash,
                             )?;
                             let sn: u64 = event.content.event_proposal.proposal.sn;
                             // Comprobamos si estamos esperando la transferencia y si esta es a nosotros
@@ -651,7 +686,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                             {
                                 // TODO: ANALIZAR QUE DEBERÍAMOS HACER SI SE NOS TRANSFIERE Y NO LO QUEREMOS
                                 // La transferencia es a nosotros
-                                match self.database.get_expecting_transfer(&subject_id) {
+                                match self.database.get_keys(&transfer_request.public_key) {
                                     Ok(keypair) => (Some(keypair), true),
                                     Err(DbError::EntryNotFound) => {
                                         return Err(LedgerError::UnexpectedTransfer);
@@ -683,10 +718,16 @@ impl<C: DatabaseCollection> Ledger<C> {
                             )?;
                             self.database
                                 .set_event(&transfer_request.subject_id, event)?;
+                            self.set_finished_request(
+                                &request_id,
+                                event_request.clone(),
+                                sn,
+                                subject_id.clone(),
+                            )?;
                             self.database
                                 .set_subject(&transfer_request.subject_id, subject)?;
                             if to_delete {
-                                self.database.del_expecting_transfer(&subject_id)?;
+                                self.database.del_keys(&transfer_request.public_key)?;
                             }
                             if self.subject_is_gov.get(&subject_id).unwrap().to_owned() {
                                 // Enviar mensaje a gov de governance updated con el id y el sn
@@ -778,6 +819,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                             )?;
                             self.database
                                 .set_event(&transfer_request.subject_id, event)?;
+                            self.set_finished_request(
+                                &request_id,
+                                event_request.clone(),
+                                sn,
+                                subject_id.clone(),
+                            )?;
                             self.database.set_lce_validation_proof(
                                 &transfer_request.subject_id,
                                 validation_proof,
@@ -890,6 +937,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                         )?;
                         self.database
                             .set_event(&transfer_request.subject_id, event)?;
+                        self.set_finished_request(
+                            &request_id,
+                            event_request.clone(),
+                            sn,
+                            subject_id.clone(),
+                        )?;
                         self.ledger_state.insert(
                             transfer_request.subject_id.clone(),
                             LedgerState {
@@ -922,7 +975,13 @@ impl<C: DatabaseCollection> Ledger<C> {
                     ));
                 }
                 // Comprobaciones criptográficas
-                let subject_id = create_subject_id(&event)?;
+                let subject_id = generate_subject_id(
+                    &create_request.namespace,
+                    &create_request.schema_id,
+                    create_request.public_key.to_str(),
+                    create_request.governance_id.to_str(),
+                    event.content.event_proposal.proposal.gov_version,
+                )?;
                 match self.database.get_subject(&subject_id) {
                     Ok(_) => {
                         return Err(LedgerError::SubjectAlreadyExists(
@@ -950,24 +1009,6 @@ impl<C: DatabaseCollection> Ledger<C> {
                     governance_id: create_request.governance_id,
                     governance_version: our_gov_version,
                     schema_id: create_request.schema_id.clone(),
-                    owner: event
-                        .content
-                        .event_proposal
-                        .proposal
-                        .event_request
-                        .signature
-                        .content
-                        .signer
-                        .clone(),
-                    creator: event
-                        .content
-                        .event_proposal
-                        .proposal
-                        .event_request
-                        .signature
-                        .content
-                        .signer
-                        .clone(),
                 };
                 if &create_request.schema_id == "governance" {
                     match self
@@ -1063,7 +1104,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                     .tell(DistributionMessagesNew::SignaturesNeeded { subject_id, sn: 0 })
                     .await?;
             }
-            EventRequestType::State(state_request) => {
+            EventRequestType::Fact(state_request) => {
                 // Comprobaciones criptográficas
                 let ledger_state = self.ledger_state.get(&state_request.subject_id);
                 let metadata = validation_proof.get_metadata();
@@ -1210,10 +1251,6 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 .content
                                 .event_content_hash
                         };
-                        let state_hash = subject.state_hash_after_apply(
-                            &event.content.event_proposal.proposal.json_patch,
-                        )?;
-
                         let notary_hash = DigestIdentifier::from_serializable_borsh(
                             &validation_proof,
                         )
@@ -1222,17 +1259,8 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 "Error calculating the hash of the serializable",
                             ))
                         })?;
-
                         log::warn!("NOTARY HASH QUE ME LLEGA {}", notary_hash.to_str());
                         log::warn!("VALIDATION PROOF {:?}", validation_proof);
-                        let notary_hash = DigestIdentifier::from_serializable_borsh(
-                            &validation_proof,
-                        )
-                        .map_err(|_| {
-                            LedgerError::CryptoError(String::from(
-                                "Error calculating the hash of the serializable",
-                            ))
-                        })?;
                         log::warn!("SIGNATURES SIZE: {}", signatures.len());
                         log::warn!("SIGNERS SIZE {}", signers.len());
                         verify_signatures(&signatures, &signers, quorum, &notary_hash)?;
@@ -1249,9 +1277,8 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 &validation_proof,
                                 &subject,
                                 &event.signature.content.event_content_hash,
-                                &state_hash,
                             )?;
-                            check_context(&event, metadata, subject.properties.clone())?;
+                            check_context(&event, &subject, metadata, subject.properties.clone())?;
                             let sn: u64 = event.content.event_proposal.proposal.sn;
                             let json_patch =
                                 event.content.event_proposal.proposal.json_patch.as_str();
@@ -1266,6 +1293,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 validation_proof,
                             )?;
                             self.database.set_event(&state_request.subject_id, event)?;
+                            self.set_finished_request(
+                                &request_id,
+                                event_request.clone(),
+                                sn,
+                                subject_id.clone(),
+                            )?;
                             self.database
                                 .set_subject(&state_request.subject_id, subject)?;
                             if self.subject_is_gov.get(&subject_id).unwrap().to_owned() {
@@ -1365,6 +1398,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 validation_proof,
                             )?;
                             self.database.set_event(&state_request.subject_id, event)?;
+                            self.set_finished_request(
+                                &request_id,
+                                event_request.clone(),
+                                sn,
+                                subject_id.clone(),
+                            )?;
                             if last_lce.is_some() {
                                 let last_lce_sn = last_lce.unwrap();
                                 self.database
@@ -1471,6 +1510,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                             validation_proof,
                         )?;
                         self.database.set_event(&state_request.subject_id, event)?;
+                        self.set_finished_request(
+                            &request_id,
+                            event_request.clone(),
+                            sn,
+                            subject_id.clone(),
+                        )?;
                         self.ledger_state.insert(
                             state_request.subject_id.clone(),
                             LedgerState {
@@ -1498,34 +1543,6 @@ impl<C: DatabaseCollection> Ledger<C> {
                 let ledger_state = self.ledger_state.get(&eol_request.subject_id);
                 let metadata = validation_proof.get_metadata();
                 // Comprobar que invoker tiene permisos de invocación
-                let closers = self
-                    .gov_api
-                    .get_signers(metadata.clone(), ValidationStage::Close)
-                    .await
-                    .map_err(LedgerError::GovernanceError)?;
-                if !closers.contains(
-                    &event
-                        .content
-                        .event_proposal
-                        .proposal
-                        .event_request
-                        .signature
-                        .content
-                        .signer,
-                ) {
-                    return Err(LedgerError::Unauthorized(format!(
-                        "Close unauthorized for KeyId: {}",
-                        event
-                            .content
-                            .event_proposal
-                            .proposal
-                            .event_request
-                            .signature
-                            .content
-                            .signer
-                            .to_str()
-                    )));
-                }
                 match ledger_state {
                     Some(ledger_state) => {
                         match ledger_state.current_sn {
@@ -1566,21 +1583,16 @@ impl<C: DatabaseCollection> Ledger<C> {
                         if !subject.active {
                             return Err(LedgerError::SubjectLifeEnd(subject.subject_id.to_str()));
                         }
-                        let invokers = self
-                            .gov_api
-                            .get_signers(metadata.clone(), ValidationStage::Invoke)
-                            .await
-                            .map_err(LedgerError::GovernanceError)?;
-                        if !invokers.contains(
-                            &event
+                        if subject.creator
+                            != event
                                 .content
                                 .event_proposal
                                 .proposal
                                 .event_request
                                 .signature
                                 .content
-                                .signer,
-                        ) {
+                                .signer
+                        {
                             return Err(LedgerError::Unauthorized(format!(
                                 "Invokation unauthorized for KeyId: {}",
                                 event
@@ -1692,9 +1704,8 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 &validation_proof,
                                 &subject,
                                 &event.signature.content.event_content_hash,
-                                &state_hash,
                             )?;
-                            check_context(&event, metadata, subject.properties.clone())?;
+                            check_context(&event, &subject, metadata, subject.properties.clone())?;
                             let sn: u64 = event.content.event_proposal.proposal.sn;
                             subject.eol_event();
                             self.database.set_signatures(
@@ -1704,6 +1715,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 validation_proof,
                             )?;
                             self.database.set_event(&eol_request.subject_id, event)?;
+                            self.set_finished_request(
+                                &request_id,
+                                event_request.clone(),
+                                sn,
+                                subject_id.clone(),
+                            )?;
                             self.database
                                 .set_subject(&eol_request.subject_id, subject)?;
                             if self.subject_is_gov.get(&subject_id).unwrap().to_owned() {
@@ -1802,6 +1819,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 validation_proof,
                             )?;
                             self.database.set_event(&eol_request.subject_id, event)?;
+                            self.set_finished_request(
+                                &request_id,
+                                event_request.clone(),
+                                sn,
+                                subject_id.clone(),
+                            )?;
                             if last_lce.is_some() {
                                 let last_lce_sn = last_lce.unwrap();
                                 self.database
@@ -1866,7 +1889,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                         } else {
                             self.subject_is_gov.insert(subject_id.clone(), false);
                         }
-                        let mut witnesses = self.get_witnesses(metadata.clone()).await?;
+                        let witnesses = self.get_witnesses(metadata.clone()).await?;
                         if !witnesses.contains(&self.our_id) {
                             match self
                                 .database
@@ -1906,7 +1929,15 @@ impl<C: DatabaseCollection> Ledger<C> {
                             signatures,
                             validation_proof,
                         )?;
+                        let sn = event.content.event_proposal.proposal.sn;
                         self.database.set_event(&eol_request.subject_id, event)?;
+                        self.set_finished_request(
+                            &request_id,
+                            event_request.clone(),
+                            sn,
+                            subject_id.clone(),
+                        )?;
+                        // TODO: PONER Aprobaciones como finalizadas y borrar de índice de pendientes
                         self.ledger_state.insert(
                             eol_request.subject_id.clone(),
                             LedgerState {
@@ -1935,15 +1966,31 @@ impl<C: DatabaseCollection> Ledger<C> {
     }
 
     pub async fn external_intermediate_event(&mut self, event: Event) -> Result<(), LedgerError> {
+        let event_request = event.content.event_proposal.proposal.event_request.clone();
+        let request_id = DigestIdentifier::from_serializable_borsh(&event_request)
+            .map_err(|_| LedgerError::CryptoError("Error generating request hash".to_owned()))?;
+        match self.database.get_taple_request(&request_id) {
+            Ok(_) => return Err(LedgerError::RepeatedRequestId(request_id.to_str())),
+            Err(error) => match error {
+                DbError::EntryNotFound => {}
+                _ => return Err(LedgerError::DatabaseError(error)),
+            },
+        }
         // Comprobaciones criptográficas
         event.check_signatures()?;
         // Comprobar si es genesis o state
         let subject_id = match &event.content.event_proposal.proposal.event_request.request {
             EventRequestType::Create(create_request) => {
                 // Comprobar si había un LCE previo o es genesis puro, si es genesis puro rechazar y que manden por la otra petición aunque sea con hashset de firmas vacío
-                create_subject_id(&event)?
+                generate_subject_id(
+                    &create_request.namespace,
+                    &create_request.schema_id,
+                    create_request.public_key.to_str(),
+                    create_request.governance_id.to_str(),
+                    event.content.event_proposal.proposal.gov_version,
+                )?
             }
-            EventRequestType::State(state_request) => state_request.subject_id.clone(),
+            EventRequestType::Fact(state_request) => state_request.subject_id.clone(),
             EventRequestType::Transfer(transfer_request) => transfer_request.subject_id.clone(),
             EventRequestType::EOL(eol_request) => {
                 return Err(LedgerError::IntermediateEOL(
@@ -1978,8 +2025,6 @@ impl<C: DatabaseCollection> Ledger<C> {
                                         .proposal
                                         .gov_version,
                                     schema_id: subject.schema_id.clone(),
-                                    owner: subject.owner.clone(),
-                                    creator: subject.creator.clone(),
                                 };
                                 // Comprobar que el evento es el siguiente
                                 if event.content.event_proposal.proposal.sn == current_sn + 1 {
@@ -1994,11 +2039,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                                         EventRequestType::Create(_) => {
                                             return Err(LedgerError::UnexpectedCreateEvent)
                                         }
-                                        EventRequestType::State(_) => {
+                                        EventRequestType::Fact(_) => {
                                             self.check_event(event.clone(), metadata.clone())
                                                 .await?;
                                             check_context(
                                                 &event,
+                                                &subject,
                                                 metadata.clone(),
                                                 subject.properties.clone(),
                                             )?;
@@ -2009,6 +2055,13 @@ impl<C: DatabaseCollection> Ledger<C> {
                                         EventRequestType::EOL(_) => unreachable!(),
                                     }
                                     self.database.set_event(&subject_id, event.clone())?;
+                                    self.set_finished_request(
+                                        &request_id,
+                                        event_request.clone(),
+                                        event.content.event_proposal.proposal.sn,
+                                        subject_id.clone(),
+                                    )?;
+                                    // TODO: PONER Aprobaciones como finalizadas y borrar de índice de pendientes
                                     self.event_sourcing(event.clone())?;
                                     if head == current_sn + 2 {
                                         // Hacer event sourcing del LCE tambien y actualizar subject
@@ -2024,15 +2077,11 @@ impl<C: DatabaseCollection> Ledger<C> {
                                         // Comprobar ValidationProof
                                         let validation_proof =
                                             self.database.get_lce_validation_proof(&subject_id)?;
-                                        let state_hash = subject.state_hash_after_apply(
-                                            &head_event.content.event_proposal.proposal.json_patch,
-                                        )?;
                                         // TODO: Si falla aquí inutilizamos sujeto???
                                         self.check_validation_proof(
                                             &validation_proof,
                                             &subject,
                                             &head_event.signature.content.event_content_hash,
-                                            &state_hash,
                                         )?;
                                         self.event_sourcing(head_event)?;
                                         self.ledger_state.insert(
@@ -2063,7 +2112,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                         // Pedir siguiente evento
                                         let mut witnesses =
                                             self.get_witnesses(metadata.clone()).await?;
-                                        witnesses.insert(metadata.owner);
+                                        witnesses.insert(subject.owner);
                                         let msg = request_event(
                                             self.our_id.clone(),
                                             subject_id,
@@ -2126,15 +2175,11 @@ impl<C: DatabaseCollection> Ledger<C> {
                                         // Comprobar ValidationProof
                                         let validation_proof =
                                             self.database.get_lce_validation_proof(&subject_id)?;
-                                        let state_hash = subject.state_hash_after_apply(
-                                            &head_event.content.event_proposal.proposal.json_patch,
-                                        )?;
                                         // TODO: Si falla aquí inutilizamos sujeto???
                                         self.check_validation_proof(
                                             &validation_proof,
                                             &subject,
                                             &head_event.signature.content.event_content_hash,
-                                            &state_hash,
                                         )?;
                                         // Hacer event sourcing del evento 1 tambien y actualizar subject
                                         self.event_sourcing(head_event)?;
@@ -2166,7 +2211,17 @@ impl<C: DatabaseCollection> Ledger<C> {
                                         // Pedir siguiente evento
                                         let mut witnesses =
                                             self.get_witnesses(metadata.clone()).await?;
-                                        witnesses.insert(metadata.owner);
+                                        // Añadir owner
+                                        witnesses.insert(
+                                            event
+                                                .content
+                                                .event_proposal
+                                                .proposal
+                                                .event_request
+                                                .signature
+                                                .content
+                                                .signer,
+                                        );
                                         let msg = request_event(self.our_id.clone(), subject_id, 1);
                                         self.message_channel
                                             .tell(MessageTaskCommand::Request(
@@ -2306,7 +2361,6 @@ impl<C: DatabaseCollection> Ledger<C> {
         validation_proof: &ValidationProof,
         subject: &Subject,
         event_hash: &DigestIdentifier,
-        state_hash: &DigestIdentifier,
     ) -> Result<(), LedgerError> {
         let hash_prev_event = match self.database.get_event(&subject.subject_id, subject.sn) {
             Ok(event) => event.signature.content.event_content_hash.clone(),
@@ -2349,21 +2403,17 @@ impl<C: DatabaseCollection> Ledger<C> {
             return Err(LedgerError::ValidationProofError(
                 "Hash Event does not match".to_string(),
             ));
-        } else if state_hash != &validation_proof.state_hash {
-            return Err(LedgerError::ValidationProofError(
-                "Hash of State does not match".to_string(),
-            ));
         } else if validation_proof.subject_public_key != subject.public_key {
             return Err(LedgerError::ValidationProofError(
                 "Subject Public Key does not match".to_string(),
             ));
-        } else if validation_proof.owner != subject.owner {
+        } else if validation_proof.name != subject.name {
             return Err(LedgerError::ValidationProofError(
-                "Owner does not match".to_string(),
+                "Subject Name does not match".to_string(),
             ));
-        } else if validation_proof.creator != subject.creator {
+        } else if validation_proof.genesis_governance_version != subject.genesis_gov_version {
             return Err(LedgerError::ValidationProofError(
-                "Creator does not match".to_string(),
+                "Genesis gov versiob does not match".to_string(),
             ));
         }
         Ok(())
@@ -2393,8 +2443,6 @@ impl<C: DatabaseCollection> Ledger<C> {
             governance_id: create_request.governance_id.clone(),
             governance_version: event.content.event_proposal.proposal.gov_version,
             schema_id: create_request.schema_id.clone(),
-            owner: invoker.clone(),
-            creator: invoker.clone(),
         };
         // Ignoramos las firmas por ahora
         // Comprobar que el creador tiene permisos de creación
@@ -2421,7 +2469,12 @@ impl<C: DatabaseCollection> Ledger<C> {
         let subject = Subject::from_genesis_event(event.clone(), init_state)?;
         self.database
             .set_governance_index(&subject_id, &subject.governance_id)?;
+        let event_request = event.content.event_proposal.proposal.event_request.clone();
+        let request_id = DigestIdentifier::from_serializable_borsh(&event_request)
+            .map_err(|_| LedgerError::CryptoError("Error generating request hash".to_owned()))?;
+        let sn = event.content.event_proposal.proposal.sn;
         self.database.set_event(&subject_id, event)?;
+        self.set_finished_request(&request_id, event_request.clone(), sn, subject_id.clone())?;
         self.database.set_subject(&subject_id, subject)?;
         Ok(metadata)
     }
@@ -2499,7 +2552,7 @@ impl<C: DatabaseCollection> Ledger<C> {
         {
             // TODO: ANALIZAR QUE DEBERÍAMOS HACER SI SE NOS TRANSFIERE Y NO LO QUEREMOS
             // La transferencia es a nosotros
-            match self.database.get_expecting_transfer(&subject_id) {
+            match self.database.get_keys(&public_key) {
                 Ok(keypair) => (Some(keypair), true),
                 Err(DbError::EntryNotFound) => {
                     return Err(LedgerError::UnexpectedTransfer);
@@ -2511,13 +2564,13 @@ impl<C: DatabaseCollection> Ledger<C> {
         };
         subject.transfer_subject(
             owner,
-            public_key,
+            public_key.clone(),
             keypair,
             event.content.event_proposal.proposal.sn,
         );
         self.database.set_subject(&subject_id, subject)?;
         if to_delete {
-            self.database.del_expecting_transfer(&subject_id)?;
+            self.database.del_keys(&public_key)?;
         }
         Ok(())
     }
@@ -2539,7 +2592,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                 transfer_request.public_key.clone(),
             ),
             EventRequestType::Create(_) => return Err(LedgerError::UnexpectedCreateEvent),
-            EventRequestType::State(state_request) => self.event_sourcing_state(
+            EventRequestType::Fact(state_request) => self.event_sourcing_state(
                 state_request.subject_id.clone(),
                 event.content.event_proposal.proposal.sn,
                 event,
@@ -2643,6 +2696,7 @@ impl<C: DatabaseCollection> Ledger<C> {
 
 fn check_context(
     event: &Event,
+    subject: &Subject,
     metadata: Metadata,
     prev_properties: String,
 ) -> Result<(), LedgerError> {
@@ -2651,8 +2705,8 @@ fn check_context(
         context: Context {
             governance_id: metadata.governance_id,
             schema_id: metadata.schema_id,
-            creator: metadata.creator,
-            owner: metadata.owner,
+            creator: subject.creator.clone(),
+            owner: subject.owner.clone(),
             actual_state: prev_properties,
             namespace: metadata.namespace,
             governance_version: event.content.event_proposal.proposal.gov_version,
@@ -2773,29 +2827,4 @@ fn verify_signatures(
         return Err(LedgerError::NotEnoughSignatures(event_hash.to_str()));
     }
     Ok(())
-}
-
-fn create_subject_id(event: &Event) -> Result<DigestIdentifier, LedgerError> {
-    match DigestIdentifier::from_serializable_borsh((
-        &event
-            .content
-            .event_proposal
-            .proposal
-            .event_request
-            .signature
-            .content
-            .event_content_hash,
-        &event
-            .content
-            .event_proposal
-            .subject_signature
-            .content
-            .signer
-            .public_key, // No estoy seguro que esto equivalga al vector de bytes pero creo que si
-    )) {
-        Ok(subject_id) => Ok(subject_id),
-        Err(_) => Err(LedgerError::CryptoError(
-            "Error creating subject_id in external event".to_owned(),
-        )),
-    }
 }

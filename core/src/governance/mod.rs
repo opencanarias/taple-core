@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use crate::commons::{
     identifier::{DigestIdentifier, KeyIdentifier},
     models::event_content::Metadata,
-    schema_handler::gov_models::{Contract, Invoke},
+    schema_handler::gov_models::{Contract},
 };
 pub mod error;
 pub mod governance;
@@ -61,7 +61,8 @@ pub enum GovernanceMessage {
     },
     GetInvokeInfo {
         metadata: Metadata,
-        fact: String,
+        stage: ValidationStage,
+        invoker: KeyIdentifier,
     },
     GetContracts {
         governance_id: DigestIdentifier,
@@ -73,10 +74,6 @@ pub enum GovernanceMessage {
     },
     IsGovernance {
         subject_id: DigestIdentifier,
-    },
-    GetRolesOfInvokator {
-        invokator: KeyIdentifier,
-        metadata: Metadata,
     },
     GovernanceUpdated {
         governance_id: DigestIdentifier,
@@ -90,11 +87,10 @@ pub enum GovernanceResponse {
     GetSchema(Result<Value, RequestError>),
     GetSigners(Result<HashSet<KeyIdentifier>, RequestError>),
     GetQuorum(Result<u32, RequestError>),
-    GetInvokeInfo(Result<Option<Invoke>, RequestError>),
+    GetInvokeInfo(Result<bool, RequestError>),
     GetContracts(Result<Vec<Contract>, RequestError>),
     GetGovernanceVersion(Result<u64, RequestError>),
     IsGovernance(Result<bool, RequestError>),
-    GetRolesOfInvokator(Result<Vec<String>, RequestError>),
     NoResponse,
 }
 

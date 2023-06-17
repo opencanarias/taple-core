@@ -4,21 +4,59 @@ mod message_receiver;
 mod message_sender;
 mod message_task_manager;
 
+use crate::{
+    commons::{identifier::KeyIdentifier, self_signature_manager::{SelfSignatureManager, SelfSignatureInterface}},
+    signature::Signature,
+    DigestIdentifier,
+};
+use borsh::{BorshDeserialize, BorshSerialize};
 pub use command::*;
-use crate::commons::identifier::KeyIdentifier;
 pub use message_receiver::*;
 pub use message_sender::*;
 pub use message_task_manager::*;
 
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+use self::error::Error;
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct Message<T: TaskCommandContent> {
-    pub sender_id: Option<KeyIdentifier>,
-    pub content: T,
+    pub content: MessageContent<T>,
+    pub signature: Signature,
 }
 
-pub trait TaskCommandContent: Serialize + std::fmt::Debug + Clone + Send + Sync {}
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, BorshSerialize, BorshDeserialize)]
+pub struct MessageContent<T: TaskCommandContent> {
+    pub sender_id: KeyIdentifier,
+    pub content: T,
+    pub receiver: KeyIdentifier,
+}
+
+impl<T: TaskCommandContent> Message<T> {
+    pub fn new(
+        sender: KeyIdentifier,
+        receiver: KeyIdentifier,
+        content: T,
+        sender_sm: &SelfSignatureManager,
+    ) -> Result<Self, Error> {
+        let content = MessageContent {
+            sender_id: sender.clone(),
+            content,
+            receiver,
+        };
+        let content_hash = DigestIdentifier::from_serializable_borsh(&content)
+            .map_err(|_| Error::CreatingMessageError)?;
+        let signature = sender_sm
+            .sign(&content_hash)
+            .map_err(|_| Error::CreatingMessageError)?;
+        Ok(Self { content, signature })
+    }
+}
+
+pub trait TaskCommandContent:
+    Serialize + std::fmt::Debug + Clone + Send + Sync + BorshDeserialize + BorshSerialize
+{
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum MessageTaskCommand<M>

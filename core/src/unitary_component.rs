@@ -380,13 +380,21 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
         .await
         .expect("Error en creación de la capa de red");
         self.peer_id = Some(network_manager.local_peer_id().to_owned());
-        // Creation NetworkReceiver
-        let network_receiver =
-            MessageReceiver::new(receiver_network, protocol_sender, bsx.subscribe());
-        // Creation NetworkSender
-        let network_sender = MessageSender::new(network_manager.client(), key_identifier.clone());
         // Creation Signature Manager
         let signature_manager = SelfSignatureManager::new(kp.clone(), &self.settings);
+        // Creation NetworkReceiver
+        let network_receiver = MessageReceiver::new(
+            receiver_network,
+            protocol_sender,
+            bsx.subscribe(),
+            signature_manager.get_own_identifier(),
+        );
+        // Creation NetworkSender
+        let network_sender = MessageSender::new(
+            network_manager.client(),
+            key_identifier.clone(),
+            signature_manager.clone(),
+        );
         // Creation TaskManager
         let mut task_manager = MessageTaskManager::new(
             network_sender.clone(),

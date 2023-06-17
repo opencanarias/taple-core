@@ -1,10 +1,10 @@
 use crate::{
     commons::{
-        crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair},
+        crypto::{KeyPair},
         errors::SubjectError,
         identifier::{DigestIdentifier, KeyIdentifier},
     },
-    event_request::EventRequest,
+    Derivable,
 };
 use json_patch::{patch, Patch};
 use serde::{Deserialize, Serialize};
@@ -21,9 +21,11 @@ pub struct Subject {
     pub governance_id: DigestIdentifier,
     /// Current sequence number of the subject
     pub sn: u64,
+    pub genesis_gov_version: u64,
     /// Public key of the subject
     pub public_key: KeyIdentifier,
     pub namespace: String,
+    pub name: String,
     /// Identifier of the schema used by the subject and defined in associated governance
     pub schema_id: String,
     /// Subject owner identifier
@@ -77,62 +79,57 @@ impl From<Subject> for SubjectData {
 }
 
 impl Subject {
-    pub fn from_genesis_request(
-        event_request: EventRequest,
-        init_state: String,
-    ) -> Result<Self, SubjectError> {
-        let EventRequestType::Create(create_request) = event_request.request.clone() else {
-            return Err(SubjectError::NotCreateEvent)
-        };
-        // TODO: Pasar que tipo de esquema criptográfico se quiere usar por parametros
-        let keys = KeyPair::Ed25519(Ed25519KeyPair::new());
-        let public_key = KeyIdentifier::new(keys.get_key_derivator(), &keys.public_key_bytes());
-        let subject_id = match DigestIdentifier::from_serializable_borsh((
-            &event_request.signature.content.event_content_hash,
-            &public_key.public_key,
-        )) {
-            Ok(subject_id) => subject_id,
-            Err(_) => return Err(SubjectError::ErrorCreatingSubjectId),
-        };
-        Ok(Subject {
-            keys: Some(keys),
-            subject_id,
-            governance_id: create_request.governance_id.clone(),
-            sn: 0,
-            public_key,
-            namespace: create_request.namespace.clone(),
-            schema_id: create_request.schema_id.clone(),
-            owner: event_request.signature.content.signer.clone(),
-            creator: event_request.signature.content.signer.clone(),
-            properties: init_state,
-            active: true,
-        })
-    }
+    // // TODO: Probablemente borrar
+    // pub fn from_genesis_request(
+    //     event_request: EventRequest,
+    //     init_state: String,
+    // ) -> Result<Self, SubjectError> {
+    //     let EventRequestType::Create(create_request) = event_request.request.clone() else {
+    //         return Err(SubjectError::NotCreateEvent)
+    //     };
+    //     // TODO: Pasar que tipo de esquema criptográfico se quiere usar por parametros
+    //     let keys = KeyPair::Ed25519(Ed25519KeyPair::new());
+    //     let public_key = KeyIdentifier::new(keys.get_key_derivator(), &keys.public_key_bytes());
+    //     let subject_id = generate_subject_id(
+    //         &create_request.namespace,
+    //         &create_request.schema_id,
+    //         create_request.public_key.to_str(),
+    //         create_request.governance_id.to_str(),
+    //         0, // Ta mal
+    //     )?;
+    //     Ok(Subject {
+    //         keys: Some(keys),
+    //         subject_id,
+    //         governance_id: create_request.governance_id.clone(),
+    //         sn: 0,
+    //         public_key,
+    //         namespace: create_request.namespace.clone(),
+    //         schema_id: create_request.schema_id.clone(),
+    //         owner: event_request.signature.content.signer.clone(),
+    //         creator: event_request.signature.content.signer.clone(),
+    //         properties: init_state,
+    //         active: true,
+    //         name: create_request.name,
+    //     })
+    // }
 
     pub fn from_genesis_event(event: Event, init_state: String) -> Result<Self, SubjectError> {
         let EventRequestType::Create(create_request) = event.content.event_proposal.proposal.event_request.request.clone() else {
             return Err(SubjectError::NotCreateEvent)
         };
-        let subject_id = match DigestIdentifier::from_serializable_borsh((
-            &event
-                .content
-                .event_proposal
-                .proposal
-                .event_request
-                .signature
-                .content
-                .event_content_hash,
-            &event.signature.content.signer.public_key,
-        )) {
-            Ok(subject_id) => subject_id,
-            Err(_) => return Err(SubjectError::ErrorCreatingSubjectId),
-        };
+        let subject_id = generate_subject_id(
+            &create_request.namespace,
+            &create_request.schema_id,
+            create_request.public_key.to_str(),
+            create_request.governance_id.to_str(),
+            event.content.event_proposal.proposal.gov_version,
+        )?;
         Ok(Subject {
             keys: None,
             subject_id,
             governance_id: create_request.governance_id.clone(),
             sn: 0,
-            public_key: event.signature.content.signer,
+            public_key: create_request.public_key,
             namespace: create_request.namespace.clone(),
             schema_id: create_request.schema_id.clone(),
             owner: event
@@ -155,6 +152,8 @@ impl Subject {
                 .clone(),
             properties: init_state,
             active: true,
+            name: create_request.name,
+            genesis_gov_version: event.content.event_proposal.proposal.gov_version,
         })
     }
 
@@ -191,7 +190,7 @@ impl Subject {
     }
 
     pub fn get_state_hash(&self) -> Result<DigestIdentifier, SubjectError> {
-        let mut subject_properties = serde_json::from_str::<Value>(&self.properties)
+        let subject_properties = serde_json::from_str::<Value>(&self.properties)
             .map_err(|_| SubjectError::CryptoError(String::from("Error parsing the state")))?;
         let subject_properties_str = serde_json::to_string(&subject_properties)
             .map_err(|_| SubjectError::CryptoError(String::from("Error serializing the state")))?;
@@ -225,4 +224,22 @@ impl Subject {
             })?,
         )
     }
+}
+
+pub fn generate_subject_id(
+    namespace: &str,
+    schema_id: &str,
+    public_key: String,
+    governance_id: String,
+    governance_version: u64,
+) -> Result<DigestIdentifier, SubjectError> {
+    let subject_id = DigestIdentifier::from_serializable_borsh((
+        namespace,
+        schema_id,
+        public_key,
+        governance_id,
+        governance_version,
+    ))
+    .map_err(|_| SubjectError::ErrorCreatingSubjectId)?;
+    Ok(subject_id)
 }

@@ -15,14 +15,13 @@ use super::{signature::Signature, state::Subject, timestamp::TimeStamp};
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct EventRequest {
     pub request: EventRequestType,
-    pub timestamp: TimeStamp,
     pub signature: Signature,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub enum EventRequestType {
     Create(CreateRequest),
-    State(StateRequest),
+    Fact(FactRequest),
     Transfer(TransferRequest),
     EOL(EOLRequest),
 }
@@ -32,12 +31,14 @@ pub struct CreateRequest {
     pub governance_id: DigestIdentifier,
     pub schema_id: String,
     pub namespace: String,
+    pub name: String,
+    pub public_key: KeyIdentifier,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
-pub struct StateRequest {
+pub struct FactRequest {
     pub subject_id: DigestIdentifier,
-    pub invokation: String,
+    pub payload: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
@@ -53,15 +54,11 @@ pub struct EOLRequest {
 
 impl EventRequest {
     pub fn new(request: EventRequestType, signature: Signature) -> Self {
-        Self {
-            request,
-            timestamp: TimeStamp::now(),
-            signature,
-        }
+        Self { request, signature }
     }
 
     pub fn check_signatures(&self) -> Result<(), SubjectError> {
-        check_cryptography((&self.request, &self.timestamp), &self.signature)
+        check_cryptography(&self.request, &self.signature)
             .map_err(|error| SubjectError::CryptoError(error.to_string()))?;
         Ok(())
     }

@@ -1,5 +1,5 @@
 use super::utils::{get_key, Element};
-use crate::event_request::EventRequest;
+use crate::commons::models::request::TapleRequest;
 use crate::DbError;
 use crate::{DatabaseCollection, DatabaseManager, Derivable, DigestIdentifier};
 use std::sync::Arc;
@@ -12,27 +12,31 @@ pub(crate) struct RequestDb<C: DatabaseCollection> {
 impl<C: DatabaseCollection> RequestDb<C> {
     pub fn new<M: DatabaseManager<C>>(manager: &Arc<M>) -> Self {
         Self {
-            collection: manager.create_collection("request"),
-            prefix: "request".to_string(),
+            collection: manager.create_collection("taple-request"),
+            prefix: "taple-request".to_string(),
         }
     }
 
-    pub fn get_request(&self, subject_id: &DigestIdentifier) -> Result<EventRequest, DbError> {
+    pub fn get_request(&self, request_id: &DigestIdentifier) -> Result<TapleRequest, DbError> {
         let key_elements: Vec<Element> = vec![
             Element::S(self.prefix.clone()),
-            Element::S(subject_id.to_str()),
+            Element::S(request_id.to_str()),
         ];
         let key = get_key(key_elements)?;
         let request = self.collection.get(&key)?;
-        Ok(bincode::deserialize::<EventRequest>(&request).map_err(|_| {
-            DbError::DeserializeError
-        })?)
+        Ok(
+            bincode::deserialize::<TapleRequest>(&request)
+                .map_err(|_| DbError::DeserializeError)?,
+        )
     }
 
-    pub fn get_all_request(&self) -> Vec<EventRequest> {
+    pub fn get_all_request(&self) -> Vec<TapleRequest> {
         let mut result = Vec::new();
-        for (_, request) in self.collection.iter(false, format!("{}{}", self.prefix, char::MAX)) {
-            let request = bincode::deserialize::<EventRequest>(&request).unwrap();
+        for (_, request) in self
+            .collection
+            .iter(false, format!("{}{}", self.prefix, char::MAX))
+        {
+            let request = bincode::deserialize::<TapleRequest>(&request).unwrap();
             result.push(request);
         }
         result
@@ -40,24 +44,24 @@ impl<C: DatabaseCollection> RequestDb<C> {
 
     pub fn set_request(
         &self,
-        subject_id: &DigestIdentifier,
-        request: EventRequest,
+        request_id: &DigestIdentifier,
+        request: &TapleRequest,
     ) -> Result<(), DbError> {
         let key_elements: Vec<Element> = vec![
             Element::S(self.prefix.clone()),
-            Element::S(subject_id.to_str()),
+            Element::S(request_id.to_str()),
         ];
         let key = get_key(key_elements)?;
-        let Ok(data) = bincode::serialize::<EventRequest>(&request) else {
+        let Ok(data) = bincode::serialize::<TapleRequest>(request) else {
             return Err(DbError::SerializeError);
         };
         self.collection.put(&key, data)
     }
 
-    pub fn del_request(&self, subject_id: &DigestIdentifier) -> Result<(), DbError> {
+    pub fn del_request(&self, request_id: &DigestIdentifier) -> Result<(), DbError> {
         let key_elements: Vec<Element> = vec![
             Element::S(self.prefix.clone()),
-            Element::S(subject_id.to_str()),
+            Element::S(request_id.to_str()),
         ];
         let key = get_key(key_elements)?;
         self.collection.del(&key)

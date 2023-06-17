@@ -2,7 +2,7 @@ use crate::commons::identifier::{Derivable, KeyIdentifier};
 use futures::{future::BoxFuture, prelude::*};
 use log::debug;
 
-use super::super::{error::Error, Message, MessageConfig, MessageSender, TaskCommandContent};
+use super::super::{error::Error, MessageConfig, MessageSender, TaskCommandContent};
 use std::time::Duration;
 
 use rand::Rng;
@@ -34,13 +34,7 @@ impl Algorithm {
                 for target in targets_selected {
                     debug!("Message sent to {}", target.to_str());
                     sender
-                        .send_message(
-                            target,
-                            Message::<T> {
-                                content: request.clone(),
-                                sender_id: None,
-                            },
-                        )
+                        .send_message(target, request.clone())
                         .await
                         .map_err(|_| Error::SenderChannelError)?;
                 }
@@ -59,15 +53,7 @@ impl Algorithm {
             // Targets are selected
             let targets_selected = Algorithm::get_targets(targets, config.replication_factor());
             for target in targets_selected {
-                let result_sending = sender
-                    .send_message(
-                        target,
-                        Message::<T> {
-                            content: request.clone(),
-                            sender_id: None,
-                        },
-                    )
-                    .await;
+                let result_sending = sender.send_message(target, request.clone()).await;
                 log::warn!("RESULT SENDING: {:?}", result_sending);
                 result_sending.map_err(|_| Error::SenderChannelError)?;
             }

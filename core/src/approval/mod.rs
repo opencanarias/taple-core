@@ -1,3 +1,4 @@
+use borsh::{BorshSerialize, BorshDeserialize};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -15,7 +16,7 @@ mod inner_manager;
 #[cfg(feature = "aproval")]
 pub(crate) mod manager;
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, BorshSerialize, BorshDeserialize)]
 pub enum ApprovalMessages {
     RequestApproval(EventProposal),
     EmitVote(EmitVote),
@@ -57,7 +58,7 @@ pub struct RequestApproval {
     subject_signature: Signature,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, BorshSerialize, BorshDeserialize)]
 pub struct EmitVote {
     request_id: DigestIdentifier,
     acceptance: Acceptance,

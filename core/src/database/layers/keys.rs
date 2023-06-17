@@ -5,26 +5,23 @@ use crate::{DatabaseCollection, DatabaseManager, Derivable, DigestIdentifier, Ke
 use std::collections::HashSet;
 use std::sync::Arc;
 
-pub(crate) struct TransferEventsDb<C: DatabaseCollection> {
+pub(crate) struct KeysDb<C: DatabaseCollection> {
     collection: C,
     prefix: String,
 }
 
-impl<C: DatabaseCollection> TransferEventsDb<C> {
+impl<C: DatabaseCollection> KeysDb<C> {
     pub fn new<M: DatabaseManager<C>>(manager: &Arc<M>) -> Self {
         Self {
             collection: manager.create_collection("transfer"),
-            prefix: "transfer".to_string(),
+            prefix: "keys".to_string(),
         }
     }
 
-    pub fn get_expecting_transfer(
-        &self,
-        subject_id: &DigestIdentifier,
-    ) -> Result<KeyPair, DbError> {
+    pub fn get_keys(&self, public_key: &KeyIdentifier) -> Result<KeyPair, DbError> {
         let key_elements: Vec<Element> = vec![
             Element::S(self.prefix.clone()),
-            Element::S(subject_id.to_str()),
+            Element::S(public_key.to_str()),
         ];
         let key = get_key(key_elements)?;
         let value = self.collection.get(&key)?;
@@ -33,14 +30,10 @@ impl<C: DatabaseCollection> TransferEventsDb<C> {
         Ok(result)
     }
 
-    pub fn set_expecting_transfer(
-        &self,
-        subject_id: &DigestIdentifier,
-        keypair: KeyPair,
-    ) -> Result<(), DbError> {
+    pub fn set_keys(&self, public_key: &KeyIdentifier, keypair: KeyPair) -> Result<(), DbError> {
         let key_elements: Vec<Element> = vec![
             Element::S(self.prefix.clone()),
-            Element::S(subject_id.to_str()),
+            Element::S(public_key.to_str()),
         ];
         let key = get_key(key_elements)?;
         let Ok(data) = bincode::serialize::<KeyPair>(&keypair) else {
@@ -49,25 +42,23 @@ impl<C: DatabaseCollection> TransferEventsDb<C> {
         self.collection.put(&key, data)
     }
 
-    pub fn del_expecting_transfer(&self, subject_id: &DigestIdentifier) -> Result<(), DbError> {
+    pub fn del_keys(&self, public_key: &KeyIdentifier) -> Result<(), DbError> {
         let key_elements: Vec<Element> = vec![
             Element::S(self.prefix.clone()),
-            Element::S(subject_id.to_str()),
+            Element::S(public_key.to_str()),
         ];
         let key = get_key(key_elements)?;
         self.collection.del(&key)
     }
 
-    pub fn get_all_expecting_transfers(
-        &self,
-    ) -> Result<Vec<(DigestIdentifier, HashSet<KeyIdentifier>)>, DbError> {
+    pub fn get_all_keys(&self) -> Result<Vec<KeyPair>, DbError> {
         let key_elements: Vec<Element> = vec![Element::S(self.prefix.clone())];
         let key = get_key(key_elements)?;
         let iter = self.collection.iter(false, key);
         let mut result = Vec::new();
         for (_, bytes) in iter {
             let subject =
-                bincode::deserialize::<(DigestIdentifier, HashSet<KeyIdentifier>)>(&bytes)
+                bincode::deserialize::<KeyPair>(&bytes)
                     .map_err(|_| DbError::DeserializeError)?;
             result.push(subject);
         }

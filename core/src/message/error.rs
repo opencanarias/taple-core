@@ -34,4 +34,6 @@ pub enum Error {
     },
     #[error("Cant send message. Channel closed")]
     ChannelClosed,
+    #[error("Error Creating message")]
+    CreatingMessageError,
 }

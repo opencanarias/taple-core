@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use crate::commons::models::request::TapleRequest;
 use crate::commons::models::approval::ApprovalStatus;
 use crate::signature::Signature;
 #[cfg(feature = "aproval")]
@@ -25,6 +26,7 @@ pub enum APICommands {
     GetAllSubjects(GetAllSubjects),
     GetAllGovernances(GetAllSubjects),
     GetSingleSubject(GetSingleSubject),
+    GetEvent(DigestIdentifier, u64),
     GetEventsOfSubject(GetEventsOfSubject),
     #[cfg(feature = "aproval")]
     VoteResolve(Acceptance, DigestIdentifier),
@@ -35,8 +37,9 @@ pub enum APICommands {
     #[cfg(feature = "aproval")]
     GetSingleRequest(DigestIdentifier),
     SetPreauthorizedSubject(DigestIdentifier, HashSet<KeyIdentifier>),
-    ExpectingTransfer(DigestIdentifier),
+    GenerateKeys,
     GetValidationProof(DigestIdentifier),
+    GetRequest(DigestIdentifier),
     GetGovernanceSubjects(GetGovernanceSubjects),
     GetApproval(DigestIdentifier),
     GetApprovals(Option<String>),
@@ -57,8 +60,10 @@ pub enum ApiResponses {
     GetPendingRequests(Result<Vec<ApprovalPetitionData>, ApiError>),
     #[cfg(feature = "aproval")]
     GetSingleRequest(Result<ApprovalPetitionData, ApiError>),
-    ExpectingTransfer(Result<KeyIdentifier, ApiError>),
+    GetEvent(Result<Event, ApiError>),
+    GenerateKeys(Result<KeyIdentifier, ApiError>),
     GetValidationProof(Result<HashSet<Signature>, ApiError>),
+    GetRequest(Result<TapleRequest, ApiError>),
     GetGovernanceSubjects(Result<Vec<SubjectData>, ApiError>),
     GetApproval(Result<(ApprovalPetitionData, ApprovalStatus), ApiError>),
     GetApprovals(Result<Vec<ApprovalPetitionData>, ApiError>),

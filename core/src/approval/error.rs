@@ -18,6 +18,8 @@ pub enum ApprovalManagerError {
     HashGenerationFailed,
     #[error("Sign process failed")]
     SignProcessFailed,
+    #[error("Response channel closed")]
+    ResponseChannelClosed
 }
 
 #[derive(Error, Debug, Clone)]

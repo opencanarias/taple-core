@@ -14,8 +14,6 @@ pub struct Metadata {
     pub governance_id: DigestIdentifier,
     pub governance_version: u64,
     pub schema_id: String,
-    pub owner: KeyIdentifier,
-    pub creator: KeyIdentifier,
 }
 
 /// Content of a TAPLE event

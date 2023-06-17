@@ -153,7 +153,7 @@ impl<C: DatabaseCollection> EventManager<C> {
         let response = {
             match data {
                 EventCommand::Event { event_request } => {
-                    let response = self.event_completer.new_event(event_request).await;
+                    let response = self.event_completer.pre_new_event(event_request).await;
                     log::warn!("EVENT REPSONE: {:?}", response);
                     match response.clone() {
                         Err(error) => match error {

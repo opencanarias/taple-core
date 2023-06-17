@@ -1,10 +1,12 @@
 use std::collections::HashSet;
 
+use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 
 use crate::{
     commons::models::{event::ValidationProof, notary::NotaryEventResponse},
     signature::Signature,
+    KeyIdentifier,
 };
 
 use self::errors::NotaryError;
@@ -15,9 +17,13 @@ pub mod manager;
 #[cfg(feature = "validation")]
 pub mod notary;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub enum NotaryCommand {
-    NotaryEvent(NotaryEvent),
+    NotaryEvent {
+        notary_event: NotaryEvent,
+        sender: KeyIdentifier,
+    },
+    AskForNotary(NotaryEvent),
 }
 
 #[derive(Debug, Clone)]
@@ -25,7 +31,7 @@ pub enum NotaryResponse {
     NotaryEventResponse(Result<NotaryEventResponse, NotaryError>),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub struct NotaryEvent {
     pub proof: ValidationProof,
     pub subject_signature: Signature,
