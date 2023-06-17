@@ -43,6 +43,7 @@ impl<C: DatabaseCollection> ApprovalsDb<C> {
                 let real_status = match value.as_str() {
                     "Pending" => ApprovalStatus::Pending,
                     "Voted" => ApprovalStatus::Voted,
+                    "Finished" => ApprovalStatus::Finished,
                     _ => return Err(DbError::NonExistentStatus),
                 };
                 for (_, approval) in self.collection.iter(false, format!("{}{}", self.prefix, char::MAX)) {
