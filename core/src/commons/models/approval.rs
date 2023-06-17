@@ -64,4 +64,5 @@ impl Hash for UniqueApproval {
 pub enum ApprovalStatus {
     Pending,
     Voted,
+    Finished,
 }
