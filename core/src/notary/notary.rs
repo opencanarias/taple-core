@@ -47,27 +47,32 @@ impl<C: DatabaseCollection> Notary<C> {
         notary_event: NotaryEvent,
         sender: KeyIdentifier,
     ) -> Result<NotaryEventResponse, NotaryError> {
-        let actual_gov_version = match self
-            .gov_api
-            .get_governance_version(
-                notary_event.proof.governance_id.clone(),
-                notary_event.proof.subject_id.clone(),
-            )
-            .await
-        {
-            Ok(gov_version) => gov_version,
-            Err(error) => match error {
-                crate::governance::error::RequestError::GovernanceNotFound(_)
-                | crate::governance::error::RequestError::SubjectNotFound
-                | crate::governance::error::RequestError::InvalidGovernanceID => {
-                    return Err(NotaryError::GovernanceNotFound);
+        let actual_gov_version =
+            if &notary_event.proof.schema_id == "governance" && notary_event.proof.sn == 0 {
+                0
+            } else {
+                match self
+                    .gov_api
+                    .get_governance_version(
+                        notary_event.proof.governance_id.clone(),
+                        notary_event.proof.subject_id.clone(),
+                    )
+                    .await
+                {
+                    Ok(gov_version) => gov_version,
+                    Err(error) => match error {
+                        crate::governance::error::RequestError::GovernanceNotFound(_)
+                        | crate::governance::error::RequestError::SubjectNotFound
+                        | crate::governance::error::RequestError::InvalidGovernanceID => {
+                            return Err(NotaryError::GovernanceNotFound);
+                        }
+                        crate::governance::error::RequestError::ChannelClosed => {
+                            return Err(NotaryError::ChannelError(ChannelErrors::ChannelClosed));
+                        }
+                        _ => return Err(NotaryError::GovApiUnexpectedResponse),
+                    },
                 }
-                crate::governance::error::RequestError::ChannelClosed => {
-                    return Err(NotaryError::ChannelError(ChannelErrors::ChannelClosed));
-                }
-                _ => return Err(NotaryError::GovApiUnexpectedResponse),
-            },
-        };
+            };
         if actual_gov_version < notary_event.proof.governance_version {
             return Err(NotaryError::GovernanceVersionTooHigh);
         } else if actual_gov_version > notary_event.proof.governance_version {
@@ -126,10 +131,7 @@ impl<C: DatabaseCollection> Notary<C> {
             .signature_manager
             .sign(&notary_event.proof)
             .map_err(NotaryError::ProtocolErrors)?;
-        log::warn!(
-            "SE ENVÍA LA VALIDACIÓN A {}",
-            sender.to_str()
-        );
+        log::warn!("SE ENVÍA LA VALIDACIÓN A {}", sender.to_str());
         self.message_channel
             .tell(MessageTaskCommand::Request(
                 None,
