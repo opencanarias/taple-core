@@ -1,19 +1,19 @@
-use std::collections::HashSet;
 use crate::commons::models::approval::ApprovalStatus;
+use crate::commons::models::event::Event;
+use crate::commons::models::event_request::EventRequest;
 use crate::commons::models::request::TapleRequest;
+use crate::commons::models::state::SubjectData;
+use crate::identifier::DigestIdentifier;
 use crate::signature::Signature;
 #[cfg(feature = "aproval")]
 use crate::{Acceptance, ApprovalPetitionData};
-use crate::{KeyIdentifier, KeyDerivator};
-use crate::commons::models::event::Event;
-use crate::commons::models::event_request::EventRequest;
-use crate::commons::models::state::SubjectData;
-use crate::identifier::DigestIdentifier;
+use crate::{KeyDerivator, KeyIdentifier};
+use std::collections::HashSet;
 
 mod api;
 
-pub use api::{NodeAPI, ApiModuleInterface};
 pub(crate) use api::API;
+pub use api::{ApiModuleInterface, NodeAPI};
 pub use error::ApiError;
 
 mod error;
@@ -38,7 +38,9 @@ pub enum APICommands {
     GetValidationProof(DigestIdentifier),
     GetRequest(DigestIdentifier),
     GetGovernanceSubjects(GetGovernanceSubjects),
+    #[cfg(feature = "aproval")]
     GetApproval(DigestIdentifier),
+    #[cfg(feature = "aproval")]
     GetApprovals(Option<String>),
     Shutdown,
 }
@@ -61,10 +63,12 @@ pub enum ApiResponses {
     GetValidationProof(Result<HashSet<Signature>, ApiError>),
     GetRequest(Result<TapleRequest, ApiError>),
     GetGovernanceSubjects(Result<Vec<SubjectData>, ApiError>),
+    #[cfg(feature = "aproval")]
     GetApproval(Result<(ApprovalPetitionData, ApprovalStatus), ApiError>),
+    #[cfg(feature = "aproval")]
     GetApprovals(Result<Vec<ApprovalPetitionData>, ApiError>),
     ShutdownCompleted,
-    SetPreauthorizedSubjectCompleted
+    SetPreauthorizedSubjectCompleted,
 }
 
 #[derive(Debug, Clone)]
