@@ -2,7 +2,6 @@ use std::collections::HashSet;
 use crate::commons::models::approval::ApprovalStatus;
 use crate::commons::models::request::TapleRequest;
 use crate::signature::Signature;
-#[cfg(feature = "aproval")]
 use crate::{Acceptance, ApprovalPetitionData};
 use crate::{KeyIdentifier, KeyDerivator};
 use crate::commons::models::event::Event;

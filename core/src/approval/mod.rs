@@ -24,14 +24,6 @@ pub enum ApprovalMessages {
     GetSingleRequest(DigestIdentifier),
 }
 
-#[derive(Clone, Debug)]
-pub enum ApprovalResponses {
-    RequestApproval(Result<(), ApprovalErrorResponse>),
-    EmitVote(Result<(), ApprovalErrorResponse>),
-    GetAllRequest(Vec<ApprovalPetitionData>),
-    GetSingleRequest(Result<ApprovalPetitionData, ApprovalErrorResponse>),
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ApprovalPetitionData {
     pub subject_id: DigestIdentifier,
@@ -41,6 +33,14 @@ pub struct ApprovalPetitionData {
     pub hash_event_proporsal: DigestIdentifier,
     pub sender: KeyIdentifier,
     pub json_patch: String,
+}
+
+#[derive(Clone, Debug)]
+pub enum ApprovalResponses {
+    RequestApproval(Result<(), ApprovalErrorResponse>),
+    EmitVote(Result<(), ApprovalErrorResponse>),
+    GetAllRequest(Vec<ApprovalPetitionData>),
+    GetSingleRequest(Result<ApprovalPetitionData, ApprovalErrorResponse>),
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
