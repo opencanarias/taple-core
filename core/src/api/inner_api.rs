@@ -1,5 +1,5 @@
 use super::error::APIInternalError;
-use super::{ApiResponses};
+use super::ApiResponses;
 use crate::approval::error::ApprovalErrorResponse;
 #[cfg(feature = "aproval")]
 use crate::approval::manager::{ApprovalAPI, ApprovalAPIInterface};
@@ -12,7 +12,7 @@ use crate::event::EventResponse;
 use crate::identifier::Derivable;
 use crate::ledger::manager::{EventManagerAPI, EventManagerInterface};
 use crate::signature::Signature;
-use crate::{KeyIdentifier, KeyDerivator};
+use crate::{KeyDerivator, KeyIdentifier};
 // use crate::ledger::errors::LedgerManagerError;
 use crate::{
     commons::{
@@ -30,7 +30,8 @@ use crate::{
 use std::collections::HashSet;
 
 use super::{
-    error::ApiError, GetSubjects, GetEvents, GetSubject as GetSingleSubjectAPI, GetGovernanceSubjects
+    error::ApiError, GetEvents, GetGovernanceSubjects, GetSubject as GetSingleSubjectAPI,
+    GetSubjects,
 };
 
 use crate::database::Error as DbError;
@@ -118,9 +119,7 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         let result = match self.db.get_subjects(from, quantity) {
             Ok(subjects) => subjects,
             Err(error) => {
-                return ApiResponses::GetSubjects(Err(ApiError::DatabaseError(
-                    error.to_string(),
-                )))
+                return ApiResponses::GetSubjects(Err(ApiError::DatabaseError(error.to_string())))
             }
         };
         let result = result
@@ -167,9 +166,7 @@ impl<C: DatabaseCollection> InnerAPI<C> {
                 ))))
             }
             Err(error) => {
-                return ApiResponses::GetSubject(Err(ApiError::DatabaseError(
-                    error.to_string(),
-                )))
+                return ApiResponses::GetSubject(Err(ApiError::DatabaseError(error.to_string())))
             }
         };
         ApiResponses::GetSubject(Ok(subject.into()))
@@ -192,15 +189,11 @@ impl<C: DatabaseCollection> InnerAPI<C> {
 
     pub fn get_event(&self, subject_id: DigestIdentifier, sn: u64) -> ApiResponses {
         match self.db.get_event(&subject_id, sn) {
-            Ok(event) => {
-                ApiResponses::GetEvent(Ok(event))
-            },
-            Err(DbError::EntryNotFound) => {
-                ApiResponses::GetEvent(Err(ApiError::NotFound(format!("Event {} of subejct {}", sn, subject_id.to_str()))))
-            },
-            Err(error) => {
-                ApiResponses::GetEvent(Err(ApiError::DatabaseError(error.to_string())))
-            }
+            Ok(event) => ApiResponses::GetEvent(Ok(event)),
+            Err(DbError::EntryNotFound) => ApiResponses::GetEvent(Err(ApiError::NotFound(
+                format!("Event {} of subejct {}", sn, subject_id.to_str()),
+            ))),
+            Err(error) => ApiResponses::GetEvent(Err(ApiError::DatabaseError(error.to_string()))),
         }
     }
 
@@ -213,9 +206,7 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         let id = &data.subject_id;
         match self.db.get_events_by_range(id, data.from, quantity) {
             Ok(events) => ApiResponses::GetEvents(Ok(events)),
-            Err(error) => {
-                ApiResponses::GetEvents(Err(ApiError::DatabaseError(error.to_string())))
-            }
+            Err(error) => ApiResponses::GetEvents(Err(ApiError::DatabaseError(error.to_string()))),
         }
     }
 
@@ -260,7 +251,10 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         Ok(ApiResponses::SetPreauthorizedSubjectCompleted)
     }
 
-    pub async fn generate_keys(&self, derivator: KeyDerivator) -> Result<ApiResponses, APIInternalError> {
+    pub async fn generate_keys(
+        &self,
+        derivator: KeyDerivator,
+    ) -> Result<ApiResponses, APIInternalError> {
         match self.ledger_api.generate_keys(derivator).await {
             Ok(public_key) => Ok(ApiResponses::AddKeys(Ok(public_key))),
             Err(error) => Err(APIInternalError::DatabaseError(error.to_string())),
@@ -279,10 +273,7 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         ApiResponses::GetValidationProof(Ok(result))
     }
 
-    pub async fn get_governance_subjects(
-        &self,
-        data: GetGovernanceSubjects
-    ) -> ApiResponses {
+    pub async fn get_governance_subjects(&self, data: GetGovernanceSubjects) -> ApiResponses {
         let from = if data.from.is_none() {
             None
         } else {
@@ -293,13 +284,16 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         } else {
             (data.quantity.unwrap() as isize).min(MAX_QUANTITY)
         };
-        let result = match self.db.get_governance_subjects(&data.governance_id, from, quantity) {
+        let result = match self
+            .db
+            .get_governance_subjects(&data.governance_id, from, quantity)
+        {
             Ok(subjects) => subjects,
             Err(error) => {
                 return ApiResponses::GetGovernanceSubjects(Err(ApiError::DatabaseError(
-                    error.to_string()
+                    error.to_string(),
                 )))
-            } 
+            }
         };
         let result = result
             .into_iter()
@@ -308,32 +302,24 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         ApiResponses::GetGovernanceSubjects(Ok(result))
     }
 
-    pub async fn get_approval(
-        &self,
-        subject_id: DigestIdentifier,
-    ) -> ApiResponses {
+    #[cfg(feature = "aproval")]
+    pub async fn get_approval(&self, subject_id: DigestIdentifier) -> ApiResponses {
         let result = match self.db.get_approval(&subject_id) {
             Ok(approval) => approval,
             Err(error) => {
-                return ApiResponses::GetApproval(Err(ApiError::DatabaseError(
-                    error.to_string()
-                )))
-            } 
+                return ApiResponses::GetApproval(Err(ApiError::DatabaseError(error.to_string())))
+            }
         };
         ApiResponses::GetApproval(Ok(result))
     }
 
-    pub async fn get_approvals(
-        &self,
-        status: Option<String>,
-    ) -> ApiResponses {
+    #[cfg(feature = "aproval")]
+    pub async fn get_approvals(&self, status: Option<String>) -> ApiResponses {
         let result = match self.db.get_approvals(status) {
             Ok(approvals) => approvals,
             Err(error) => {
-                return ApiResponses::GetApprovals(Err(ApiError::DatabaseError(
-                    error.to_string()
-                )))
-            } 
+                return ApiResponses::GetApprovals(Err(ApiError::DatabaseError(error.to_string())))
+            }
         };
         ApiResponses::GetApprovals(Ok(result))
     }

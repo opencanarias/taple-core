@@ -1,11 +1,11 @@
 use std::collections::HashSet;
 
-use super::{GetEvents, GetGovernanceSubjects};
 use super::{
     error::{APIInternalError, ApiError},
     inner_api::InnerAPI,
     APICommands, ApiResponses,
 };
+use super::{GetEvents, GetGovernanceSubjects};
 #[cfg(feature = "aproval")]
 use crate::approval::manager::ApprovalAPI;
 use crate::authorized_subjecs::manager::AuthorizedSubjectsAPI;
@@ -22,13 +22,11 @@ use crate::commons::{
 use crate::event::manager::EventAPI;
 use crate::ledger::manager::EventManagerAPI;
 use crate::signature::Signature;
-use crate::{KeyIdentifier, KeyDerivator};
 use crate::{
-    approval::ApprovalPetitionData,
-    commons::models::Acceptance,
-    identifier::DigestIdentifier,
+    approval::ApprovalPetitionData, commons::models::Acceptance, identifier::DigestIdentifier,
     DatabaseCollection, DB,
 };
+use crate::{KeyDerivator, KeyIdentifier};
 use async_trait::async_trait;
 use tokio::sync::watch::Sender;
 
@@ -140,10 +138,12 @@ pub trait ApiModuleInterface {
         from: Option<String>,
         quantity: Option<i64>,
     ) -> Result<Vec<SubjectData>, ApiError>;
+    #[cfg(feature = "aproval")]
     async fn get_approval(
         &self,
-        request_id: DigestIdentifier
+        request_id: DigestIdentifier,
     ) -> Result<(ApprovalPetitionData, ApprovalStatus), ApiError>;
+    #[cfg(feature = "aproval")]
     async fn get_approvals(
         &self,
         status: Option<String>,
@@ -165,7 +165,6 @@ pub struct NodeAPI {
 /// Feature that allows implementing the API Rest of an Taple node.
 #[async_trait]
 impl ApiModuleInterface for NodeAPI {
-
     async fn get_request(&self, request_id: DigestIdentifier) -> Result<TapleRequest, ApiError> {
         let response = self
             .sender
@@ -307,9 +306,7 @@ impl ApiModuleInterface for NodeAPI {
     async fn get_subject(&self, subject_id: DigestIdentifier) -> Result<SubjectData, ApiError> {
         let response = self
             .sender
-            .ask(APICommands::GetSubject(super::GetSubject {
-                subject_id,
-            }))
+            .ask(APICommands::GetSubject(super::GetSubject { subject_id }))
             .await
             .unwrap();
         if let ApiResponses::GetSubject(data) = response {
@@ -367,7 +364,11 @@ impl ApiModuleInterface for NodeAPI {
     }
 
     async fn add_keys(&self, derivator: KeyDerivator) -> Result<KeyIdentifier, ApiError> {
-        let response = self.sender.ask(APICommands::AddKeys(derivator)).await.unwrap();
+        let response = self
+            .sender
+            .ask(APICommands::AddKeys(derivator))
+            .await
+            .unwrap();
         if let ApiResponses::AddKeys(data) = response {
             data
         } else {
@@ -413,12 +414,13 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
+    #[cfg(feature = "aproval")]
     async fn get_approval(
         &self,
-        request_id: DigestIdentifier
+        request_id: DigestIdentifier,
     ) -> Result<(ApprovalPetitionData, ApprovalStatus), ApiError> {
-        let response = self.
-        sender
+        let response = self
+            .sender
             .ask(APICommands::GetApproval(request_id))
             .await
             .unwrap();
@@ -429,12 +431,13 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
+    #[cfg(feature = "aproval")]
     async fn get_approvals(
         &self,
         status: Option<String>,
     ) -> Result<Vec<ApprovalPetitionData>, ApiError> {
-        let response = self.
-        sender
+        let response = self
+            .sender
             .ask(APICommands::GetApprovals(status))
             .await
             .unwrap();
@@ -546,9 +549,7 @@ impl<C: DatabaseCollection> API<C> {
                     APICommands::GetEvents(data) => {
                         self.inner_api.get_events_of_subject(data).await
                     }
-                    APICommands::GetSubject(data) => {
-                        self.inner_api.get_single_subject(data).await
-                    }
+                    APICommands::GetSubject(data) => self.inner_api.get_single_subject(data).await,
                     APICommands::GetRequest(request_id) => {
                         self.inner_api.get_request(request_id).await
                     }
@@ -574,19 +575,21 @@ impl<C: DatabaseCollection> API<C> {
                             .set_preauthorized_subject(subject_id, providers)
                             .await?
                     }
-                    APICommands::AddKeys(derivator) => self.inner_api.generate_keys(derivator).await?,
+                    APICommands::AddKeys(derivator) => {
+                        self.inner_api.generate_keys(derivator).await?
+                    }
                     APICommands::GetValidationProof(subject_id) => {
                         self.inner_api.get_validation_proof(subject_id).await
                     }
                     APICommands::GetGovernanceSubjects(data) => {
                         self.inner_api.get_governance_subjects(data).await
                     }
+                    #[cfg(feature = "aproval")]
                     APICommands::GetApproval(request_id) => {
                         self.inner_api.get_approval(request_id).await
                     }
-                    APICommands::GetApprovals(status) => {
-                        self.inner_api.get_approvals(status).await
-                    }
+                    #[cfg(feature = "aproval")]
+                    APICommands::GetApprovals(status) => self.inner_api.get_approvals(status).await,
                 };
                 sx.send(response)
                     .map_err(|_| APIInternalError::OneshotUnavailable)?;
