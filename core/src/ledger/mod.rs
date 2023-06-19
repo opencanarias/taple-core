@@ -4,8 +4,8 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    commons::models::event::ValidationProof, identifier::DigestIdentifier, signature::Signature,
-    Event, KeyIdentifier,
+    commons::models::event::ValidationProof, event_request::EventRequest,
+    identifier::DigestIdentifier, signature::Signature, Event, KeyIdentifier, KeyDerivator,
 };
 
 pub mod errors;
@@ -47,7 +47,7 @@ pub enum LedgerCommand {
         who_asked: KeyIdentifier,
         subject_id: DigestIdentifier,
     },
-    GenerateKey,
+    GenerateKey(KeyDerivator),
 }
 
 #[derive(Debug, Clone)]

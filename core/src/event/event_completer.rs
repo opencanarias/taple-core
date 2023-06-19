@@ -6,7 +6,7 @@ use serde_json::Value;
 use crate::{
     commons::{
         channel::SenderEnd,
-        crypto::{check_cryptography, Payload, DSA},
+        crypto::{check_cryptography},
         models::{
             approval::{Approval, UniqueApproval},
             event::{EventContent, ValidationProof},
@@ -21,18 +21,18 @@ use crate::{
     event_content::Metadata,
     event_request::{CreateRequest, EventRequest},
     governance::{stage::ValidationStage, GovernanceAPI, GovernanceInterface},
-    identifier::{Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier},
+    identifier::{Derivable, DigestIdentifier, KeyIdentifier},
     ledger::{LedgerCommand, LedgerResponse},
     message::{MessageConfig, MessageTaskCommand},
     notary::NotaryEvent,
     protocol::protocol_message_manager::TapleMessages,
     request::TapleRequest,
-    signature::{Signature, SignatureContent, UniqueSignature},
+    signature::{Signature, UniqueSignature},
     utils::message::{
         approval::create_approval_request, evaluator::create_evaluator_request,
         ledger::request_gov_event, validation::create_validator_request,
     },
-    DatabaseCollection, Event, EventRequestType, Notification, TimeStamp,
+    DatabaseCollection, Event, EventRequestType, Notification,
 };
 use std::hash::Hash;
 

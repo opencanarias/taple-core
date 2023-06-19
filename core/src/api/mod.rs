@@ -1,15 +1,13 @@
 use std::collections::HashSet;
-use crate::commons::models::request::TapleRequest;
 use crate::commons::models::approval::ApprovalStatus;
+use crate::commons::models::request::TapleRequest;
 use crate::signature::Signature;
 #[cfg(feature = "aproval")]
-use crate::Acceptance;
-use crate::KeyIdentifier;
-use crate::ApprovalPetitionData;
+use crate::{Acceptance, ApprovalPetitionData};
+use crate::{KeyIdentifier, KeyDerivator};
 use crate::commons::models::event::Event;
 use crate::commons::models::event_request::EventRequest;
 use crate::commons::models::state::SubjectData;
-use crate::event_request::{EventRequestType};
 use crate::identifier::DigestIdentifier;
 
 mod api;
@@ -23,21 +21,20 @@ mod inner_api;
 
 #[derive(Debug, Clone)]
 pub enum APICommands {
-    GetAllSubjects(GetAllSubjects),
-    GetAllGovernances(GetAllSubjects),
-    GetSingleSubject(GetSingleSubject),
+    GetSubjects(GetSubjects),
+    GetGovernances(GetSubjects),
+    GetSubject(GetSubject),
     GetEvent(DigestIdentifier, u64),
-    GetEventsOfSubject(GetEventsOfSubject),
+    GetEvents(GetEvents),
     #[cfg(feature = "aproval")]
     VoteResolve(Acceptance, DigestIdentifier),
-    HandleRequest(EventRequestType),
     ExternalRequest(EventRequest),
     #[cfg(feature = "aproval")]
     GetPendingRequests,
     #[cfg(feature = "aproval")]
     GetSingleRequest(DigestIdentifier),
     SetPreauthorizedSubject(DigestIdentifier, HashSet<KeyIdentifier>),
-    GenerateKeys,
+    AddKeys(KeyDerivator),
     GetValidationProof(DigestIdentifier),
     GetRequest(DigestIdentifier),
     GetGovernanceSubjects(GetGovernanceSubjects),
@@ -48,20 +45,19 @@ pub enum APICommands {
 
 #[derive(Debug, Clone)]
 pub enum ApiResponses {
-    GetAllSubjects(Result<Vec<SubjectData>, ApiError>),
-    GetAllGovernances(Result<Vec<SubjectData>, ApiError>),
-    GetSingleSubject(Result<SubjectData, ApiError>),
-    GetEventsOfSubject(Result<Vec<Event>, ApiError>),
+    GetSubjects(Result<Vec<SubjectData>, ApiError>),
+    GetGovernances(Result<Vec<SubjectData>, ApiError>),
+    GetSubject(Result<SubjectData, ApiError>),
+    GetEvents(Result<Vec<Event>, ApiError>),
     HandleExternalRequest(Result<DigestIdentifier, ApiError>),
     #[cfg(feature = "aproval")]
     VoteResolve(Result<DigestIdentifier, ApiError>),
-    HandleRequest(Result<DigestIdentifier, ApiError>), // Borrar RequestData
     #[cfg(feature = "aproval")]
     GetPendingRequests(Result<Vec<ApprovalPetitionData>, ApiError>),
     #[cfg(feature = "aproval")]
     GetSingleRequest(Result<ApprovalPetitionData, ApiError>),
     GetEvent(Result<Event, ApiError>),
-    GenerateKeys(Result<KeyIdentifier, ApiError>),
+    AddKeys(Result<KeyIdentifier, ApiError>),
     GetValidationProof(Result<HashSet<Signature>, ApiError>),
     GetRequest(Result<TapleRequest, ApiError>),
     GetGovernanceSubjects(Result<Vec<SubjectData>, ApiError>),
@@ -72,19 +68,19 @@ pub enum ApiResponses {
 }
 
 #[derive(Debug, Clone)]
-pub struct GetAllSubjects {
+pub struct GetSubjects {
     pub namespace: String,
     pub from: Option<String>,
     pub quantity: Option<i64>,
 }
 
 #[derive(Debug, Clone)]
-pub struct GetSingleSubject {
+pub struct GetSubject {
     pub subject_id: DigestIdentifier,
 }
 
 #[derive(Debug, Clone)]
-pub struct GetEventsOfSubject {
+pub struct GetEvents {
     pub subject_id: DigestIdentifier,
     pub from: Option<i64>,
     pub quantity: Option<i64>,
