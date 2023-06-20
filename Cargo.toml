@@ -4,7 +4,8 @@ members = [
     "core", 
     "json", 
     "json-patch",
-    "treediff-rs"
+    "treediff-rs",
+    "jsonschema-rs/jsonschema"
     ]
 
 exclude = ["contract"]
@@ -62,7 +63,7 @@ env_logger = "^0.10"
 log = "~0.4"
 hex = "~0.4.3"
 db-key = "^0.0.5" #Usar esta versión. Necesario para implementar custom keys para leveldb::Database // Eso puso Javier
-jsonschema = "~0.16"
+jsonschema = "~0.17"
 libp2p = { version = "~0.45", features = [
     "request-response",
 ], default-features = false }

@@ -34,7 +34,7 @@ futures = { workspace = true }
 env_logger = { workspace = true }
 log = { workspace = true }
 hex = { workspace = true }
-jsonschema = { workspace = true }
+jsonschema = { path = "../jsonschema-rs/jsonschema" }
 time = { workspace = true, features = ["std"] }
 
 # API
