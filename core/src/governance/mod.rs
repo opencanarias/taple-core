@@ -78,8 +78,7 @@ pub enum GovernanceMessage {
     GovernanceUpdated {
         governance_id: DigestIdentifier,
         governance_version: u64,
-    },
-}
+    }}
 
 #[derive(Debug, Clone)]
 pub enum GovernanceResponse {

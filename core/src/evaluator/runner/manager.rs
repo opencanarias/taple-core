@@ -3,26 +3,35 @@ use serde_json::Value;
 use wasmtime::Engine;
 
 use crate::{
-    commons::models::{event_preevaluation::EventPreEvaluation, Acceptance},
+    commons::{
+        models::{event_preevaluation::EventPreEvaluation, Acceptance},
+        schema_handler::Schema,
+    },
     database::DB,
     evaluator::errors::ExecutorErrorResponses,
     event_request::FactRequest,
+    governance::{GovernanceInterface},
     identifier::DigestIdentifier,
     DatabaseCollection, EventRequestType,
 };
 
-use super::{executor::ContractExecutor, ExecuteContractResponse};
+use super::{
+    executor::{ContractExecutor, ContractResult},
+    ExecuteContractResponse,
+};
 use crate::database::Error as DbError;
-pub struct TapleRunner<C: DatabaseCollection> {
+pub struct TapleRunner<C: DatabaseCollection, G: GovernanceInterface> {
     database: DB<C>,
     executor: ContractExecutor,
+    gov_api: G,
 }
 
-impl<C: DatabaseCollection> TapleRunner<C> {
-    pub fn new(database: DB<C>, engine: Engine) -> Self {
+impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
+    pub fn new(database: DB<C>, engine: Engine, gov_api: G) -> Self {
         Self {
             database,
             executor: ContractExecutor::new(engine),
+            gov_api,
         }
     }
 
@@ -36,7 +45,7 @@ impl<C: DatabaseCollection> TapleRunner<C> {
     pub async fn execute_contract(
         &self,
         execute_contract: &EventPreEvaluation,
-        state_data: &FactRequest
+        state_data: &FactRequest,
     ) -> Result<ExecuteContractResponse, ExecutorErrorResponses> {
         // Check governance version
         let governance_id = if &execute_contract.context.schema_id == "governance" {
@@ -121,28 +130,44 @@ impl<C: DatabaseCollection> TapleRunner<C> {
                 Err(error) => return Err(ExecutorErrorResponses::DatabaseError(error.to_string())),
             }
         };
-        let previous_state = execute_contract.context.actual_state.clone();
-        let contract_result = self
+        let previous_state = &execute_contract.context.actual_state.clone();
+        let mut contract_result = self
             .executor
             .execute_contract(
                 &execute_contract.context.actual_state,
                 &state_data.payload,
                 contract,
-                execute_contract.event_request.signature.content.signer
-                    == execute_contract.context.owner,
+                &execute_contract.event_request.signature.content.signer
+                    == &execute_contract.context.owner,
             )
             .await?;
         log::warn!("Contract result: {:?}", contract_result);
         let (patch, hash) = match contract_result.success {
-            Acceptance::Ok => (
-                generate_json_patch(&previous_state, &contract_result.final_state)?,
-                DigestIdentifier::from_serializable_borsh(
-                    serde_json::from_str::<Value>(&contract_result.final_state)
-                        .unwrap()
-                        .to_string(),
-                )
-                .map_err(|_| ExecutorErrorResponses::StateHashGenerationFailed)?,
-            ),
+            Acceptance::Ok => {
+                match self
+                    .validation_state(
+                        &contract_result,
+                        &governance_id,
+                        execute_contract.context.schema_id.clone(),
+                        execute_contract.context.governance_version,
+                    )
+                    .await
+                {
+                    Ok(false) | Err(_) => {
+                        contract_result.success = Acceptance::Ko;
+                        (String::from(""), DigestIdentifier::default())
+                    }
+                    _ => (
+                        generate_json_patch(&previous_state, &contract_result.final_state)?,
+                        DigestIdentifier::from_serializable_borsh(
+                            serde_json::from_str::<Value>(&contract_result.final_state)
+                                .unwrap()
+                                .to_string(),
+                        )
+                        .map_err(|_| ExecutorErrorResponses::StateHashGenerationFailed)?,
+                    ),
+                }
+            }
             Acceptance::Ko => (String::from(""), DigestIdentifier::default()),
         };
         Ok(ExecuteContractResponse {
@@ -153,6 +178,31 @@ impl<C: DatabaseCollection> TapleRunner<C> {
             success: contract_result.success,
             approval_required: contract_result.approval_required,
         })
+    }
+
+    async fn validation_state(
+        &self,
+        contract_result: &ContractResult,
+        governance_id: &DigestIdentifier,
+        schema_id: String,
+        governance_version: u64,
+    ) -> Result<bool, ExecutorErrorResponses> {
+        if Acceptance::Ok == contract_result.success {
+            let new_state = &contract_result.final_state;
+            // Comprobar el estado contra el esquema definido en la gobernanza
+            let schema = self
+                .gov_api
+                .get_schema(governance_id.clone(), schema_id, governance_version)
+                .await?;
+            let schema = Schema::compile(&schema)
+                .map_err(|_| ExecutorErrorResponses::SchemaCompilationFailed)?;
+            Ok(schema.validate(
+                &serde_json::to_value(new_state)
+                    .map_err(|_| ExecutorErrorResponses::StateJSONDeserializationFailed)?,
+            ))
+        } else {
+            Ok(true)
+        }
     }
 }
 
