@@ -1,6 +1,11 @@
 [workspace]
 
-members = ["core", "json"]
+members = [
+    "core", 
+    "json", 
+    "json-patch",
+    "treediff-rs"
+    ]
 
 exclude = ["contract"]
 

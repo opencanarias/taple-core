@@ -62,7 +62,7 @@ base64 = { workspace = true }
 
 # Commons
 getrandom = { workspace = true }
-json-patch = { workspace = true }
+json-patch = { path = "../json-patch" }
 rand_core = { workspace = true }
 ed25519-dalek = { workspace = true, features = ["serde"] }
 libsecp256k1 = { workspace = true, optional = true }
