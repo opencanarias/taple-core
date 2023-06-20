@@ -442,38 +442,46 @@ mod test {
             &self,
             governance_id: DigestIdentifier,
             _governance_version: u64,
-        ) -> Result<Vec<Contract>, RequestError> {
+        ) -> Result<Vec<(Contract, String)>, RequestError> {
             if governance_id
                 == DigestIdentifier::from_str("Jg2Nuv5bNs4swQGcPQ1CXs9MtcfwMVoeQDR2Ea1YNYJw")
                     .unwrap()
             {
-                Ok(vec![Contract {
-                    name: "test".to_owned(),
-                    content: ContractType::String(String::from("test"))
-                        .to_string()
-                        .unwrap(),
-                }])
+                Ok(vec![(
+                    Contract {
+                        raw: ContractType::String(String::from("test"))
+                            .to_string()
+                            .unwrap(),
+                    },
+                    "test".to_owned(),
+                )])
             } else if governance_id
                 == DigestIdentifier::from_str("Jg2Nuc5bNs4swQGcPQ1CXs9MtcfwMVoeQDR2Ea1YNYJw")
                     .unwrap()
             {
-                Ok(vec![Contract {
-                    name: "test".to_owned(),
-                    content: ContractType::String(get_file_wrong()).to_string().unwrap(),
-                }])
+                Ok(vec![(
+                    Contract {
+                        raw: ContractType::String(get_file_wrong()).to_string().unwrap(),
+                    },
+                    "test".to_owned(),
+                )])
             } else if governance_id
                 == DigestIdentifier::from_str("Jg2Nuc5bNs4swQGcPQ2CXs9MtcfwMVoeQDR2Ea2YNYJw")
                     .unwrap()
             {
-                Ok(vec![Contract {
-                    name: "test".to_owned(),
-                    content: ContractType::String(get_file_wrong2()).to_string().unwrap(),
-                }])
+                Ok(vec![(
+                    Contract {
+                        raw: ContractType::String(get_file_wrong2()).to_string().unwrap(),
+                    },
+                    "test".to_owned(),
+                )])
             } else {
-                Ok(vec![Contract {
-                    name: "test".to_owned(),
-                    content: ContractType::String(get_file()).to_string().unwrap(),
-                }])
+                Ok(vec![(
+                    Contract {
+                        raw: ContractType::String(get_file()).to_string().unwrap(),
+                    },
+                    "test".to_owned(),
+                )])
             }
         }
 

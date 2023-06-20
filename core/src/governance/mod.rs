@@ -88,7 +88,7 @@ pub enum GovernanceResponse {
     GetSigners(Result<HashSet<KeyIdentifier>, RequestError>),
     GetQuorum(Result<u32, RequestError>),
     GetInvokeInfo(Result<bool, RequestError>),
-    GetContracts(Result<Vec<Contract>, RequestError>),
+    GetContracts(Result<Vec<(Contract, String)>, RequestError>),
     GetGovernanceVersion(Result<u64, RequestError>),
     IsGovernance(Result<bool, RequestError>),
     NoResponse,
