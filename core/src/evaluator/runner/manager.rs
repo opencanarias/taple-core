@@ -10,7 +10,7 @@ use crate::{
     database::DB,
     evaluator::errors::ExecutorErrorResponses,
     event_request::FactRequest,
-    governance::{GovernanceInterface},
+    governance::GovernanceInterface,
     identifier::DigestIdentifier,
     DatabaseCollection, EventRequestType,
 };
@@ -91,7 +91,8 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
                         }
                     };
                     return Ok(ExecuteContractResponse {
-                        json_patch: String::from(""),
+                        json_patch: serde_json::from_str("")
+                            .map_err(|_| ExecutorErrorResponses::JSONPATCHDeserializationFailed)?,
                         hash_new_state: DigestIdentifier::default(),
                         governance_version,
                         context_hash,
@@ -119,7 +120,8 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
                         }
                     };
                     return Ok(ExecuteContractResponse {
-                        json_patch: String::from(""),
+                        json_patch: serde_json::from_str("")
+                            .map_err(|_| ExecutorErrorResponses::JSONPATCHDeserializationFailed)?,
                         hash_new_state: DigestIdentifier::default(),
                         governance_version,
                         context_hash,
@@ -134,8 +136,10 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
         let mut contract_result = self
             .executor
             .execute_contract(
-                &execute_contract.context.actual_state,
-                &state_data.payload,
+                &serde_json::to_string(&execute_contract.context.actual_state)
+                    .map_err(|_| ExecutorErrorResponses::ValueToStringConversionFailed)?,
+                &serde_json::to_string(&state_data.payload)
+                    .map_err(|_| ExecutorErrorResponses::ValueToStringConversionFailed)?,
                 contract,
                 &execute_contract.event_request.signature.content.signer
                     == &execute_contract.context.owner,
@@ -155,7 +159,12 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
                 {
                     Ok(false) | Err(_) => {
                         contract_result.success = Acceptance::Ko;
-                        (String::from(""), DigestIdentifier::default())
+                        (
+                            serde_json::from_str("").map_err(|_| {
+                                ExecutorErrorResponses::JSONPATCHDeserializationFailed
+                            })?,
+                            DigestIdentifier::default(),
+                        )
                     }
                     _ => (
                         generate_json_patch(&previous_state, &contract_result.final_state)?,
@@ -168,7 +177,11 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
                     ),
                 }
             }
-            Acceptance::Ko => (String::from(""), DigestIdentifier::default()),
+            Acceptance::Ko => (
+                serde_json::from_str("")
+                    .map_err(|_| ExecutorErrorResponses::JSONPATCHDeserializationFailed)?,
+                DigestIdentifier::default(),
+            ),
         };
         Ok(ExecuteContractResponse {
             json_patch: patch,
@@ -207,14 +220,12 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
 }
 
 fn generate_json_patch(
-    prev_state: &str,
+    prev_state: &Value,
     new_state: &str,
-) -> Result<String, ExecutorErrorResponses> {
-    let prev_state: Value = serde_json::from_str(prev_state)
-        .map_err(|_| ExecutorErrorResponses::StateJSONDeserializationFailed)?;
+) -> Result<Value, ExecutorErrorResponses> {
     let new_state: Value = serde_json::from_str(new_state)
         .map_err(|_| ExecutorErrorResponses::StateJSONDeserializationFailed)?;
     let patch = diff(&prev_state, &new_state);
-    Ok(serde_json::to_string(&patch)
+    Ok(serde_json::to_value(&patch)
         .map_err(|_| ExecutorErrorResponses::JSONPATCHDeserializationFailed)?)
 }

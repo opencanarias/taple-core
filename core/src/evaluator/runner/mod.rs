@@ -1,3 +1,5 @@
+use serde_json::Value;
+
 use crate::{identifier::DigestIdentifier, commons::models::Acceptance};
 
 mod context;
@@ -6,7 +8,7 @@ pub mod manager;
 
 #[derive(Clone, Debug)]
 pub struct ExecuteContractResponse {
-    pub json_patch: String,
+    pub json_patch: Value,
     pub hash_new_state: DigestIdentifier,
     pub context_hash: DigestIdentifier,
     pub governance_version: u64,

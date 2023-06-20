@@ -1,6 +1,6 @@
 use crate::{
     commons::{
-        crypto::{KeyPair},
+        crypto::KeyPair,
         errors::SubjectError,
         identifier::{DigestIdentifier, KeyIdentifier},
     },
@@ -33,7 +33,7 @@ pub struct Subject {
     /// Subject creator identifier
     pub creator: KeyIdentifier,
     /// Current status of the subject
-    pub properties: String,
+    pub properties: Value,
     /// Indicates if the subject is active or not
     pub active: bool,
 }
@@ -56,7 +56,7 @@ pub struct SubjectData {
     /// Subject creator identifier
     pub creator: KeyIdentifier,
     /// Current status of the subject
-    pub properties: String,
+    pub properties: Value,
     /// Indicates if the subject is active or not
     pub active: bool,
 }
@@ -113,7 +113,7 @@ impl Subject {
     //     })
     // }
 
-    pub fn from_genesis_event(event: Event, init_state: String) -> Result<Self, SubjectError> {
+    pub fn from_genesis_event(event: Event, init_state: Value) -> Result<Self, SubjectError> {
         let EventRequestType::Create(create_request) = event.content.event_proposal.proposal.event_request.request.clone() else {
             return Err(SubjectError::NotCreateEvent)
         };
@@ -157,22 +157,15 @@ impl Subject {
         })
     }
 
-    pub fn update_subject(&mut self, json_patch: &str, new_sn: u64) -> Result<(), SubjectError> {
+    pub fn update_subject(&mut self, json_patch: Value, new_sn: u64) -> Result<(), SubjectError> {
         let prev_properties = self.properties.as_str();
-        let Ok(patch_json) = serde_json::from_str::<Patch>(json_patch) else {
-                    return Err(SubjectError::ErrorParsingJsonString(json_patch.to_owned()));
+        let Ok(patch_json) = serde_json::from_value::<Patch>(json_patch) else {
+                    return Err(SubjectError::ErrorParsingJsonString("Json Patch conversion fails".to_owned()));
                 };
-        let Ok(mut state) = serde_json::from_str::<Value>(prev_properties) else {
-                    return Err(SubjectError::ErrorParsingJsonString(prev_properties.to_owned()));
+        let Ok(()) = patch(&mut self.properties, &patch_json) else {
+                    return Err(SubjectError::ErrorApplyingPatch("Error Applying Patch".to_owned()));
                 };
-        let Ok(()) = patch(&mut state, &patch_json) else {
-                    return Err(SubjectError::ErrorApplyingPatch(json_patch.to_owned()));
-                };
-        let state = serde_json::to_string(&state).map_err(|_| {
-            SubjectError::ErrorParsingJsonString("New State after patch".to_owned())
-        })?;
         self.sn = new_sn;
-        self.properties = state;
         Ok(())
     }
 
@@ -190,12 +183,8 @@ impl Subject {
     }
 
     pub fn get_state_hash(&self) -> Result<DigestIdentifier, SubjectError> {
-        let subject_properties = serde_json::from_str::<Value>(&self.properties)
-            .map_err(|_| SubjectError::CryptoError(String::from("Error parsing the state")))?;
-        let subject_properties_str = serde_json::to_string(&subject_properties)
-            .map_err(|_| SubjectError::CryptoError(String::from("Error serializing the state")))?;
         Ok(
-            DigestIdentifier::from_serializable_borsh(&subject_properties_str).map_err(|_| {
+            DigestIdentifier::from_serializable_borsh(&self.properties).map_err(|_| {
                 SubjectError::CryptoError(String::from("Error calculating the hash of the state"))
             })?,
         )
@@ -207,19 +196,16 @@ impl Subject {
 
     pub fn state_hash_after_apply(
         &self,
-        json_patch: &str,
+        json_patch: Value,
     ) -> Result<DigestIdentifier, SubjectError> {
-        let mut subject_properties = serde_json::from_str::<Value>(&self.properties)
-            .map_err(|_| SubjectError::CryptoError(String::from("Error parsing the state")))?;
-        let json_patch = serde_json::from_str::<Patch>(json_patch)
+        let mut subject_properties = self.properties.clone();
+        let json_patch = serde_json::from_value::<Patch>(json_patch)
             .map_err(|_| SubjectError::CryptoError(String::from("Error parsing the json patch")))?;
         patch(&mut subject_properties, &json_patch).map_err(|_| {
             SubjectError::CryptoError(String::from("Error applying the json patch"))
         })?;
-        let subject_properties_str = serde_json::to_string(&subject_properties)
-            .map_err(|_| SubjectError::CryptoError(String::from("Error serializing the state")))?;
         Ok(
-            DigestIdentifier::from_serializable_borsh(&subject_properties_str).map_err(|_| {
+            DigestIdentifier::from_serializable_borsh(&subject_properties).map_err(|_| {
                 SubjectError::CryptoError(String::from("Error calculating the hash of the state"))
             })?,
         )

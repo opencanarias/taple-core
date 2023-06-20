@@ -2,6 +2,7 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::commons::{
     crypto::{check_cryptography, KeyGenerator},
@@ -38,7 +39,7 @@ pub struct CreateRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct FactRequest {
     pub subject_id: DigestIdentifier,
-    pub payload: String,
+    pub payload: Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]

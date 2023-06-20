@@ -161,12 +161,9 @@ impl Event {
         gov_version: u64,
         init_state: &Value,
     ) -> Result<Self, SubjectError> {
-        let json_patch = serde_json::to_string(
-            &serde_json::to_value(diff(&json!({}), init_state)).map_err(|_| {
-                SubjectError::CryptoError(String::from("Error converting patch to value"))
-            })?,
-        )
-        .map_err(|_| SubjectError::CryptoError(String::from("Error converting patch to string")))?;
+        let json_patch = serde_json::to_value(diff(&json!({}), init_state)).map_err(|_| {
+            SubjectError::CryptoError(String::from("Error converting patch to value"))
+        })?;
         let proposal = Proposal {
             event_request,
             sn: 0,

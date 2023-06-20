@@ -565,7 +565,7 @@ mod test {
             two: 11,
             three: 13,
         };
-        let initial_state_json = serde_json::to_string(&initial_state).unwrap();
+        let initial_state_json = serde_json::to_value(&initial_state).unwrap();
         Subject {
             keys: None,
             subject_id: DigestIdentifier::from_str("JGSPR6FL-vE7iZxWMd17o09qn7NeTqlcImDVWmijXczw")
@@ -587,7 +587,7 @@ mod test {
     }
 
     fn create_event_request(
-        json: String,
+        json: Value,
         signature_manager: &SelfSignatureManager,
     ) -> EventRequest {
         let request = EventRequestType::Fact(FactRequest {
@@ -600,11 +600,9 @@ mod test {
         event_request
     }
 
-    fn generate_json_patch(prev_state: &str, new_state: &str) -> String {
-        let prev_state = serde_json::to_value(prev_state).unwrap();
-        let new_state = serde_json::to_value(new_state).unwrap();
+    fn generate_json_patch(prev_state: Value, new_state: Value) -> Value {
         let patch = diff(&prev_state, &new_state);
-        serde_json::to_string(&patch).unwrap()
+        serde_json::to_value(&patch).unwrap()
     }
 
     #[test]
@@ -618,7 +616,7 @@ mod test {
                 two: 11,
                 three: 13,
             };
-            let initial_state_json = serde_json::to_string(&initial_state).unwrap();
+            let initial_state_json = serde_json::to_value(&initial_state).unwrap();
             let event = EventType::ModTwo {
                 data: 100,
                 chunk: vec![123, 45, 20],
@@ -641,7 +639,7 @@ mod test {
             let response = sx_evaluator
                 .ask(EvaluatorMessage::AskForEvaluation(EventPreEvaluation {
                     event_request: create_event_request(
-                        serde_json::to_string(&event).unwrap(),
+                        serde_json::to_value(&event).unwrap(),
                         &signature_manager,
                     ),
                     context: Context {
@@ -698,11 +696,11 @@ mod test {
                 three: 13,
             };
             assert_eq!(evaluation.governance_version, 0);
-            let new_state_json = &serde_json::to_string(&new_state).unwrap();
+            let new_state_json = serde_json::to_value(&new_state).unwrap();
             // let hash = DigestIdentifier::from_serializable_borsh(new_state_json).unwrap();
             // assert_eq!(hash, evaluation.state_hash); // arreglar
             println!("{:#?}\n{:#?}", initial_state_json, new_state_json);
-            let patch = generate_json_patch(&initial_state_json, &new_state_json);
+            let patch = generate_json_patch(initial_state_json, new_state_json);
             assert_eq!(patch, json_patch); // arreglar
                                            // let own_identifier = signature_manager.get_own_identifier();
                                            // assert_eq!(evaluation..signer, own_identifier); // arreglar

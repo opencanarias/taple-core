@@ -6,7 +6,7 @@ use serde_json::Value;
 use crate::{
     commons::{
         channel::SenderEnd,
-        crypto::{check_cryptography},
+        crypto::check_cryptography,
         models::{
             approval::{Approval, UniqueApproval},
             event::{EventContent, ValidationProof},
@@ -452,7 +452,8 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             hash_prev_event,
             gov_version,
             None,
-            String::from(""),
+            serde_json::from_str("")
+                .map_err(|_| EventError::CryptoError("Error parsing empty json".to_string()))?,
             HashSet::new(),
         );
         let proposal_hash = DigestIdentifier::from_serializable_borsh(&proposal).map_err(|_| {
@@ -774,7 +775,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
     pub async fn evaluator_signatures(
         &mut self,
         evaluation: Evaluation,
-        json_patch: String,
+        json_patch: Value,
         signature: Signature,
     ) -> Result<(), EventError> {
         // Comprobar que el hash devuelto coincide con el hash de la preevaluación
@@ -836,7 +837,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             return Err(EventError::WrongGovernanceVersion);
         }
         // Comprobar que el json patch es válido
-        if !hash_match_after_patch(&evaluation, &json_patch, &subject.properties)? {
+        if !hash_match_after_patch(&evaluation, json_patch.clone(), subject.properties.clone())? {
             return Err(EventError::CryptoError(
                 "Json patch applied to state hash does not match the new state hash".to_string(),
             ));
@@ -1497,31 +1498,24 @@ fn insert_or_replace_and_check<T: PartialEq + Eq + Hash>(
 
 fn hash_match_after_patch(
     evaluation: &Evaluation,
-    json_patch: &str,
-    prev_properties: &str,
+    json_patch: Value,
+    mut prev_properties: Value,
 ) -> Result<bool, EventError> {
-    let Ok(mut state) = serde_json::from_str::<Value>(prev_properties) else {
-    return Err(EventError::ErrorParsingJsonString(prev_properties.to_owned()));
-};
     if evaluation.acceptance != Acceptance::Ok {
-        let state = serde_json::to_string(&state)
-            .map_err(|_| EventError::ErrorParsingJsonString("New State after patch".to_owned()))?;
-        let state_hash_calculated =
-            DigestIdentifier::from_serializable_borsh(&state).map_err(|_| {
+        let state_hash_calculated = DigestIdentifier::from_serializable_borsh(&prev_properties)
+            .map_err(|_| {
                 EventError::CryptoError(String::from("Error calculating the hash of the state"))
             })?;
         Ok(state_hash_calculated == evaluation.state_hash)
     } else {
-        let Ok(patch_json) = serde_json::from_str::<Patch>(json_patch) else {
-            return Err(EventError::ErrorParsingJsonString(json_patch.to_owned()));
+        let Ok(patch_json) = serde_json::from_value::<Patch>(json_patch) else {
+            return Err(EventError::ErrorParsingJsonString("Error Parsing Patch".to_owned()));
     };
-        let Ok(()) = patch(&mut state, &patch_json) else {
-        return Err(EventError::ErrorApplyingPatch(json_patch.to_owned()));
+        let Ok(()) = patch(&mut prev_properties, &patch_json) else {
+        return Err(EventError::ErrorApplyingPatch("Error applying patch".to_owned()));
     };
-        let state = serde_json::to_string(&state)
-            .map_err(|_| EventError::ErrorParsingJsonString("New State after patch".to_owned()))?;
-        let state_hash_calculated =
-            DigestIdentifier::from_serializable_borsh(&state).map_err(|_| {
+        let state_hash_calculated = DigestIdentifier::from_serializable_borsh(&prev_properties)
+            .map_err(|_| {
                 EventError::CryptoError(String::from("Error calculating the hash of the state"))
             })?;
         Ok(state_hash_calculated == evaluation.state_hash)

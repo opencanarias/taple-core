@@ -1,5 +1,6 @@
 use borsh::{BorshSerialize, BorshDeserialize};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::{
     commons::models::{event_proposal::EventProposal, Acceptance},
@@ -32,7 +33,7 @@ pub struct ApprovalPetitionData {
     pub governance_version: u64,
     pub hash_event_proporsal: DigestIdentifier,
     pub sender: KeyIdentifier,
-    pub json_patch: String,
+    pub json_patch: Value,
 }
 
 #[derive(Clone, Debug)]

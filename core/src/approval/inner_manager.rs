@@ -605,7 +605,7 @@ mod test {
     }
 
     fn create_state_request(
-        json: String,
+        json: Value,
         signature_manager: &SelfSignatureManager,
         subject_id: &DigestIdentifier,
     ) -> EventRequest {

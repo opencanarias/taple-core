@@ -1,3 +1,5 @@
+use serde_json::Value;
+
 pub use crate::protocol::protocol_message_manager::TapleMessages;
 use crate::{
     commons::models::{approval::Approval, event_proposal::Evaluation, Acceptance},
@@ -11,7 +13,7 @@ pub fn create_evaluator_response(
     governance_version: u64,
     acceptance: Acceptance,
     approval_required: bool,
-    json_patch: String,
+    json_patch: Value,
     signature: Signature,
 ) -> TapleMessages {
     TapleMessages::EventMessage(crate::event::EventCommand::EvaluatorResponse {

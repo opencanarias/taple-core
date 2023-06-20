@@ -1,11 +1,13 @@
 use std::collections::{hash_map::Entry, HashMap, HashSet};
 
-use crate::KeyDerivator;
+use serde_json::Value;
+
 use crate::commons::crypto::KeyGenerator;
 use crate::commons::models::approval::ApprovalStatus;
 use crate::commons::models::state::generate_subject_id;
 use crate::crypto::Secp256k1KeyPair;
 use crate::request::{RequestState, TapleRequest};
+use crate::KeyDerivator;
 use crate::{
     commons::{
         channel::SenderEnd,
@@ -212,10 +214,8 @@ impl<C: DatabaseCollection> Ledger<C> {
                 governance_version,
             )
             .await?;
-        let init_state_string = serde_json::to_string(&init_state)
-            .map_err(|_| LedgerError::ErrorParsingJsonString("Init State".to_owned()))?;
         // Crear sujeto a partir de genesis y evento
-        let subject = Subject::from_genesis_event(event.clone(), init_state_string)
+        let subject = Subject::from_genesis_event(event.clone(), init_state)
             .map_err(LedgerError::SubjectError)?;
         let sn = event.content.event_proposal.proposal.sn;
         // Añadir sujeto y evento a base de datos
@@ -310,7 +310,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                     signatures,
                     validation_proof, // Current Owner
                 )?;
-                let json_patch = event.content.event_proposal.proposal.json_patch.as_str();
+                let json_patch = event.content.event_proposal.proposal.json_patch.clone();
                 subject.update_subject(json_patch, event.content.event_proposal.proposal.sn)?;
                 self.database.set_event(&subject_id, event.clone())?;
                 self.database.set_subject(&subject_id, subject)?;
@@ -1308,7 +1308,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                             check_context(&event, &subject, metadata, subject.properties.clone())?;
                             let sn: u64 = event.content.event_proposal.proposal.sn;
                             let json_patch =
-                                event.content.event_proposal.proposal.json_patch.as_str();
+                                event.content.event_proposal.proposal.json_patch.clone();
                             subject.update_subject(
                                 json_patch,
                                 event.content.event_proposal.proposal.sn,
@@ -1713,7 +1713,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                             .await?;
                         log::warn!("GET SIGNERS AND QUORUM");
                         let state_hash = subject.state_hash_after_apply(
-                            &event.content.event_proposal.proposal.json_patch,
+                            event.content.event_proposal.proposal.json_patch.clone(),
                         )?;
 
                         let notary_hash = DigestIdentifier::from_serializable_borsh(
@@ -2555,8 +2555,6 @@ impl<C: DatabaseCollection> Ledger<C> {
                 metadata.governance_version.clone(),
             )
             .await?;
-        let init_state = serde_json::to_string(&init_state)
-            .map_err(|_| LedgerError::ErrorParsingJsonString("Init state".to_owned()))?;
         let subject = Subject::from_genesis_event(event.clone(), init_state)?;
         self.database
             .set_governance_index(&subject_id, &subject.governance_id)?;
@@ -2725,7 +2723,7 @@ impl<C: DatabaseCollection> Ledger<C> {
         // };
         // check_context(&event, metadata, subject.properties.clone())?;
         subject.update_subject(
-            &event.content.event_proposal.proposal.json_patch,
+            event.content.event_proposal.proposal.json_patch,
             event.content.event_proposal.proposal.sn,
         )?;
         self.database.set_subject(&subject_id, subject)?;
@@ -2789,7 +2787,7 @@ fn check_context(
     event: &Event,
     subject: &Subject,
     metadata: Metadata,
-    prev_properties: String,
+    prev_properties: Value,
 ) -> Result<(), LedgerError> {
     let event_preevaluation = EventPreEvaluation {
         event_request: event.content.event_proposal.proposal.event_request.clone(),

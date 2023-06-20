@@ -1,5 +1,6 @@
 use borsh::{BorshSerialize, BorshDeserialize};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::{
     commons::models::{approval::Approval, event_proposal::Evaluation},
@@ -22,7 +23,7 @@ pub enum EventCommand {
     },
     EvaluatorResponse {
         evaluation: Evaluation,
-        json_patch: String,
+        json_patch: Value,
         signature: Signature,
     },
     ApproverResponse {

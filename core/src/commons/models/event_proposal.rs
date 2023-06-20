@@ -9,6 +9,7 @@ use crate::{
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use super::Acceptance;
 
@@ -25,7 +26,7 @@ pub struct Proposal {
     pub hash_prev_event: DigestIdentifier,
     pub gov_version: u64,
     pub evaluation: Option<Evaluation>,
-    pub json_patch: String,
+    pub json_patch: Value,
     pub evaluation_signatures: HashSet<Signature>,
 }
 
@@ -36,7 +37,7 @@ impl Proposal {
         hash_prev_event: DigestIdentifier,
         gov_version: u64,
         evaluation: Option<Evaluation>,
-        json_patch: String,
+        json_patch: Value,
         evaluation_signatures: HashSet<Signature>,
     ) -> Self {
         Proposal {

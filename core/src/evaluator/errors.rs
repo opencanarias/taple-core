@@ -61,7 +61,9 @@ pub enum ExecutorErrorResponses {
     #[error("Governance module error {0}")]
     GovernanceError(#[from] RequestError),
     #[error("Schema compilation failed")]
-    SchemaCompilationFailed
+    SchemaCompilationFailed,
+    #[error("Value to string conversion failed")]
+    ValueToStringConversionFailed,
 }
 
 #[derive(Error, Debug, Clone)]

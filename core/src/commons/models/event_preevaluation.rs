@@ -1,5 +1,6 @@
 //! Contains the data structures related to event preevaluations to send to evaluators.
 use borsh::{BorshDeserialize, BorshSerialize};
+use serde_json::Value;
 
 use crate::{
     event_request::EventRequest,
@@ -22,7 +23,7 @@ pub struct Context {
     pub schema_id: String,
     pub creator: KeyIdentifier,
     pub owner: KeyIdentifier,
-    pub actual_state: String,
+    pub actual_state: Value,
     pub namespace: String,
     pub governance_version: u64,
 }
