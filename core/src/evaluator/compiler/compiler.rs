@@ -68,10 +68,10 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
             .get_contracts(governance_id.clone(), governance_version)
             .await
             .map_err(CompilerErrorResponses::GovernanceError)?;
-        for contract_info in contracts {
+        for (contract_info, schema_id) in contracts {
             let contract_data = match self
                 .database
-                .get_contract(&governance_id, &contract_info.name)
+                .get_contract(&governance_id, &schema_id)
             {
                 Ok((contract, hash, contract_gov_version)) => {
                     Some((contract, hash, contract_gov_version))
@@ -83,7 +83,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
                 Err(error) => return Err(CompilerErrorResponses::DatabaseError(error.to_string())),
             };
             let new_contract_hash =
-                DigestIdentifier::from_serializable_borsh(&contract_info.content)
+                DigestIdentifier::from_serializable_borsh(&contract_info.raw)
                     .map_err(|_| CompilerErrorResponses::BorshSerializeContractError)?;
             if let Some(contract_data) = contract_data {
                 if governance_version == contract_data.2 {
@@ -94,7 +94,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
                     self.database
                         .put_contract(
                             &governance_id,
-                            &contract_info.name,
+                            &schema_id,
                             contract_data.0,
                             new_contract_hash,
                             governance_version,
@@ -106,18 +106,18 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
                 }
             }
             self.compile(
-                contract_info.content,
+                contract_info.raw,
                 &governance_id.to_str(),
-                &contract_info.name,
+                &schema_id,
             )
             .await?;
             let compiled_contract = self
-                .add_contract(&governance_id.to_str(), &contract_info.name)
+                .add_contract(&governance_id.to_str(), &schema_id)
                 .await?;
             self.database
                 .put_contract(
                     &governance_id,
-                    &contract_info.name,
+                    &schema_id,
                     compiled_contract,
                     new_contract_hash,
                     governance_version,

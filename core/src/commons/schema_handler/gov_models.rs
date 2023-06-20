@@ -306,6 +306,5 @@ pub struct Role {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Contract {
-    pub name: String,
-    pub content: String,
+    pub raw: String,
 }
