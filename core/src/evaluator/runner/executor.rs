@@ -59,7 +59,8 @@ impl ContractExecutor {
             )
             .map_err(|_| ExecutorErrorResponses::ContractExecutionFailed)?;
         // Obtención "NEW STATE" almacenado en el contexto
-        Ok(self.get_result(&store, result_ptr)?)
+        let contract_result = self.get_result(&store, result_ptr)?;
+        Ok(contract_result)
     }
 
     fn generate_context(&self, state: &str, event: &str) -> (MemoryManager, u32, u32) {
