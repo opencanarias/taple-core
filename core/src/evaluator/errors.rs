@@ -57,7 +57,11 @@ pub enum ExecutorErrorResponses {
     #[error("Our Gov Version is Higher than sender")]
     OurGovIsHigher,
     #[error("Create Request not allowed")]
-    CreateRequestNotAllowed
+    CreateRequestNotAllowed,
+    #[error("Governance module error {0}")]
+    GovernanceError(#[from] RequestError),
+    #[error("Schema compilation failed")]
+    SchemaCompilationFailed
 }
 
 #[derive(Error, Debug, Clone)]
