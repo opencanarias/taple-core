@@ -10,7 +10,7 @@ use json_patch::{patch, Patch};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::{event::Event, event_request::EventRequestType};
+use super::{event::Event, event_request::EventRequestType, value_wrapper::ValueWrapper};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Subject {
@@ -33,7 +33,7 @@ pub struct Subject {
     /// Subject creator identifier
     pub creator: KeyIdentifier,
     /// Current status of the subject
-    pub properties: Value,
+    pub properties: ValueWrapper,
     /// Indicates if the subject is active or not
     pub active: bool,
 }
@@ -56,7 +56,7 @@ pub struct SubjectData {
     /// Subject creator identifier
     pub creator: KeyIdentifier,
     /// Current status of the subject
-    pub properties: Value,
+    pub properties: ValueWrapper,
     /// Indicates if the subject is active or not
     pub active: bool,
 }
@@ -113,7 +113,7 @@ impl Subject {
     //     })
     // }
 
-    pub fn from_genesis_event(event: Event, init_state: Value) -> Result<Self, SubjectError> {
+    pub fn from_genesis_event(event: Event, init_state: ValueWrapper) -> Result<Self, SubjectError> {
         let EventRequestType::Create(create_request) = event.content.event_proposal.proposal.event_request.request.clone() else {
             return Err(SubjectError::NotCreateEvent)
         };
@@ -157,12 +157,12 @@ impl Subject {
         })
     }
 
-    pub fn update_subject(&mut self, json_patch: Value, new_sn: u64) -> Result<(), SubjectError> {
+    pub fn update_subject(&mut self, json_patch: ValueWrapper, new_sn: u64) -> Result<(), SubjectError> {
         let prev_properties = self.properties.as_str();
-        let Ok(patch_json) = serde_json::from_value::<Patch>(json_patch) else {
+        let Ok(patch_json) = serde_json::from_value::<Patch>(json_patch.0) else {
                     return Err(SubjectError::ErrorParsingJsonString("Json Patch conversion fails".to_owned()));
                 };
-        let Ok(()) = patch(&mut self.properties, &patch_json) else {
+        let Ok(()) = patch(&mut self.properties.0, &patch_json) else {
                     return Err(SubjectError::ErrorApplyingPatch("Error Applying Patch".to_owned()));
                 };
         self.sn = new_sn;
@@ -196,12 +196,12 @@ impl Subject {
 
     pub fn state_hash_after_apply(
         &self,
-        json_patch: Value,
+        json_patch: ValueWrapper,
     ) -> Result<DigestIdentifier, SubjectError> {
         let mut subject_properties = self.properties.clone();
-        let json_patch = serde_json::from_value::<Patch>(json_patch)
+        let json_patch = serde_json::from_value::<Patch>(json_patch.0)
             .map_err(|_| SubjectError::CryptoError(String::from("Error parsing the json patch")))?;
-        patch(&mut subject_properties, &json_patch).map_err(|_| {
+        patch(&mut subject_properties.0, &json_patch).map_err(|_| {
             SubjectError::CryptoError(String::from("Error applying the json patch"))
         })?;
         Ok(

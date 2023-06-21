@@ -497,7 +497,7 @@ mod test {
         commons::{
             config::VotationType,
             crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair, Payload, DSA},
-            models::{state::Subject, timestamp},
+            models::{state::Subject, timestamp, value_wrapper::ValueWrapper},
             schema_handler::gov_models::Contract,
             self_signature_manager::{SelfSignatureInterface, SelfSignatureManager},
         },
@@ -521,7 +521,7 @@ mod test {
             governance_id: DigestIdentifier,
             schema_id: String,
             governance_version: u64,
-        ) -> Result<serde_json::Value, RequestError> {
+        ) -> Result<ValueWrapper, RequestError> {
             unreachable!()
         }
 
@@ -591,7 +591,7 @@ mod test {
             governance_id: DigestIdentifier,
             schema_id: String,
             governance_version: u64,
-        ) -> Result<Value, RequestError> {
+        ) -> Result<ValueWrapper, RequestError> {
             unreachable!()
         }
 
@@ -605,7 +605,7 @@ mod test {
     }
 
     fn create_state_request(
-        json: Value,
+        json: ValueWrapper,
         signature_manager: &SelfSignatureManager,
         subject_id: &DigestIdentifier,
     ) -> EventRequest {

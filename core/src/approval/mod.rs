@@ -6,7 +6,7 @@ use crate::{
     commons::models::{event_proposal::EventProposal, Acceptance},
     event_request::EventRequest,
     identifier::{DigestIdentifier, KeyIdentifier},
-    signature::Signature,
+    signature::Signature, ValueWrapper,
 };
 
 use self::error::ApprovalErrorResponse;
@@ -33,7 +33,7 @@ pub struct ApprovalPetitionData {
     pub governance_version: u64,
     pub hash_event_proporsal: DigestIdentifier,
     pub sender: KeyIdentifier,
-    pub json_patch: Value,
+    pub json_patch: ValueWrapper,
 }
 
 #[derive(Clone, Debug)]

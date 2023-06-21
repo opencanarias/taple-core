@@ -10,7 +10,7 @@ use crate::{
         models::event_content::Metadata,
         schema_handler::{get_governance_schema, gov_models::Contract},
     },
-    DatabaseCollection, DatabaseManager, DB,
+    DatabaseCollection, DatabaseManager, ValueWrapper, DB,
 };
 
 use super::{
@@ -198,13 +198,13 @@ pub trait GovernanceInterface: Sync + Send {
         governance_id: DigestIdentifier,
         schema_id: String,
         governance_version: u64,
-    ) -> Result<Value, RequestError>;
+    ) -> Result<ValueWrapper, RequestError>;
     async fn get_schema(
         &self,
         governance_id: DigestIdentifier,
         schema_id: String,
         governance_version: u64,
-    ) -> Result<serde_json::Value, RequestError>;
+    ) -> Result<ValueWrapper, RequestError>;
 
     async fn get_signers(
         &self,
@@ -264,7 +264,7 @@ impl GovernanceInterface for GovernanceAPI {
         governance_id: DigestIdentifier,
         schema_id: String,
         governance_version: u64,
-    ) -> Result<Value, RequestError> {
+    ) -> Result<ValueWrapper, RequestError> {
         let response = self
             .sender
             .ask(GovernanceMessage::GetInitState {
@@ -286,7 +286,7 @@ impl GovernanceInterface for GovernanceAPI {
         governance_id: DigestIdentifier,
         schema_id: String,
         governance_version: u64,
-    ) -> Result<serde_json::Value, RequestError> {
+    ) -> Result<ValueWrapper, RequestError> {
         let response = self
             .sender
             .ask(GovernanceMessage::GetSchema {

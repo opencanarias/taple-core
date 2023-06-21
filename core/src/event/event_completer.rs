@@ -32,7 +32,7 @@ use crate::{
         approval::create_approval_request, evaluator::create_evaluator_request,
         ledger::request_gov_event, validation::create_validator_request,
     },
-    DatabaseCollection, Event, EventRequestType, Notification,
+    DatabaseCollection, Event, EventRequestType, Notification, ValueWrapper,
 };
 use std::hash::Hash;
 
@@ -775,7 +775,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
     pub async fn evaluator_signatures(
         &mut self,
         evaluation: Evaluation,
-        json_patch: Value,
+        json_patch: ValueWrapper,
         signature: Signature,
     ) -> Result<(), EventError> {
         // Comprobar que el hash devuelto coincide con el hash de la preevaluación
@@ -1498,8 +1498,8 @@ fn insert_or_replace_and_check<T: PartialEq + Eq + Hash>(
 
 fn hash_match_after_patch(
     evaluation: &Evaluation,
-    json_patch: Value,
-    mut prev_properties: Value,
+    json_patch: ValueWrapper,
+    mut prev_properties: ValueWrapper,
 ) -> Result<bool, EventError> {
     if evaluation.acceptance != Acceptance::Ok {
         let state_hash_calculated = DigestIdentifier::from_serializable_borsh(&prev_properties)
@@ -1508,10 +1508,10 @@ fn hash_match_after_patch(
             })?;
         Ok(state_hash_calculated == evaluation.state_hash)
     } else {
-        let Ok(patch_json) = serde_json::from_value::<Patch>(json_patch) else {
+        let Ok(patch_json) = serde_json::from_value::<Patch>(json_patch.0) else {
             return Err(EventError::ErrorParsingJsonString("Error Parsing Patch".to_owned()));
     };
-        let Ok(()) = patch(&mut prev_properties, &patch_json) else {
+        let Ok(()) = patch(&mut prev_properties.0, &patch_json) else {
         return Err(EventError::ErrorApplyingPatch("Error applying patch".to_owned()));
     };
         let state_hash_calculated = DigestIdentifier::from_serializable_borsh(&prev_properties)

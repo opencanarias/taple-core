@@ -116,7 +116,8 @@ pub use commons::{
     identifier::derive::{digest::DigestDerivator, KeyDerivator},
     models::notification::Notification,
     models::timestamp::TimeStamp,
-    models::event::ValidationProof
+    models::event::ValidationProof,
+    models::value_wrapper::ValueWrapper,
 };
 pub use error::Error;
 pub use unitary_component::{NotificationHandler, Taple};

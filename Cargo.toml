@@ -1,11 +1,7 @@
 [workspace]
 
 members = [
-    "core", 
-    "json", 
-    "json-patch",
-    "treediff-rs",
-    "jsonschema-rs/jsonschema"
+    "core"
     ]
 
 exclude = ["contract"]
@@ -26,6 +22,7 @@ keywords = ["blockchain", "distributed-ledger", "taple", "sustainability"]
 [workspace.dependencies]
 # Dependencias de el paquete json (serde-json)
 serde = { version = "^1.0.100", default-features = false }
+serde_json = { version = "^1.0.97" }
 itoa = "^1.0"
 ryu = "^1.0"
 # Post version 1
@@ -45,7 +42,8 @@ async-trait = "~0.1.56"                         # Rust's own suggested alternati
 getrandom = "~0.2"
 borsh = "~0.10.3"
 config = { version = "~0.13.2" }
-json-patch = "~0.2"
+json-patch = "~1"
+jsonschema = "~0.17"
 rand = { version = "~0.8.5" }
 rand_core = "~0.5"
 instant = "~0.1.11"
@@ -63,7 +61,6 @@ env_logger = "^0.10"
 log = "~0.4"
 hex = "~0.4.3"
 db-key = "^0.0.5" #Usar esta versión. Necesario para implementar custom keys para leveldb::Database // Eso puso Javier
-jsonschema = "~0.17"
 libp2p = { version = "~0.45", features = [
     "request-response",
 ], default-features = false }

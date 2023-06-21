@@ -8,7 +8,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 
-use super::state::SubjectData;
+use super::{state::SubjectData, value_wrapper::ValueWrapper};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct EventPreEvaluation {
@@ -23,7 +23,7 @@ pub struct Context {
     pub schema_id: String,
     pub creator: KeyIdentifier,
     pub owner: KeyIdentifier,
-    pub actual_state: Value,
+    pub actual_state: ValueWrapper,
     pub namespace: String,
     pub governance_version: u64,
 }

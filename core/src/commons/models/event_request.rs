@@ -11,7 +11,7 @@ use crate::commons::{
     schema_handler::Schema,
 };
 
-use super::{signature::Signature, state::Subject, timestamp::TimeStamp};
+use super::{signature::Signature, state::Subject, timestamp::TimeStamp, value_wrapper::ValueWrapper};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct EventRequest {
@@ -39,7 +39,7 @@ pub struct CreateRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct FactRequest {
     pub subject_id: DigestIdentifier,
-    pub payload: Value,
+    pub payload: ValueWrapper,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]

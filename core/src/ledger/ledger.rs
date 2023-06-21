@@ -7,7 +7,7 @@ use crate::commons::models::approval::ApprovalStatus;
 use crate::commons::models::state::generate_subject_id;
 use crate::crypto::Secp256k1KeyPair;
 use crate::request::{RequestState, TapleRequest};
-use crate::KeyDerivator;
+use crate::{KeyDerivator, ValueWrapper};
 use crate::{
     commons::{
         channel::SenderEnd,
@@ -2787,7 +2787,7 @@ fn check_context(
     event: &Event,
     subject: &Subject,
     metadata: Metadata,
-    prev_properties: Value,
+    prev_properties: ValueWrapper,
 ) -> Result<(), LedgerError> {
     let event_preevaluation = EventPreEvaluation {
         event_request: event.content.event_proposal.proposal.event_request.clone(),

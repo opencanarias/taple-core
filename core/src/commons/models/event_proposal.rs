@@ -11,7 +11,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::Acceptance;
+use super::{Acceptance, value_wrapper::ValueWrapper};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct EventProposal {
@@ -26,7 +26,7 @@ pub struct Proposal {
     pub hash_prev_event: DigestIdentifier,
     pub gov_version: u64,
     pub evaluation: Option<Evaluation>,
-    pub json_patch: Value,
+    pub json_patch: ValueWrapper,
     pub evaluation_signatures: HashSet<Signature>,
 }
 
@@ -37,7 +37,7 @@ impl Proposal {
         hash_prev_event: DigestIdentifier,
         gov_version: u64,
         evaluation: Option<Evaluation>,
-        json_patch: Value,
+        json_patch: ValueWrapper,
         evaluation_signatures: HashSet<Signature>,
     ) -> Self {
         Proposal {

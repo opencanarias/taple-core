@@ -19,7 +19,7 @@ use serde_json::{json, Value};
 use super::{
     approval::Approval,
     event_proposal::{EventProposal, Proposal},
-    state::Subject,
+    state::Subject, value_wrapper::ValueWrapper,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
@@ -159,9 +159,9 @@ impl Event {
         event_request: EventRequest,
         subject_keys: &KeyPair,
         gov_version: u64,
-        init_state: &Value,
+        init_state: &ValueWrapper,
     ) -> Result<Self, SubjectError> {
-        let json_patch = serde_json::to_value(diff(&json!({}), init_state)).map_err(|_| {
+        let json_patch = serde_json::to_value(diff(&json!({}), &init_state.0)).map_err(|_| {
             SubjectError::CryptoError(String::from("Error converting patch to value"))
         })?;
         let proposal = Proposal {
@@ -170,7 +170,7 @@ impl Event {
             hash_prev_event: DigestIdentifier::default(),
             gov_version,
             evaluation: None,
-            json_patch,
+            json_patch: ValueWrapper(json_patch),
             evaluation_signatures: HashSet::new(),
         };
         let public_key = KeyIdentifier::new(

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
-    commons::models::{approval::Approval, event_proposal::Evaluation},
+    commons::models::{approval::Approval, event_proposal::Evaluation, value_wrapper::ValueWrapper},
     event_request::EventRequest,
     identifier::DigestIdentifier,
     signature::Signature,
@@ -23,7 +23,7 @@ pub enum EventCommand {
     },
     EvaluatorResponse {
         evaluation: Evaluation,
-        json_patch: Value,
+        json_patch: ValueWrapper,
         signature: Signature,
     },
     ApproverResponse {

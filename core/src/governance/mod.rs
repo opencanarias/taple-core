@@ -1,10 +1,10 @@
 use std::collections::HashSet;
 
-use crate::commons::{
+use crate::{commons::{
     identifier::{DigestIdentifier, KeyIdentifier},
     models::event_content::Metadata,
     schema_handler::gov_models::{Contract},
-};
+}, ValueWrapper};
 pub mod error;
 pub mod governance;
 pub mod inner_governance;
@@ -82,8 +82,8 @@ pub enum GovernanceMessage {
 
 #[derive(Debug, Clone)]
 pub enum GovernanceResponse {
-    GetInitState(Result<Value, RequestError>),
-    GetSchema(Result<Value, RequestError>),
+    GetInitState(Result<ValueWrapper, RequestError>),
+    GetSchema(Result<ValueWrapper, RequestError>),
     GetSigners(Result<HashSet<KeyIdentifier>, RequestError>),
     GetQuorum(Result<u32, RequestError>),
     GetInvokeInfo(Result<bool, RequestError>),

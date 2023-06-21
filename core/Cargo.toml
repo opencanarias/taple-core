@@ -28,13 +28,13 @@ tokio = { workspace = true, features = [
 ] }
 config = { workspace = true, features = ["toml"] }
 serde = { workspace = true, features = ["derive"] }
-serde_json = { path = "../json" }
+serde_json = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
 env_logger = { workspace = true }
 log = { workspace = true }
 hex = { workspace = true }
-jsonschema = { path = "../jsonschema-rs/jsonschema" }
+jsonschema = { workspace = true }
 time = { workspace = true, features = ["std"] }
 
 # API
@@ -62,7 +62,7 @@ base64 = { workspace = true }
 
 # Commons
 getrandom = { workspace = true }
-json-patch = { path = "../json-patch" }
+json-patch = { workspace = true }
 rand_core = { workspace = true }
 ed25519-dalek = { workspace = true, features = ["serde"] }
 libsecp256k1 = { workspace = true, optional = true }

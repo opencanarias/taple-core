@@ -254,7 +254,7 @@ mod test {
         identifier::{DigestIdentifier, KeyIdentifier},
         message::MessageTaskCommand,
         protocol::protocol_message_manager::TapleMessages,
-        MemoryManager, TimeStamp,
+        MemoryManager, TimeStamp, ValueWrapper,
     };
 
     use crate::evaluator::manager::EvaluatorManager;
@@ -411,7 +411,7 @@ mod test {
             _governance_id: DigestIdentifier,
             _schema_id: String,
             _governance_version: u64,
-        ) -> Result<Value, RequestError> {
+        ) -> Result<ValueWrapper, RequestError> {
             unimplemented!()
         }
 
@@ -420,7 +420,7 @@ mod test {
             _governance_id: DigestIdentifier,
             _schema_id: String,
             _governance_version: u64,
-        ) -> Result<serde_json::Value, RequestError> {
+        ) -> Result<ValueWrapper, RequestError> {
             unimplemented!()
         }
 
@@ -579,7 +579,7 @@ mod test {
             owner: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
             creator: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg")
                 .unwrap(),
-            properties: initial_state_json,
+            properties: ValueWrapper(initial_state_json),
             active: true,
             name: "".to_owned(),
             genesis_gov_version: 3,
@@ -593,7 +593,7 @@ mod test {
         let request = EventRequestType::Fact(FactRequest {
             subject_id: DigestIdentifier::from_str("JXtZRpNgBWVg9v5YG9AaTNfCpPd-rCTTKrFW9cV8-JKs")
                 .unwrap(),
-            payload: json,
+            payload: ValueWrapper(json),
         });
         let signature = signature_manager.sign(&request).unwrap();
         let event_request = EventRequest { request, signature };
@@ -656,7 +656,7 @@ mod test {
                             "EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg",
                         )
                         .unwrap(),
-                        actual_state: initial_state_json.clone(),
+                        actual_state: ValueWrapper(initial_state_json.clone()),
                         namespace: "namespace1".into(),
                         governance_version: 0,
                     },
@@ -701,7 +701,7 @@ mod test {
             // assert_eq!(hash, evaluation.state_hash); // arreglar
             println!("{:#?}\n{:#?}", initial_state_json, new_state_json);
             let patch = generate_json_patch(initial_state_json, new_state_json);
-            assert_eq!(patch, json_patch); // arreglar
+            assert_eq!(patch, json_patch.0); // arreglar
                                            // let own_identifier = signature_manager.get_own_identifier();
                                            // assert_eq!(evaluation..signer, own_identifier); // arreglar
             handler.abort();

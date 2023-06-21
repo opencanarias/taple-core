@@ -13,7 +13,7 @@ use crate::{
             initial_state::get_governance_initial_state,
         },
     },
-    database::Error as DbError,
+    database::Error as DbError, ValueWrapper,
 };
 use serde_json::Value;
 
@@ -50,7 +50,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         governance_id: DigestIdentifier,
         schema_id: String,
         governance_version: u64,
-    ) -> Result<Result<Value, RequestError>, InternalError> {
+    ) -> Result<Result<ValueWrapper, RequestError>, InternalError> {
         if governance_id.digest.is_empty() {
             return Ok(Ok(get_governance_initial_state()));
         }
@@ -63,11 +63,11 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                 err => return Ok(Err(err)),
             },
         };
-        let schemas = get_as_array(&governance.properties, "schemas")?;
+        let schemas = get_as_array(&governance.properties.0, "schemas")?;
         for schema in schemas {
             let tmp = get_as_str(schema, "id")?;
             if tmp == &schema_id {
-                return Ok(Ok(schema.get("initial_value").unwrap().to_owned()));
+                return Ok(Ok(ValueWrapper(schema.get("initial_value").unwrap().to_owned())));
             }
         }
         return Ok(Err(RequestError::SchemaNotFound(schema_id)));
@@ -79,9 +79,9 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         governance_id: DigestIdentifier,
         schema_id: String,
         governance_version: u64,
-    ) -> Result<Result<Value, RequestError>, InternalError> {
+    ) -> Result<Result<ValueWrapper, RequestError>, InternalError> {
         if governance_id.digest.is_empty() {
-            return Ok(Ok(self.governance_schema.clone()));
+            return Ok(Ok(ValueWrapper(self.governance_schema.clone())));
         }
         let governance = match self.governance_event_sourcing(&governance_id, governance_version) {
             Ok(subject) => subject,
@@ -92,11 +92,11 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                 err => return Ok(Err(err)),
             },
         };
-        let schemas = get_as_array(&governance.properties, "schemas")?;
+        let schemas = get_as_array(&governance.properties.0, "schemas")?;
         for schema in schemas {
             let tmp = get_as_str(schema, "id")?;
             if tmp == &schema_id {
-                return Ok(Ok(schema.get("schema").unwrap().to_owned()));
+                return Ok(Ok(ValueWrapper(schema.get("schema").unwrap().to_owned())));
             }
         }
         return Ok(Err(RequestError::SchemaNotFound(schema_id)));
@@ -204,7 +204,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         let roles: Vec<Role> =
             serde_json::from_value(governance.properties.get("roles").unwrap().to_owned())
                 .map_err(|_| InternalError::DeserializationError)?;
-        let members = get_members_from_governance(&governance.properties)?;
+        let members = get_members_from_governance(&governance.properties.0)?;
         let get_signers_result = Self::get_signers_aux(
             roles,
             &schema_id,
@@ -251,7 +251,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                     err => return Ok(Err(err)),
                 },
             };
-        let policies = get_as_array(&governance.properties, "policies")?;
+        let policies = get_as_array(&governance.properties.0, "policies")?;
         let schema_policy = get_schema_from_policies(policies, &schema_id);
         let Ok(schema_policy) = schema_policy else {
             return Ok(Err(schema_policy.unwrap_err()));
@@ -313,7 +313,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         let roles: Vec<Role> =
             serde_json::from_value(governance.properties.get("roles").unwrap().to_owned())
                 .map_err(|_| InternalError::DeserializationError)?;
-        let members = get_members_from_governance(&governance.properties)?;
+        let members = get_members_from_governance(&governance.properties.0)?;
         let invoke_create_info_result = Self::invoke_create_info(
             roles,
             &schema_id,
@@ -399,7 +399,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                 err => return Ok(Err(err)),
             },
         };
-        let schemas = get_as_array(&governance.properties, "schemas")?;
+        let schemas = get_as_array(&governance.properties.0, "schemas")?;
         let mut result = Vec::new();
         for schema in schemas {
             let schema_id = schema["id"].as_str().unwrap();

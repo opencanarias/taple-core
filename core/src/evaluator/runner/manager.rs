@@ -12,7 +12,7 @@ use crate::{
     event_request::FactRequest,
     governance::GovernanceInterface,
     identifier::DigestIdentifier,
-    DatabaseCollection, EventRequestType,
+    DatabaseCollection, EventRequestType, ValueWrapper,
 };
 
 use super::{
@@ -167,7 +167,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
                         )
                     }
                     _ => (
-                        generate_json_patch(&previous_state, &contract_result.final_state)?,
+                        generate_json_patch(&previous_state.0, &contract_result.final_state)?,
                         DigestIdentifier::from_serializable_borsh(
                             serde_json::from_str::<Value>(&contract_result.final_state)
                                 .unwrap()
@@ -184,7 +184,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
             ),
         };
         Ok(ExecuteContractResponse {
-            json_patch: patch,
+            json_patch: ValueWrapper(patch),
             hash_new_state: hash,
             governance_version,
             context_hash,
@@ -207,7 +207,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
                 .gov_api
                 .get_schema(governance_id.clone(), schema_id, governance_version)
                 .await?;
-            let schema = Schema::compile(&schema)
+            let schema = Schema::compile(&schema.0)
                 .map_err(|_| ExecutorErrorResponses::SchemaCompilationFailed)?;
             Ok(schema.validate(
                 &serde_json::to_value(new_state)

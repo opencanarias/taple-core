@@ -13,6 +13,7 @@ pub mod signature;
 pub mod state;
 pub mod timestamp;
 pub mod request;
+pub mod value_wrapper;
 
 #[derive(
     Debug,
