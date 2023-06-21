@@ -3,7 +3,6 @@ r#"
 mod sdk;
 use std::collections::HashSet;
 
-use jsonschema::JSONSchema;
 use serde::{de::Visitor, ser::SerializeMap, Deserialize, Serialize};
 
 #[derive(Clone)]
