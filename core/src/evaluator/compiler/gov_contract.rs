@@ -1,5 +1,6 @@
 pub fn get_gov_contract() -> String {
-r#"mod sdk;
+r#"
+mod sdk;
 use std::collections::HashSet;
 
 use jsonschema::JSONSchema;
@@ -313,8 +314,6 @@ enum StateError {
     DuplicatedPolicyID,
     #[error("No governace policy detected")]
     NoGvernancePolicy,
-    #[error("A schema's ID is duplicated")]
-    DuplicatedSchemaID,
     #[error("It is not allowed to specify a different schema for the governnace")]
     GovernanceShchemaIDDetected,
     #[error("Schema ID is does not have a policy")]
@@ -378,29 +377,6 @@ fn check_schemas(
     schemas: &Vec<Schema>,
     mut policies_names: HashSet<String>,
 ) -> Result<(), StateError> {
-    #[derive(Debug)]
-    struct Schema {
-        json_schema: JSONSchema,
-    }
-
-    impl Schema {
-        pub fn compile(schema: &Value) -> Result<Self, StateError> {
-            match JSONSchema::options()
-                .with_draft(jsonschema::Draft::Draft7)
-                .compile(&schema)
-            {
-                Ok(json_schema) => Ok(Schema { json_schema }),
-                Err(_) => Err(StateError::SchemaCompilationError),
-            }
-        }
-
-        pub fn validate(&self, value: &Value) -> Result<(), StateError> {
-            match self.json_schema.validate(value) {
-                Ok(_) => Ok(()),
-                Err(_) => Err(StateError::StateValidationFailed),
-            }
-        }
-    }
     // Comprobamos que no hayan esquemas duplicados
     // También se tiene que comprobar que los estados iniciales sean válidos según el json_schema
     // Así mismo no puede haber un schema con id "governance"
@@ -413,15 +389,11 @@ fn check_schemas(
             // No tiene relación con policies_names
             return Err(StateError::NoCorrelationSchemaPolicy);
         }
-        // Se comprueba que el json_schema sea válido
-        let json_schema = Schema::compile(&schema.state_schema)?;
-        json_schema.validate(&schema.initial_value)?;
     }
     if !policies_names.is_empty() {
         return Err(StateError::PoliciesWithoutSchema);
     }
     Ok(())
 }
-
 "#.into()
 }

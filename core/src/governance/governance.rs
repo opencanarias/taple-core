@@ -229,7 +229,7 @@ pub trait GovernanceInterface: Sync + Send {
         &self,
         governance_id: DigestIdentifier,
         governance_version: u64,
-    ) -> Result<Vec<Contract>, RequestError>;
+    ) -> Result<Vec<(Contract, String)>, RequestError>;
 
     async fn get_governance_version(
         &self,
@@ -369,7 +369,7 @@ impl GovernanceInterface for GovernanceAPI {
         &self,
         governance_id: DigestIdentifier,
         governance_version: u64,
-    ) -> Result<Vec<Contract>, RequestError> {
+    ) -> Result<Vec<(Contract, String)>, RequestError> {
         let response = self
             .sender
             .ask(GovernanceMessage::GetContracts {

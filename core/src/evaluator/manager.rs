@@ -17,20 +17,30 @@ use crate::message::{MessageConfig, MessageTaskCommand};
 use crate::protocol::protocol_message_manager::TapleMessages;
 use crate::utils::message::event::create_evaluator_response;
 
-pub struct EvaluatorManager<M: DatabaseManager<C>, C: DatabaseCollection + 'static> {
+pub struct EvaluatorManager<
+    M: DatabaseManager<C>,
+    C: DatabaseCollection + 'static,
+    G: GovernanceInterface + Send + Clone + 'static,
+> {
     /// Communication channel for incoming petitions
     input_channel: MpscChannel<EvaluatorMessage, EvaluatorResponse>,
     /// Contract executioner
-    runner: TapleRunner<C>,
+    runner: TapleRunner<C, G>,
     signature_manager: SelfSignatureManager,
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
     messenger_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
     _m: PhantomData<M>,
+    _g: PhantomData<G>,
 }
 
-impl<M: DatabaseManager<C>, C: DatabaseCollection> EvaluatorManager<M, C> {
-    pub fn new<G: GovernanceInterface + Send + Clone + 'static>(
+impl<
+        M: DatabaseManager<C>,
+        C: DatabaseCollection,
+        G: GovernanceInterface + Send + Clone + 'static,
+    > EvaluatorManager<M, C, G>
+{
+    pub fn new(
         input_channel: MpscChannel<EvaluatorMessage, EvaluatorResponse>,
         database: Arc<M>,
         signature_manager: SelfSignatureManager,
@@ -56,12 +66,13 @@ impl<M: DatabaseManager<C>, C: DatabaseCollection> EvaluatorManager<M, C> {
         });
         Self {
             input_channel,
-            runner: TapleRunner::new(DB::new(database.clone()), engine),
+            runner: TapleRunner::new(DB::new(database.clone()), engine, gov_api),
             signature_manager,
             shutdown_receiver,
             shutdown_sender,
             messenger_channel,
             _m: PhantomData::default(),
+            _g: PhantomData::default(),
         }
     }
 
@@ -442,38 +453,46 @@ mod test {
             &self,
             governance_id: DigestIdentifier,
             _governance_version: u64,
-        ) -> Result<Vec<Contract>, RequestError> {
+        ) -> Result<Vec<(Contract, String)>, RequestError> {
             if governance_id
                 == DigestIdentifier::from_str("Jg2Nuv5bNs4swQGcPQ1CXs9MtcfwMVoeQDR2Ea1YNYJw")
                     .unwrap()
             {
-                Ok(vec![Contract {
-                    name: "test".to_owned(),
-                    content: ContractType::String(String::from("test"))
-                        .to_string()
-                        .unwrap(),
-                }])
+                Ok(vec![(
+                    Contract {
+                        raw: ContractType::String(String::from("test"))
+                            .to_string()
+                            .unwrap(),
+                    },
+                    "test".to_owned(),
+                )])
             } else if governance_id
                 == DigestIdentifier::from_str("Jg2Nuc5bNs4swQGcPQ1CXs9MtcfwMVoeQDR2Ea1YNYJw")
                     .unwrap()
             {
-                Ok(vec![Contract {
-                    name: "test".to_owned(),
-                    content: ContractType::String(get_file_wrong()).to_string().unwrap(),
-                }])
+                Ok(vec![(
+                    Contract {
+                        raw: ContractType::String(get_file_wrong()).to_string().unwrap(),
+                    },
+                    "test".to_owned(),
+                )])
             } else if governance_id
                 == DigestIdentifier::from_str("Jg2Nuc5bNs4swQGcPQ2CXs9MtcfwMVoeQDR2Ea2YNYJw")
                     .unwrap()
             {
-                Ok(vec![Contract {
-                    name: "test".to_owned(),
-                    content: ContractType::String(get_file_wrong2()).to_string().unwrap(),
-                }])
+                Ok(vec![(
+                    Contract {
+                        raw: ContractType::String(get_file_wrong2()).to_string().unwrap(),
+                    },
+                    "test".to_owned(),
+                )])
             } else {
-                Ok(vec![Contract {
-                    name: "test".to_owned(),
-                    content: ContractType::String(get_file()).to_string().unwrap(),
-                }])
+                Ok(vec![(
+                    Contract {
+                        raw: ContractType::String(get_file()).to_string().unwrap(),
+                    },
+                    "test".to_owned(),
+                )])
             }
         }
 
@@ -499,7 +518,7 @@ mod test {
     }
 
     fn build_module() -> (
-        EvaluatorManager<MemoryManager, MemoryCollection>,
+        EvaluatorManager<MemoryManager, MemoryCollection, GovernanceMockup>,
         SenderEnd<EvaluatorMessage, EvaluatorResponse>,
         Sender<GovernanceUpdatedMessage>,
         SelfSignatureManager,

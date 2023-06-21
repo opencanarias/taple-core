@@ -397,7 +397,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         &self,
         governance_id: DigestIdentifier,
         governance_version: u64,
-    ) -> Result<Result<Vec<Contract>, RequestError>, InternalError> {
+    ) -> Result<Result<Vec<(Contract, String)>, RequestError>, InternalError> {
         let governance = match self.governance_event_sourcing(&governance_id, governance_version) {
             Ok(subject) => subject,
             Err(error) => match error {
@@ -412,13 +412,16 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         let schemas = get_as_array(&properties, "schemas")?;
         let mut result = Vec::new();
         for schema in schemas {
+            let schema_id = schema["id"].as_str().unwrap();
             let mut contract: Contract = serde_json::from_value(schema["contract"].clone())
                 .map_err(|_| InternalError::InvalidGovernancePayload("5".into()))?;
+            
             let decoded_bytes =
-                base64::decode(contract.content).map_err(|_| InternalError::Base64DecodingError)?;
-            contract.content =
+                base64::decode(contract.raw).map_err(|_| InternalError::Base64DecodingError)?;
+            contract.raw =
                 String::from_utf8(decoded_bytes).map_err(|_| InternalError::Base64DecodingError)?;
-            result.push(contract);
+            
+            result.push((contract, schema_id.to_owned()));
         }
         Ok(Ok(result))
     }

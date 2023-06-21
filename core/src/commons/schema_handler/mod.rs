@@ -639,10 +639,7 @@ pub fn get_governance_schema() -> Value {
               "contract": {
                 "type": "object",
                 "properties": {
-                  "name": {
-                    "type": "string"
-                  },
-                  "content": {
+                  "raw": {
                     "type": "string"
                   },
                 },

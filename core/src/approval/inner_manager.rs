@@ -570,7 +570,7 @@ mod test {
             &self,
             governance_id: DigestIdentifier,
             governance_version: u64,
-        ) -> Result<Vec<Contract>, RequestError> {
+        ) -> Result<Vec<(Contract, String)>, RequestError> {
             unreachable!()
         }
 
