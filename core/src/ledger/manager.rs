@@ -166,6 +166,7 @@ impl<C: DatabaseCollection> EventManager<C> {
                         .inner_ledger
                         .event_validated(event, signatures, validation_proof)
                         .await;
+                    log::warn!("RESPUESTA DE OWN EVENT {:?}", response);
                     match response {
                         Err(error) => match error {
                             LedgerError::ChannelClosed => {
@@ -197,6 +198,7 @@ impl<C: DatabaseCollection> EventManager<C> {
                         .inner_ledger
                         .genesis(event, signatures, validation_proof)
                         .await;
+                    log::warn!("RESPUESTA DE GENESIS {:?}", response);
                     match response {
                         Err(error) => match error {
                             LedgerError::ChannelClosed => {
@@ -253,6 +255,7 @@ impl<C: DatabaseCollection> EventManager<C> {
                 LedgerCommand::ExternalIntermediateEvent { event } => {
                     log::error!("EXTERNAL INTERMEDIATE EVENT");
                     let response = self.inner_ledger.external_intermediate_event(event).await;
+                    log::warn!("RESPUESTA DE EXTERNAL INTERMEDIATE EVENT {:?}", response);
                     match response {
                         Err(error) => match error {
                             LedgerError::ChannelClosed => {

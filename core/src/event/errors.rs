@@ -62,4 +62,6 @@ pub enum EventError {
     RequestAlreadyKnown,
     #[error("Subject Keys Not Found")]
     SubjectKeysNotFound(String),
+    #[error("Event0 Not Create")]
+    Event0NotCreate,
 }

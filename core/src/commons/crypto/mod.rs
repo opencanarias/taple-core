@@ -41,9 +41,7 @@ pub fn check_cryptography<T: BorshSerialize>(
     }
     log::error!("AQUÍ 2");
     signature
-        .content
-        .signer
-        .verify(&hash.derivative(), &signature.signature)
+        .verify()
         .map_err(|_| {
             CryptoError::CryptoError(String::from("The signature does not validate the hash"))
         })?;

@@ -517,7 +517,9 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 }
                 Err(error) => return Err(EventError::DatabaseError(error.to_string())),
             };
+            log::warn!("SCHEMA ID: {}", create_request.schema_id);
             let (governance_version, initial_state) = if &create_request.schema_id != "governance" {
+                log::warn!("LLEGA IF");
                 let governance_version = self
                     .gov_api
                     .get_governance_version(
@@ -554,6 +556,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     .await?;
                 (governance_version, initial_state)
             } else {
+                log::warn!("LLEGA ELSE");
                 let initial_state = self
                     .gov_api
                     .get_init_state(
@@ -589,8 +592,13 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             let metadata = notary_event.proof.get_metadata();
             let event_message = create_validator_request(notary_event.clone());
             let stage = ValidationStage::Validate;
-            let (signers, quorum_size) =
-                self.get_signers_and_quorum(metadata, stage.clone()).await?;
+            let (signers, quorum_size) = if &create_request.schema_id != "governance" {
+                self.get_signers_and_quorum(metadata, stage.clone()).await?
+            } else {
+                let mut hs = HashSet::new();
+                hs.insert(self.own_identifier.clone());
+                (hs, 1)
+            };
             self.ask_signatures(&subject_id, event_message, signers.clone(), quorum_size)
                 .await?;
             self.event_notary_events.insert(
@@ -1213,32 +1221,68 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             crate::event_request::EventRequestType::EOL(eol_request) => {
                 eol_request.subject_id.clone()
             }
-            crate::event_request::EventRequestType::Create(_) => {
-                return Err(EventError::EvaluationOrApprovationInCreationEvent)
-            } // Que hago aquí?? devuelvo error?
+            crate::event_request::EventRequestType::Create(create_request) => generate_subject_id(
+                &create_request.namespace,
+                &create_request.schema_id,
+                create_request.public_key.to_str(),
+                create_request.governance_id.to_str(),
+                event.content.event_proposal.proposal.gov_version,
+            )?, // Que hago aquí?? devuelvo error?
             crate::event_request::EventRequestType::Fact(state_request) => {
                 state_request.subject_id.clone()
             }
         };
         // Obtener sujeto para saber si lo tenemos y los metadatos del mismo
-        let subject = self
-            .database
-            .get_subject(&subject_id)
-            .map_err(|error| match error {
-                crate::DbError::EntryNotFound => EventError::SubjectNotFound(subject_id.to_str()),
-                _ => EventError::DatabaseError(error.to_string()),
-            })?;
+        let subject = match self.database.get_subject(&subject_id) {
+            Ok(subject) => Some(subject),
+            Err(error) => match error {
+                crate::DbError::EntryNotFound => None,
+                _ => return Err(EventError::DatabaseError(error.to_string())),
+            },
+        };
         log::warn!("PASO 1");
-        let our_governance_version = self
-            .gov_api
-            .get_governance_version(subject.governance_id.clone(), subject.subject_id.clone())
-            .await
-            .map_err(EventError::GovernanceError)?;
+        let (our_governance_version, governance_id) =
+            if event.content.event_proposal.proposal.sn == 0 && subject.is_some() {
+                let subject = subject.unwrap();
+                (
+                    self.gov_api
+                        .get_governance_version(
+                            subject.governance_id.clone(),
+                            subject.subject_id.clone(),
+                        )
+                        .await
+                        .map_err(EventError::GovernanceError)?,
+                    subject.governance_id,
+                )
+            } else if event.content.event_proposal.proposal.sn == 0 && subject.is_none() {
+                if let EventRequestType::Create(create_request) =
+                    &event.content.event_proposal.proposal.event_request.request
+                {
+                    if create_request.schema_id == "governance" {
+                        (0, create_request.governance_id.clone())
+                    } else {
+                        (
+                            self.gov_api
+                                .get_governance_version(
+                                    create_request.governance_id.clone(),
+                                    subject_id.clone(),
+                                )
+                                .await
+                                .map_err(EventError::GovernanceError)?,
+                            create_request.governance_id.clone(),
+                        )
+                    }
+                } else {
+                    return Err(EventError::Event0NotCreate);
+                }
+            } else {
+                return Err(EventError::SubjectNotFound(subject_id.to_str()));
+            };
         if our_governance_version < governance_version {
             // Ignoramos la firma de validación porque no nos vale, pero pedimos la governance al validador que nos la ha enviado
             let msg = request_gov_event(
                 self.own_identifier.clone(),
-                subject.governance_id.clone(),
+                governance_id,
                 our_governance_version + 1,
             );
             self.message_channel
@@ -1333,13 +1377,23 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 .map(|unique_signature| unique_signature.signature.clone())
                 .collect();
             // Si se llega a Quorum lo mandamos al ledger
-            self.ledger_sender
-                .tell(LedgerCommand::OwnEvent {
-                    event: event.clone(),
-                    signatures: validation_signatures,
-                    validation_proof: notary_event.proof.clone(),
-                })
-                .await?;
+            if event.content.event_proposal.proposal.sn == 0 {
+                self.ledger_sender
+                    .tell(LedgerCommand::Genesis {
+                        event: event.clone(),
+                        signatures: validation_signatures,
+                        validation_proof: notary_event.proof.clone(),
+                    })
+                    .await?;
+            } else {
+                self.ledger_sender
+                    .tell(LedgerCommand::OwnEvent {
+                        event: event.clone(),
+                        signatures: validation_signatures,
+                        validation_proof: notary_event.proof.clone(),
+                    })
+                    .await?;
+            }
             self.database
                 .del_prevalidated_event(&subject_id)
                 .map_err(|error| EventError::DatabaseError(error.to_string()))?;
