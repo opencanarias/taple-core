@@ -313,9 +313,6 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                     err => return Ok(Err(err)),
                 },
             };
-        if governance.owner == invoker {
-            return Ok(Ok(true));
-        }
         let roles: Vec<Role> =
             serde_json::from_value(governance.properties.get("roles").unwrap().to_owned())
                 .map_err(|_| InternalError::DeserializationError)?;
@@ -328,6 +325,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
             members,
             is_gov,
             invoker,
+            governance.owner,
         );
         Ok(invoke_create_info_result)
     }
@@ -340,15 +338,15 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         members: (HashSet<KeyIdentifier>, HashMap<String, KeyIdentifier>),
         is_gov: bool,
         invoker: KeyIdentifier,
+        gov_owner: KeyIdentifier,
     ) -> Result<bool, RequestError> {
         let is_member = members.0.contains(&invoker);
+        let mut permisions_exists = false;
         log::warn!("IS MEMBER: {}", is_member);
         for role in roles {
-            log::info!("Llega roles: role: {:?}", role);
             if role.role != stage.to_str() {
                 continue;
             }
-            log::info!("Seguimos roles roles");
             match role.schema {
                 Schema::ID { ID } => {
                     if &ID != schema_id {
@@ -362,11 +360,10 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                 }
                 Schema::ALL => {}
             }
-            log::info!("Seguimos roles roles roles");
             if !namespace_contiene(&role.namespace, namespace) {
                 continue;
             }
-            log::info!("Seguimos roles roles roles roles");
+            permisions_exists = true;
             match role.who {
                 Who::ID { ID } => {
                     if is_member && ID == invoker.to_str() {
@@ -386,7 +383,6 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                 }
                 Who::MEMBERS => {
                     if is_member {
-                        log::info!("ESTO DEBERIA PASAR");
                         return Ok(true);
                     }
                 }
@@ -398,8 +394,11 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                 }
             }
         }
-        log::info!("Esto no puede pasar");
-        Ok(false)
+        if !permisions_exists && gov_owner == invoker {
+            Ok(true)
+        } else {
+            Ok(false)
+        }
     }
 
     // NEW
