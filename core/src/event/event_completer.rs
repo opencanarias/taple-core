@@ -394,7 +394,13 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             schema_id: subject.schema_id.clone(),
         };
         match &event_request.request {
-            EventRequestType::Transfer(_) => {}
+            EventRequestType::Transfer(tr) => {
+                if event_request.signature.content.signer == self.own_identifier {
+                    self.database
+                        .get_keys(&tr.public_key)
+                        .map_err(|_| EventError::OwnTransferKeysDbError)?;
+                }
+            }
             EventRequestType::EOL(_) => {
                 if subject.creator != event_request.signature.content.signer {
                     return Err(EventError::CloseNotAuthorized(
@@ -449,7 +455,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             hash_prev_event,
             gov_version,
             None,
-            serde_json::from_str("")
+            serde_json::from_str("[]")
                 .map_err(|_| EventError::CryptoError("Error parsing empty json".to_string()))?,
             HashSet::new(),
         );

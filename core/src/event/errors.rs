@@ -64,4 +64,6 @@ pub enum EventError {
     SubjectKeysNotFound(String),
     #[error("Event0 Not Create")]
     Event0NotCreate,
+    #[error("Own Transfer Keys Db Error")]
+    OwnTransferKeysDbError,
 }

@@ -157,7 +157,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
                     Ok(false) | Err(_) => {
                         contract_result.success = Acceptance::Ko;
                         (
-                            serde_json::from_str("").map_err(|_| {
+                            serde_json::from_str("[]").map_err(|_| {
                                 ExecutorErrorResponses::JSONPATCHDeserializationFailed
                             })?,
                             DigestIdentifier::default(),
@@ -171,7 +171,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
                 }
             }
             Acceptance::Ko => (
-                serde_json::from_str("")
+                serde_json::from_str("[]")
                     .map_err(|_| ExecutorErrorResponses::JSONPATCHDeserializationFailed)?,
                 DigestIdentifier::default(),
             ),

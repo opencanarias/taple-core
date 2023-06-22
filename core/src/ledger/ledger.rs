@@ -1,4 +1,3 @@
-use std::collections::{hash_map::Entry, HashMap, HashSet};
 use crate::commons::crypto::KeyGenerator;
 use crate::commons::models::approval::ApprovalStatus;
 use crate::commons::models::state::generate_subject_id;
@@ -28,6 +27,7 @@ use crate::{
     DatabaseCollection, Event,
 };
 use crate::{KeyDerivator, ValueWrapper};
+use std::collections::{hash_map::Entry, HashMap, HashSet};
 
 use super::errors::LedgerError;
 
@@ -360,13 +360,6 @@ impl<C: DatabaseCollection> Ledger<C> {
                             }
                             _ => LedgerError::DatabaseError(error),
                         })?;
-                self.database.set_signatures(
-                    &subject_id,
-                    event.content.event_proposal.proposal.sn,
-                    signatures,
-                    validation_proof,
-                )?;
-                self.database.set_event(&subject_id, event.clone())?;
                 // Cambiar clave pública del sujeto y eliminar material criptográfico
                 subject.public_key = transfer_request.public_key.clone();
                 subject.owner = event
@@ -378,7 +371,19 @@ impl<C: DatabaseCollection> Ledger<C> {
                     .content
                     .signer
                     .clone();
-                subject.keys = None;
+                if subject.owner == self.our_id {
+                    let keys = self.database.get_keys(&transfer_request.public_key)?;
+                    subject.keys = Some(keys);
+                } else {
+                    subject.keys = None;
+                }
+                self.database.set_signatures(
+                    &subject_id,
+                    event.content.event_proposal.proposal.sn,
+                    signatures,
+                    validation_proof,
+                )?;
+                self.database.set_event(&subject_id, event.clone())?;
                 subject.sn = event.content.event_proposal.proposal.sn;
                 self.database.set_subject(&subject_id, subject)?;
                 let is_gov = self.subject_is_gov.get(&subject_id);
