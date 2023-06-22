@@ -1,3 +1,4 @@
+use super::{deserialize, serialize};
 use super::utils::{get_by_range, get_key, Element, get_by_range_governances};
 use crate::commons::models::state::Subject;
 use crate::DbError;
@@ -29,7 +30,7 @@ impl<C: DatabaseCollection> SubjectByGovernanceDb<C> {
             Element::S(subject_id.to_str()),
         ];
         let key = get_key(key_elements)?;
-        let Ok(data) = bincode::serialize::<DigestIdentifier>(subject_id) else {
+        let Ok(data) = serialize::<DigestIdentifier>(subject_id) else {
             return Err(DbError::SerializeError);
         };
         self.collection.put(&key, data)
@@ -46,7 +47,7 @@ impl<C: DatabaseCollection> SubjectByGovernanceDb<C> {
         let key = get_key(key_elements)?;
         let mut result = Vec::new();
         for (_, data) in self.collection.iter(false, format!("{}{}", key, char::MAX)) {
-            let request = bincode::deserialize::<DigestIdentifier>(&data)
+            let request = deserialize::<DigestIdentifier>(&data)
                 .map_err(|_| DbError::DeserializeError)?;
             result.push(request);
         }
@@ -103,10 +104,10 @@ impl<C: DatabaseCollection> SubjectByGovernanceDb<C> {
         let mut subjects = vec![];
         let subject_prefix = "subject".to_string();
         for value in values {
-            let subject_id = bincode::deserialize::<DigestIdentifier>(&value)
+            let subject_id = deserialize::<DigestIdentifier>(&value)
                 .map_err(|_| DbError::DeserializeError)?;
             let key = format!("{}{}{}", subject_prefix, char::MAX, subject_id.to_str());
-            let subject = bincode::deserialize::<Subject>(&self.collection.get(&key)?)
+            let subject = deserialize::<Subject>(&self.collection.get(&key)?)
                 .map_err(|_| DbError::DeserializeError)?;
             subjects.push(subject);
         }

@@ -1,3 +1,4 @@
+use super::{deserialize, serialize};
 use super::utils::{get_key, Element};
 use crate::commons::models::event::ValidationProof;
 use crate::signature::Signature;
@@ -31,7 +32,7 @@ impl<C: DatabaseCollection> SignatureDb<C> {
         ];
         let key = get_key(key_elements)?;
         let signatures = self.collection.get(&key)?;
-        Ok(bincode::deserialize::<(HashSet<Signature>, ValidationProof)>(&signatures).map_err(|_| {
+        Ok(deserialize::<(HashSet<Signature>, ValidationProof)>(&signatures).map_err(|_| {
             DbError::DeserializeError
         })?)
     }
@@ -51,7 +52,7 @@ impl<C: DatabaseCollection> SignatureDb<C> {
         let key = get_key(key_elements)?;
         let total_signatures = match self.collection.get(&key) {
             Ok(other) => {
-                let (other, _) = bincode::deserialize::<(HashSet<Signature>, ValidationProof)>(&other).map_err(|_| {
+                let (other, _) = deserialize::<(HashSet<Signature>, ValidationProof)>(&other).map_err(|_| {
                     DbError::SerializeError
                 })?;
                 signatures.union(&other).cloned().collect()
@@ -61,7 +62,7 @@ impl<C: DatabaseCollection> SignatureDb<C> {
                 return Err(error);
             }
         };
-        let total_signatures = bincode::serialize(&(total_signatures, validation_proof)).map_err(|_| {
+        let total_signatures = serialize(&(total_signatures, validation_proof)).map_err(|_| {
             DbError::SerializeError
         })?;
         self.collection.put(&key, total_signatures)
@@ -86,7 +87,7 @@ impl<C: DatabaseCollection> SignatureDb<C> {
         let mut iter = self.collection.iter(false, format!("{}{}", key, char::MAX));
         if let Some(vproof) = iter.next() {
             log::info!("{:#?}", vproof);
-            let vproof = bincode::deserialize::<(HashSet<Signature>, ValidationProof)>(&vproof.1).map_err(|_| {
+            let vproof = deserialize::<(HashSet<Signature>, ValidationProof)>(&vproof.1).map_err(|_| {
                 DbError::DeserializeError
             })?;
             return Ok(vproof.0);

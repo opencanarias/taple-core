@@ -1,3 +1,4 @@
+use super::{deserialize, serialize};
 use super::utils::{get_by_range, get_key, Element};
 use crate::commons::models::state::Subject;
 use crate::DbError;
@@ -24,7 +25,7 @@ impl<C: DatabaseCollection> SubjectDb<C> {
         ];
         let key = get_key(key_elements)?;
         let subject = self.collection.get(&key)?;
-        Ok(bincode::deserialize::<Subject>(&subject).map_err(|_| DbError::DeserializeError)?)
+        Ok(deserialize::<Subject>(&subject).map_err(|_| DbError::DeserializeError)?)
     }
 
     pub fn set_subject(
@@ -37,7 +38,7 @@ impl<C: DatabaseCollection> SubjectDb<C> {
             Element::S(subject_id.to_str()),
         ];
         let key = get_key(key_elements)?;
-        let Ok(data) = bincode::serialize::<Subject>(&subject) else {
+        let Ok(data) = serialize::<Subject>(&subject) else {
             return Err(DbError::SerializeError);
         };
         self.collection.put(&key, data)
@@ -60,7 +61,7 @@ impl<C: DatabaseCollection> SubjectDb<C> {
         let subjects = get_by_range(from, quantity, &self.collection, &self.prefix.clone())?;
         Ok(subjects
             .iter()
-            .map(|subject| (bincode::deserialize::<Subject>(subject).unwrap()))
+            .map(|subject| (deserialize::<Subject>(subject).unwrap()))
             .collect())
     }
 
@@ -70,7 +71,7 @@ impl<C: DatabaseCollection> SubjectDb<C> {
             .collection
             .iter(false, format!("{}{}", self.prefix, char::MAX))
         {
-            let subject = bincode::deserialize::<Subject>(&subject).unwrap();
+            let subject = deserialize::<Subject>(&subject).unwrap();
             result.push(subject);
         }
         result

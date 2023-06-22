@@ -1,3 +1,4 @@
+use super::{deserialize, serialize};
 use super::utils::{get_key, Element};
 use crate::{DatabaseCollection, DatabaseManager};
 use crate::{DbError};
@@ -20,7 +21,7 @@ impl<C: DatabaseCollection> ControllerIdDb<C> {
         let key_elements: Vec<Element> = vec![Element::S(self.prefix.clone())];
         let key = get_key(key_elements)?;
         let controller_id = self.collection.get(&key)?;
-        Ok(bincode::deserialize::<String>(&controller_id).map_err(|_| {
+        Ok(deserialize::<String>(&controller_id).map_err(|_| {
             DbError::DeserializeError
         })?)
     }
@@ -28,7 +29,7 @@ impl<C: DatabaseCollection> ControllerIdDb<C> {
     pub fn set_controller_id(&self, controller_id: String) -> Result<(), DbError> {
         let key_elements: Vec<Element> = vec![Element::S(self.prefix.clone())];
         let key = get_key(key_elements)?;
-        let Ok(data) = bincode::serialize::<String>(&controller_id) else {
+        let Ok(data) = serialize::<String>(&controller_id) else {
             return Err(DbError::SerializeError);
         };
         self.collection.put(&key, data)

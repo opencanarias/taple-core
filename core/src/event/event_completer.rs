@@ -507,6 +507,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             if event_request.signature.content.signer != self.own_identifier {
                 return Err(EventError::ExternalGenesisEvent);
             }
+            log::warn!("PREKEYS");
             // Check if i have the keys
             let subject_keys = match self.database.get_keys(&create_request.public_key) {
                 Ok(keys) => keys,
@@ -653,6 +654,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         if !subject.active {
             return Err(EventError::SubjectLifeEnd(subject_id.to_str()));
         }
+        log::info!("Subject: {:?}", subject);
         // Chek if we are owner of Subject
         if subject.keys.is_none() {
             return Err(EventError::SubjectNotOwned(subject_id.to_str()));

@@ -1,3 +1,4 @@
+use super::{deserialize, serialize};
 use super::utils::{get_by_range, get_key, Element};
 use crate::commons::models::approval::ApprovalStatus;
 use crate::{DbError, ApprovalPetitionData};
@@ -28,7 +29,7 @@ impl<C: DatabaseCollection> ApprovalsDb<C> {
         let key = get_key(key_elements)?;
         let approval = self.collection.get(&key)?;
         Ok(
-            bincode::deserialize::<(ApprovalPetitionData, ApprovalStatus)>(&approval)
+            deserialize::<(ApprovalPetitionData, ApprovalStatus)>(&approval)
                 .map_err(|_| DbError::DeserializeError)?,
         )
     }
@@ -47,7 +48,7 @@ impl<C: DatabaseCollection> ApprovalsDb<C> {
                     _ => return Err(DbError::NonExistentStatus),
                 };
                 for (_, approval) in self.collection.iter(false, format!("{}{}", self.prefix, char::MAX)) {
-                    let approval = bincode::deserialize::<(ApprovalPetitionData, ApprovalStatus)>(&approval).unwrap();
+                    let approval = deserialize::<(ApprovalPetitionData, ApprovalStatus)>(&approval).unwrap();
                     if approval.1 == real_status {
                         result.push(approval.0);
                     }
@@ -56,7 +57,7 @@ impl<C: DatabaseCollection> ApprovalsDb<C> {
             }
             None => {
                 for (_, approval) in self.collection.iter(false, format!("{}{}", self.prefix, char::MAX)) {
-                    let approval = bincode::deserialize::<(ApprovalPetitionData, ApprovalStatus)>(&approval).unwrap();
+                    let approval = deserialize::<(ApprovalPetitionData, ApprovalStatus)>(&approval).unwrap();
                     result.push(approval.0);
                 }
                 return Ok(result);
@@ -74,7 +75,7 @@ impl<C: DatabaseCollection> ApprovalsDb<C> {
             Element::S(request_id.to_str()),
         ];
         let key = get_key(key_elements)?;
-        let Ok(data) = bincode::serialize::<(ApprovalPetitionData, ApprovalStatus)>(&approval) else {
+        let Ok(data) = serialize::<(ApprovalPetitionData, ApprovalStatus)>(&approval) else {
             return Err(DbError::SerializeError);
         };
         self.collection.put(&key, data)

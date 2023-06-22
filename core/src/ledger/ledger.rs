@@ -1,13 +1,9 @@
 use std::collections::{hash_map::Entry, HashMap, HashSet};
-
-use serde_json::Value;
-
 use crate::commons::crypto::KeyGenerator;
 use crate::commons::models::approval::ApprovalStatus;
 use crate::commons::models::state::generate_subject_id;
 use crate::crypto::Secp256k1KeyPair;
 use crate::request::{RequestState, TapleRequest};
-use crate::{KeyDerivator, ValueWrapper};
 use crate::{
     commons::{
         channel::SenderEnd,
@@ -31,6 +27,7 @@ use crate::{
     utils::message::ledger::{request_event, request_gov_event},
     DatabaseCollection, Event,
 };
+use crate::{KeyDerivator, ValueWrapper};
 
 use super::errors::LedgerError;
 
@@ -214,8 +211,16 @@ impl<C: DatabaseCollection> Ledger<C> {
                 governance_version,
             )
             .await?;
+        let subject_keys = match self.database.get_keys(&create_request.public_key) {
+            Ok(keys) => keys,
+            Err(_) => {
+                return Err(LedgerError::CryptoError(
+                    "Error getting keys from database".to_owned(),
+                ))
+            }
+        };
         // Crear sujeto a partir de genesis y evento
-        let subject = Subject::from_genesis_event(event.clone(), init_state)
+        let subject = Subject::from_genesis_event(event.clone(), init_state, Some(subject_keys))
             .map_err(LedgerError::SubjectError)?;
         let sn = event.content.event_proposal.proposal.sn;
         // Añadir sujeto y evento a base de datos
@@ -2555,7 +2560,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                 metadata.governance_version.clone(),
             )
             .await?;
-        let subject = Subject::from_genesis_event(event.clone(), init_state)?;
+        let subject = Subject::from_genesis_event(event.clone(), init_state, None)?;
         self.database
             .set_governance_index(&subject_id, &subject.governance_id)?;
         let event_request = event.content.event_proposal.proposal.event_request.clone();

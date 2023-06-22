@@ -13,7 +13,8 @@ use crate::{
             initial_state::get_governance_initial_state,
         },
     },
-    database::Error as DbError, ValueWrapper,
+    database::Error as DbError,
+    ValueWrapper,
 };
 use serde_json::Value;
 
@@ -67,7 +68,9 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         for schema in schemas {
             let tmp = get_as_str(schema, "id")?;
             if tmp == &schema_id {
-                return Ok(Ok(ValueWrapper(schema.get("initial_value").unwrap().to_owned())));
+                return Ok(Ok(ValueWrapper(
+                    schema.get("initial_value").unwrap().to_owned(),
+                )));
             }
         }
         return Ok(Err(RequestError::SchemaNotFound(schema_id)));
@@ -488,7 +491,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         } else if gov_subject.sn > governance_version {
             let gov_genesis = self.repo_access.get_event(governance_id, 0)?;
             let init_state = get_governance_initial_state();
-            let mut gov_subject = Subject::from_genesis_event(gov_genesis, init_state)?;
+            let mut gov_subject = Subject::from_genesis_event(gov_genesis, init_state, None)?;
             for i in 1..=governance_version {
                 let event = self.repo_access.get_event(governance_id, i)?;
                 gov_subject.update_subject(event.content.event_proposal.proposal.json_patch, i)?;

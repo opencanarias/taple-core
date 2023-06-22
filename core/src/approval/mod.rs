@@ -25,7 +25,7 @@ pub enum ApprovalMessages {
     GetSingleRequest(DigestIdentifier),
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub struct ApprovalPetitionData {
     pub subject_id: DigestIdentifier,
     pub sn: u64,

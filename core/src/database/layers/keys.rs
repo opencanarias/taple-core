@@ -1,3 +1,4 @@
+use super::{deserialize, serialize};
 use super::utils::{get_key, Element};
 use crate::crypto::KeyPair;
 use crate::DbError;
@@ -26,7 +27,7 @@ impl<C: DatabaseCollection> KeysDb<C> {
         let key = get_key(key_elements)?;
         let value = self.collection.get(&key)?;
         let result =
-            bincode::deserialize::<KeyPair>(&value).map_err(|_| DbError::DeserializeError)?;
+            deserialize::<KeyPair>(&value).map_err(|_| DbError::DeserializeError)?;
         Ok(result)
     }
 
@@ -36,7 +37,7 @@ impl<C: DatabaseCollection> KeysDb<C> {
             Element::S(public_key.to_str()),
         ];
         let key = get_key(key_elements)?;
-        let Ok(data) = bincode::serialize::<KeyPair>(&keypair) else {
+        let Ok(data) = serialize::<KeyPair>(&keypair) else {
             return Err(DbError::SerializeError);
         };
         self.collection.put(&key, data)
@@ -58,7 +59,7 @@ impl<C: DatabaseCollection> KeysDb<C> {
         let mut result = Vec::new();
         for (_, bytes) in iter {
             let subject =
-                bincode::deserialize::<KeyPair>(&bytes)
+                deserialize::<KeyPair>(&bytes)
                     .map_err(|_| DbError::DeserializeError)?;
             result.push(subject);
         }

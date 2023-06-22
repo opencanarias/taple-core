@@ -1,3 +1,4 @@
+use super::{deserialize, serialize};
 use super::utils::{get_by_range, get_key, Element};
 use crate::{DatabaseCollection, DatabaseManager, Derivable, DigestIdentifier};
 use crate::{DbError, Event};
@@ -24,7 +25,7 @@ impl<C: DatabaseCollection> EventDb<C> {
         ];
         let key = get_key(key_elements)?;
         let event = self.collection.get(&key)?;
-        Ok(bincode::deserialize::<Event>(&event).map_err(|_| {
+        Ok(deserialize::<Event>(&event).map_err(|_| {
             DbError::DeserializeError
         })?)
     }
@@ -49,7 +50,7 @@ impl<C: DatabaseCollection> EventDb<C> {
         Ok(events_by_subject
             .iter()
             .map(|event| {
-                bincode::deserialize::<Event>(event).unwrap()
+                deserialize::<Event>(event).unwrap()
             })
             .collect())
     }
@@ -62,7 +63,7 @@ impl<C: DatabaseCollection> EventDb<C> {
             Element::N(sn),
         ];
         let key = get_key(key_elements)?;
-        let Ok(data) = bincode::serialize::<Event>(&event) else {
+        let Ok(data) = serialize::<Event>(&event) else {
             return Err(DbError::SerializeError);
         };
         self.collection.put(&key, data)

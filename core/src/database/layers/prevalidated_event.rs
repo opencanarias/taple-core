@@ -1,3 +1,4 @@
+use super::{deserialize, serialize};
 use super::utils::{get_key, Element};
 use crate::{DatabaseCollection, DatabaseManager, Derivable, DigestIdentifier};
 use crate::{DbError, Event};
@@ -23,7 +24,7 @@ impl<C: DatabaseCollection> PrevalidatedEventDb<C> {
         ];
         let key = get_key(key_elements)?;
         let prevalidated_event = self.collection.get(&key)?;
-        Ok(bincode::deserialize::<Event>(&prevalidated_event).map_err(|_| {
+        Ok(deserialize::<Event>(&prevalidated_event).map_err(|_| {
             DbError::DeserializeError
         })?)
     }
@@ -38,7 +39,7 @@ impl<C: DatabaseCollection> PrevalidatedEventDb<C> {
             Element::S(subject_id.to_str()),
         ];
         let key = get_key(key_elements)?;
-        let Ok(data) = bincode::serialize::<Event>(&event) else {
+        let Ok(data) = serialize::<Event>(&event) else {
             return Err(DbError::SerializeError);
         };
         self.collection.put(&key, data)

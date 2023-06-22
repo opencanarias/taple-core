@@ -1,8 +1,9 @@
+use borsh::{BorshSerialize, BorshDeserialize};
 use serde::{Deserialize, Serialize};
 
 use crate::{commons::errors::SubjectError, event_request::EventRequest, DigestIdentifier};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub struct TapleRequest {
     pub id: DigestIdentifier,
     pub subject_id: Option<DigestIdentifier>,
@@ -35,7 +36,7 @@ impl TryFrom<EventRequest> for TapleRequest {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub enum RequestState {
     Finished,
     Error,

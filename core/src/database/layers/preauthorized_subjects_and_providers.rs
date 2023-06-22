@@ -1,3 +1,4 @@
+use super::{deserialize, serialize};
 use super::utils::{get_by_range, get_key, Element};
 use crate::{DatabaseCollection, DatabaseManager, Derivable, DigestIdentifier};
 use crate::{DbError, KeyIdentifier};
@@ -27,7 +28,7 @@ impl<C: DatabaseCollection> PreauthorizedSbujectsAndProovidersDb<C> {
         ];
         let key = get_key(key_elements)?;
         let value = self.collection.get(&key)?;
-        let result = bincode::deserialize::<(DigestIdentifier, HashSet<KeyIdentifier>)>(&value)
+        let result = deserialize::<(DigestIdentifier, HashSet<KeyIdentifier>)>(&value)
             .map_err(|_| DbError::DeserializeError)?;
         Ok(result.1)
     }
@@ -41,7 +42,7 @@ impl<C: DatabaseCollection> PreauthorizedSbujectsAndProovidersDb<C> {
         let mut vec_result = vec![];
         for value in result {
             vec_result.push(
-                bincode::deserialize::<(DigestIdentifier, HashSet<KeyIdentifier>)>(&value)
+                deserialize::<(DigestIdentifier, HashSet<KeyIdentifier>)>(&value)
                     .map_err(|_| DbError::DeserializeError)?,
             );
         }
@@ -58,7 +59,7 @@ impl<C: DatabaseCollection> PreauthorizedSbujectsAndProovidersDb<C> {
             Element::S(subject_id.to_str()),
         ];
         let key = get_key(key_elements)?;
-        let Ok(data) = bincode::serialize::<(DigestIdentifier, HashSet<KeyIdentifier>)>(&(subject_id.clone(), providers)) else {
+        let Ok(data) = serialize::<(DigestIdentifier, HashSet<KeyIdentifier>)>(&(subject_id.clone(), providers)) else {
             return Err(DbError::SerializeError);
         };
         self.collection.put(&key, data)

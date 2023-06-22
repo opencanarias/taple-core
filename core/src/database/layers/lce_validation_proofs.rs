@@ -1,3 +1,4 @@
+use super::{deserialize, serialize};
 use super::utils::{get_key, Element};
 use crate::commons::models::event::ValidationProof;
 use crate::{DatabaseCollection, DatabaseManager, Derivable, DigestIdentifier};
@@ -28,7 +29,7 @@ impl<C: DatabaseCollection> LceValidationProofs<C> {
         let key = get_key(key_elements)?;
         let lce_validation_proof = self.collection.get(&key)?;
         Ok(
-            bincode::deserialize::<ValidationProof>(&lce_validation_proof)
+            deserialize::<ValidationProof>(&lce_validation_proof)
                 .map_err(|_| DbError::DeserializeError)?,
         )
     }
@@ -43,7 +44,7 @@ impl<C: DatabaseCollection> LceValidationProofs<C> {
             Element::S(subject_id.to_str()),
         ];
         let key = get_key(key_elements)?;
-        let Ok(data) = bincode::serialize::<ValidationProof>(&lce_validation_proof) else {
+        let Ok(data) = serialize::<ValidationProof>(&lce_validation_proof) else {
             return Err(DbError::SerializeError);
         };
         self.collection.put(&key, data)
