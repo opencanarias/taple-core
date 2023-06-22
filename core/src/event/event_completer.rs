@@ -698,15 +698,16 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     ValidationStage::Evaluate,
                 );
                 // Check the invoker can Invoke for this subject
-                if !self
-                    .gov_api
-                    .get_invoke_info(
-                        metadata.clone(),
-                        ValidationStage::Invoke,
-                        event_request.signature.content.signer.clone(),
-                    )
-                    .await
-                    .map_err(EventError::GovernanceError)?
+                if event_request.signature.content.signer != self.own_identifier
+                    && !self
+                        .gov_api
+                        .get_invoke_info(
+                            metadata.clone(),
+                            ValidationStage::Invoke,
+                            event_request.signature.content.signer.clone(),
+                        )
+                        .await
+                        .map_err(EventError::GovernanceError)?
                 {
                     return Err(EventError::InvokePermissionDenied(
                         event_request.signature.content.signer.to_str(),

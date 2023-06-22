@@ -325,7 +325,6 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
             members,
             is_gov,
             invoker,
-            governance.owner,
         );
         Ok(invoke_create_info_result)
     }
@@ -338,7 +337,6 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         members: (HashSet<KeyIdentifier>, HashMap<String, KeyIdentifier>),
         is_gov: bool,
         invoker: KeyIdentifier,
-        gov_owner: KeyIdentifier,
     ) -> Result<bool, RequestError> {
         let is_member = members.0.contains(&invoker);
         let mut permisions_exists = false;
@@ -363,7 +361,6 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
             if !namespace_contiene(&role.namespace, namespace) {
                 continue;
             }
-            permisions_exists = true;
             match role.who {
                 Who::ID { ID } => {
                     if is_member && ID == invoker.to_str() {
@@ -394,11 +391,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                 }
             }
         }
-        if !permisions_exists && gov_owner == invoker {
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+        Ok(false)
     }
 
     // NEW
