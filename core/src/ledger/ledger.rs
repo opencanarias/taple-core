@@ -429,6 +429,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                     sn,
                     subject_id.clone(),
                 )?;
+                subject.sn = sn;
                 subject.eol_event();
                 self.database.set_subject(&subject_id, subject)?;
                 // Comprobar is_gov
