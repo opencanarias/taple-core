@@ -202,6 +202,7 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
                     return Err(ApprovalManagerError::AskNoAllowed);
                 }
                 let result = self.inner_manager.process_approval_request(message).await?;
+                log::error!("RESULT APPROVAL REQUEST: {:?}", result);
                 match result {
                     Ok(Some((approval, sender))) => {
                         let msg = create_approver_response(approval);

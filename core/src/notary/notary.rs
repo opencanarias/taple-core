@@ -171,6 +171,9 @@ impl<C: DatabaseCollection> Notary<C> {
                         Ok(last_proof.subject_public_key)
                     }
                 } else if last_proof.sn + 1 == new_proof.sn {
+                    if previous_proof.is_none() {
+                        return Err(NotaryError::PreviousProofLeft);
+                    }
                     // Comprobar que es similar a la prueba del evento anterior que nos llega en el mensaje
                     if !last_proof.is_similar(&previous_proof.unwrap()) {
                         Err(NotaryError::DifferentProofForEvent)

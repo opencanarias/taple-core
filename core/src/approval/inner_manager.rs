@@ -333,10 +333,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             }
             // Comprobamos su firma -> Es necesario generar el contenido que ellos firman
             if signature
-                .content
-                .signer
-                .verify(&hash.derivative(), &signature.signature)
-                .is_err()
+                .verify().is_err()
             {
                 return Ok(Err(ApprovalErrorResponse::InvalidEvaluatorSignature));
             }

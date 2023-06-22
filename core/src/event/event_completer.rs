@@ -169,20 +169,16 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             }
         };
         let (prev_event_validation_signatures, previous_proof) = {
-            if subject.sn <= 1 {
-                (HashSet::new(), None)
-            } else {
-                let (prev_event_validation_signatures, previous_proof) = self
-                    .database
-                    .get_signatures(&subject.subject_id, subject.sn)
-                    .map_err(|e| {
-                        EventError::DatabaseError(format!(
-                            "Error getting the signatures of the previous event: {}",
-                            e
-                        ))
-                    })?;
-                (prev_event_validation_signatures, Some(previous_proof))
-            }
+            let (prev_event_validation_signatures, previous_proof) = self
+                .database
+                .get_signatures(&subject.subject_id, subject.sn)
+                .map_err(|e| {
+                    EventError::DatabaseError(format!(
+                        "Error getting the signatures of the previous event: {}",
+                        e
+                    ))
+                })?;
+            (prev_event_validation_signatures, Some(previous_proof))
         };
         match &subject.keys {
             Some(keys) => {
@@ -1246,19 +1242,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         };
         log::warn!("PASO 1");
         let (our_governance_version, governance_id) =
-            if event.content.event_proposal.proposal.sn == 0 && subject.is_some() {
-                let subject = subject.unwrap();
-                (
-                    self.gov_api
-                        .get_governance_version(
-                            subject.governance_id.clone(),
-                            subject.subject_id.clone(),
-                        )
-                        .await
-                        .map_err(EventError::GovernanceError)?,
-                    subject.governance_id,
-                )
-            } else if event.content.event_proposal.proposal.sn == 0 && subject.is_none() {
+            if event.content.event_proposal.proposal.sn == 0 && subject.is_none() {
                 if let EventRequestType::Create(create_request) =
                     &event.content.event_proposal.proposal.event_request.request
                 {
@@ -1278,6 +1262,22 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     }
                 } else {
                     return Err(EventError::Event0NotCreate);
+                }
+            } else if subject.is_some() && event.content.event_proposal.proposal.sn != 0 {
+                let subject = subject.unwrap();
+                if subject.schema_id == "governance" {
+                    (0, subject.subject_id.clone())
+                } else {
+                    (
+                        self.gov_api
+                            .get_governance_version(
+                                subject.governance_id.clone(),
+                                subject.subject_id.clone(),
+                            )
+                            .await
+                            .map_err(EventError::GovernanceError)?,
+                        subject.governance_id,
+                    )
                 }
             } else {
                 return Err(EventError::SubjectNotFound(subject_id.to_str()));
