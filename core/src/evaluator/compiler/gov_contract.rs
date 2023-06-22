@@ -2,10 +2,13 @@ pub fn get_gov_contract() -> String {
 r#"
 mod sdk;
 use std::collections::HashSet;
-
+use thiserror::Error;
+use sdk::ValueWrapper;
 use serde::{de::Visitor, ser::SerializeMap, Deserialize, Serialize};
 
 #[derive(Clone)]
+#[allow(non_snake_case)]
+#[allow(non_camel_case_types)]
 pub enum Who {
     ID { ID: String },
     NAME { NAME: String },
@@ -109,6 +112,8 @@ impl<'de> Deserialize<'de> for Who {
 }
 
 #[derive(Clone)]
+#[allow(non_snake_case)]
+#[allow(non_camel_case_types)]
 pub enum SchemaEnum {
     ID { ID: String },
     NOT_GOVERNANCE,
@@ -198,7 +203,7 @@ impl<'de> Deserialize<'de> for SchemaEnum {
 pub struct Role {
     who: Who,
     namespace: String,
-    roles: Vec<RoleEnum>,
+    role: RoleEnum,
     schema: SchemaEnum,
 }
 
@@ -220,15 +225,16 @@ pub struct Member {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Contract {
-    name: String,
-    content: String,
+    raw: String,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
+#[allow(non_snake_case)]
+#[allow(non_camel_case_types)]
 pub enum Quorum {
-    Majority,
-    Fixed(u64), // TODO: Es posible que tenga que ser estructura vacía
-    Porcentaje(f64),
+    MAJORITY,
+    FIXED(u64), // TODO: Es posible que tenga que ser estructura vacía
+    PORCENTAJE(f64),
     BFT(f64),
 }
 
@@ -248,7 +254,7 @@ pub struct Policy {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Schema {
     id: String,
-    state_schema: serde_json::Value, // TODO: QUIZÁS STRING
+    schema: serde_json::Value, // TODO: QUIZÁS STRING
     // #[serde(rename = "Initial-Value")]
     initial_value: serde_json::Value,
     contract: Contract,
@@ -266,7 +272,7 @@ pub struct Governance {
 // Definir "Familia de eventos"
 #[derive(Serialize, Deserialize, Debug)]
 pub enum GovernanceEvent {
-    Patch { data: String },
+    Patch { data: ValueWrapper },
 }
 
 #[no_mangle]
@@ -288,7 +294,7 @@ fn contract_logic(
         GovernanceEvent::Patch { data } => {
             // Se recibe un JSON PATCH
             // Se aplica directamente al estado
-            let patched_state = sdk::apply_patch(&data, &context.initial_state).unwrap();
+            let patched_state = sdk::apply_patch(data.0.clone(), &context.initial_state).unwrap();
             if let Ok(_) = check_governance_state(&patched_state) {
                 *state = patched_state;
                 contract_result.success = true;
@@ -299,9 +305,6 @@ fn contract_logic(
         }
     }
 }
-
-use serde_json::Value;
-use thiserror::Error;
 
 #[derive(Error, Debug)]
 enum StateError {
@@ -319,10 +322,6 @@ enum StateError {
     NoCorrelationSchemaPolicy,
     #[error("There are policies not correlated to any schema")]
     PoliciesWithoutSchema,
-    #[error("The compilation of a JSON Schema failed")]
-    SchemaCompilationError,
-    #[error("Schema initial state validation failed")]
-    StateValidationFailed,
 }
 
 fn check_governance_state(state: &Governance) -> Result<(), StateError> {

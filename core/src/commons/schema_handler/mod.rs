@@ -644,7 +644,7 @@ pub fn get_governance_schema() -> Value {
                   },
                 },
                 "additionalProperties": false,
-                "required": ["name", "content"]
+                "required": ["raw"]
               },
             },
             "required": [

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     commons::models::event_preevaluation::EventPreEvaluation, identifier::DigestIdentifier,
-    signature::Signature,
+    signature::Signature, ValueWrapper,
 };
 
 use self::errors::EvaluatorErrorResponses;
@@ -31,7 +31,7 @@ pub enum EvaluatorResponse {
 pub struct AskForEvaluationResponse {
     pub governance_version: u64,
     pub hash_new_state: DigestIdentifier,
-    pub json_patch: String,
+    pub json_patch: ValueWrapper,
     pub success: bool,
     pub approval_required: bool,
     pub signature: Signature,

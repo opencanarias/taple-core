@@ -136,16 +136,13 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
         let mut contract_result = self
             .executor
             .execute_contract(
-                &serde_json::to_string(&execute_contract.context.actual_state)
-                    .map_err(|_| ExecutorErrorResponses::ValueToStringConversionFailed)?,
-                &serde_json::to_string(&state_data.payload)
-                    .map_err(|_| ExecutorErrorResponses::ValueToStringConversionFailed)?,
+                &execute_contract.context.actual_state,
+                &state_data.payload,
                 contract,
                 &execute_contract.event_request.signature.content.signer
                     == &execute_contract.context.owner,
             )
             .await?;
-        log::warn!("Contract result: {:?}", contract_result);
         let (patch, hash) = match contract_result.success {
             Acceptance::Ok => {
                 match self
@@ -167,13 +164,9 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
                         )
                     }
                     _ => (
-                        generate_json_patch(&previous_state.0, &contract_result.final_state)?,
-                        DigestIdentifier::from_serializable_borsh(
-                            serde_json::from_str::<Value>(&contract_result.final_state)
-                                .unwrap()
-                                .to_string(),
-                        )
-                        .map_err(|_| ExecutorErrorResponses::StateHashGenerationFailed)?,
+                        generate_json_patch(&previous_state.0, &contract_result.final_state.0)?,
+                        DigestIdentifier::from_serializable_borsh(&contract_result.final_state)
+                            .map_err(|_| ExecutorErrorResponses::StateHashGenerationFailed)?,
                     ),
                 }
             }
@@ -221,10 +214,8 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
 
 fn generate_json_patch(
     prev_state: &Value,
-    new_state: &str,
+    new_state: &Value,
 ) -> Result<Value, ExecutorErrorResponses> {
-    let new_state: Value = serde_json::from_str(new_state)
-        .map_err(|_| ExecutorErrorResponses::StateJSONDeserializationFailed)?;
     let patch = diff(&prev_state, &new_state);
     Ok(serde_json::to_value(&patch)
         .map_err(|_| ExecutorErrorResponses::JSONPATCHDeserializationFailed)?)

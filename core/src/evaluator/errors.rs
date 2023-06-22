@@ -64,6 +64,10 @@ pub enum ExecutorErrorResponses {
     SchemaCompilationFailed,
     #[error("Value to string conversion failed")]
     ValueToStringConversionFailed,
+    #[error("Borsh serialization failed")]
+    BorshSerializationError,
+    #[error("Borsh deerialization failed")]
+    BorshDeserializationError,
 }
 
 #[derive(Error, Debug, Clone)]

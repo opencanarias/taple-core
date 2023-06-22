@@ -83,7 +83,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         schema_id: String,
         governance_version: u64,
     ) -> Result<Result<ValueWrapper, RequestError>, InternalError> {
-        if governance_id.digest.is_empty() {
+        if schema_id == "governance" {
             return Ok(Ok(ValueWrapper(self.governance_schema.clone())));
         }
         let governance = match self.governance_event_sourcing(&governance_id, governance_version) {

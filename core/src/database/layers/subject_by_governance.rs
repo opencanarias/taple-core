@@ -1,4 +1,4 @@
-use super::{deserialize, serialize};
+use crate::utils::{deserialize, serialize};
 use super::utils::{get_by_range, get_key, Element, get_by_range_governances};
 use crate::commons::models::state::Subject;
 use crate::DbError;

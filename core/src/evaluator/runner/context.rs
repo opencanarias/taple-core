@@ -48,7 +48,7 @@ impl MemoryManager {
         *result as isize
     }
 
-    pub fn add_date_raw(&mut self, bytes: &[u8]) -> usize {
+    pub fn add_data_raw(&mut self, bytes: &[u8]) -> usize {
         let ptr = self.alloc(bytes.len());
         for (index, byte) in bytes.iter().enumerate() {
             self.memory[ptr + index] = *byte;
@@ -56,6 +56,7 @@ impl MemoryManager {
         ptr
     }
 
+    #[allow(dead_code)]
     pub fn add_data<S: Serialize>(&mut self, data: S) -> usize {
         let bytes = bincode::serialize(&data).unwrap();
         let ptr = self.alloc(bytes.len());

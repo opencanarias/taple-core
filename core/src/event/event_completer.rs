@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
 use json_patch::{patch, Patch};
-use serde_json::Value;
 
 use crate::{
     commons::{
@@ -889,6 +888,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             }
         };
         if quorum_reached.is_none() {
+            log::error!("SE EJECUTA IS NONE");
             let mut new_signers: HashSet<KeyIdentifier> =
                 signers.into_iter().map(|s| s.clone()).collect();
             new_signers.remove(&signer);
@@ -910,6 +910,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             );
             return Ok(()); // No llegamos a quorum, no hacemos nada
         } else {
+            log::error!("LLEGA A QUORUM");
             // Si es así comprobar que json patch aplicado al evento parar la petición de firmas y empezar a pedir las approves con el evento completo con lo nuevo obtenido en esta fase si se requieren approves, si no informar a validator
             // Comprobar que al aplicar Json Patch llegamos al estado final?
             // Crear Event Proposal
@@ -964,6 +965,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 .insert(proposal_hash, event_proposal.clone());
             // Pedir Approves si es necesario, si no pedir validaciones
             let (stage, event_message) = if evaluation.approval_required {
+                log::error!("SE PIDEN APROBACIONES");
                 let msg = create_approval_request(event_proposal);
                 // Retornar TapleMessage directamente
                 (ValidationStage::Approve, msg)

@@ -1,4 +1,4 @@
-use super::{deserialize, serialize};
+use crate::utils::{deserialize, serialize};
 use super::utils::{get_key, Element};
 use crate::commons::models::request::TapleRequest;
 use crate::DbError;

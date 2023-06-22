@@ -1,4 +1,4 @@
-use super::{deserialize, serialize};
+use crate::utils::{deserialize, serialize};
 use super::utils::{get_by_range, get_key, Element};
 use crate::{DatabaseCollection, DatabaseManager, Derivable, DigestIdentifier};
 use crate::{DbError, Event};

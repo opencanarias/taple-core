@@ -121,7 +121,6 @@ impl<
                         break 'response EvaluatorResponse::AskForEvaluation(Err(super::errors::EvaluatorErrorResponses::CreateRequestNotAllowed));
                     };
                     let result = self.runner.execute_contract(&data, state_data).await;
-                    log::warn!("Execution result: {:?}", result);
                     match result {
                         Ok(executor_response) => {
                             let governance_version = executor_response.governance_version;
