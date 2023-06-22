@@ -290,6 +290,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         governance_id: DigestIdentifier,
         new_version: u64,
     ) -> Result<(), EventError> {
+        log::info!("NEW GOVERNANCE VERSION");
         // Pedir event requests para cada subject_id del set y lanza new_event con ellas
         match self.subjects_by_governance.get(&governance_id).cloned() {
             Some(subjects_affected) => {
@@ -302,6 +303,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                             let subject_id = state_request.subject_id.clone();
                             self.subjects_completing_event.remove(&subject_id);
                             self.new_event(event_request).await?;
+                            log::info!("NEW GOVERNANCE VERSION NEW EVENT CALLED REQUEST");
                         }
                         Err(error) => match error {
                             crate::DbError::EntryNotFound => {}
@@ -1266,7 +1268,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             } else if subject.is_some() && event.content.event_proposal.proposal.sn != 0 {
                 let subject = subject.unwrap();
                 if subject.schema_id == "governance" {
-                    (0, subject.subject_id.clone())
+                    (subject.sn, subject.subject_id.clone())
                 } else {
                     (
                         self.gov_api

@@ -131,7 +131,11 @@ impl<C: DatabaseCollection> Notary<C> {
             .signature_manager
             .sign(&notary_event.proof)
             .map_err(NotaryError::ProtocolErrors)?;
-        log::warn!("SE ENVÍA LA VALIDACIÓN A {}", sender.to_str());
+        log::warn!(
+            "SE ENVÍA LA VALIDACIÓN A {}: sn: {}",
+            sender.to_str(),
+            notary_event.proof.sn
+        );
         self.message_channel
             .tell(MessageTaskCommand::Request(
                 None,
