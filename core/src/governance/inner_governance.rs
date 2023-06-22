@@ -313,6 +313,9 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                     err => return Ok(Err(err)),
                 },
             };
+        if governance.owner == invoker {
+            return Ok(Ok(true));
+        }
         let roles: Vec<Role> =
             serde_json::from_value(governance.properties.get("roles").unwrap().to_owned())
                 .map_err(|_| InternalError::DeserializationError)?;
@@ -339,10 +342,13 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         invoker: KeyIdentifier,
     ) -> Result<bool, RequestError> {
         let is_member = members.0.contains(&invoker);
+        log::warn!("IS MEMBER: {}", is_member);
         for role in roles {
+            log::info!("Llega roles: role: {:?}", role);
             if role.role != stage.to_str() {
                 continue;
             }
+            log::info!("Seguimos roles roles");
             match role.schema {
                 Schema::ID { ID } => {
                     if &ID != schema_id {
@@ -356,9 +362,11 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                 }
                 Schema::ALL => {}
             }
+            log::info!("Seguimos roles roles roles");
             if !namespace_contiene(&role.namespace, namespace) {
                 continue;
             }
+            log::info!("Seguimos roles roles roles roles");
             match role.who {
                 Who::ID { ID } => {
                     if is_member && ID == invoker.to_str() {
@@ -376,7 +384,13 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                         return Ok(true);
                     }
                 }
-                Who::MEMBERS | Who::ALL => return Ok(true),
+                Who::MEMBERS => {
+                    if is_member {
+                        log::info!("ESTO DEBERIA PASAR");
+                        return Ok(true);
+                    }
+                }
+                Who::ALL => return Ok(true),
                 Who::NOT_MEMBERS => {
                     if !is_member {
                         return Ok(true);
@@ -384,6 +398,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                 }
             }
         }
+        log::info!("Esto no puede pasar");
         Ok(false)
     }
 

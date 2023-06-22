@@ -692,17 +692,21 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     ValidationStage::Evaluate,
                 );
                 // Check the invoker can Invoke for this subject
-                let invokers = self
+                if !self
                     .gov_api
-                    .get_signers(metadata.clone(), ValidationStage::Invoke)
+                    .get_invoke_info(
+                        metadata.clone(),
+                        ValidationStage::Invoke,
+                        event_request.signature.content.signer.clone(),
+                    )
                     .await
-                    .map_err(EventError::GovernanceError)?;
-                if !invokers.contains(&event_request.signature.content.signer) {
+                    .map_err(EventError::GovernanceError)?
+                {
                     return Err(EventError::InvokePermissionDenied(
                         event_request.signature.content.signer.to_str(),
                         subject_id.to_str(),
                     ));
-                }
+                };
                 let event_preevaluation = EventPreEvaluation {
                     event_request: event_request.clone(),
                     context: Context {
