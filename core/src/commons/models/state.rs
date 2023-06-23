@@ -4,14 +4,14 @@ use crate::{
         errors::SubjectError,
         identifier::{DigestIdentifier, KeyIdentifier},
     },
-    Derivable,
+    Derivable, signature::Signed, EventContent,
 };
-use borsh::{BorshSerialize, BorshDeserialize};
+use borsh::{BorshDeserialize, BorshSerialize};
 use json_patch::{patch, Patch};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::{event::Event, event_request::EventRequestType, value_wrapper::ValueWrapper};
+use super::{event_request::EventRequestType, value_wrapper::ValueWrapper};
 
 #[derive(Debug, Deserialize, Serialize, Clone, BorshSerialize, BorshDeserialize)]
 pub struct Subject {
@@ -114,7 +114,11 @@ impl Subject {
     //     })
     // }
 
-    pub fn from_genesis_event(event: Event, init_state: ValueWrapper, keys: Option<KeyPair>) -> Result<Self, SubjectError> {
+    pub fn from_genesis_event(
+        event: Signed<EventContent>,
+        init_state: ValueWrapper,
+        keys: Option<KeyPair>,
+    ) -> Result<Self, SubjectError> {
         let EventRequestType::Create(create_request) = event.content.event_proposal.proposal.event_request.request.clone() else {
             return Err(SubjectError::NotCreateEvent)
         };
@@ -139,7 +143,6 @@ impl Subject {
                 .proposal
                 .event_request
                 .signature
-                .content
                 .signer
                 .clone(),
             creator: event
@@ -148,7 +151,6 @@ impl Subject {
                 .proposal
                 .event_request
                 .signature
-                .content
                 .signer
                 .clone(),
             properties: init_state,
@@ -158,7 +160,11 @@ impl Subject {
         })
     }
 
-    pub fn update_subject(&mut self, json_patch: ValueWrapper, new_sn: u64) -> Result<(), SubjectError> {
+    pub fn update_subject(
+        &mut self,
+        json_patch: ValueWrapper,
+        new_sn: u64,
+    ) -> Result<(), SubjectError> {
         let prev_properties = self.properties.as_str();
         let Ok(patch_json) = serde_json::from_value::<Patch>(json_patch.0) else {
                     return Err(SubjectError::ErrorParsingJsonString("Json Patch conversion fails".to_owned()));

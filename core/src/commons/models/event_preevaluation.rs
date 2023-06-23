@@ -1,10 +1,8 @@
 //! Contains the data structures related to event preevaluations to send to evaluators.
 use borsh::{BorshDeserialize, BorshSerialize};
-use serde_json::Value;
 
 use crate::{
-    event_request::EventRequest,
-    identifier::{DigestIdentifier, KeyIdentifier},
+    identifier::{DigestIdentifier, KeyIdentifier}, signature::Signed, EventRequestType,
 };
 use serde::{Deserialize, Serialize};
 
@@ -12,7 +10,7 @@ use super::{state::SubjectData, value_wrapper::ValueWrapper};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct EventPreEvaluation {
-    pub event_request: EventRequest,
+    pub event_request: Signed<EventRequestType>,
     pub context: Context,
     pub sn: u64,
 }
@@ -30,7 +28,7 @@ pub struct Context {
 
 impl EventPreEvaluation {
     pub fn new(
-        event_request: EventRequest,
+        event_request: Signed<EventRequestType>,
         subject_data: SubjectData,
         sn: u64,
         governance_version: u64,

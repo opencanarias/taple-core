@@ -2,16 +2,16 @@
 use std::collections::HashSet;
 
 use crate::{
-    commons::{crypto::check_cryptography, errors::SubjectError},
-    event_request::EventRequest,
+    commons::errors::SubjectError,
     identifier::DigestIdentifier,
-    signature::Signature,
+    signature::{Signature, Signed},
+    EventRequestType,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::{Acceptance, value_wrapper::ValueWrapper};
+use super::{value_wrapper::ValueWrapper, Acceptance};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct EventProposal {
@@ -21,7 +21,7 @@ pub struct EventProposal {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct Proposal {
-    pub event_request: EventRequest,
+    pub event_request: Signed<EventRequestType>,
     pub sn: u64,
     pub hash_prev_event: DigestIdentifier,
     pub gov_version: u64,
@@ -32,7 +32,7 @@ pub struct Proposal {
 
 impl Proposal {
     pub fn new(
-        event_request: EventRequest,
+        event_request: Signed<EventRequestType>,
         sn: u64,
         hash_prev_event: DigestIdentifier,
         gov_version: u64,
@@ -61,19 +61,16 @@ pub struct Evaluation {
     pub approval_required: bool,
 }
 
-impl EventProposal {
-    pub fn new(proposal: Proposal, subject_signature: Signature) -> Self {
-        EventProposal {
-            proposal,
-            subject_signature,
+impl Signed<Proposal> {
+    pub fn new(proposal: Proposal, signature: Signature) -> Self {
+        Self {
+            content: proposal,
+            signature,
         }
     }
 
-    pub fn check_signatures(&self) -> Result<(), SubjectError> {
-        check_cryptography(&self.proposal, &self.subject_signature)
-            .map_err(|error| SubjectError::CryptoError(error.to_string()))?;
-        log::warn!("CHECK SIGNATURES NO FALLA EN EVENT PROPOSAL");
-        self.proposal.event_request.check_signatures()?;
-        Ok(())
+    pub fn verify(&self) -> Result<(), SubjectError> {
+        self.signature.verify(&self.content)?;
+        self.content.event_request.verify()
     }
 }

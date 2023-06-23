@@ -50,13 +50,13 @@ pub struct UniqueApproval {
 
 impl PartialEq for UniqueApproval {
     fn eq(&self, other: &Self) -> bool {
-        self.approval.signature.content.signer == other.approval.signature.content.signer
+        self.approval.signature.signer == other.approval.signature.signer
     }
 }
 
 impl Hash for UniqueApproval {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.approval.signature.content.signer.hash(state);
+        self.approval.signature.signer.hash(state);
     }
 }
 

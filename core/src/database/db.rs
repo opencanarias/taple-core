@@ -6,22 +6,20 @@ use crate::commons::models::event::ValidationProof;
 use crate::commons::models::request::TapleRequest;
 use crate::commons::models::state::Subject;
 use crate::crypto::KeyPair;
-use crate::event_request::EventRequest;
 use crate::identifier::{DigestIdentifier, KeyIdentifier};
-use crate::signature::Signature;
-use crate::{Event, ApprovalPetitionData};
+use crate::signature::{Signature, Signed};
+use crate::{ApprovalPetitionData, EventContent, EventRequestType};
 
 use super::error::Error;
-use super::layers::lce_validation_proofs::{LceValidationProofs};
+use super::layers::lce_validation_proofs::LceValidationProofs;
 use super::layers::request::RequestDb;
 use super::{
     layers::{
         approvals::ApprovalsDb, contract::ContractDb, controller_id::ControllerIdDb,
-        event::EventDb, notary::NotaryDb,
+        event::EventDb, event_request::EventRequestDb, keys::KeysDb, notary::NotaryDb,
         preauthorized_subjects_and_providers::PreauthorizedSbujectsAndProovidersDb,
-        prevalidated_event::PrevalidatedEventDb, event_request::EventRequestDb, signature::SignatureDb,
-        subject::SubjectDb, subject_by_governance::SubjectByGovernanceDb,
-        keys::KeysDb, witness_signatures::WitnessSignaturesDb,
+        prevalidated_event::PrevalidatedEventDb, signature::SignatureDb, subject::SubjectDb,
+        subject_by_governance::SubjectByGovernanceDb, witness_signatures::WitnessSignaturesDb,
     },
     DatabaseCollection, DatabaseManager,
 };
@@ -139,7 +137,7 @@ impl<C: DatabaseCollection> DB<C> {
         self.subject_db.get_all_subjects()
     }
 
-    pub fn get_event(&self, subject_id: &DigestIdentifier, sn: u64) -> Result<Event, Error> {
+    pub fn get_event(&self, subject_id: &DigestIdentifier, sn: u64) -> Result<Signed<EventContent>, Error> {
         self.event_db.get_event(subject_id, sn)
     }
 
@@ -148,12 +146,12 @@ impl<C: DatabaseCollection> DB<C> {
         subject_id: &DigestIdentifier,
         from: Option<i64>,
         quantity: isize,
-    ) -> Result<Vec<Event>, Error> {
+    ) -> Result<Vec<Signed<EventContent>>, Error> {
         self.event_db
             .get_events_by_range(subject_id, from, quantity)
     }
 
-    pub fn set_event(&self, subject_id: &DigestIdentifier, event: Event) -> Result<(), Error> {
+    pub fn set_event(&self, subject_id: &DigestIdentifier, event: Signed<EventContent>) -> Result<(), Error> {
         self.event_db.set_event(subject_id, event)
     }
 
@@ -161,7 +159,7 @@ impl<C: DatabaseCollection> DB<C> {
         self.event_db.del_event(subject_id, sn)
     }
 
-    pub fn get_prevalidated_event(&self, subject_id: &DigestIdentifier) -> Result<Event, Error> {
+    pub fn get_prevalidated_event(&self, subject_id: &DigestIdentifier) -> Result<Signed<EventContent>, Error> {
         self.prevalidated_event_db
             .get_prevalidated_event(subject_id)
     }
@@ -169,7 +167,7 @@ impl<C: DatabaseCollection> DB<C> {
     pub fn set_prevalidated_event(
         &self,
         subject_id: &DigestIdentifier,
-        event: Event,
+        event: Signed<EventContent>,
     ) -> Result<(), Error> {
         self.prevalidated_event_db
             .set_prevalidated_event(subject_id, event)
@@ -180,18 +178,18 @@ impl<C: DatabaseCollection> DB<C> {
             .del_prevalidated_event(subject_id)
     }
 
-    pub fn get_request(&self, subject_id: &DigestIdentifier) -> Result<EventRequest, Error> {
+    pub fn get_request(&self, subject_id: &DigestIdentifier) -> Result<Signed<EventRequestType>, Error> {
         self.event_request_db.get_request(subject_id)
     }
 
-    pub fn get_all_request(&self) -> Vec<EventRequest> {
+    pub fn get_all_request(&self) -> Vec<Signed<EventRequestType>> {
         self.event_request_db.get_all_request()
     }
 
     pub fn set_request(
         &self,
         subject_id: &DigestIdentifier,
-        request: EventRequest,
+        request: Signed<EventRequestType>,
     ) -> Result<(), Error> {
         self.event_request_db.set_request(subject_id, request)
     }
@@ -341,19 +339,12 @@ impl<C: DatabaseCollection> DB<C> {
         self.keys_db.get_keys(public_key)
     }
 
-    pub fn get_all_keys(
-        &self,
-    ) -> Result<Vec<KeyPair>, Error> {
+    pub fn get_all_keys(&self) -> Result<Vec<KeyPair>, Error> {
         self.keys_db.get_all_keys()
     }
 
-    pub fn set_keys(
-        &self,
-        public_key: &KeyIdentifier,
-        keypair: KeyPair,
-    ) -> Result<(), Error> {
-        self.keys_db
-            .set_keys(public_key, keypair)
+    pub fn set_keys(&self, public_key: &KeyIdentifier, keypair: KeyPair) -> Result<(), Error> {
+        self.keys_db.set_keys(public_key, keypair)
     }
 
     pub fn del_keys(&self, public_key: &KeyIdentifier) -> Result<(), Error> {
@@ -430,10 +421,7 @@ impl<C: DatabaseCollection> DB<C> {
         self.approvals_db.set_approval(request_id, approval)
     }
 
-    pub fn del_approval(
-        &self,
-        request_id: &DigestIdentifier
-    ) -> Result<(), Error> {
+    pub fn del_approval(&self, request_id: &DigestIdentifier) -> Result<(), Error> {
         self.approvals_db.del_approval(request_id)
     }
 }

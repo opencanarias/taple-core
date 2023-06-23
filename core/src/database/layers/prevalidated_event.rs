@@ -1,7 +1,8 @@
+use crate::signature::Signed;
 use crate::utils::{deserialize, serialize};
 use super::utils::{get_key, Element};
-use crate::{DatabaseCollection, DatabaseManager, Derivable, DigestIdentifier};
-use crate::{DbError, Event};
+use crate::{DatabaseCollection, DatabaseManager, Derivable, DigestIdentifier, EventContent};
+use crate::{DbError};
 use std::sync::Arc;
 
 pub(crate) struct PrevalidatedEventDb<C: DatabaseCollection> {
@@ -17,14 +18,14 @@ impl<C: DatabaseCollection> PrevalidatedEventDb<C> {
         }
     }
 
-    pub fn get_prevalidated_event(&self, subject_id: &DigestIdentifier) -> Result<Event, DbError> {
+    pub fn get_prevalidated_event(&self, subject_id: &DigestIdentifier) -> Result<Signed<EventContent>, DbError> {
         let key_elements: Vec<Element> = vec![
             Element::S(self.prefix.clone()),
             Element::S(subject_id.to_str()),
         ];
         let key = get_key(key_elements)?;
         let prevalidated_event = self.collection.get(&key)?;
-        Ok(deserialize::<Event>(&prevalidated_event).map_err(|_| {
+        Ok(deserialize::<Signed<EventContent>>(&prevalidated_event).map_err(|_| {
             DbError::DeserializeError
         })?)
     }
@@ -32,14 +33,14 @@ impl<C: DatabaseCollection> PrevalidatedEventDb<C> {
     pub fn set_prevalidated_event(
         &self,
         subject_id: &DigestIdentifier,
-        event: Event,
+        event: Signed<EventContent>,
     ) -> Result<(), DbError> {
         let key_elements: Vec<Element> = vec![
             Element::S(self.prefix.clone()),
             Element::S(subject_id.to_str()),
         ];
         let key = get_key(key_elements)?;
-        let Ok(data) = serialize::<Event>(&event) else {
+        let Ok(data) = serialize::<Signed<EventContent>>(&event) else {
             return Err(DbError::SerializeError);
         };
         self.collection.put(&key, data)

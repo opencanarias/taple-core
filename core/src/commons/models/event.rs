@@ -3,30 +3,26 @@ use std::collections::HashSet;
 
 use crate::{
     commons::{
-        crypto::{check_cryptography, KeyMaterial, KeyPair, Payload, DSA},
+        crypto::{KeyMaterial, KeyPair},
         errors::SubjectError,
     },
     event_content::Metadata,
-    event_request::{CreateRequest, EventRequest},
-    identifier::{Derivable, DigestIdentifier, KeyIdentifier},
-    signature::Signature,
+    event_request::CreationRequest,
+    identifier::{DigestIdentifier, KeyIdentifier},
+    signature::{Signature, Signed},
+    EventRequestType,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
-use json_patch::{diff, Patch};
+use json_patch::diff;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::json;
 
 use super::{
     approval::Approval,
     event_proposal::{EventProposal, Proposal},
-    state::Subject, value_wrapper::ValueWrapper,
+    state::Subject,
+    value_wrapper::ValueWrapper,
 };
-
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
-pub struct Event {
-    pub content: EventContent,
-    pub signature: Signature,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct EventContent {
@@ -52,7 +48,7 @@ pub struct ValidationProof {
 
 impl ValidationProof {
     pub fn new_from_genesis_event(
-        create_request: CreateRequest,
+        create_request: CreationRequest,
         event_hash: DigestIdentifier,
         governance_version: u64,
         subject_id: DigestIdentifier,
@@ -154,9 +150,9 @@ impl EventContent {
     }
 }
 
-impl Event {
+impl Signed<EventContent> {
     pub fn from_genesis_request(
-        event_request: EventRequest,
+        event_request: Signed<EventRequestType>,
         subject_keys: &KeyPair,
         gov_version: u64,
         init_state: &ValueWrapper,
@@ -197,10 +193,9 @@ impl Event {
         })
     }
 
-    pub fn check_signatures(&self) -> Result<(), SubjectError> {
-        check_cryptography(&self.content, &self.signature)
-            .map_err(|error| SubjectError::CryptoError(error.to_string()))?;
-        self.content.event_proposal.check_signatures()?;
-        Ok(())
+    pub fn verify(&self) -> Result<(), SubjectError> {
+        self.signature.verify(&self.content)?;
+        self.content.event_proposal.verify()?;
+        self.content.event_proposal.proposal.event_request.verify()
     }
 }

@@ -1,8 +1,9 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Deserializer, Serialize};
+use std::hash::{Hash, Hasher};
 use time::OffsetDateTime;
 
-#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, BorshSerialize, BorshDeserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, BorshSerialize, BorshDeserialize, Hash)]
 pub struct TimeStamp {
     pub time: u64,
 }

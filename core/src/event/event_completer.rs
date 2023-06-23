@@ -18,7 +18,7 @@ use crate::{
     },
     crypto::{KeyMaterial, KeyPair},
     event_content::Metadata,
-    event_request::{CreateRequest, EventRequest},
+    event_request::{CreationRequest, EventRequest},
     governance::{stage::ValidationStage, GovernanceAPI, GovernanceInterface},
     identifier::{Derivable, DigestIdentifier, KeyIdentifier},
     ledger::{LedgerCommand, LedgerResponse},
@@ -102,7 +102,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
 
     fn create_notary_event_from_genesis(
         &self,
-        create_request: CreateRequest,
+        create_request: CreationRequest,
         event_hash: DigestIdentifier,
         governance_version: u64,
         subject_id: DigestIdentifier,

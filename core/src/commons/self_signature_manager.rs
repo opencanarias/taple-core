@@ -9,7 +9,7 @@ use crate::commons::{
         SignatureIdentifier,
     },
     models::{
-        signature::{Signature, SignatureContent},
+        signature::{Signature},
         timestamp::TimeStamp,
     },
 };

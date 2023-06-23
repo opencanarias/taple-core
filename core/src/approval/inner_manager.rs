@@ -328,7 +328,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
 
         for signature in approval_request.proposal.evaluation_signatures.iter() {
             // Comprobación de que el evaluador existe
-            if !evaluators.contains(&signature.content.signer) {
+            if !evaluators.contains(&signature.signer) {
                 return Ok(Err(ApprovalErrorResponse::InvalidEvaluator));
             }
             // Comprobamos su firma -> Es necesario generar el contenido que ellos firman
@@ -500,10 +500,10 @@ mod test {
         },
         database::{MemoryCollection, DB},
         event_content::Metadata,
-        event_request::{CreateRequest, EventRequest, EventRequestType, FactRequest},
+        event_request::{CreationRequest, EventRequest, EventRequestType, FactRequest},
         governance::{error::RequestError, stage::ValidationStage, GovernanceInterface},
         identifier::{Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier},
-        signature::{Signature, SignatureContent},
+        signature::{Signature},
         DatabaseManager, Event, MemoryManager, Notification, TimeStamp,
     };
 
@@ -619,7 +619,7 @@ mod test {
         json: String,
         signature_manager: &SelfSignatureManager,
     ) -> EventRequest {
-        let request = EventRequestType::Create(CreateRequest {
+        let request = EventRequestType::Create(CreationRequest {
             governance_id: DigestIdentifier::from_str(
                 "J6axKnS5KQjtMDFgapJq49tdIpqGVpV7SS4kxV1iR10I",
             )
