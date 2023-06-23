@@ -9,15 +9,8 @@ use crate::{
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 use super::{value_wrapper::ValueWrapper, Acceptance};
-
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
-pub struct EventProposal {
-    pub proposal: Proposal,
-    pub subject_signature: Signature,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct Proposal {

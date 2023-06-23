@@ -5,7 +5,6 @@ use crate::{
         config::VotationType,
         models::{
             approval::{Approval, ApprovalContent, ApprovalStatus},
-            event_proposal::EventProposal,
             state::Subject,
             Acceptance,
         },
@@ -13,10 +12,10 @@ use crate::{
     },
     database::DB,
     event_content::Metadata,
-    event_request::{EventRequest, EventRequestType},
+    event_request::{ EventRequestType},
     governance::{error::RequestError, GovernanceInterface},
     identifier::{Derivable, DigestIdentifier, KeyIdentifier},
-    DatabaseCollection, Notification,
+    DatabaseCollection, Notification, signature::Signed, Proposal,
 };
 
 use super::{
@@ -174,7 +173,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
 
     pub async fn process_approval_request(
         &mut self,
-        approval_request: EventProposal,
+        approval_request: Signed<Proposal>,
     ) -> Result<
         Result<Option<(Approval, KeyIdentifier)>, ApprovalErrorResponse>,
         ApprovalManagerError,
@@ -410,28 +409,6 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         }
     }
 
-    fn check_event_request_signatures(
-        &self,
-        event_request: &EventRequest,
-    ) -> Result<Result<(), ApprovalErrorResponse>, ApprovalManagerError> {
-        let hash_request = DigestIdentifier::from_serializable_borsh(&event_request.request)
-            .map_err(|_| ApprovalManagerError::HashGenerationFailed)?;
-        // Check that the hash is the same
-        if hash_request != event_request.signature.content.event_content_hash {
-            return Ok(Err(ApprovalErrorResponse::NoHashCorrelation));
-        }
-        // Check that the signature matches the hash
-        match event_request.signature.content.signer.verify(
-            &hash_request.derivative(),
-            &event_request.signature.signature,
-        ) {
-            Ok(_) => return Ok(Ok(())),
-            Err(_) => {
-                return Ok(Err(ApprovalErrorResponse::InvalidInvokator));
-            }
-        };
-    }
-
     pub async fn generate_vote(
         &mut self,
         request_id: &DigestIdentifier,
@@ -465,7 +442,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
 }
 
 fn event_proposal_hash_gen(
-    approval_request: &EventProposal,
+    approval_request: &Signed<Proposal>,
 ) -> Result<DigestIdentifier, ApprovalManagerError> {
     Ok(DigestIdentifier::from_serializable_borsh(approval_request)
         .map_err(|_| ApprovalManagerError::HashGenerationFailed)?)
@@ -500,11 +477,11 @@ mod test {
         },
         database::{MemoryCollection, DB},
         event_content::Metadata,
-        event_request::{CreationRequest, EventRequest, EventRequestType, FactRequest},
+        event_request::{CreationRequest, EventRequestType, FactRequest},
         governance::{error::RequestError, stage::ValidationStage, GovernanceInterface},
         identifier::{Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier},
-        signature::{Signature},
-        DatabaseManager, Event, MemoryManager, Notification, TimeStamp,
+        signature::{Signature, Signed},
+        DatabaseManager, MemoryManager, Notification, TimeStamp,
     };
 
     use super::{InnerApprovalManager, RequestNotifier};
@@ -605,20 +582,20 @@ mod test {
         json: ValueWrapper,
         signature_manager: &SelfSignatureManager,
         subject_id: &DigestIdentifier,
-    ) -> EventRequest {
+    ) -> Signed<EventRequestType> {
         let request = EventRequestType::Fact(FactRequest {
             subject_id: subject_id.clone(),
             payload: json,
         });
-        let signature = signature_manager.sign(&request).unwrap();
-        let event_request = EventRequest { request, signature };
+        let signature = signature_manager.sign(&request).unwrap(); // TODO: MAL usar Signature::new
+        let event_request = Signed::<EventRequestType>::new(request, signature);
         event_request
     }
 
     fn create_genesis_request(
         json: String,
         signature_manager: &SelfSignatureManager,
-    ) -> EventRequest {
+    ) -> Signed<EventRequestType> {
         let request = EventRequestType::Create(CreationRequest {
             governance_id: DigestIdentifier::from_str(
                 "J6axKnS5KQjtMDFgapJq49tdIpqGVpV7SS4kxV1iR10I",
@@ -630,8 +607,8 @@ mod test {
             public_key: KeyIdentifier::from_str("EceWPmTsy2oXYsAhnWqTpBKtpobsnWM0QT8sNUTtV_Pw")
                 .unwrap(), // TODO: Revisar, lo puse a voleo
         });
-        let signature = signature_manager.sign(&request).unwrap();
-        let event_request = EventRequest { request, signature };
+        let signature = signature_manager.sign(&request).unwrap(); // TODO: MAL usar Signature::new
+        let event_request = Signed::<EventRequestType>::new(request, signature);
         event_request
     }
 
@@ -689,7 +666,7 @@ mod test {
     }
 
     fn generate_request_approve_msg(
-        request: EventRequest,
+        request: Signed<EventRequestType>,
         sn: u64,
         governance_id: &DigestIdentifier,
         governance_version: u64,

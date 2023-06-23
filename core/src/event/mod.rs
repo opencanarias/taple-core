@@ -1,13 +1,14 @@
-use borsh::{BorshSerialize, BorshDeserialize};
+use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
-    commons::models::{approval::Approval, event_proposal::Evaluation, value_wrapper::ValueWrapper},
-    event_request::EventRequest,
+    commons::models::{
+        approval::Approval, event_proposal::Evaluation, value_wrapper::ValueWrapper,
+    },
     identifier::DigestIdentifier,
-    signature::Signature,
-    Event, KeyIdentifier,
+    signature::{Signature, Signed},
+    KeyIdentifier, EventRequestType,
 };
 
 use self::errors::EventError;
@@ -19,7 +20,7 @@ pub mod manager;
 #[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub enum EventCommand {
     Event {
-        event_request: EventRequest,
+        event_request: Signed<EventRequestType>,
     },
     EvaluatorResponse {
         evaluation: Evaluation,

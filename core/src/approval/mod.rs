@@ -1,12 +1,11 @@
-use borsh::{BorshSerialize, BorshDeserialize};
+use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 use crate::{
-    commons::models::{event_proposal::EventProposal, Acceptance},
-    event_request::EventRequest,
+    commons::models::Acceptance,
     identifier::{DigestIdentifier, KeyIdentifier},
-    signature::Signature, ValueWrapper,
+    signature::{Signature, Signed},
+    EventRequestType, Proposal, ValueWrapper,
 };
 
 use self::error::ApprovalErrorResponse;
@@ -19,7 +18,7 @@ pub(crate) mod manager;
 
 #[derive(Clone, Serialize, Deserialize, Debug, BorshSerialize, BorshDeserialize)]
 pub enum ApprovalMessages {
-    RequestApproval(EventProposal),
+    RequestApproval(Signed<Proposal>),
     EmitVote(EmitVote),
     GetAllRequest,
     GetSingleRequest(DigestIdentifier),
@@ -46,7 +45,7 @@ pub enum ApprovalResponses {
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct RequestApproval {
-    request: EventRequest,
+    request: Signed<EventRequestType>,
     sn: u64,
     context_hash: DigestIdentifier,
     hash_new_state: DigestIdentifier,

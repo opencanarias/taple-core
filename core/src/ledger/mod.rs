@@ -4,8 +4,8 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    commons::models::event::ValidationProof, event_request::EventRequest,
-    identifier::DigestIdentifier, signature::Signature, Event, KeyIdentifier, KeyDerivator,
+    commons::models::event::ValidationProof, identifier::DigestIdentifier, signature::{Signature, Signed},
+    KeyDerivator, KeyIdentifier, EventContent,
 };
 
 pub mod errors;
@@ -15,23 +15,23 @@ pub mod manager;
 #[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub enum LedgerCommand {
     OwnEvent {
-        event: Event,
+        event: Signed<EventContent>,
         signatures: HashSet<Signature>,
         validation_proof: ValidationProof,
     },
     Genesis {
-        event: Event,
+        event: Signed<EventContent>,
         signatures: HashSet<Signature>,
         validation_proof: ValidationProof,
     },
     ExternalEvent {
         sender: KeyIdentifier,
-        event: Event,
+        event: Signed<EventContent>,
         signatures: HashSet<Signature>,
         validation_proof: ValidationProof,
     },
     ExternalIntermediateEvent {
-        event: Event,
+        event: Signed<EventContent>,
     },
     GetEvent {
         who_asked: KeyIdentifier,
@@ -52,9 +52,9 @@ pub enum LedgerCommand {
 
 #[derive(Debug, Clone)]
 pub enum LedgerResponse {
-    GetEvent(Result<Event, errors::LedgerError>),
-    GetNextGov(Result<(Event, HashSet<Signature>), errors::LedgerError>),
-    GetLCE(Result<(Event, HashSet<Signature>), errors::LedgerError>),
+    GetEvent(Result<Signed<EventContent>, errors::LedgerError>),
+    GetNextGov(Result<(Signed<EventContent>, HashSet<Signature>), errors::LedgerError>),
+    GetLCE(Result<(Signed<EventContent>, HashSet<Signature>), errors::LedgerError>),
     GenerateKey(Result<KeyIdentifier, errors::LedgerError>),
     NoResponse,
 }

@@ -8,10 +8,8 @@ use super::{
 use super::{GetEvents, GetGovernanceSubjects};
 #[cfg(feature = "aproval")]
 use crate::approval::manager::ApprovalAPI;
-use crate::authorized_subjecs::manager::AuthorizedSubjectsAPI;
+use crate::{authorized_subjecs::manager::AuthorizedSubjectsAPI, EventRequestType, signature::Signed, EventContent};
 use crate::commons::models::approval::ApprovalStatus;
-use crate::commons::models::event::Event;
-use crate::commons::models::event_request::EventRequest;
 use crate::commons::models::request::TapleRequest;
 use crate::commons::models::state::SubjectData;
 use crate::commons::{
@@ -41,7 +39,7 @@ pub trait ApiModuleInterface {
     /// Allows to make a request to the node from an external Invoker
     async fn external_request(
         &self,
-        event_request: EventRequest,
+        event_request: Signed<EventRequestType>,
     ) -> Result<DigestIdentifier, ApiError>;
     /// Allows to get all subjects that are known to the current node, regardless of their governance.
     /// Paging can be performed using the optional arguments `from` and `quantity`.
@@ -76,9 +74,9 @@ pub trait ApiModuleInterface {
         subject_id: DigestIdentifier,
         from: Option<i64>,
         quantity: Option<i64>,
-    ) -> Result<Vec<Event>, ApiError>;
+    ) -> Result<Vec<Signed<EventContent>>, ApiError>;
 
-    async fn get_event(&self, subject_id: DigestIdentifier, sn: u64) -> Result<Event, ApiError>;
+    async fn get_event(&self, subject_id: DigestIdentifier, sn: u64) -> Result<Signed<EventContent>, ApiError>;
     /// Allows to obtain a specified subject by specifying its identifier.
     /// # Possible errors
     /// • [ApiError::InvalidParameters] if the specified identifier does not match a valid [DigestIdentifier].<br />
@@ -180,7 +178,7 @@ impl ApiModuleInterface for NodeAPI {
 
     async fn external_request(
         &self,
-        event_request: EventRequest,
+        event_request: Signed<EventRequestType>,
     ) -> Result<DigestIdentifier, ApiError> {
         let response = self
             .sender
@@ -268,7 +266,7 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
-    async fn get_event(&self, subject_id: DigestIdentifier, sn: u64) -> Result<Event, ApiError> {
+    async fn get_event(&self, subject_id: DigestIdentifier, sn: u64) -> Result<Signed<EventContent>, ApiError> {
         let response = self
             .sender
             .ask(APICommands::GetEvent(subject_id, sn))
@@ -286,7 +284,7 @@ impl ApiModuleInterface for NodeAPI {
         subject_id: DigestIdentifier,
         from: Option<i64>,
         quantity: Option<i64>,
-    ) -> Result<Vec<Event>, ApiError> {
+    ) -> Result<Vec<Signed<EventContent>>, ApiError> {
         let response = self
             .sender
             .ask(APICommands::GetEvents(GetEvents {

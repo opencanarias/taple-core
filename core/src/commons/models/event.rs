@@ -18,15 +18,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use super::{
-    approval::Approval,
-    event_proposal::{EventProposal, Proposal},
-    state::Subject,
-    value_wrapper::ValueWrapper,
+    approval::Approval, event_proposal::Proposal, state::Subject, value_wrapper::ValueWrapper,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct EventContent {
-    pub event_proposal: EventProposal,
+    pub event_proposal: Signed<Proposal>,
     pub approvals: HashSet<Approval>,
     pub execution: bool,
 }
@@ -138,7 +135,7 @@ impl ValidationProof {
 
 impl EventContent {
     pub fn new(
-        event_proposal: EventProposal,
+        event_proposal: Signed<Proposal>,
         approvals: HashSet<Approval>,
         execution: bool,
     ) -> Self {
@@ -177,7 +174,7 @@ impl Signed<EventContent> {
             Signature::new(&proposal, public_key.clone(), &subject_keys).map_err(|_| {
                 SubjectError::CryptoError(String::from("Error signing the hash of the proposal"))
             })?;
-        let event_proposal = EventProposal::new(proposal, subject_signature_proposal);
+        let event_proposal = Signed::<Proposal>::new(proposal, subject_signature_proposal);
         let content = EventContent {
             event_proposal,
             approvals: HashSet::new(),
@@ -196,6 +193,6 @@ impl Signed<EventContent> {
     pub fn verify(&self) -> Result<(), SubjectError> {
         self.signature.verify(&self.content)?;
         self.content.event_proposal.verify()?;
-        self.content.event_proposal.proposal.event_request.verify()
+        self.content.event_proposal.content.event_request.verify()
     }
 }

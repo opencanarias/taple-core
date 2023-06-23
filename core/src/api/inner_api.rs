@@ -11,7 +11,7 @@ use crate::event::manager::{EventAPI, EventAPIInterface};
 use crate::event::EventResponse;
 use crate::identifier::Derivable;
 use crate::ledger::manager::{EventManagerAPI, EventManagerInterface};
-use crate::signature::Signature;
+use crate::signature::{Signature, Signed};
 use crate::{KeyDerivator, KeyIdentifier};
 // use crate::ledger::errors::LedgerManagerError;
 use crate::{
@@ -20,7 +20,7 @@ use crate::{
         crypto::KeyPair,
         identifier::DigestIdentifier,
         models::{
-            event_request::{EventRequest, EventRequestType},
+            event_request::{EventRequestType},
             state::SubjectData,
             timestamp::TimeStamp,
         },
@@ -71,7 +71,7 @@ impl<C: DatabaseCollection> InnerAPI<C> {
 
     pub async fn handle_external_request(
         &self,
-        request: EventRequest,
+        request: Signed<EventRequestType>,
     ) -> Result<ApiResponses, APIInternalError> {
         let EventResponse::Event(response) = self.event_api.send_event_request(request).await else {
             return Err(APIInternalError::UnexpectedManagerResponse);

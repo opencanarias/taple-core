@@ -1,13 +1,11 @@
-use crate::commons::models::approval::ApprovalStatus;
-use crate::commons::models::event::Event;
-use crate::commons::models::event_request::EventRequest;
+use crate::{commons::models::approval::ApprovalStatus, signature::Signed};
 use crate::commons::models::request::TapleRequest;
 use crate::commons::models::state::SubjectData;
 use crate::identifier::DigestIdentifier;
 use crate::signature::Signature;
 #[cfg(feature = "aproval")]
 use crate::{Acceptance, ApprovalPetitionData};
-use crate::{KeyDerivator, KeyIdentifier};
+use crate::{KeyDerivator, KeyIdentifier, EventContent, EventRequestType};
 use std::collections::HashSet;
 
 mod api;
@@ -28,7 +26,7 @@ pub enum APICommands {
     GetEvents(GetEvents),
     #[cfg(feature = "aproval")]
     VoteResolve(Acceptance, DigestIdentifier),
-    ExternalRequest(EventRequest),
+    ExternalRequest(Signed<EventRequestType>),
     #[cfg(feature = "aproval")]
     GetPendingRequests,
     #[cfg(feature = "aproval")]
@@ -50,7 +48,7 @@ pub enum ApiResponses {
     GetSubjects(Result<Vec<SubjectData>, ApiError>),
     GetGovernances(Result<Vec<SubjectData>, ApiError>),
     GetSubject(Result<SubjectData, ApiError>),
-    GetEvents(Result<Vec<Event>, ApiError>),
+    GetEvents(Result<Vec<Signed<EventContent>>, ApiError>),
     HandleExternalRequest(Result<DigestIdentifier, ApiError>),
     #[cfg(feature = "aproval")]
     VoteResolve(Result<DigestIdentifier, ApiError>),
@@ -58,7 +56,7 @@ pub enum ApiResponses {
     GetPendingRequests(Result<Vec<ApprovalPetitionData>, ApiError>),
     #[cfg(feature = "aproval")]
     GetSingleRequest(Result<ApprovalPetitionData, ApiError>),
-    GetEvent(Result<Event, ApiError>),
+    GetEvent(Result<Signed<EventContent>, ApiError>),
     AddKeys(Result<KeyIdentifier, ApiError>),
     GetValidationProof(Result<HashSet<Signature>, ApiError>),
     GetRequest(Result<TapleRequest, ApiError>),

@@ -107,8 +107,7 @@ impl<C: DatabaseCollection> Notary<C> {
         // Verificar firma de sujecto sobre proof
         let proof_hash = DigestIdentifier::from_serializable_borsh(&notary_event.proof)
             .map_err(|_| NotaryError::SubjectSignatureNotValid)?;
-        if notary_event.subject_signature.verify().is_err()
-            || proof_hash != notary_event.subject_signature.content.event_content_hash
+        if notary_event.subject_signature.verify(&notary_event.proof).is_err()
         {
             return Err(NotaryError::SubjectSignatureNotValid);
         }
@@ -120,7 +119,7 @@ impl<C: DatabaseCollection> Notary<C> {
                 last_proof,
             )
             .await?;
-        if notary_event.subject_signature.content.signer != subject_pk {
+        if notary_event.subject_signature.signer != subject_pk {
             return Err(NotaryError::SubjectSignatureNotValid);
         }
         self.database
@@ -268,10 +267,10 @@ impl<C: DatabaseCollection> Notary<C> {
                     validation_signatures
                         .into_iter()
                         .map(|signature| {
-                            if signature.verify().is_err() {
+                            if signature.verify(&previous_proof).is_err() {
                                 return Err(NotaryError::InvalidSignature);
                             }
-                            Ok(signature.content.signer)
+                            Ok(signature.signer)
                         })
                         .collect();
                 let actual_signers = actual_signers?;
