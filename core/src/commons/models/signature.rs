@@ -100,7 +100,7 @@ impl Hash for UniqueSignature {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, PartialOrd, Hash)]
 pub struct Signed<T: BorshSerialize + BorshDeserialize> {
     #[serde(flatten)]
     pub content: T,

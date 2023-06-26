@@ -501,7 +501,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
             let mut gov_subject = Subject::from_genesis_event(gov_genesis, init_state, None)?;
             for i in 1..=governance_version {
                 let event = self.repo_access.get_event(governance_id, i)?;
-                gov_subject.update_subject(event.content.event_proposal.proposal.json_patch, i)?;
+                gov_subject.update_subject(event.content.event_proposal.content.json_patch, i)?;
             }
             Ok(gov_subject)
         } else {

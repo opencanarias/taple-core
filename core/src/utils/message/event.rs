@@ -2,9 +2,9 @@ use serde_json::Value;
 
 pub use crate::protocol::protocol_message_manager::TapleMessages;
 use crate::{
-    commons::models::{approval::Approval, event_proposal::Evaluation, Acceptance, value_wrapper::ValueWrapper},
+    commons::models::{event_proposal::Evaluation, value_wrapper::ValueWrapper, Acceptance},
     identifier::DigestIdentifier,
-    signature::Signature,
+    signature::{Signature, Signed}, ApprovalContent,
 };
 
 pub fn create_evaluator_response(
@@ -29,6 +29,6 @@ pub fn create_evaluator_response(
     })
 }
 
-pub fn create_approver_response(approval: Approval) -> TapleMessages {
+pub fn create_approver_response(approval: Signed<ApprovalContent>) -> TapleMessages {
     TapleMessages::EventMessage(crate::event::EventCommand::ApproverResponse { approval: approval })
 }

@@ -103,7 +103,7 @@ pub use approval::ApprovalPetitionData;
 pub use commons::crypto;
 pub use commons::identifier;
 pub use commons::identifier::{Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier};
-pub use commons::models::approval::{Approval, ApprovalContent};
+pub use commons::models::approval::ApprovalContent;
 pub use commons::models::event::EventContent;
 pub use commons::models::event_proposal::{Evaluation, Proposal};
 pub use commons::models::event_request::EventRequestType;

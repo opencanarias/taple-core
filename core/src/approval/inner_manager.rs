@@ -376,7 +376,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             sn: approval_request.content.sn,
             governance_id: subject_data.governance_id,
             governance_version: version,
-            hash_event_proporsal: id,
+            hash_event_proporsal: id.clone(),
             sender: subject_data.owner.clone(),
             json_patch: approval_request.content.json_patch.clone(),
         };
