@@ -10,21 +10,19 @@ use crate::{
     event_request::CreationRequest,
     identifier::{DigestIdentifier, KeyIdentifier},
     signature::{Signature, Signed},
-    EventRequestType,
+    EventRequestType, ApprovalContent,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use json_patch::diff;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use super::{
-    approval::Approval, event_proposal::Proposal, state::Subject, value_wrapper::ValueWrapper,
-};
+use super::{event_proposal::Proposal, state::Subject, value_wrapper::ValueWrapper};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct EventContent {
     pub event_proposal: Signed<Proposal>,
-    pub approvals: HashSet<Approval>,
+    pub approvals: HashSet<Signed<ApprovalContent>>,
     pub execution: bool,
 }
 
@@ -136,7 +134,7 @@ impl ValidationProof {
 impl EventContent {
     pub fn new(
         event_proposal: Signed<Proposal>,
-        approvals: HashSet<Approval>,
+        approvals: HashSet<Signed<ApprovalContent>>,
         execution: bool,
     ) -> Self {
         Self {

@@ -1,10 +1,11 @@
 use crate::commons::identifier::KeyIdentifier;
 use crate::commons::self_signature_manager::SelfSignatureManager;
+use crate::signature::Signed;
 use log::debug;
 use rmp_serde;
 use tokio::sync::mpsc::{self, error::SendError};
 
-use super::{Message, TaskCommandContent};
+use super::{MessageContent, TaskCommandContent};
 
 use super::{command::Command, error::Error};
 
@@ -40,7 +41,7 @@ impl MessageSender {
         message: T,
     ) -> Result<(), Error> {
         // TODO: Define type of invalid identifier error
-        let complete_message = Message::new(
+        let complete_message = Signed::<MessageContent<T>>::new(
             self.controller_id.clone(),
             target.clone(),
             message,

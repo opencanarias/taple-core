@@ -1,14 +1,15 @@
 use async_trait::async_trait;
 
 use super::{errors::EventError, event_completer::EventCompleter, EventCommand, EventResponse};
+use crate::EventRequestType;
 use crate::commons::self_signature_manager::SelfSignatureManager;
 use crate::database::{DB, DatabaseCollection};
-use crate::event_request::EventRequest;
 use crate::governance::error::RequestError;
 use crate::governance::GovernanceUpdatedMessage;
 use crate::identifier::KeyIdentifier;
 use crate::ledger::{LedgerCommand, LedgerResponse};
 use crate::protocol::protocol_message_manager::TapleMessages;
+use crate::signature::Signed;
 use crate::{
     commons::channel::{ChannelData, MpscChannel, SenderEnd},
     governance::GovernanceAPI,
@@ -29,12 +30,12 @@ impl EventAPI {
 
 #[async_trait]
 pub trait EventAPIInterface {
-    async fn send_event_request(&self, event_request: EventRequest) -> EventResponse;
+    async fn send_event_request(&self, event_request: Signed<EventRequestType>) -> EventResponse;
 }
 
 #[async_trait]
 impl EventAPIInterface for EventAPI {
-    async fn send_event_request(&self, event_request: EventRequest) -> EventResponse {
+    async fn send_event_request(&self, event_request: Signed<EventRequestType>) -> EventResponse {
         match self.sender.ask(EventCommand::Event { event_request }).await {
             Ok(response) => response,
             Err(error) => EventResponse::Event(Err(EventError::EventApiChannelNotAvailable)),

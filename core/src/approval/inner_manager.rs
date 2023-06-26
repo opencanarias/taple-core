@@ -4,7 +4,7 @@ use crate::{
     commons::{
         config::VotationType,
         models::{
-            approval::{Approval, ApprovalContent, ApprovalStatus},
+            approval::{ ApprovalContent, ApprovalStatus},
             state::Subject,
             Acceptance,
         },
@@ -15,7 +15,7 @@ use crate::{
     event_request::{ EventRequestType},
     governance::{error::RequestError, GovernanceInterface},
     identifier::{Derivable, DigestIdentifier, KeyIdentifier},
-    DatabaseCollection, Notification, signature::Signed, Proposal,
+    DatabaseCollection, Notification, signature::Signed, Proposal, authorized_subjecs::error,
 };
 
 use super::{
@@ -175,7 +175,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         &mut self,
         approval_request: Signed<Proposal>,
     ) -> Result<
-        Result<Option<(Approval, KeyIdentifier)>, ApprovalErrorResponse>,
+        Result<Option<(Signed<ApprovalContent>, KeyIdentifier)>, ApprovalErrorResponse>,
         ApprovalManagerError,
     > {
         /*
@@ -194,17 +194,17 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             intervención. En ese caso es precisar eliminar la petición y actualizar a la nueva.
             Debemos comprobar siempre si ya tenemos la petición que nos envían.
         */
-        let id = &approval_request
-            .subject_signature
-            .content
-            .event_content_hash;
+        let id = match DigestIdentifier::from_serializable_borsh(&approval_request.content).map_err(|_| ApprovalErrorResponse::ErrorHashing) {
+            Ok(id) => id,
+            Err(error) => return Ok(Err(error)),
+        };
 
         if let Ok(_data) = self.get_single_request(&id) {
             return Ok(Err(ApprovalErrorResponse::RequestAlreadyKnown));
         };
 
         // Comprobamos si la request es de tipo State
-        let EventRequestType::Fact(state_request) = &approval_request.proposal.event_request.request else {
+        let EventRequestType::Fact(state_request) = &approval_request.content.event_request.content else {
                 return Ok(Err(ApprovalErrorResponse::NoFactEvent));
             };
 
@@ -215,7 +215,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             Err(_error) => return Err(ApprovalManagerError::DatabaseError),
         };
 
-        if approval_request.proposal.sn > subject_data.sn + 1 {
+        if approval_request.content.sn > subject_data.sn + 1 {
             return Ok(Err(ApprovalErrorResponse::SubjectNotSynchronized));
         }
 
@@ -223,7 +223,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         // En caso de no haber request previa, continuamos.
         if let Some(prev_request_id) = self.subject_been_approved.get(&state_request.subject_id) {
             let data = self.get_single_request(&prev_request_id).unwrap();
-            if approval_request.proposal.sn <= data.sn {
+            if approval_request.content.sn <= data.sn {
                 return Ok(Err(ApprovalErrorResponse::PreviousEventDetected));
             }
         }
@@ -242,7 +242,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             Err(error) => return Ok(Err(error)),
         };
 
-        let Some(evaluation) = &approval_request.proposal.evaluation else {
+        let Some(evaluation) = &approval_request.content.evaluation else {
             return Ok(Err(ApprovalErrorResponse::NotEvaluationInRequest));
         };
 
@@ -277,7 +277,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
 
         // Comprobamos validez criptográfica de la firma del sujeto
         // Empezamos comprobando que el firmante sea el sujeto
-        if approval_request.subject_signature.content.signer != subject_data.public_key {
+        if approval_request.signature.signer != subject_data.public_key {
             return Ok(Err(ApprovalErrorResponse::SignatureSignerIsNotSubject));
         }
 
@@ -290,7 +290,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         //     return Ok(Err(ApprovalErrorResponse::InvalidSubjectSignature));
         // }
 
-        let Ok(()) = approval_request.check_signatures() else {
+        let Ok(()) = approval_request.verify() else {
             return Ok(Err(ApprovalErrorResponse::InvalidSubjectSignature));
         }
         ;
@@ -325,14 +325,14 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         let hash = DigestIdentifier::from_serializable_borsh(&evaluation)
             .map_err(|_| ApprovalManagerError::HashGenerationFailed)?;
 
-        for signature in approval_request.proposal.evaluation_signatures.iter() {
+        for signature in approval_request.content.evaluation_signatures.iter() {
             // Comprobación de que el evaluador existe
             if !evaluators.contains(&signature.signer) {
                 return Ok(Err(ApprovalErrorResponse::InvalidEvaluator));
             }
             // Comprobamos su firma -> Es necesario generar el contenido que ellos firman
             if signature
-                .verify().is_err()
+                .verify(&hash).is_err()
             {
                 return Ok(Err(ApprovalErrorResponse::InvalidEvaluatorSignature));
             }
@@ -347,7 +347,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
 
         match evaluation.acceptance {
             Acceptance::Ok => {
-                if !(approval_request.proposal.evaluation_signatures.len() as u32
+                if !(approval_request.content.evaluation_signatures.len() as u32
                     >= evaluator_quorum)
                 {
                     return Ok(Err(ApprovalErrorResponse::NoQuorumReached));
@@ -355,7 +355,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             }
             Acceptance::Ko => {
                 let negativate_quorum = evaluators.len() as u32 - evaluator_quorum;
-                if !(approval_request.proposal.evaluation_signatures.len() as u32
+                if !(approval_request.content.evaluation_signatures.len() as u32
                     > negativate_quorum)
                 {
                     return Ok(Err(ApprovalErrorResponse::NoQuorumReached));
@@ -369,21 +369,17 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         // - VotarionType::AlwaysAccept => Se emite voto afirmativo
         // - VotarionType::AlwaysReject => Se emite voto negativo
 
-        let approval_petition_data = ApprovalPetitionData {
-            subject_id: subject_data.subject_id.clone(),
-            sn: approval_request.proposal.sn,
-            governance_id: subject_data.governance_id,
-            governance_version: version,
-            hash_event_proporsal: approval_request
-                .subject_signature
-                .content
-                .event_content_hash
-                .clone(),
-            sender: subject_data.owner.clone(),
-            json_patch: approval_request.proposal.json_patch.clone(),
-        };
         self.subject_been_approved
             .insert(subject_data.subject_id.clone(), id.clone());
+        let approval_petition_data = ApprovalPetitionData {
+            subject_id: subject_data.subject_id.clone(),
+            sn: approval_request.content.sn,
+            governance_id: subject_data.governance_id,
+            governance_version: version,
+            hash_event_proporsal: id,
+            sender: subject_data.owner.clone(),
+            json_patch: approval_request.content.json_patch.clone(),
+        };
         let Ok(_result) = self.database.set_approval(&approval_petition_data.hash_event_proporsal.clone(), (approval_petition_data, ApprovalStatus::Pending)) else { 
             return Err(ApprovalManagerError::DatabaseError)
         };
@@ -413,7 +409,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         &mut self,
         request_id: &DigestIdentifier,
         acceptance: Acceptance,
-    ) -> Result<Result<(Approval, KeyIdentifier), ApprovalErrorResponse>, ApprovalManagerError>
+    ) -> Result<Result<(Signed<ApprovalContent>, KeyIdentifier), ApprovalErrorResponse>, ApprovalManagerError>
     {
         // Obtenemos la petición
         let Ok(data) = self.get_single_request(&request_id) else {
@@ -429,7 +425,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             return Err(ApprovalManagerError::DatabaseError)
         };
         Ok(Ok((
-            Approval {
+            Signed::<ApprovalContent> {
                 content: ApprovalContent {
                     event_proposal_hash: data.hash_event_proporsal,
                     acceptance,

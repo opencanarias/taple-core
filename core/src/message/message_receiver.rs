@@ -5,9 +5,9 @@ use std::io::Cursor;
 use tokio::sync::mpsc::{self};
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::{commons::channel::SenderEnd, KeyIdentifier};
+use crate::{commons::channel::SenderEnd, KeyIdentifier, signature::Signed};
 
-use super::{Message, TaskCommandContent};
+use super::{ TaskCommandContent, MessageContent};
 
 #[derive(Debug)]
 pub enum NetworkEvent {
@@ -19,7 +19,7 @@ where
     T: TaskCommandContent + Serialize + DeserializeOwned,
 {
     receiver: ReceiverStream<NetworkEvent>,
-    sender: SenderEnd<Message<T>, ()>,
+    sender: SenderEnd<Signed<MessageContent<T>>, ()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
     own_id: KeyIdentifier,
 }
@@ -27,7 +27,7 @@ where
 impl<T: TaskCommandContent + Serialize + DeserializeOwned + 'static> MessageReceiver<T> {
     pub fn new(
         receiver: mpsc::Receiver<NetworkEvent>,
-        sender: SenderEnd<Message<T>, ()>,
+        sender: SenderEnd<Signed<MessageContent<T>>, ()>,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
         own_id: KeyIdentifier,
     ) -> Self {
@@ -49,9 +49,9 @@ impl<T: TaskCommandContent + Serialize + DeserializeOwned + 'static> MessageRece
                         // Deserialize the message
                         let cur = Cursor::new(message);
                         let mut de = Deserializer::new(cur);
-                        let message: Message<T> = Deserialize::deserialize(&mut de).expect("Fallo de deserialización");
+                        let message: Signed<MessageContent<T>> = Deserialize::deserialize(&mut de).expect("Fallo de deserialización");
                         // Check message signature
-                        if message.signature.verify().is_err() || message.content.sender_id != message.signature.content.signer {
+                        if message.verify().is_err() || message.content.sender_id != message.signature.signer {
                             log::error!("Invalid signature in message");
                         } else if message.content.receiver != self.own_id {
                             log::error!("Message not for me");

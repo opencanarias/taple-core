@@ -80,4 +80,6 @@ pub enum ApprovalErrorResponse {
     NoHashCorrelation,
     #[error("Invalid acceptance")]
     InvalidAcceptance,
+    #[error("Error Hashing")]
+    ErrorHashing,
 }

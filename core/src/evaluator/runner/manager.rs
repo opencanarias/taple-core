@@ -49,7 +49,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
     ) -> Result<ExecuteContractResponse, ExecutorErrorResponses> {
         // Check governance version
         let governance_id = if &execute_contract.context.schema_id == "governance" {
-            if let EventRequestType::Fact(data) = &execute_contract.event_request.request {
+            if let EventRequestType::Fact(data) = &execute_contract.event_request.content {
                 data.subject_id.clone()
             } else {
                 return Err(ExecutorErrorResponses::CreateRequestNotAllowed);
@@ -139,7 +139,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
                 &execute_contract.context.actual_state,
                 &state_data.payload,
                 contract,
-                &execute_contract.event_request.signature.content.signer
+                &execute_contract.event_request.signature.signer
                     == &execute_contract.context.owner,
             )
             .await?;

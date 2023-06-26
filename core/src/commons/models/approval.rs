@@ -2,27 +2,27 @@
 use std::hash::Hasher;
 
 use super::Acceptance;
-use crate::{identifier::DigestIdentifier, signature::Signature};
+use crate::{identifier::DigestIdentifier, signature::{Signature, Signed}, commons::errors::SubjectError};
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 use std::hash::Hash;
 
-#[derive(
-    Debug,
-    Clone,
-    Serialize,
-    Deserialize,
-    Eq,
-    BorshSerialize,
-    BorshDeserialize,
-    PartialOrd,
-    PartialEq,
-    Hash,
-)]
-pub struct Approval {
-    pub content: ApprovalContent,
-    pub signature: Signature,
-}
+// #[derive(
+//     Debug,
+//     Clone,
+//     Serialize,
+//     Deserialize,
+//     Eq,
+//     BorshSerialize,
+//     BorshDeserialize,
+//     PartialOrd,
+//     PartialEq,
+//     Hash,
+// )]
+// pub struct Approval {
+//     pub content: ApprovalContent,
+//     pub signature: Signature,
+// }
 
 #[derive(
     Debug,
@@ -41,11 +41,29 @@ pub struct ApprovalContent {
     pub acceptance: Acceptance,
 }
 
+impl Signed<ApprovalContent> {
+    pub fn new(
+        event_proposal_hash: DigestIdentifier,
+        acceptance: Acceptance,
+        signature: Signature,
+    ) -> Self {
+        let content = ApprovalContent {
+            event_proposal_hash,
+            acceptance,
+        };
+        Self { content, signature }
+    }
+
+    pub fn verify(&self) -> Result<(), SubjectError> {
+        self.signature.verify(&self.content)
+    }
+}
+
 #[derive(
     Debug, Clone, Serialize, Deserialize, Eq, BorshSerialize, BorshDeserialize, PartialOrd,
 )]
 pub struct UniqueApproval {
-    pub approval: Approval,
+    pub approval: Signed<ApprovalContent>,
 }
 
 impl PartialEq for UniqueApproval {

@@ -83,10 +83,8 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
                 .db
                 .get_witness_signatures(&id)
                 .map_err(|error| DistributionManagerError::DatabaseError(error.to_string()))?;
-            let current_signers: HashSet<KeyIdentifier> = current_signatures
-                .into_iter()
-                .map(|s| s.content.signer)
-                .collect();
+            let current_signers: HashSet<KeyIdentifier> =
+                current_signatures.into_iter().map(|s| s.signer).collect();
             let remaining_signers: HashSet<KeyIdentifier> =
                 witnesses.difference(&current_signers).cloned().collect();
             witnesses.insert(owner);
@@ -347,7 +345,7 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
                     let requested = &msg.signatures_requested;
                     let result = signatures
                         .iter()
-                        .filter(|s| requested.contains(&s.content.signer))
+                        .filter(|s| requested.contains(&s.signer))
                         .cloned()
                         .collect();
                     let response = create_distribution_response(msg.subject_id.clone(), sn, result);
@@ -405,10 +403,8 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
         current_signatures: &HashSet<Signature>,
         targets: &HashSet<KeyIdentifier>,
     ) -> HashSet<KeyIdentifier> {
-        let current_signers: HashSet<&KeyIdentifier> = current_signatures
-            .iter()
-            .map(|s| &s.content.signer)
-            .collect();
+        let current_signers: HashSet<&KeyIdentifier> =
+            current_signatures.iter().map(|s| &s.signer).collect();
         let targets_ref: HashSet<&KeyIdentifier> = targets.iter().map(|s| s).collect();
         targets_ref
             .difference(&current_signers)
@@ -455,17 +451,15 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
                 let mut targets = self.get_targets(metadata, &subject).await?;
                 let hash_signed = DigestIdentifier::from_serializable_borsh(&event)
                     .map_err(|_| DistributionManagerError::HashGenerationFailed)?;
+                let event_hash = DigestIdentifier::from_serializable_borsh(&event)
+                    .map_err(|_| DistributionManagerError::HashGenerationFailed)?;
                 for signature in msg.signatures.iter() {
                     // Comprobamos signer
-                    if !targets.contains(&signature.content.signer) {
+                    if !targets.contains(&signature.signer) {
                         return Ok(Err(DistributionErrorResponses::InvalidSigner));
                     }
                     // Comprobamos firma
-                    if let Err(_error) = signature
-                        .content
-                        .signer
-                        .verify(&hash_signed.derivative(), &signature.signature)
-                    {
+                    if let Err(_error) = signature.verify(&event_hash) {
                         return Ok(Err(DistributionErrorResponses::InvalidSignature));
                     }
                 }

@@ -117,7 +117,7 @@ impl<
         let response = 'response: {
             match data {
                 EvaluatorMessage::AskForEvaluation(data) => {
-                    let EventRequestType::Fact(state_data) = &data.event_request.request else {
+                    let EventRequestType::Fact(state_data) = &data.event_request.content else {
                         break 'response EvaluatorResponse::AskForEvaluation(Err(super::errors::EvaluatorErrorResponses::CreateRequestNotAllowed));
                     };
                     let result = self.runner.execute_contract(&data, state_data).await;
@@ -245,7 +245,7 @@ mod test {
         evaluator::{compiler::ContractType, EvaluatorMessage, EvaluatorResponse},
         event::EventCommand,
         event_content::Metadata,
-        event_request::{EventRequest, EventRequestType, FactRequest},
+        event_request::{EventRequestType, FactRequest},
         governance::{
             error::RequestError, stage::ValidationStage, GovernanceInterface,
             GovernanceUpdatedMessage,
@@ -253,6 +253,7 @@ mod test {
         identifier::{DigestIdentifier, KeyIdentifier},
         message::MessageTaskCommand,
         protocol::protocol_message_manager::TapleMessages,
+        signature::Signed,
         MemoryManager, TimeStamp, ValueWrapper,
     };
 
@@ -588,14 +589,17 @@ mod test {
     fn create_event_request(
         json: Value,
         signature_manager: &SelfSignatureManager,
-    ) -> EventRequest {
+    ) -> Signed<EventRequestType> {
         let request = EventRequestType::Fact(FactRequest {
             subject_id: DigestIdentifier::from_str("JXtZRpNgBWVg9v5YG9AaTNfCpPd-rCTTKrFW9cV8-JKs")
                 .unwrap(),
             payload: ValueWrapper(json),
         });
         let signature = signature_manager.sign(&request).unwrap();
-        let event_request = EventRequest { request, signature };
+        let event_request = Signed::<EventRequestType> {
+            content: request,
+            signature,
+        };
         event_request
     }
 
@@ -701,8 +705,8 @@ mod test {
             println!("{:#?}\n{:#?}", initial_state_json, new_state_json);
             let patch = generate_json_patch(initial_state_json, new_state_json);
             assert_eq!(patch, json_patch.0); // arreglar
-                                           // let own_identifier = signature_manager.get_own_identifier();
-                                           // assert_eq!(evaluation..signer, own_identifier); // arreglar
+                                             // let own_identifier = signature_manager.get_own_identifier();
+                                             // assert_eq!(evaluation..signer, own_identifier); // arreglar
             handler.abort();
         });
     }
