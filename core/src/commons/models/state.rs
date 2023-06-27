@@ -4,7 +4,7 @@ use crate::{
         errors::SubjectError,
         identifier::{DigestIdentifier, KeyIdentifier},
     },
-    Derivable, signature::Signed, EventContent,
+    Derivable, signature::Signed, Event,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use json_patch::{patch, Patch};
@@ -115,7 +115,7 @@ impl Subject {
     // }
 
     pub fn from_genesis_event(
-        event: Signed<EventContent>,
+        event: Signed<Event>,
         init_state: ValueWrapper,
         keys: Option<KeyPair>,
     ) -> Result<Self, SubjectError> {

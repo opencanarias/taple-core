@@ -5,7 +5,7 @@ use crate::identifier::DigestIdentifier;
 use crate::signature::Signature;
 #[cfg(feature = "aproval")]
 use crate::{Acceptance, ApprovalPetitionData};
-use crate::{KeyDerivator, KeyIdentifier, EventContent, EventRequest};
+use crate::{KeyDerivator, KeyIdentifier, Event, EventRequest};
 use std::collections::HashSet;
 
 mod api;
@@ -48,7 +48,7 @@ pub enum ApiResponses {
     GetSubjects(Result<Vec<SubjectData>, ApiError>),
     GetGovernances(Result<Vec<SubjectData>, ApiError>),
     GetSubject(Result<SubjectData, ApiError>),
-    GetEvents(Result<Vec<Signed<EventContent>>, ApiError>),
+    GetEvents(Result<Vec<Signed<Event>>, ApiError>),
     HandleExternalRequest(Result<DigestIdentifier, ApiError>),
     #[cfg(feature = "aproval")]
     VoteResolve(Result<DigestIdentifier, ApiError>),
@@ -56,7 +56,7 @@ pub enum ApiResponses {
     GetPendingRequests(Result<Vec<ApprovalPetitionData>, ApiError>),
     #[cfg(feature = "aproval")]
     GetSingleRequest(Result<ApprovalPetitionData, ApiError>),
-    GetEvent(Result<Signed<EventContent>, ApiError>),
+    GetEvent(Result<Signed<Event>, ApiError>),
     AddKeys(Result<KeyIdentifier, ApiError>),
     GetValidationProof(Result<HashSet<Signature>, ApiError>),
     GetRequest(Result<TapleRequest, ApiError>),

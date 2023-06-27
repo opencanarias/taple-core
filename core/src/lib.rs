@@ -104,7 +104,7 @@ pub use commons::crypto;
 pub use commons::identifier;
 pub use commons::identifier::{Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier};
 pub use commons::models::approval::ApprovalContent;
-pub use commons::models::event::EventContent;
+pub use commons::models::event::Event;
 pub use commons::models::event_proposal::{Evaluation, Proposal};
 pub use commons::models::request::EventRequest;
 pub use commons::models::request;
@@ -114,7 +114,7 @@ pub use commons::models::{event_content, signature};
 pub use commons::{
     config::{DatabaseSettings, NetworkSettings, NodeSettings, TapleSettings},
     identifier::derive::{digest::DigestDerivator, KeyDerivator},
-    models::event::ValidationProof,
+    models::validation::ValidationProof,
     models::notification::Notification,
     models::timestamp::TimeStamp,
     models::value_wrapper::ValueWrapper,

@@ -8,7 +8,8 @@ use crate::{
         models::{
             approval::UniqueApproval,
             evaluation::{EvaluationRequest, SubjectContext},
-            event::{EventContent, ValidationProof},
+            event::{Event},
+            validation::ValidationProof,
             event_proposal::{Evaluation, Proposal},
             state::{generate_subject_id, Subject},
             Acceptance,
@@ -61,7 +62,7 @@ pub struct EventCompleter<C: DatabaseCollection> {
     event_proposals: HashMap<DigestIdentifier, Signed<Proposal>>,
     event_approvations: HashMap<DigestIdentifier, HashSet<UniqueApproval>>,
     // Validation HashMaps
-    events_to_validate: HashMap<DigestIdentifier, Signed<EventContent>>,
+    events_to_validate: HashMap<DigestIdentifier, Signed<Event>>,
     event_validations: HashMap<DigestIdentifier, HashSet<UniqueSignature>>,
     event_notary_events: HashMap<DigestIdentifier, NotaryEvent>,
     // SignatureManager
@@ -130,7 +131,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
     fn create_notary_event(
         &self,
         subject: &Subject,
-        event: &Signed<EventContent>,
+        event: &Signed<Event>,
         gov_version: u64,
     ) -> Result<NotaryEvent, EventError> {
         let prev_event_hash = if event.content.event_proposal.content.sn == 0 {
@@ -589,7 +590,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 governance_version,
             )?;
             // Una vez que todo va bien creamos el evento prevalidado y lo mandamos a validación
-            let event = Signed::<EventContent>::from_genesis_request(
+            let event = Signed::<Event>::from_genesis_request(
                 event_request.clone(),
                 &subject_keys,
                 governance_version,
@@ -1512,8 +1513,8 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         approvals: HashSet<Signed<ApprovalContent>>,
         subject: &Subject,
         execution: bool,
-    ) -> Result<Signed<EventContent>, EventError> {
-        let event_content = EventContent::new(event_proposal, approvals, execution);
+    ) -> Result<Signed<Event>, EventError> {
+        let event_content = Event::new(event_proposal, approvals, execution);
         let event_content_hash = DigestIdentifier::from_serializable_borsh(&event_content)
             .map_err(|_| {
                 EventError::CryptoError(String::from("Error calculating the hash of the event"))
@@ -1527,7 +1528,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         .map_err(|_| {
             EventError::CryptoError(String::from("Error signing the hash of the event content"))
         })?;
-        let event = Signed::<EventContent> {
+        let event = Signed::<Event> {
             content: event_content,
             signature: event_signature,
         };

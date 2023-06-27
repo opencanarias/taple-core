@@ -8,7 +8,7 @@ use super::{
 use super::{GetEvents, GetGovernanceSubjects};
 #[cfg(feature = "aproval")]
 use crate::approval::manager::ApprovalAPI;
-use crate::{authorized_subjecs::manager::AuthorizedSubjectsAPI, EventRequest, signature::Signed, EventContent};
+use crate::{authorized_subjecs::manager::AuthorizedSubjectsAPI, EventRequest, signature::Signed, Event};
 use crate::commons::models::approval::ApprovalStatus;
 use crate::commons::models::request::TapleRequest;
 use crate::commons::models::state::SubjectData;
@@ -74,9 +74,9 @@ pub trait ApiModuleInterface {
         subject_id: DigestIdentifier,
         from: Option<i64>,
         quantity: Option<i64>,
-    ) -> Result<Vec<Signed<EventContent>>, ApiError>;
+    ) -> Result<Vec<Signed<Event>>, ApiError>;
 
-    async fn get_event(&self, subject_id: DigestIdentifier, sn: u64) -> Result<Signed<EventContent>, ApiError>;
+    async fn get_event(&self, subject_id: DigestIdentifier, sn: u64) -> Result<Signed<Event>, ApiError>;
     /// Allows to obtain a specified subject by specifying its identifier.
     /// # Possible errors
     /// • [ApiError::InvalidParameters] if the specified identifier does not match a valid [DigestIdentifier].<br />
@@ -266,7 +266,7 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
-    async fn get_event(&self, subject_id: DigestIdentifier, sn: u64) -> Result<Signed<EventContent>, ApiError> {
+    async fn get_event(&self, subject_id: DigestIdentifier, sn: u64) -> Result<Signed<Event>, ApiError> {
         let response = self
             .sender
             .ask(APICommands::GetEvent(subject_id, sn))
@@ -284,7 +284,7 @@ impl ApiModuleInterface for NodeAPI {
         subject_id: DigestIdentifier,
         from: Option<i64>,
         quantity: Option<i64>,
-    ) -> Result<Vec<Signed<EventContent>>, ApiError> {
+    ) -> Result<Vec<Signed<Event>>, ApiError> {
         let response = self
             .sender
             .ask(APICommands::GetEvents(GetEvents {

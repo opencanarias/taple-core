@@ -7,176 +7,93 @@ use crate::{
         errors::SubjectError,
     },
     event_content::Metadata,
-    request::{StartRequest, EventRequest},
     identifier::{DigestIdentifier, KeyIdentifier},
+    request::{EventRequest, StartRequest},
     signature::{Signature, Signed},
-    ApprovalContent,
+    ApprovalContent, Derivable,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use json_patch::diff;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use super::{event_proposal::Proposal, state::Subject, value_wrapper::ValueWrapper};
+use super::{
+    event_proposal::Proposal,
+    state::{generate_subject_id, Subject},
+    value_wrapper::ValueWrapper,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
-pub struct EventContent {
-    pub event_proposal: Signed<Proposal>,
-    pub approvals: HashSet<Signed<ApprovalContent>>,
-    pub execution: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
-pub struct ValidationProof {
+pub struct Event {
     pub subject_id: DigestIdentifier,
-    pub schema_id: String,
-    pub namespace: String,
-    pub name: String,
-    pub subject_public_key: KeyIdentifier,
-    pub governance_id: DigestIdentifier,
-    pub genesis_governance_version: u64,
+    pub event_request: Signed<EventRequest>,
     pub sn: u64,
-    pub prev_event_hash: DigestIdentifier,
-    pub event_hash: DigestIdentifier,
-    pub governance_version: u64,
+    pub gov_version: u64,
+    pub patch: ValueWrapper, // cambiar
+    pub state_hash: DigestIdentifier,
+    // Si EventRequest
+    pub evaluation_success: bool, //Acceptance?  Se ejecutó con exito y se validó el resultado contra el esquema. Si no se evalua es true
+    pub approval_required: bool,  // no puede ser true si evaluation_success = false
+    pub approved: bool,           // por defecto true, si approval_required = false
+    pub hash_prev_event: DigestIdentifier,
+    pub evaluators: HashSet<Signature>, //hace falta la firma? Hashset
+    pub approvers: HashSet<Signature>,  //hace falta la firma? Hashset
 }
 
-impl ValidationProof {
-    pub fn new_from_genesis_event(
-        create_request: StartRequest,
-        event_hash: DigestIdentifier,
-        governance_version: u64,
-        subject_id: DigestIdentifier,
-    ) -> Self {
-        Self {
-            governance_id: create_request.governance_id,
-            governance_version,
-            subject_id,
-            sn: 0,
-            schema_id: create_request.schema_id,
-            namespace: create_request.namespace,
-            prev_event_hash: DigestIdentifier::default(),
-            event_hash,
-            subject_public_key: create_request.public_key,
-            genesis_governance_version: governance_version,
-            name: create_request.name,
-        }
-    }
-    pub fn new_from_transfer_event(
-        subject: &Subject,
-        sn: u64,
-        prev_event_hash: DigestIdentifier,
-        event_hash: DigestIdentifier,
-        governance_version: u64,
-        subject_public_key: KeyIdentifier,
-    ) -> Self {
-        Self {
-            governance_id: subject.governance_id.clone(),
-            governance_version,
-            subject_id: subject.subject_id.clone(),
-            sn,
-            schema_id: subject.schema_id.clone(),
-            namespace: subject.namespace.clone(),
-            prev_event_hash,
-            event_hash,
-            subject_public_key,
-            genesis_governance_version: subject.genesis_gov_version,
-            name: subject.name.clone(),
-        }
-    }
+// impl Event {
+//     pub fn new(
+//         event_proposal: Signed<Proposal>,
+//         approvals: HashSet<Signed<ApprovalContent>>,
+//         execution: bool,
+//     ) -> Self {
+//         Self {
+//             event_proposal,
+//             approvals,
+//             execution,
+//         }
+//     }
+// }
 
-    pub fn new(
-        subject: &Subject,
-        sn: u64,
-        prev_event_hash: DigestIdentifier,
-        event_hash: DigestIdentifier,
-        governance_version: u64,
-    ) -> Self {
-        Self {
-            governance_id: subject.governance_id.clone(),
-            governance_version,
-            subject_id: subject.subject_id.clone(),
-            sn,
-            schema_id: subject.schema_id.clone(),
-            namespace: subject.namespace.clone(),
-            prev_event_hash,
-            event_hash,
-            subject_public_key: subject.public_key.clone(),
-            genesis_governance_version: subject.genesis_gov_version,
-            name: subject.name.clone(),
-        }
-    }
-
-    pub fn get_metadata(&self) -> Metadata {
-        Metadata {
-            namespace: self.namespace.clone(),
-            governance_id: self.governance_id.clone(),
-            governance_version: self.governance_version,
-            schema_id: self.schema_id.clone(),
-            subject_id: self.subject_id.clone(),
-        }
-    }
-
-    pub fn is_similar(&self, other: &ValidationProof) -> bool {
-        self.governance_id == other.governance_id
-            && self.subject_id == other.subject_id
-            && self.sn == other.sn
-            && self.schema_id == other.schema_id
-            && self.namespace == other.namespace
-            && self.prev_event_hash == other.prev_event_hash
-            && self.event_hash == other.event_hash
-            && self.subject_public_key == other.subject_public_key
-            && self.genesis_governance_version == other.genesis_governance_version
-            && self.name == other.name
-    }
-}
-
-impl EventContent {
-    pub fn new(
-        event_proposal: Signed<Proposal>,
-        approvals: HashSet<Signed<ApprovalContent>>,
-        execution: bool,
-    ) -> Self {
-        Self {
-            event_proposal,
-            approvals,
-            execution,
-        }
-    }
-}
-
-impl Signed<EventContent> {
+impl Signed<Event> {
     pub fn from_genesis_request(
         event_request: Signed<EventRequest>,
         subject_keys: &KeyPair,
         gov_version: u64,
         init_state: &ValueWrapper,
     ) -> Result<Self, SubjectError> {
+        let EventRequest::Create(start_request) = event_request.content.clone() else {
+            return Err(SubjectError::NotCreateEvent)
+        };
         let json_patch = serde_json::to_value(diff(&json!({}), &init_state.0)).map_err(|_| {
             SubjectError::CryptoError(String::from("Error converting patch to value"))
         })?;
-        let proposal = Proposal {
-            event_request,
-            sn: 0,
-            hash_prev_event: DigestIdentifier::default(),
-            gov_version,
-            evaluation: None,
-            json_patch: ValueWrapper(json_patch),
-            evaluation_signatures: HashSet::new(),
-        };
         let public_key = KeyIdentifier::new(
             subject_keys.get_key_derivator(),
             &subject_keys.public_key_bytes(),
         );
-        let subject_signature_proposal =
-            Signature::new(&proposal, public_key.clone(), &subject_keys).map_err(|_| {
-                SubjectError::CryptoError(String::from("Error signing the hash of the proposal"))
-            })?;
-        let event_proposal = Signed::<Proposal>::new(proposal, subject_signature_proposal);
-        let content = EventContent {
-            event_proposal,
-            approvals: HashSet::new(),
-            execution: true,
+        let subject_id = generate_subject_id(
+            &start_request.namespace,
+            &start_request.schema_id,
+            public_key.to_str(),
+            start_request.governance_id.to_str(),
+            gov_version,
+        )?;
+        let state_hash = DigestIdentifier::from_serializable_borsh(init_state).map_err(|_| {
+            SubjectError::CryptoError(String::from("Error converting state to hash"))
+        })?;
+        let content = Event {
+            subject_id,
+            event_request,
+            sn: 0,
+            gov_version,
+            patch: ValueWrapper(json_patch),
+            state_hash,
+            evaluation_success: true,
+            approval_required: false,
+            approved: true,
+            hash_prev_event: DigestIdentifier::default(),
+            evaluators: HashSet::new(),
+            approvers: HashSet::new(),
         };
         let subject_signature_event = Signature::new(&content, public_key.clone(), &subject_keys)
             .map_err(|_| {
@@ -189,8 +106,12 @@ impl Signed<EventContent> {
     }
 
     pub fn verify(&self) -> Result<(), SubjectError> {
+        // Verify event and event_request signatures
         self.signature.verify(&self.content)?;
-        self.content.event_proposal.verify()?;
-        self.content.event_proposal.content.event_request.verify()
+        self.content.event_request.verify()?;
+        // Verify evaluators signatures
+        
+        // Verify approvers signatures
+
     }
 }

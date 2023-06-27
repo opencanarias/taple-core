@@ -1,6 +1,6 @@
 use crate::utils::{deserialize, serialize};
 use super::utils::{get_key, Element};
-use crate::commons::models::event::ValidationProof;
+use crate::commons::models::validation::ValidationProof;
 use crate::DbError;
 use crate::{DatabaseCollection, DatabaseManager, Derivable, DigestIdentifier, KeyIdentifier};
 use std::sync::Arc;

@@ -2,13 +2,13 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::commons::models::approval::ApprovalStatus;
-use crate::commons::models::event::ValidationProof;
+use crate::commons::models::validation::ValidationProof;
 use crate::commons::models::request::TapleRequest;
 use crate::commons::models::state::Subject;
 use crate::crypto::KeyPair;
 use crate::identifier::{DigestIdentifier, KeyIdentifier};
 use crate::signature::{Signature, Signed};
-use crate::{ApprovalPetitionData, EventContent, EventRequest};
+use crate::{ApprovalPetitionData, Event, EventRequest};
 
 use super::error::Error;
 use super::layers::lce_validation_proofs::LceValidationProofs;
@@ -137,7 +137,7 @@ impl<C: DatabaseCollection> DB<C> {
         self.subject_db.get_all_subjects()
     }
 
-    pub fn get_event(&self, subject_id: &DigestIdentifier, sn: u64) -> Result<Signed<EventContent>, Error> {
+    pub fn get_event(&self, subject_id: &DigestIdentifier, sn: u64) -> Result<Signed<Event>, Error> {
         self.event_db.get_event(subject_id, sn)
     }
 
@@ -146,12 +146,12 @@ impl<C: DatabaseCollection> DB<C> {
         subject_id: &DigestIdentifier,
         from: Option<i64>,
         quantity: isize,
-    ) -> Result<Vec<Signed<EventContent>>, Error> {
+    ) -> Result<Vec<Signed<Event>>, Error> {
         self.event_db
             .get_events_by_range(subject_id, from, quantity)
     }
 
-    pub fn set_event(&self, subject_id: &DigestIdentifier, event: Signed<EventContent>) -> Result<(), Error> {
+    pub fn set_event(&self, subject_id: &DigestIdentifier, event: Signed<Event>) -> Result<(), Error> {
         self.event_db.set_event(subject_id, event)
     }
 
@@ -159,7 +159,7 @@ impl<C: DatabaseCollection> DB<C> {
         self.event_db.del_event(subject_id, sn)
     }
 
-    pub fn get_prevalidated_event(&self, subject_id: &DigestIdentifier) -> Result<Signed<EventContent>, Error> {
+    pub fn get_prevalidated_event(&self, subject_id: &DigestIdentifier) -> Result<Signed<Event>, Error> {
         self.prevalidated_event_db
             .get_prevalidated_event(subject_id)
     }
@@ -167,7 +167,7 @@ impl<C: DatabaseCollection> DB<C> {
     pub fn set_prevalidated_event(
         &self,
         subject_id: &DigestIdentifier,
-        event: Signed<EventContent>,
+        event: Signed<Event>,
     ) -> Result<(), Error> {
         self.prevalidated_event_db
             .set_prevalidated_event(subject_id, event)

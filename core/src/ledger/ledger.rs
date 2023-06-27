@@ -9,7 +9,7 @@ use crate::{
         channel::SenderEnd,
         models::{
             evaluation::{EvaluationRequest, SubjectContext},
-            event::ValidationProof,
+            validation::ValidationProof,
             state::Subject,
         },
     },
@@ -26,7 +26,7 @@ use crate::{
     utils::message::ledger::{request_event, request_gov_event},
     DatabaseCollection,
 };
-use crate::{ApprovalContent, EventContent, KeyDerivator, ValueWrapper};
+use crate::{ApprovalContent, Event, KeyDerivator, ValueWrapper};
 use std::collections::{hash_map::Entry, HashMap, HashSet};
 
 use super::errors::LedgerError;
@@ -179,7 +179,7 @@ impl<C: DatabaseCollection> Ledger<C> {
 
     pub async fn genesis(
         &mut self,
-        event: Signed<EventContent>,
+        event: Signed<Event>,
         signatures: HashSet<Signature>,
         validation_proof: ValidationProof,
     ) -> Result<(), LedgerError> {
@@ -288,7 +288,7 @@ impl<C: DatabaseCollection> Ledger<C> {
 
     pub async fn event_validated(
         &mut self,
-        event: Signed<EventContent>,
+        event: Signed<Event>,
         signatures: HashSet<Signature>,
         validation_proof: ValidationProof,
     ) -> Result<(), LedgerError> {
@@ -489,7 +489,7 @@ impl<C: DatabaseCollection> Ledger<C> {
 
     pub async fn external_event(
         &mut self,
-        event: Signed<EventContent>,
+        event: Signed<Event>,
         signatures: HashSet<Signature>,
         sender: KeyIdentifier,
         validation_proof: ValidationProof,
@@ -2075,7 +2075,7 @@ impl<C: DatabaseCollection> Ledger<C> {
 
     pub async fn external_intermediate_event(
         &mut self,
-        event: Signed<EventContent>,
+        event: Signed<Event>,
     ) -> Result<(), LedgerError> {
         let event_request = event.content.event_proposal.content.event_request.clone();
         let request_id = DigestIdentifier::from_serializable_borsh(&event_request)
@@ -2390,7 +2390,7 @@ impl<C: DatabaseCollection> Ledger<C> {
         who_asked: KeyIdentifier,
         subject_id: DigestIdentifier,
         sn: u64,
-    ) -> Result<Signed<EventContent>, LedgerError> {
+    ) -> Result<Signed<Event>, LedgerError> {
         let event = self.database.get_event(&subject_id, sn)?;
         self.message_channel
             .tell(MessageTaskCommand::Request(
@@ -2410,7 +2410,7 @@ impl<C: DatabaseCollection> Ledger<C> {
         who_asked: KeyIdentifier,
         subject_id: DigestIdentifier,
         sn: u64,
-    ) -> Result<(Signed<EventContent>, HashSet<Signature>), LedgerError> {
+    ) -> Result<(Signed<Event>, HashSet<Signature>), LedgerError> {
         log::warn!("GET NEXT GOV");
         log::info!("Getting NG: {}..............{}", subject_id.to_str(), sn);
         log::info!("Who Asked: {}", who_asked.to_str());
@@ -2439,7 +2439,7 @@ impl<C: DatabaseCollection> Ledger<C> {
         &self,
         who_asked: KeyIdentifier,
         subject_id: DigestIdentifier,
-    ) -> Result<(Signed<EventContent>, HashSet<Signature>), LedgerError> {
+    ) -> Result<(Signed<Event>, HashSet<Signature>), LedgerError> {
         log::info!("Getting LCE: {}", subject_id.to_str());
         log::info!("Who Asked: {}", who_asked.to_str());
         let subject = self.database.get_subject(&subject_id)?;
@@ -2562,7 +2562,7 @@ impl<C: DatabaseCollection> Ledger<C> {
 
     async fn check_genesis(
         &self,
-        event: Signed<EventContent>,
+        event: Signed<Event>,
         subject_id: DigestIdentifier,
     ) -> Result<Metadata, LedgerError> {
         let EventRequest::Create(create_request) = &event.content.event_proposal.content.event_request.content else {
@@ -2617,7 +2617,7 @@ impl<C: DatabaseCollection> Ledger<C> {
         Ok(metadata)
     }
 
-    fn event_sourcing_eol(&self, event: Signed<EventContent>) -> Result<(), LedgerError> {
+    fn event_sourcing_eol(&self, event: Signed<Event>) -> Result<(), LedgerError> {
         let subject_id = {
             match event.content.event_proposal.content.event_request.content {
                 EventRequest::EOL(eol_request) => eol_request.subject_id.clone(),
@@ -2716,7 +2716,7 @@ impl<C: DatabaseCollection> Ledger<C> {
         Ok(())
     }
 
-    fn event_sourcing(&self, event: Signed<EventContent>) -> Result<(), LedgerError> {
+    fn event_sourcing(&self, event: Signed<Event>) -> Result<(), LedgerError> {
         match &event.content.event_proposal.content.event_request.content {
             EventRequest::Transfer(transfer_request) => self.event_sourcing_transfer(
                 transfer_request.subject_id.clone(),
@@ -2745,7 +2745,7 @@ impl<C: DatabaseCollection> Ledger<C> {
         &self,
         subject_id: DigestIdentifier,
         sn: u64,
-        event: Signed<EventContent>,
+        event: Signed<Event>,
     ) -> Result<(), LedgerError> {
         let prev_event_hash = DigestIdentifier::from_serializable_borsh(
             &self
@@ -2783,7 +2783,7 @@ impl<C: DatabaseCollection> Ledger<C> {
         Ok(())
     }
 
-    fn check_transfer_event(&self, event: Signed<EventContent>) -> Result<(), LedgerError> {
+    fn check_transfer_event(&self, event: Signed<Event>) -> Result<(), LedgerError> {
         if event.content.event_proposal.content.evaluation.is_some() {
             return Err(LedgerError::EvaluationInTransferEvent);
         }
@@ -2795,7 +2795,7 @@ impl<C: DatabaseCollection> Ledger<C> {
 
     async fn check_event(
         &self,
-        event: Signed<EventContent>,
+        event: Signed<Event>,
         metadata: Metadata,
     ) -> Result<(), LedgerError> {
         // Comprobar que las firmas de evaluación y/o aprobación hacen quorum
@@ -2855,7 +2855,7 @@ impl<C: DatabaseCollection> Ledger<C> {
 }
 
 fn check_context(
-    event: &Signed<EventContent>,
+    event: &Signed<Event>,
     subject: &Subject,
     metadata: Metadata,
     prev_properties: ValueWrapper,
@@ -2949,7 +2949,7 @@ fn verify_signatures(
     signers: &HashSet<KeyIdentifier>,
     quorum_size: u32,
     event_hash: &DigestIdentifier,
-    event_content: &EventContent,
+    event_content: &Event,
 ) -> Result<(), LedgerError> {
     log::warn!("EL EVENT HASH ES {}", event_hash.to_str());
     let mut actual_signers = HashSet::new();

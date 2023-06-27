@@ -4,7 +4,7 @@ use crate::{
     commons::{
         channel::SenderEnd,
         errors::ChannelErrors,
-        models::event::ValidationProof,
+        models::validation::ValidationProof,
         self_signature_manager::{SelfSignatureInterface, SelfSignatureManager},
     },
     event::EventCommand,

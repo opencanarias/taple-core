@@ -4,7 +4,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    commons::models::{event::ValidationProof, notary::NotaryEventResponse},
+    commons::models::{validation::ValidationProof, notary::NotaryEventResponse},
     signature::Signature,
     KeyIdentifier,
 };
