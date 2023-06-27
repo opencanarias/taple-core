@@ -6,7 +6,7 @@ use crate::{
     ledger::LedgerCommand,
     message::{MessageConfig, MessageTaskCommand},
     protocol::protocol_message_manager::TapleMessages,
-    DatabaseCollection, Derivable, DigestIdentifier, KeyIdentifier,
+    DatabaseCollection, DigestIdentifier, KeyIdentifier,
 };
 
 use super::error::AuthorizedSubjectsError;

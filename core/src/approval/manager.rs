@@ -47,7 +47,7 @@ pub trait ApprovalAPIInterface {
         &self,
         request_id: DigestIdentifier,
         acceptance: Acceptance,
-    ) -> Result<(), ApprovalErrorResponse>;
+    ) -> Result<ApprovalPetitionData, ApprovalErrorResponse>;
     async fn get_all_requests(&self) -> Result<Vec<ApprovalPetitionData>, ApprovalErrorResponse>;
     async fn get_single_request(
         &self,
@@ -68,7 +68,7 @@ impl ApprovalAPIInterface for ApprovalAPI {
         &self,
         request_id: DigestIdentifier,
         acceptance: Acceptance,
-    ) -> Result<(), ApprovalErrorResponse> {
+    ) -> Result<ApprovalPetitionData, ApprovalErrorResponse> {
         let result = self
             .input_channel
             .ask(ApprovalMessages::EmitVote(EmitVote {
@@ -266,7 +266,7 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
                     .generate_vote(&message.request_id, message.acceptance)
                     .await?
                 {
-                    Ok((vote, owner)) => {
+                    Ok((vote, owner, data)) => {
                         let msg = create_approver_response(vote);
                         self.messenger_channel
                             .tell(MessageTaskCommand::Request(
@@ -280,7 +280,7 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
                         if sender.is_some() {
                             sender
                                 .unwrap()
-                                .send(ApprovalResponses::EmitVote(Ok(())))
+                                .send(ApprovalResponses::EmitVote(Ok(data)))
                                 .map_err(|_| ApprovalManagerError::ResponseChannelClosed)?;
                         }
                     }

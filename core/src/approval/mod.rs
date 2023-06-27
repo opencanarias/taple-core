@@ -38,7 +38,7 @@ pub struct ApprovalPetitionData {
 #[derive(Clone, Debug)]
 pub enum ApprovalResponses {
     RequestApproval(Result<(), ApprovalErrorResponse>),
-    EmitVote(Result<(), ApprovalErrorResponse>),
+    EmitVote(Result<ApprovalPetitionData, ApprovalErrorResponse>),
     GetAllRequest(Vec<ApprovalPetitionData>),
     GetSingleRequest(Result<ApprovalPetitionData, ApprovalErrorResponse>),
 }

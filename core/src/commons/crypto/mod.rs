@@ -19,11 +19,9 @@ pub use secp256k1::Secp256k1KeyPair;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    identifier::{self, derive::KeyDerivator, Derivable, DigestIdentifier},
-    signature::Signature,
+    identifier::{self, derive::KeyDerivator},
 };
 
-use self::error::CryptoError;
 
 /// Asymmetric key pair
 #[derive(Serialize, Deserialize, Debug)]

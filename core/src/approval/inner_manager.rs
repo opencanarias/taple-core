@@ -15,7 +15,7 @@ use crate::{
     event_request::{ EventRequestType},
     governance::{error::RequestError, GovernanceInterface},
     identifier::{Derivable, DigestIdentifier, KeyIdentifier},
-    DatabaseCollection, Notification, signature::Signed, Proposal, authorized_subjecs::error,
+    DatabaseCollection, Notification, signature::Signed, Proposal,
 };
 
 use super::{
@@ -389,14 +389,14 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         match self.pass_votation {
             VotationType::Normal => return Ok(Ok(None)),
             VotationType::AlwaysAccept => {
-                let (vote, sender) = self
+                let (vote, sender, _) = self
                     .generate_vote(&id, Acceptance::Ok)
                     .await?
                     .expect("Request should be in data structure");
                 return Ok(Ok(Some((vote, sender))));
             }
             VotationType::AlwaysReject => {
-                let (vote, sender) = self
+                let (vote, sender, _) = self
                     .generate_vote(&id, Acceptance::Ko)
                     .await?
                     .expect("Request should be in data structure");
@@ -409,7 +409,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         &mut self,
         request_id: &DigestIdentifier,
         acceptance: Acceptance,
-    ) -> Result<Result<(Signed<ApprovalContent>, KeyIdentifier), ApprovalErrorResponse>, ApprovalManagerError>
+    ) -> Result<Result<(Signed<ApprovalContent>, KeyIdentifier, ApprovalPetitionData), ApprovalErrorResponse>, ApprovalManagerError>
     {
         // Obtenemos la petición
         let Ok(data) = self.get_single_request(&request_id) else {
@@ -427,12 +427,13 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         Ok(Ok((
             Signed::<ApprovalContent> {
                 content: ApprovalContent {
-                    event_proposal_hash: data.hash_event_proporsal,
+                    event_proposal_hash: data.hash_event_proporsal.clone(),
                     acceptance,
                 },
                 signature,
             },
-            data.sender,
+            data.sender.clone(),
+            data
         )))
     }
 }
@@ -460,14 +461,14 @@ mod test {
 
     use async_trait::async_trait;
     use serde_json::Value;
-    use tokio::{runtime::Runtime, sync::broadcast::Receiver};
+    use tokio::{sync::broadcast::Receiver};
 
     use crate::{
         approval::RequestApproval,
         commons::{
             config::VotationType,
-            crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair, Payload, DSA},
-            models::{state::Subject, timestamp, value_wrapper::ValueWrapper},
+            crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair},
+            models::{state::Subject, value_wrapper::ValueWrapper},
             schema_handler::gov_models::Contract,
             self_signature_manager::{SelfSignatureInterface, SelfSignatureManager},
         },
@@ -475,9 +476,9 @@ mod test {
         event_content::Metadata,
         event_request::{CreationRequest, EventRequestType, FactRequest},
         governance::{error::RequestError, stage::ValidationStage, GovernanceInterface},
-        identifier::{Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier},
+        identifier::{DigestIdentifier, KeyIdentifier},
         signature::{Signature, Signed},
-        DatabaseManager, MemoryManager, Notification, TimeStamp,
+        MemoryManager, Notification,
     };
 
     use super::{InnerApprovalManager, RequestNotifier};

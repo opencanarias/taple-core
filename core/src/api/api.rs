@@ -3,19 +3,17 @@ use std::collections::HashSet;
 use super::{
     error::{APIInternalError, ApiError},
     inner_api::InnerAPI,
-    APICommands, ApiResponses,
+    APICommands, ApiResponses, GetPreauthorizedSubjects,
 };
 use super::{GetEvents, GetGovernanceSubjects};
 #[cfg(feature = "aproval")]
 use crate::approval::manager::ApprovalAPI;
-use crate::{authorized_subjecs::manager::AuthorizedSubjectsAPI, EventRequestType, signature::Signed, EventContent};
 use crate::commons::models::approval::ApprovalStatus;
 use crate::commons::models::request::TapleRequest;
 use crate::commons::models::state::SubjectData;
 use crate::commons::{
     channel::{ChannelData, MpscChannel, SenderEnd},
     config::TapleSettings,
-    crypto::KeyPair,
 };
 use crate::event::manager::EventAPI;
 use crate::ledger::manager::EventManagerAPI;
@@ -23,6 +21,10 @@ use crate::signature::Signature;
 use crate::{
     approval::ApprovalPetitionData, commons::models::Acceptance, identifier::DigestIdentifier,
     DatabaseCollection, DB,
+};
+use crate::{
+    authorized_subjecs::manager::AuthorizedSubjectsAPI, signature::Signed, EventContent,
+    EventRequestType,
 };
 use crate::{KeyDerivator, KeyIdentifier};
 use async_trait::async_trait;
@@ -76,7 +78,11 @@ pub trait ApiModuleInterface {
         quantity: Option<i64>,
     ) -> Result<Vec<Signed<EventContent>>, ApiError>;
 
-    async fn get_event(&self, subject_id: DigestIdentifier, sn: u64) -> Result<Signed<EventContent>, ApiError>;
+    async fn get_event(
+        &self,
+        subject_id: DigestIdentifier,
+        sn: u64,
+    ) -> Result<Signed<EventContent>, ApiError>;
     /// Allows to obtain a specified subject by specifying its identifier.
     /// # Possible errors
     /// • [ApiError::InvalidParameters] if the specified identifier does not match a valid [DigestIdentifier].<br />
@@ -98,7 +104,7 @@ pub trait ApiModuleInterface {
         &self,
         request_id: DigestIdentifier,
         acceptance: Acceptance,
-    ) -> Result<DigestIdentifier, ApiError>;
+    ) -> Result<ApprovalPetitionData, ApiError>;
     /// It allows to obtain all the voting requests pending to be resolved in the node.
     /// These requests are received from other nodes in the network when they try to update
     /// a governance subject. It is necessary to vote their agreement or disagreement with
@@ -124,6 +130,11 @@ pub trait ApiModuleInterface {
         subject_id: &DigestIdentifier,
         providers: &HashSet<KeyIdentifier>,
     ) -> Result<(), ApiError>;
+    async fn get_all_preauthorized_subjects_and_providers(
+        &self,
+        from: Option<i64>,
+        quantity: Option<i64>,
+    ) -> Result<Vec<(DigestIdentifier, HashSet<KeyIdentifier>)>, ApiError>;
     async fn add_keys(&self, derivator: KeyDerivator) -> Result<KeyIdentifier, ApiError>;
     async fn get_validation_proof(
         &self,
@@ -266,7 +277,11 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
-    async fn get_event(&self, subject_id: DigestIdentifier, sn: u64) -> Result<Signed<EventContent>, ApiError> {
+    async fn get_event(
+        &self,
+        subject_id: DigestIdentifier,
+        sn: u64,
+    ) -> Result<Signed<EventContent>, ApiError> {
         let response = self
             .sender
             .ask(APICommands::GetEvent(subject_id, sn))
@@ -319,7 +334,7 @@ impl ApiModuleInterface for NodeAPI {
         &self,
         request_id: DigestIdentifier,
         acceptance: Acceptance,
-    ) -> Result<DigestIdentifier, ApiError> {
+    ) -> Result<ApprovalPetitionData, ApiError> {
         let response = self
             .sender
             .ask(APICommands::VoteResolve(acceptance, request_id))
@@ -356,6 +371,28 @@ impl ApiModuleInterface for NodeAPI {
             .unwrap();
         if let ApiResponses::SetPreauthorizedSubjectCompleted = response {
             Ok(())
+        } else {
+            unreachable!()
+        }
+    }
+
+    async fn get_all_preauthorized_subjects_and_providers(
+        &self,
+        from: Option<i64>,
+        quantity: Option<i64>,
+    ) -> Result<Vec<(DigestIdentifier, HashSet<KeyIdentifier>)>, ApiError> {
+        let response = self
+            .sender
+            .ask(APICommands::GetAllPreauthorizedSubjects(
+                GetPreauthorizedSubjects {
+                    from: from.map(|val| val as isize),
+                    quantity,
+                },
+            ))
+            .await
+            .unwrap();
+        if let ApiResponses::GetAllPreauthorizedSubjects(data) = response {
+            data
         } else {
             unreachable!()
         }
@@ -463,8 +500,6 @@ impl<C: DatabaseCollection> API<C> {
         authorized_subjects_api: AuthorizedSubjectsAPI,
         ledger_api: EventManagerAPI,
         settings_sender: Sender<TapleSettings>,
-        initial_settings: TapleSettings,
-        keys: KeyPair,
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
         db: DB<C>,
@@ -473,8 +508,6 @@ impl<C: DatabaseCollection> API<C> {
             input,
             _settings_sender: settings_sender,
             inner_api: InnerAPI::new(
-                keys,
-                &initial_settings,
                 event_api,
                 authorized_subjects_api,
                 db,
@@ -588,6 +621,11 @@ impl<C: DatabaseCollection> API<C> {
                     }
                     #[cfg(feature = "aproval")]
                     APICommands::GetApprovals(status) => self.inner_api.get_approvals(status).await,
+                    APICommands::GetAllPreauthorizedSubjects(data) => {
+                        self.inner_api
+                            .get_all_preauthorized_subjects_and_providers(data)
+                            .await?
+                    }
                 };
                 sx.send(response)
                     .map_err(|_| APIInternalError::OneshotUnavailable)?;

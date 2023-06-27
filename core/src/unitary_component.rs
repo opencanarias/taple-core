@@ -337,7 +337,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
         // Shutdown channel
         let (bsx, _brx) = tokio::sync::broadcast::channel::<()>(10);
         // Creation Watch Channel
-        let (wath_sender, watch_receiver): (
+        let (wath_sender, _watch_receiver): (
             tokio::sync::watch::Sender<TapleSettings>,
             tokio::sync::watch::Receiver<TapleSettings>,
         ) = tokio::sync::watch::channel(self.settings.clone());
@@ -470,8 +470,6 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
             AuthorizedSubjectsAPI::new(as_sender),
             EventManagerAPI::new(ledger_sender),
             wath_sender,
-            self.settings.clone(),
-            kp.clone(),
             bsx.clone(),
             bsx.subscribe(),
             DB::new(db.clone()),
