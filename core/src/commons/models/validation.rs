@@ -1,13 +1,13 @@
 //! Contains the data structures related to event  to send to approvers, or to validators if approval is not required.
 use crate::{
-    commons::models::event::Metadata,
+    commons::{errors::SubjectError, models::event::Metadata},
     identifier::{DigestIdentifier, KeyIdentifier},
     request::StartRequest,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 
-use super::state::Subject;
+use super::{state::Subject, HashId};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct ValidationProof {
@@ -22,6 +22,13 @@ pub struct ValidationProof {
     pub prev_event_hash: DigestIdentifier,
     pub event_hash: DigestIdentifier,
     pub governance_version: u64,
+}
+
+impl HashId for ValidationProof {
+    fn hash_id(&self) -> Result<DigestIdentifier, SubjectError> {
+        DigestIdentifier::from_serializable_borsh(&self)
+            .map_err(|_| SubjectError::CryptoError("Hashing error in ValidationProof".to_string()))
+    }
 }
 
 impl ValidationProof {

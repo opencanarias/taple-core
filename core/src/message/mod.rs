@@ -8,6 +8,7 @@ use crate::{
     commons::{
         errors::SubjectError,
         identifier::KeyIdentifier,
+        models::HashId,
         self_signature_manager::{SelfSignatureInterface, SelfSignatureManager},
     },
     signature::{Signature, Signed},
@@ -36,6 +37,13 @@ pub struct MessageContent<T: TaskCommandContent> {
     pub receiver: KeyIdentifier,
 }
 
+impl<T: TaskCommandContent> HashId for MessageContent<T> {
+    fn hash_id(&self) -> Result<DigestIdentifier, SubjectError> {
+        DigestIdentifier::from_serializable_borsh(&self)
+            .map_err(|_| SubjectError::CryptoError("Hashing error in MessageContent".to_string()))
+    }
+}
+
 impl<T: TaskCommandContent> Signed<MessageContent<T>> {
     pub fn new(
         sender: KeyIdentifier,
@@ -48,10 +56,8 @@ impl<T: TaskCommandContent> Signed<MessageContent<T>> {
             content,
             receiver,
         };
-        let content_hash = DigestIdentifier::from_serializable_borsh(&message_content)
-            .map_err(|_| Error::CreatingMessageError)?;
         let signature = sender_sm
-            .sign(&content_hash)
+            .sign(&message_content)
             .map_err(|_| Error::CreatingMessageError)?;
         Ok(Self {
             content: message_content,

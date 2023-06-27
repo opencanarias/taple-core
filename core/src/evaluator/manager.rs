@@ -6,7 +6,6 @@ use wasmtime::Engine;
 use super::compiler::manager::TapleCompiler;
 use super::errors::EvaluatorError;
 use super::{EvaluatorMessage, EvaluatorResponse};
-use crate::EvaluationResponse;
 use crate::commons::channel::{ChannelData, MpscChannel, SenderEnd};
 use crate::commons::self_signature_manager::{SelfSignatureInterface, SelfSignatureManager};
 use crate::database::{DatabaseCollection, DatabaseManager, DB};
@@ -18,6 +17,7 @@ use crate::protocol::protocol_message_manager::TapleMessages;
 use crate::request::EventRequest;
 use crate::signature::Signed;
 use crate::utils::message::event::create_evaluator_response;
+use crate::EvaluationResponse;
 
 pub struct EvaluatorManager<
     M: DatabaseManager<C>,
@@ -131,21 +131,14 @@ impl<
                         .await;
                     match result {
                         Ok(executor_response) => {
-                            let governance_version = executor_response.governance_version;
                             let signature = self
                                 .signature_manager
-                                .sign(&(
-                                    &executor_response.context_hash,
-                                    &executor_response.hash_new_state,
-                                    governance_version,
-                                    &executor_response.success,
-                                    &executor_response.approval_required,
-                                ))
+                                .sign(&executor_response)
                                 .map_err(|_| EvaluatorError::SignatureGenerationFailed)?;
-                            let signed_evaluator_response: crate::signature::Signed<crate::EvaluationResponse> = Signed<EvaluationResponse>::new();
-                            let msg = create_evaluator_response(
-                                signed_evaluator_response
-                            );
+                            let signed_evaluator_response: crate::signature::Signed<
+                                crate::EvaluationResponse,
+                            > = Signed::<EvaluationResponse>::new(executor_response, signature);
+                            let msg = create_evaluator_response(signed_evaluator_response);
                             self.messenger_channel
                                 .tell(MessageTaskCommand::Request(
                                     None,
@@ -251,7 +244,6 @@ mod test {
         database::{MemoryCollection, DB},
         evaluator::{compiler::ContractType, EvaluatorMessage, EvaluatorResponse},
         event::EventCommand,
-        event_content::Metadata,
         governance::{
             error::RequestError, stage::ValidationStage, GovernanceInterface,
             GovernanceUpdatedMessage,
@@ -261,7 +253,7 @@ mod test {
         protocol::protocol_message_manager::TapleMessages,
         request::{EventRequest, FactRequest},
         signature::Signed,
-        MemoryManager, TimeStamp, ValueWrapper,
+        MemoryManager, TimeStamp, ValueWrapper, Metadata,
     };
 
     use crate::evaluator::manager::EvaluatorManager;
@@ -678,19 +670,16 @@ mod test {
             } else {
                 panic!("Unexpected");
             };
-            let evaluator_response =
-                if let TapleMessages::EventMessage(event) = message {
-                    match event {
-                        EventCommand::EvaluatorResponse {
-                            evaluator_response
-                        } => evaluator_response,
-                        _ => {
-                            panic!("Unexpected 4");
-                        }
+            let evaluator_response = if let TapleMessages::EventMessage(event) = message {
+                match event {
+                    EventCommand::EvaluatorResponse { evaluator_response } => evaluator_response,
+                    _ => {
+                        panic!("Unexpected 4");
                     }
-                } else {
-                    panic!("Unexpected 3");
-                };
+                }
+            } else {
+                panic!("Unexpected 3");
+            };
             let new_state = Data {
                 one: 10,
                 two: 100,
@@ -701,9 +690,9 @@ mod test {
             // assert_eq!(hash, evaluation.state_hash); // arreglar
             println!("{:#?}\n{:#?}", initial_state_json, new_state_json);
             let patch = generate_json_patch(initial_state_json, new_state_json);
-            assert_eq!(patch, evaluator_response.content.patch.0.0); // arreglar
-                                             // let own_identifier = signature_manager.get_own_identifier();
-                                             // assert_eq!(evaluation..signer, own_identifier); // arreglar
+            assert_eq!(patch, evaluator_response.content.patch.0); // arreglar
+                                                                   // let own_identifier = signature_manager.get_own_identifier();
+                                                                   // assert_eq!(evaluation..signer, own_identifier); // arreglar
             handler.abort();
         });
     }

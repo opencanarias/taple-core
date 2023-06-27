@@ -1,7 +1,7 @@
-use crate::{commons::models::Acceptance, evaluator::errors::ExecutorErrorResponses, ValueWrapper};
+use crate::{evaluator::errors::ExecutorErrorResponses, ValueWrapper};
 
 use super::context::MemoryManager;
-use borsh::{BorshSerialize, BorshDeserialize};
+use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 use wasmtime::{Caller, Engine, Linker, Module, Store};
 
@@ -16,7 +16,7 @@ struct WasmContractResult {
 pub struct ContractResult {
     pub final_state: ValueWrapper,
     pub approval_required: bool,
-    pub success: Acceptance,
+    pub success: bool,
 }
 
 pub struct ContractExecutor {
@@ -91,10 +91,7 @@ impl ContractExecutor {
         let result = ContractResult {
             final_state: contract_result.final_state,
             approval_required: contract_result.approval_required,
-            success: match contract_result.success {
-                true => Acceptance::Ok,
-                false => Acceptance::Ko,
-            },
+            success: contract_result.success,
         };
         Ok(result)
     }
