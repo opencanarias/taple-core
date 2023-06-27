@@ -61,6 +61,14 @@ impl HashId for Event {
     }
 }
 
+impl HashId for Signed<Event> {
+    fn hash_id(&self) -> Result<DigestIdentifier, SubjectError> {
+        DigestIdentifier::from_serializable_borsh(&self).map_err(|_| {
+            SubjectError::SignatureCreationFails("HashId for Signed Event Fails".to_string())
+        })
+    }
+}
+
 impl Signed<Event> {
     pub fn from_genesis_request(
         event_request: Signed<EventRequest>,

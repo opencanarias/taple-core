@@ -1,6 +1,6 @@
 use crate::utils::{deserialize, serialize};
 use super::utils::{get_by_range, get_key, Element};
-use crate::commons::models::approval::ApprovalStatus;
+use crate::commons::models::approval::ApprovalState;
 use crate::{DbError, ApprovalPetitionData};
 use crate::{DatabaseCollection, DatabaseManager, Derivable, DigestIdentifier};
 use std::sync::Arc;
@@ -21,7 +21,7 @@ impl<C: DatabaseCollection> ApprovalsDb<C> {
     pub fn get_approval(
         &self,
         request_id: &DigestIdentifier,
-    ) -> Result<(ApprovalPetitionData, ApprovalStatus), DbError> {
+    ) -> Result<(ApprovalPetitionData, ApprovalState), DbError> {
         let key_elements: Vec<Element> = vec![
             Element::S(self.prefix.clone()),
             Element::S(request_id.to_str()),
@@ -29,7 +29,7 @@ impl<C: DatabaseCollection> ApprovalsDb<C> {
         let key = get_key(key_elements)?;
         let approval = self.collection.get(&key)?;
         Ok(
-            deserialize::<(ApprovalPetitionData, ApprovalStatus)>(&approval)
+            deserialize::<(ApprovalPetitionData, ApprovalState)>(&approval)
                 .map_err(|_| DbError::DeserializeError)?,
         )
     }
@@ -42,13 +42,13 @@ impl<C: DatabaseCollection> ApprovalsDb<C> {
         match status {
             Some(value) => {
                 let real_status = match value.as_str() {
-                    "Pending" => ApprovalStatus::Pending,
-                    "Voted" => ApprovalStatus::Voted,
-                    "Finished" => ApprovalStatus::Finished,
+                    "Pending" => ApprovalState::Pending,
+                    "Responded" => ApprovalState::Responded,
+                    "Obsolete" => ApprovalState::Obsolete,
                     _ => return Err(DbError::NonExistentStatus),
                 };
                 for (_, approval) in self.collection.iter(false, format!("{}{}", self.prefix, char::MAX)) {
-                    let approval = deserialize::<(ApprovalPetitionData, ApprovalStatus)>(&approval).unwrap();
+                    let approval = deserialize::<(ApprovalPetitionData, ApprovalState)>(&approval).unwrap();
                     if approval.1 == real_status {
                         result.push(approval.0);
                     }
@@ -57,7 +57,7 @@ impl<C: DatabaseCollection> ApprovalsDb<C> {
             }
             None => {
                 for (_, approval) in self.collection.iter(false, format!("{}{}", self.prefix, char::MAX)) {
-                    let approval = deserialize::<(ApprovalPetitionData, ApprovalStatus)>(&approval).unwrap();
+                    let approval = deserialize::<(ApprovalPetitionData, ApprovalState)>(&approval).unwrap();
                     result.push(approval.0);
                 }
                 return Ok(result);
@@ -68,14 +68,14 @@ impl<C: DatabaseCollection> ApprovalsDb<C> {
     pub fn set_approval(
         &self,
         request_id: &DigestIdentifier,
-        approval: (ApprovalPetitionData, ApprovalStatus),
+        approval: (ApprovalPetitionData, ApprovalState),
     ) -> Result<(), DbError> {
         let key_elements: Vec<Element> = vec![
             Element::S(self.prefix.clone()),
             Element::S(request_id.to_str()),
         ];
         let key = get_key(key_elements)?;
-        let Ok(data) = serialize::<(ApprovalPetitionData, ApprovalStatus)>(&approval) else {
+        let Ok(data) = serialize::<(ApprovalPetitionData, ApprovalState)>(&approval) else {
             return Err(DbError::SerializeError);
         };
         self.collection.put(&key, data)

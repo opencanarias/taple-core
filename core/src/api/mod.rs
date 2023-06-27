@@ -1,4 +1,4 @@
-use crate::{commons::models::approval::ApprovalStatus, signature::Signed};
+use crate::{commons::models::approval::ApprovalState, signature::Signed};
 use crate::commons::models::request::TapleRequest;
 use crate::commons::models::state::SubjectData;
 use crate::identifier::DigestIdentifier;
@@ -62,7 +62,7 @@ pub enum ApiResponses {
     GetRequest(Result<TapleRequest, ApiError>),
     GetGovernanceSubjects(Result<Vec<SubjectData>, ApiError>),
     #[cfg(feature = "aproval")]
-    GetApproval(Result<(ApprovalPetitionData, ApprovalStatus), ApiError>),
+    GetApproval(Result<(ApprovalPetitionData, ApprovalState), ApiError>),
     #[cfg(feature = "aproval")]
     GetApprovals(Result<Vec<ApprovalPetitionData>, ApiError>),
     ShutdownCompleted,

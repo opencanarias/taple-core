@@ -9,7 +9,7 @@ use super::{GetEvents, GetGovernanceSubjects};
 #[cfg(feature = "aproval")]
 use crate::approval::manager::ApprovalAPI;
 use crate::{authorized_subjecs::manager::AuthorizedSubjectsAPI, EventRequest, signature::Signed, Event};
-use crate::commons::models::approval::ApprovalStatus;
+use crate::commons::models::approval::ApprovalState;
 use crate::commons::models::request::TapleRequest;
 use crate::commons::models::state::SubjectData;
 use crate::commons::{
@@ -140,7 +140,7 @@ pub trait ApiModuleInterface {
     async fn get_approval(
         &self,
         request_id: DigestIdentifier,
-    ) -> Result<(ApprovalPetitionData, ApprovalStatus), ApiError>;
+    ) -> Result<(ApprovalPetitionData, ApprovalState), ApiError>;
     #[cfg(feature = "aproval")]
     async fn get_approvals(
         &self,
@@ -416,7 +416,7 @@ impl ApiModuleInterface for NodeAPI {
     async fn get_approval(
         &self,
         request_id: DigestIdentifier,
-    ) -> Result<(ApprovalPetitionData, ApprovalStatus), ApiError> {
+    ) -> Result<(ApprovalPetitionData, ApprovalState), ApiError> {
         let response = self
             .sender
             .ask(APICommands::GetApproval(request_id))

@@ -4,7 +4,6 @@ use crate::commons::channel::SenderEnd;
 use crate::commons::models::state::Subject;
 use crate::commons::self_signature_manager::{SelfSignatureInterface, SelfSignatureManager};
 use crate::distribution::{AskForSignatures, SignaturesReceived};
-use crate::event_content::Metadata;
 use crate::governance::stage::ValidationStage;
 use crate::identifier::{Derivable, DigestIdentifier, KeyIdentifier};
 use crate::message::{MessageConfig, MessageTaskCommand};
@@ -14,7 +13,7 @@ use crate::utils::message::distribution::{
     create_distribution_request, create_distribution_response,
 };
 use crate::utils::message::ledger::request_lce;
-use crate::TapleSettings;
+use crate::{TapleSettings, Metadata};
 use crate::{
     database::{Error as DbError, DB},
     governance::GovernanceInterface,
@@ -449,17 +448,13 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
                     .map_err(|_| DistributionManagerError::GovernanceChannelNotAvailable)?;
                 let metadata = build_metadata(&subject, governance_version);
                 let mut targets = self.get_targets(metadata, &subject).await?;
-                let hash_signed = DigestIdentifier::from_serializable_borsh(&event)
-                    .map_err(|_| DistributionManagerError::HashGenerationFailed)?;
-                let event_hash = DigestIdentifier::from_serializable_borsh(&event)
-                    .map_err(|_| DistributionManagerError::HashGenerationFailed)?;
                 for signature in msg.signatures.iter() {
                     // Comprobamos signer
                     if !targets.contains(&signature.signer) {
                         return Ok(Err(DistributionErrorResponses::InvalidSigner));
                     }
                     // Comprobamos firma
-                    if let Err(_error) = signature.verify(&event_hash) {
+                    if let Err(_error) = signature.verify(&event) {
                         return Ok(Err(DistributionErrorResponses::InvalidSignature));
                     }
                 }

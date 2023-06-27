@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use crate::commons::models::approval::ApprovalStatus;
+use crate::commons::models::approval::ApprovalState;
 use crate::commons::models::validation::ValidationProof;
 use crate::commons::models::request::TapleRequest;
 use crate::commons::models::state::Subject;
@@ -402,7 +402,7 @@ impl<C: DatabaseCollection> DB<C> {
     pub fn get_approval(
         &self,
         request_id: &DigestIdentifier,
-    ) -> Result<(ApprovalPetitionData, ApprovalStatus), Error> {
+    ) -> Result<(ApprovalPetitionData, ApprovalState), Error> {
         self.approvals_db.get_approval(request_id)
     }
 
@@ -416,7 +416,7 @@ impl<C: DatabaseCollection> DB<C> {
     pub fn set_approval(
         &self,
         request_id: &DigestIdentifier,
-        approval: (ApprovalPetitionData, ApprovalStatus),
+        approval: (ApprovalPetitionData, ApprovalState),
     ) -> Result<(), Error> {
         self.approvals_db.set_approval(request_id, approval)
     }

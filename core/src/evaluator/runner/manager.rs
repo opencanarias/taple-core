@@ -3,22 +3,16 @@ use serde_json::Value;
 use wasmtime::Engine;
 
 use crate::{
-    commons::{
-        models::{evaluation::EvaluationRequest, Acceptance},
-        schema_handler::Schema,
-    },
+    commons::{models::evaluation::EvaluationRequest, schema_handler::Schema},
     database::DB,
     evaluator::errors::ExecutorErrorResponses,
     governance::GovernanceInterface,
     identifier::DigestIdentifier,
     request::FactRequest,
-    DatabaseCollection, EventRequest, ValueWrapper,
+    DatabaseCollection, EvaluationResponse, EventRequest, ValueWrapper,
 };
 
-use super::{
-    executor::{ContractExecutor, ContractResult},
-    ExecuteContractResponse,
-};
+use super::executor::{ContractExecutor, ContractResult};
 use crate::database::Error as DbError;
 pub struct TapleRunner<C: DatabaseCollection, G: GovernanceInterface> {
     database: DB<C>,
@@ -46,7 +40,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
         &self,
         execute_contract: &EvaluationRequest,
         state_data: &FactRequest,
-    ) -> Result<ExecuteContractResponse, ExecutorErrorResponses> {
+    ) -> Result<EvaluationResponse, ExecutorErrorResponses> {
         // Check governance version
         let governance_id = if &execute_contract.context.schema_id == "governance" {
             if let EventRequest::Fact(data) = &execute_contract.event_request.content {
@@ -90,14 +84,16 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
                             return Err(ExecutorErrorResponses::DatabaseError(error.to_string()))
                         }
                     };
-                    return Ok(ExecuteContractResponse {
-                        json_patch: serde_json::from_str("")
-                            .map_err(|_| ExecutorErrorResponses::JSONPATCHDeserializationFailed)?,
-                        hash_new_state: DigestIdentifier::default(),
-                        governance_version,
-                        context_hash,
-                        success: Acceptance::Ko,
-                        approval_required: false,
+                    return Ok(EvaluationResponse {
+                        patch: ValueWrapper(
+                            serde_json::from_str("[]").map_err(|_| {
+                                ExecutorErrorResponses::JSONPATCHDeserializationFailed
+                            })?,
+                        ),
+                        state_hash: DigestIdentifier::default(),
+                        eval_req_hash: context_hash,
+                        eval_success: false,
+                        appr_required: false,
                     });
                 }
                 Err(error) => return Err(ExecutorErrorResponses::DatabaseError(error.to_string())),
@@ -119,7 +115,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
                             return Err(ExecutorErrorResponses::DatabaseError(error.to_string()))
                         }
                     };
-                    return Ok(ExecuteContractResponse {
+                    return Ok(EvaluationResponse {
                         json_patch: serde_json::from_str("")
                             .map_err(|_| ExecutorErrorResponses::JSONPATCHDeserializationFailed)?,
                         hash_new_state: DigestIdentifier::default(),
@@ -175,7 +171,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
                 DigestIdentifier::default(),
             ),
         };
-        Ok(ExecuteContractResponse {
+        Ok(EvaluationResponse {
             json_patch: ValueWrapper(patch),
             hash_new_state: hash,
             governance_version,

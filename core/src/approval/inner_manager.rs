@@ -4,7 +4,7 @@ use crate::{
     commons::{
         config::VotationType,
         models::{
-            approval::{ ApprovalResponse, ApprovalStatus},
+            approval::{ ApprovalResponse, ApprovalState},
             state::Subject, event::Metadata,
         },
         self_signature_manager::{SelfSignatureInterface, SelfSignatureManager},
@@ -378,7 +378,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             sender: subject_data.owner.clone(),
             json_patch: approval_request.content.json_patch.clone(),
         };
-        let Ok(_result) = self.database.set_approval(&approval_petition_data.hash_event_proporsal.clone(), (approval_petition_data, ApprovalStatus::Pending)) else { 
+        let Ok(_result) = self.database.set_approval(&approval_petition_data.hash_event_proporsal.clone(), (approval_petition_data, ApprovalState::Pending)) else { 
             return Err(ApprovalManagerError::DatabaseError)
         };
         self.notifier
@@ -419,7 +419,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             .map_err(|_| ApprovalManagerError::SignProcessFailed)?;
         // Podría ser necesario un ACK
         self.subject_been_approved.remove(&data.subject_id);
-        let Ok(_result) = self.database.set_approval(&request_id, (data.clone(), ApprovalStatus::Voted)) else {
+        let Ok(_result) = self.database.set_approval(&request_id, (data.clone(), ApprovalState::Voted)) else {
             return Err(ApprovalManagerError::DatabaseError)
         };
         Ok(Ok((

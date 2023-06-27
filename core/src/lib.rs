@@ -108,6 +108,7 @@ pub use commons::models::approval::ApprovalResponse;
 pub use commons::models::evaluation::EvaluationRequest;
 pub use commons::models::evaluation::EvaluationResponse;
 pub use commons::models::event::Event;
+pub use commons::models::event::Metadata;
 pub use commons::models::request;
 pub use commons::models::request::EventRequest;
 pub use commons::models::signature;

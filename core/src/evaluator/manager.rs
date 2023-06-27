@@ -140,14 +140,9 @@ impl<
                                     &executor_response.approval_required,
                                 ))
                                 .map_err(|_| EvaluatorError::SignatureGenerationFailed)?;
+                            let signed_evaluator_response = ;
                             let msg = create_evaluator_response(
-                                executor_response.context_hash,
-                                executor_response.hash_new_state,
-                                governance_version,
-                                executor_response.success,
-                                executor_response.approval_required,
-                                executor_response.json_patch,
-                                signature,
+                                signed_evaluator_response
                             );
                             self.messenger_channel
                                 .tell(MessageTaskCommand::Request(
