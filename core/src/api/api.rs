@@ -8,7 +8,7 @@ use super::{
 use super::{GetEvents, GetGovernanceSubjects};
 #[cfg(feature = "aproval")]
 use crate::approval::manager::ApprovalAPI;
-use crate::{authorized_subjecs::manager::AuthorizedSubjectsAPI, EventRequestType, signature::Signed, EventContent};
+use crate::{authorized_subjecs::manager::AuthorizedSubjectsAPI, EventRequest, signature::Signed, EventContent};
 use crate::commons::models::approval::ApprovalStatus;
 use crate::commons::models::request::TapleRequest;
 use crate::commons::models::state::SubjectData;
@@ -39,7 +39,7 @@ pub trait ApiModuleInterface {
     /// Allows to make a request to the node from an external Invoker
     async fn external_request(
         &self,
-        event_request: Signed<EventRequestType>,
+        event_request: Signed<EventRequest>,
     ) -> Result<DigestIdentifier, ApiError>;
     /// Allows to get all subjects that are known to the current node, regardless of their governance.
     /// Paging can be performed using the optional arguments `from` and `quantity`.
@@ -178,7 +178,7 @@ impl ApiModuleInterface for NodeAPI {
 
     async fn external_request(
         &self,
-        event_request: Signed<EventRequestType>,
+        event_request: Signed<EventRequest>,
     ) -> Result<DigestIdentifier, ApiError> {
         let response = self
             .sender

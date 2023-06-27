@@ -5,7 +5,7 @@ use crate::{
     commons::models::Acceptance,
     identifier::{DigestIdentifier, KeyIdentifier},
     signature::{Signature, Signed},
-    EventRequestType, Proposal, ValueWrapper,
+    request::EventRequest, Proposal, ValueWrapper,
 };
 
 use self::error::ApprovalErrorResponse;
@@ -45,7 +45,7 @@ pub enum ApprovalResponses {
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct RequestApproval {
-    request: Signed<EventRequestType>,
+    request: Signed<EventRequest>,
     sn: u64,
     context_hash: DigestIdentifier,
     hash_new_state: DigestIdentifier,

@@ -7,23 +7,6 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 use std::hash::Hash;
 
-// #[derive(
-//     Debug,
-//     Clone,
-//     Serialize,
-//     Deserialize,
-//     Eq,
-//     BorshSerialize,
-//     BorshDeserialize,
-//     PartialOrd,
-//     PartialEq,
-//     Hash,
-// )]
-// pub struct Approval {
-//     pub content: ApprovalContent,
-//     pub signature: Signature,
-// }
-
 #[derive(
     Debug,
     Clone,

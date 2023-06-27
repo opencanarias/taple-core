@@ -5,7 +5,7 @@ use crate::{
     commons::errors::SubjectError,
     identifier::DigestIdentifier,
     signature::{Signature, Signed},
-    EventRequestType,
+    request::EventRequest,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
@@ -14,7 +14,7 @@ use super::{value_wrapper::ValueWrapper, Acceptance};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct Proposal {
-    pub event_request: Signed<EventRequestType>,
+    pub event_request: Signed<EventRequest>,
     pub sn: u64,
     pub hash_prev_event: DigestIdentifier,
     pub gov_version: u64,
@@ -25,7 +25,7 @@ pub struct Proposal {
 
 impl Proposal {
     pub fn new(
-        event_request: Signed<EventRequestType>,
+        event_request: Signed<EventRequest>,
         sn: u64,
         hash_prev_event: DigestIdentifier,
         gov_version: u64,

@@ -11,7 +11,7 @@ use json_patch::{patch, Patch};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::{event_request::EventRequestType, value_wrapper::ValueWrapper};
+use super::{request::EventRequest, value_wrapper::ValueWrapper};
 
 #[derive(Debug, Deserialize, Serialize, Clone, BorshSerialize, BorshDeserialize)]
 pub struct Subject {
@@ -119,7 +119,7 @@ impl Subject {
         init_state: ValueWrapper,
         keys: Option<KeyPair>,
     ) -> Result<Self, SubjectError> {
-        let EventRequestType::Create(create_request) = event.content.event_proposal.content.event_request.content.clone() else {
+        let EventRequest::Create(create_request) = event.content.event_proposal.content.event_request.content.clone() else {
             return Err(SubjectError::NotCreateEvent)
         };
         let subject_id = generate_subject_id(

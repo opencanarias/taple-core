@@ -6,7 +6,7 @@ use crate::{
     commons::models::{event_proposal::Evaluation, value_wrapper::ValueWrapper},
     identifier::DigestIdentifier,
     signature::{Signature, Signed},
-    EventRequestType, KeyIdentifier, ApprovalContent,
+    EventRequest, KeyIdentifier, ApprovalContent,
 };
 
 use self::errors::EventError;
@@ -18,7 +18,7 @@ pub mod manager;
 #[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub enum EventCommand {
     Event {
-        event_request: Signed<EventRequestType>,
+        event_request: Signed<EventRequest>,
     },
     EvaluatorResponse {
         evaluation: Evaluation,

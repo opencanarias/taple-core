@@ -4,15 +4,15 @@ use wasmtime::Engine;
 
 use crate::{
     commons::{
-        models::{event_preevaluation::EventPreEvaluation, Acceptance},
+        models::{evaluation::EvaluationRequest, Acceptance},
         schema_handler::Schema,
     },
     database::DB,
     evaluator::errors::ExecutorErrorResponses,
-    event_request::FactRequest,
     governance::GovernanceInterface,
     identifier::DigestIdentifier,
-    DatabaseCollection, EventRequestType, ValueWrapper,
+    request::FactRequest,
+    DatabaseCollection, EventRequest, ValueWrapper,
 };
 
 use super::{
@@ -36,7 +36,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
     }
 
     pub fn generate_context_hash(
-        execute_contract: &EventPreEvaluation,
+        execute_contract: &EvaluationRequest,
     ) -> Result<DigestIdentifier, ExecutorErrorResponses> {
         DigestIdentifier::from_serializable_borsh(execute_contract)
             .map_err(|_| ExecutorErrorResponses::ContextHashGenerationFailed)
@@ -44,12 +44,12 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
 
     pub async fn execute_contract(
         &self,
-        execute_contract: &EventPreEvaluation,
+        execute_contract: &EvaluationRequest,
         state_data: &FactRequest,
     ) -> Result<ExecuteContractResponse, ExecutorErrorResponses> {
         // Check governance version
         let governance_id = if &execute_contract.context.schema_id == "governance" {
-            if let EventRequestType::Fact(data) = &execute_contract.event_request.content {
+            if let EventRequest::Fact(data) = &execute_contract.event_request.content {
                 data.subject_id.clone()
             } else {
                 return Err(ExecutorErrorResponses::CreateRequestNotAllowed);
@@ -65,10 +65,10 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
             }
             Err(error) => return Err(ExecutorErrorResponses::DatabaseError(error.to_string())),
         };
-        if governance.sn > execute_contract.context.governance_version {
+        if governance.sn > execute_contract.governance_version {
             // Nuestra gov es mayor: mandamos mensaje para que actualice el emisor
             return Err(ExecutorErrorResponses::OurGovIsHigher);
-        } else if governance.sn < execute_contract.context.governance_version {
+        } else if governance.sn < execute_contract.governance_version {
             // Nuestra gov es menor: no podemos hacer nada. Pedimos LCE al que nos lo envió
             return Err(ExecutorErrorResponses::OurGovIsLower);
         }
@@ -78,7 +78,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
         {
             match self.database.get_governance_contract() {
                 // TODO: Gestionar versión gobernanza
-                Ok(contract) => (contract, execute_contract.context.governance_version),
+                Ok(contract) => (contract, execute_contract.governance_version),
                 Err(DbError::EntryNotFound) => {
                     let governance_version = match self
                         .database
@@ -132,15 +132,14 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
                 Err(error) => return Err(ExecutorErrorResponses::DatabaseError(error.to_string())),
             }
         };
-        let previous_state = &execute_contract.context.actual_state.clone();
+        let previous_state = &execute_contract.context.state.clone();
         let mut contract_result = self
             .executor
             .execute_contract(
-                &execute_contract.context.actual_state,
+                &execute_contract.context.state,
                 &state_data.payload,
                 contract,
-                &execute_contract.event_request.signature.signer
-                    == &execute_contract.context.owner,
+                execute_contract.context.is_owner,
             )
             .await?;
         let (patch, hash) = match contract_result.success {
@@ -150,7 +149,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
                         &contract_result,
                         &governance_id,
                         execute_contract.context.schema_id.clone(),
-                        execute_contract.context.governance_version,
+                        execute_contract.governance_version,
                     )
                     .await
                 {

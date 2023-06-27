@@ -20,7 +20,7 @@ use crate::{
         crypto::KeyPair,
         identifier::DigestIdentifier,
         models::{
-            event_request::{EventRequestType},
+            request::{EventRequest},
             state::SubjectData,
             timestamp::TimeStamp,
         },
@@ -71,7 +71,7 @@ impl<C: DatabaseCollection> InnerAPI<C> {
 
     pub async fn handle_external_request(
         &self,
-        request: Signed<EventRequestType>,
+        request: Signed<EventRequest>,
     ) -> Result<ApiResponses, APIInternalError> {
         let EventResponse::Event(response) = self.event_api.send_event_request(request).await else {
             return Err(APIInternalError::UnexpectedManagerResponse);

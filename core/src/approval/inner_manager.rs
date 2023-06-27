@@ -12,7 +12,7 @@ use crate::{
     },
     database::DB,
     event_content::Metadata,
-    event_request::{ EventRequestType},
+    request::{ EventRequest},
     governance::{error::RequestError, GovernanceInterface},
     identifier::{Derivable, DigestIdentifier, KeyIdentifier},
     DatabaseCollection, Notification, signature::Signed, Proposal, authorized_subjecs::error,
@@ -204,7 +204,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         };
 
         // Comprobamos si la request es de tipo State
-        let EventRequestType::Fact(state_request) = &approval_request.content.event_request.content else {
+        let EventRequest::Fact(state_request) = &approval_request.content.event_request.content else {
                 return Ok(Err(ApprovalErrorResponse::NoFactEvent));
             };
 
@@ -467,17 +467,16 @@ mod test {
         commons::{
             config::VotationType,
             crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair, Payload, DSA},
-            models::{state::Subject, timestamp, value_wrapper::ValueWrapper},
+            models::{state::Subject, timestamp, value_wrapper::ValueWrapper, request::{StartRequest, FactRequest}},
             schema_handler::gov_models::Contract,
             self_signature_manager::{SelfSignatureInterface, SelfSignatureManager},
         },
         database::{MemoryCollection, DB},
         event_content::Metadata,
-        event_request::{CreationRequest, EventRequestType, FactRequest},
         governance::{error::RequestError, stage::ValidationStage, GovernanceInterface},
         identifier::{Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier},
         signature::{Signature, Signed},
-        DatabaseManager, MemoryManager, Notification, TimeStamp,
+        DatabaseManager, MemoryManager, Notification, TimeStamp, EventRequest,
     };
 
     use super::{InnerApprovalManager, RequestNotifier};
@@ -578,21 +577,21 @@ mod test {
         json: ValueWrapper,
         signature_manager: &SelfSignatureManager,
         subject_id: &DigestIdentifier,
-    ) -> Signed<EventRequestType> {
-        let request = EventRequestType::Fact(FactRequest {
+    ) -> Signed<EventRequest> {
+        let request = EventRequest::Fact(FactRequest {
             subject_id: subject_id.clone(),
             payload: json,
         });
         let signature = signature_manager.sign(&request).unwrap(); // TODO: MAL usar Signature::new
-        let event_request = Signed::<EventRequestType>::new(request, signature);
+        let event_request = Signed::<EventRequest>::new(request, signature);
         event_request
     }
 
     fn create_genesis_request(
         json: String,
         signature_manager: &SelfSignatureManager,
-    ) -> Signed<EventRequestType> {
-        let request = EventRequestType::Create(CreationRequest {
+    ) -> Signed<EventRequest> {
+        let request = EventRequest::Create(StartRequest {
             governance_id: DigestIdentifier::from_str(
                 "J6axKnS5KQjtMDFgapJq49tdIpqGVpV7SS4kxV1iR10I",
             )
@@ -604,7 +603,7 @@ mod test {
                 .unwrap(), // TODO: Revisar, lo puse a voleo
         });
         let signature = signature_manager.sign(&request).unwrap(); // TODO: MAL usar Signature::new
-        let event_request = Signed::<EventRequestType>::new(request, signature);
+        let event_request = Signed::<EventRequest>::new(request, signature);
         event_request
     }
 
@@ -662,7 +661,7 @@ mod test {
     }
 
     fn generate_request_approve_msg(
-        request: Signed<EventRequestType>,
+        request: Signed<EventRequest>,
         sn: u64,
         governance_id: &DigestIdentifier,
         governance_version: u64,

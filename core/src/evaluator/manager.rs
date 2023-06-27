@@ -11,10 +11,10 @@ use crate::commons::self_signature_manager::{SelfSignatureInterface, SelfSignatu
 use crate::database::{DatabaseCollection, DatabaseManager, DB};
 use crate::evaluator::errors::ExecutorErrorResponses;
 use crate::evaluator::runner::manager::TapleRunner;
-use crate::event_request::EventRequestType;
 use crate::governance::{GovernanceInterface, GovernanceUpdatedMessage};
 use crate::message::{MessageConfig, MessageTaskCommand};
 use crate::protocol::protocol_message_manager::TapleMessages;
+use crate::request::EventRequest;
 use crate::utils::message::event::create_evaluator_response;
 
 pub struct EvaluatorManager<
@@ -116,11 +116,17 @@ impl<
         };
         let response = 'response: {
             match data {
-                EvaluatorMessage::AskForEvaluation(data) => {
-                    let EventRequestType::Fact(state_data) = &data.event_request.content else {
+                EvaluatorMessage::EvaluationEvent {
+                    evaluation_request,
+                    sender,
+                } => {
+                    let EventRequest::Fact(state_data) = &evaluation_request.event_request.content else {
                         break 'response EvaluatorResponse::AskForEvaluation(Err(super::errors::EvaluatorErrorResponses::CreateRequestNotAllowed));
                     };
-                    let result = self.runner.execute_contract(&data, state_data).await;
+                    let result = self
+                        .runner
+                        .execute_contract(&evaluation_request, state_data)
+                        .await;
                     match result {
                         Ok(executor_response) => {
                             let governance_version = executor_response.governance_version;
@@ -147,7 +153,7 @@ impl<
                                 .tell(MessageTaskCommand::Request(
                                     None,
                                     msg,
-                                    vec![data.context.owner],
+                                    vec![sender],
                                     MessageConfig::direct_response(),
                                 ))
                                 .await
@@ -161,11 +167,11 @@ impl<
                                     None,
                                     TapleMessages::EventMessage(
                                         crate::event::EventCommand::HigherGovernanceExpected {
-                                            governance_id: data.context.governance_id,
+                                            governance_id: evaluation_request.context.governance_id,
                                             who_asked: self.signature_manager.get_own_identifier(),
                                         },
                                     ),
-                                    vec![data.context.owner],
+                                    vec![sender],
                                     MessageConfig::direct_response(),
                                 ))
                                 .await
@@ -181,10 +187,10 @@ impl<
                                     TapleMessages::LedgerMessages(
                                         crate::ledger::LedgerCommand::GetLCE {
                                             who_asked: self.signature_manager.get_own_identifier(),
-                                            subject_id: data.context.governance_id,
+                                            subject_id: evaluation_request.context.governance_id,
                                         },
                                     ),
-                                    vec![data.context.owner],
+                                    vec![sender],
                                     MessageConfig::direct_response(),
                                 ))
                                 .await
@@ -206,6 +212,10 @@ impl<
                             ))
                         }
                     }
+                }
+                EvaluatorMessage::AskForEvaluation(_) => {
+                    log::error!("Ask for Evaluation in Evaluator Manager");
+                    return Ok(());
                 }
             }
         };
@@ -235,7 +245,7 @@ mod test {
             channel::{ChannelData, MpscChannel, SenderEnd},
             crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair},
             models::{
-                event_preevaluation::{Context, EventPreEvaluation},
+                evaluation::{EvaluationRequest, SubjectContext},
                 state::Subject,
             },
             schema_handler::gov_models::Contract,
@@ -245,7 +255,6 @@ mod test {
         evaluator::{compiler::ContractType, EvaluatorMessage, EvaluatorResponse},
         event::EventCommand,
         event_content::Metadata,
-        event_request::{EventRequestType, FactRequest},
         governance::{
             error::RequestError, stage::ValidationStage, GovernanceInterface,
             GovernanceUpdatedMessage,
@@ -253,6 +262,7 @@ mod test {
         identifier::{DigestIdentifier, KeyIdentifier},
         message::MessageTaskCommand,
         protocol::protocol_message_manager::TapleMessages,
+        request::{EventRequest, FactRequest},
         signature::Signed,
         MemoryManager, TimeStamp, ValueWrapper,
     };
@@ -589,14 +599,14 @@ mod test {
     fn create_event_request(
         json: Value,
         signature_manager: &SelfSignatureManager,
-    ) -> Signed<EventRequestType> {
-        let request = EventRequestType::Fact(FactRequest {
+    ) -> Signed<EventRequest> {
+        let request = EventRequest::Fact(FactRequest {
             subject_id: DigestIdentifier::from_str("JXtZRpNgBWVg9v5YG9AaTNfCpPd-rCTTKrFW9cV8-JKs")
                 .unwrap(),
             payload: ValueWrapper(json),
         });
         let signature = signature_manager.sign(&request).unwrap();
-        let event_request = Signed::<EventRequestType> {
+        let event_request = Signed::<EventRequest> {
             content: request,
             signature,
         };
@@ -640,30 +650,23 @@ mod test {
                 .unwrap();
             tokio::time::sleep(tokio::time::Duration::from_secs(5)).await; // Pausa para compilar el contrato
             let response = sx_evaluator
-                .ask(EvaluatorMessage::AskForEvaluation(EventPreEvaluation {
+                .ask(EvaluatorMessage::AskForEvaluation(EvaluationRequest {
                     event_request: create_event_request(
                         serde_json::to_value(&event).unwrap(),
                         &signature_manager,
                     ),
-                    context: Context {
+                    context: SubjectContext {
                         governance_id: DigestIdentifier::from_str(
                             "JGSPR6FL-vE7iZxWMd17o09qn7NeTqlcImDVWmijXczw",
                         )
                         .unwrap(),
                         schema_id: "test".into(),
-                        creator: KeyIdentifier::from_str(
-                            "EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg",
-                        )
-                        .unwrap(),
-                        owner: KeyIdentifier::from_str(
-                            "EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg",
-                        )
-                        .unwrap(),
-                        actual_state: ValueWrapper(initial_state_json.clone()),
                         namespace: "namespace1".into(),
-                        governance_version: 0,
+                        is_owner: todo!(),
+                        state: todo!(),
                     },
                     sn: 1,
+                    governance_version: todo!(),
                 }))
                 .await
                 .unwrap();

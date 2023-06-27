@@ -7,10 +7,10 @@ use crate::{
         errors::SubjectError,
     },
     event_content::Metadata,
-    event_request::CreationRequest,
+    request::{StartRequest, EventRequest},
     identifier::{DigestIdentifier, KeyIdentifier},
     signature::{Signature, Signed},
-    EventRequestType, ApprovalContent,
+    ApprovalContent,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use json_patch::diff;
@@ -43,7 +43,7 @@ pub struct ValidationProof {
 
 impl ValidationProof {
     pub fn new_from_genesis_event(
-        create_request: CreationRequest,
+        create_request: StartRequest,
         event_hash: DigestIdentifier,
         governance_version: u64,
         subject_id: DigestIdentifier,
@@ -147,7 +147,7 @@ impl EventContent {
 
 impl Signed<EventContent> {
     pub fn from_genesis_request(
-        event_request: Signed<EventRequestType>,
+        event_request: Signed<EventRequest>,
         subject_keys: &KeyPair,
         gov_version: u64,
         init_state: &ValueWrapper,

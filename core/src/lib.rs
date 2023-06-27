@@ -106,11 +106,11 @@ pub use commons::identifier::{Derivable, DigestIdentifier, KeyIdentifier, Signat
 pub use commons::models::approval::ApprovalContent;
 pub use commons::models::event::EventContent;
 pub use commons::models::event_proposal::{Evaluation, Proposal};
-pub use commons::models::event_request::EventRequestType;
+pub use commons::models::request::EventRequest;
 pub use commons::models::request;
 pub use commons::models::state::SubjectData;
 pub use commons::models::Acceptance;
-pub use commons::models::{event_content, event_request, signature};
+pub use commons::models::{event_content, signature};
 pub use commons::{
     config::{DatabaseSettings, NetworkSettings, NodeSettings, TapleSettings},
     identifier::derive::{digest::DigestDerivator, KeyDerivator},
