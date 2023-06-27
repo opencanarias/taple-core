@@ -65,10 +65,10 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
             }
             Err(error) => return Err(ExecutorErrorResponses::DatabaseError(error.to_string())),
         };
-        if governance.sn > execute_contract.governance_version {
+        if governance.sn > execute_contract.gov_version {
             // Nuestra gov es mayor: mandamos mensaje para que actualice el emisor
             return Err(ExecutorErrorResponses::OurGovIsHigher);
-        } else if governance.sn < execute_contract.governance_version {
+        } else if governance.sn < execute_contract.gov_version {
             // Nuestra gov es menor: no podemos hacer nada. Pedimos LCE al que nos lo envió
             return Err(ExecutorErrorResponses::OurGovIsLower);
         }
@@ -78,7 +78,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
         {
             match self.database.get_governance_contract() {
                 // TODO: Gestionar versión gobernanza
-                Ok(contract) => (contract, execute_contract.governance_version),
+                Ok(contract) => (contract, execute_contract.gov_version),
                 Err(DbError::EntryNotFound) => {
                     let governance_version = match self
                         .database
@@ -149,7 +149,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
                         &contract_result,
                         &governance_id,
                         execute_contract.context.schema_id.clone(),
-                        execute_contract.governance_version,
+                        execute_contract.gov_version,
                     )
                     .await
                 {

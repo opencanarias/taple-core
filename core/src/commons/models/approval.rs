@@ -18,7 +18,7 @@ pub struct ApprovalRequest {
     // Evaluation Request
     pub event_request: Signed<EventRequest>,
     pub sn: u64,
-    pub governance_version: u64,
+    pub gov_version: u64,
     // Evaluation Response
     pub patch: ValueWrapper, // cambiar
     pub state_hash: DigestIdentifier,

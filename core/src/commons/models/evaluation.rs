@@ -14,7 +14,7 @@ pub struct EvaluationRequest {
     pub event_request: Signed<EventRequest>,
     pub context: SubjectContext,
     pub sn: u64,
-    pub governance_version: u64,
+    pub gov_version: u64,
 }
 // firmada por sujeto
 
@@ -33,19 +33,19 @@ pub struct SubjectContext {
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct EvaluationResponse {
     pub patch: ValueWrapper, // cambiar
-    pub evaluation_req_hash: DigestIdentifier,
+    pub eval_req_hash: DigestIdentifier,
     pub state_hash: DigestIdentifier,
-    pub evaluation_success: bool, // Se ejecutó con exito y se validó el resultado contra el esquema
-    pub approval_required: bool,
+    pub eval_success: bool, // Se ejecutó con exito y se validó el resultado contra el esquema
+    pub appr_required: bool,
 }
 
 impl HashId for EvaluationResponse {
     fn hash_id(&self) -> Result<DigestIdentifier, SubjectError> {
         DigestIdentifier::from_serializable_borsh(&(
-            &self.evaluation_req_hash,
+            &self.eval_req_hash,
             self.state_hash,
-            self.evaluation_success,
-            self.approval_required,
+            self.eval_success,
+            self.appr_required,
         ))
         .map_err(|_| {
             SubjectError::SignatureCreationFails("HashId for EvaluationResponse Fails".to_string())

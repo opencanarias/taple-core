@@ -666,7 +666,7 @@ mod test {
                         state: todo!(),
                     },
                     sn: 1,
-                    governance_version: todo!(),
+                    gov_version: todo!(),
                 }))
                 .await
                 .unwrap();

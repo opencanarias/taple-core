@@ -175,6 +175,10 @@ pub enum SubjectError {
     SignatureCreationFails(String),
     #[error("Signature Verify Fails: {0}")]
     SignatureVerifyFails(String),
+    #[error("Signature Repeated: {0}")]
+    RepeatedSignature(String),
+    #[error("Signers Error: {0}")]
+    SignersError(String),
 }
 
 #[derive(Error, Debug, Clone, PartialEq)]

@@ -9,7 +9,7 @@ use crate::{
     identifier::{DigestIdentifier, KeyIdentifier},
     request::{EventRequest, StartRequest},
     signature::{Signature, Signed},
-    ApprovalResponse, Derivable,
+    ApprovalResponse, Derivable, EvaluationRequest, EvaluationResponse,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use json_patch::diff;
@@ -18,8 +18,10 @@ use serde_json::json;
 
 use super::{
     approval::ApprovalRequest,
+    evaluation::SubjectContext,
     state::{generate_subject_id, Subject},
-    value_wrapper::ValueWrapper, HashId,
+    value_wrapper::ValueWrapper,
+    HashId,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
@@ -31,9 +33,9 @@ pub struct Event {
     pub patch: ValueWrapper, // cambiar
     pub state_hash: DigestIdentifier,
     // Si EventRequest
-    pub evaluation_success: bool, //Acceptance?  Se ejecutó con exito y se validó el resultado contra el esquema. Si no se evalua es true
-    pub approval_required: bool,  // no puede ser true si evaluation_success = false
-    pub approved: bool,           // por defecto true, si approval_required = false
+    pub eval_success: bool, //Acceptance?  Se ejecutó con exito y se validó el resultado contra el esquema. Si no se evalua es true
+    pub appr_required: bool, // no puede ser true si evaluation_success = false
+    pub approved: bool,     // por defecto true, si approval_required = false
     pub hash_prev_event: DigestIdentifier,
     pub evaluators: HashSet<Signature>, //hace falta la firma? Hashset
     pub approvers: HashSet<Signature>,  //hace falta la firma? Hashset
@@ -93,8 +95,8 @@ impl Signed<Event> {
             gov_version,
             patch: ValueWrapper(json_patch),
             state_hash,
-            evaluation_success: true,
-            approval_required: false,
+            eval_success: true,
+            appr_required: false,
             approved: true,
             hash_prev_event: DigestIdentifier::default(),
             evaluators: HashSet::new(),
@@ -110,14 +112,80 @@ impl Signed<Event> {
         })
     }
 
-    pub fn verify(&self) -> Result<(), SubjectError> {
+    pub fn verify(
+        &self,
+        subject_context: SubjectContext,
+        eval_sign_info: (&HashSet<KeyIdentifier>, u64),
+        appr_sign_info: (&HashSet<KeyIdentifier>, u64),
+    ) -> Result<(), SubjectError> {
         // Verify event and event_request signatures
         self.signature.verify(&self.content)?;
         self.content.event_request.verify()?;
         // Verify evaluators signatures
-
+        let eval_request = EvaluationRequest {
+            event_request: self.content.event_request.clone(),
+            context: subject_context,
+            sn: self.content.sn,
+            gov_version: self.content.gov_version,
+        };
+        let eval_response = EvaluationResponse {
+            patch: self.content.patch.clone(), // Esto no hace falta realmente
+            eval_req_hash: eval_request.hash_id()?,
+            state_hash: self.content.state_hash,
+            eval_success: self.content.eval_success,
+            appr_required: self.content.appr_required,
+        };
+        let mut evaluators = HashSet::new();
+        for eval_signature in self.content.evaluators.iter() {
+            if !evaluators.insert(eval_signature.signer.clone()) {
+                return Err(SubjectError::RepeatedSignature(
+                    "Repeated Signer in Evaluators".to_string(),
+                ));
+            }
+            eval_signature.verify(&eval_response)?;
+        }
+        if !evaluators.is_subset(eval_sign_info.0) {
+            return Err(SubjectError::SignersError(
+                "Incorrect Evaluators signed".to_string(),
+            ));
+        }
+        if evaluators.len() < eval_sign_info.1 as usize {
+            return Err(SubjectError::SignersError(
+                "Not enough Evaluators signed".to_string(),
+            ));
+        }
         // Verify approvers signatures
-
+        let appr_request = ApprovalRequest {
+            event_request: self.content.event_request.clone(),
+            sn: self.content.sn,
+            gov_version: self.content.gov_version,
+            patch: self.content.patch.clone(),
+            state_hash: self.content.state_hash.clone(),
+            hash_prev_event: self.content.hash_prev_event.clone(),
+        };
+        let appr_response = ApprovalResponse {
+            appr_req_hash: appr_request.hash_id()?,
+            approved: self.content.approved,
+        };
+        let mut approvers = HashSet::new();
+        for appr_signature in self.content.approvers.iter() {
+            if !approvers.insert(appr_signature.signer.clone()) {
+                return Err(SubjectError::RepeatedSignature(
+                    "Repeated Signer in Approvers".to_string(),
+                ));
+            }
+            appr_signature.verify(&appr_response)?;
+        }
+        if !approvers.is_subset(appr_sign_info.0) {
+            return Err(SubjectError::SignersError(
+                "Incorrect Approvers signed".to_string(),
+            ));
+        }
+        if approvers.len() < appr_sign_info.1 as usize {
+            return Err(SubjectError::SignersError(
+                "Not enough Approvers signed".to_string(),
+            ));
+        }
         Ok(())
     }
 }

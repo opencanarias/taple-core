@@ -2877,7 +2877,7 @@ fn check_context(
             state: prev_properties,
         },
         sn: event.content.event_proposal.content.sn,
-        governance_version: event.content.event_proposal.content.gov_version,
+        gov_version: event.content.event_proposal.content.gov_version,
     };
     let event_preevaluation_hash = DigestIdentifier::from_serializable_borsh(&event_preevaluation)
         .map_err(|_| {

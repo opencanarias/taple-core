@@ -732,7 +732,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                         //     .map_err(|_| EventError::ErrorParsingValue)?, // Must be Some, filled in init function
                         namespace: metadata.namespace.clone(),
                     },
-                    governance_version: gov_version,
+                    gov_version,
                     sn: subject.sn + 1,
                     // self.actual_sn.get(&subject_id).unwrap().to_owned() + 1, // Must be Some, filled in init function
                 };
