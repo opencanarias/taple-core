@@ -4,7 +4,7 @@ use crate::{
     commons::{
         config::VotationType,
         models::{
-            approval::{ ApprovalContent, ApprovalStatus},
+            approval::{ ApprovalResponse, ApprovalStatus},
             state::Subject,
             Acceptance,
         },
@@ -15,7 +15,7 @@ use crate::{
     request::{ EventRequest},
     governance::{error::RequestError, GovernanceInterface},
     identifier::{Derivable, DigestIdentifier, KeyIdentifier},
-    DatabaseCollection, Notification, signature::Signed, Proposal, authorized_subjecs::error,
+    DatabaseCollection, Notification, signature::Signed, ApprovalRequest, authorized_subjecs::error,
 };
 
 use super::{
@@ -173,9 +173,9 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
 
     pub async fn process_approval_request(
         &mut self,
-        approval_request: Signed<Proposal>,
+        approval_request: Signed<ApprovalRequest>,
     ) -> Result<
-        Result<Option<(Signed<ApprovalContent>, KeyIdentifier)>, ApprovalErrorResponse>,
+        Result<Option<(Signed<ApprovalResponse>, KeyIdentifier)>, ApprovalErrorResponse>,
         ApprovalManagerError,
     > {
         /*
@@ -409,7 +409,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         &mut self,
         request_id: &DigestIdentifier,
         acceptance: Acceptance,
-    ) -> Result<Result<(Signed<ApprovalContent>, KeyIdentifier), ApprovalErrorResponse>, ApprovalManagerError>
+    ) -> Result<Result<(Signed<ApprovalResponse>, KeyIdentifier), ApprovalErrorResponse>, ApprovalManagerError>
     {
         // Obtenemos la petición
         let Ok(data) = self.get_single_request(&request_id) else {
@@ -425,10 +425,10 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             return Err(ApprovalManagerError::DatabaseError)
         };
         Ok(Ok((
-            Signed::<ApprovalContent> {
-                content: ApprovalContent {
-                    event_proposal_hash: data.hash_event_proporsal,
-                    acceptance,
+            Signed::<ApprovalResponse> {
+                content: ApprovalResponse {
+                    appr_req_hash: data.hash_event_proporsal,
+                    approved: acceptance,
                 },
                 signature,
             },
@@ -438,7 +438,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
 }
 
 fn event_proposal_hash_gen(
-    approval_request: &Signed<Proposal>,
+    approval_request: &Signed<ApprovalRequest>,
 ) -> Result<DigestIdentifier, ApprovalManagerError> {
     Ok(DigestIdentifier::from_serializable_borsh(approval_request)
         .map_err(|_| ApprovalManagerError::HashGenerationFailed)?)

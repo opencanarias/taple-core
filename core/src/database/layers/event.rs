@@ -60,7 +60,7 @@ impl<C: DatabaseCollection> EventDb<C> {
         subject_id: &DigestIdentifier,
         event: Signed<Event>,
     ) -> Result<(), DbError> {
-        let sn = event.content.event_proposal.content.sn;
+        let sn = event.content.sn;
         let key_elements: Vec<Element> = vec![
             Element::S(self.prefix.clone()),
             Element::S(subject_id.to_str()),

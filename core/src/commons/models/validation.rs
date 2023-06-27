@@ -12,7 +12,7 @@ use json_patch::{diff, Patch};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use super::{event_proposal::Proposal, state::Subject};
+use super::{approval::ApprovalRequest, state::Subject};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct ValidationProof {

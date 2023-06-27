@@ -3,10 +3,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
-    commons::models::{event_proposal::Evaluation, value_wrapper::ValueWrapper},
+    commons::models::{evaluation::EvaluationResponse, value_wrapper::ValueWrapper},
     identifier::DigestIdentifier,
     signature::{Signature, Signed},
-    EventRequest, KeyIdentifier, ApprovalContent,
+    EventRequest, KeyIdentifier, ApprovalResponse,
 };
 
 use self::errors::EventError;
@@ -21,12 +21,12 @@ pub enum EventCommand {
         event_request: Signed<EventRequest>,
     },
     EvaluatorResponse {
-        evaluation: Evaluation,
+        evaluation: EvaluationResponse,
         json_patch: ValueWrapper,
         signature: Signature,
     },
     ApproverResponse {
-        approval: Signed<ApprovalContent>,
+        approval: Signed<ApprovalResponse>,
     },
     ValidatorResponse {
         event_hash: DigestIdentifier,

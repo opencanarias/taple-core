@@ -4,7 +4,7 @@ pub use crate::protocol::protocol_message_manager::TapleMessages;
 use crate::{
     commons::models::{event_proposal::Evaluation, value_wrapper::ValueWrapper, Acceptance},
     identifier::DigestIdentifier,
-    signature::{Signature, Signed}, ApprovalContent,
+    signature::{Signature, Signed}, ApprovalResponse,
 };
 
 pub fn create_evaluator_response(
@@ -29,6 +29,6 @@ pub fn create_evaluator_response(
     })
 }
 
-pub fn create_approver_response(approval: Signed<ApprovalContent>) -> TapleMessages {
+pub fn create_approver_response(approval: Signed<ApprovalResponse>) -> TapleMessages {
     TapleMessages::EventMessage(crate::event::EventCommand::ApproverResponse { approval: approval })
 }

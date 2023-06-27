@@ -10,7 +10,7 @@ use crate::{
     identifier::{DigestIdentifier, KeyIdentifier},
     request::{EventRequest, StartRequest},
     signature::{Signature, Signed},
-    ApprovalContent, Derivable,
+    ApprovalResponse, Derivable,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use json_patch::diff;
@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use super::{
-    event_proposal::Proposal,
+    approval::ApprovalRequest,
     state::{generate_subject_id, Subject},
     value_wrapper::ValueWrapper,
 };
@@ -114,4 +114,14 @@ impl Signed<Event> {
         // Verify approvers signatures
 
     }
+}
+
+/// Metadata of a TAPLE Event
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
+pub struct Metadata {
+    pub namespace: String,
+    pub subject_id: DigestIdentifier,
+    pub governance_id: DigestIdentifier,
+    pub governance_version: u64,
+    pub schema_id: String,
 }

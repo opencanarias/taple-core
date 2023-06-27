@@ -5,7 +5,7 @@ use crate::{
     commons::models::Acceptance,
     identifier::{DigestIdentifier, KeyIdentifier},
     signature::{Signature, Signed},
-    request::EventRequest, Proposal, ValueWrapper,
+    request::EventRequest, ApprovalRequest, ValueWrapper,
 };
 
 use self::error::ApprovalErrorResponse;
@@ -18,7 +18,7 @@ pub(crate) mod manager;
 
 #[derive(Clone, Serialize, Deserialize, Debug, BorshSerialize, BorshDeserialize)]
 pub enum ApprovalMessages {
-    RequestApproval(Signed<Proposal>),
+    RequestApproval(Signed<ApprovalRequest>),
     EmitVote(EmitVote),
     GetAllRequest,
     GetSingleRequest(DigestIdentifier),

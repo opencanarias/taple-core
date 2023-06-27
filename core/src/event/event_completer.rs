@@ -10,7 +10,7 @@ use crate::{
             evaluation::{EvaluationRequest, SubjectContext},
             event::{Event},
             validation::ValidationProof,
-            event_proposal::{Evaluation, Proposal},
+            event_proposal::{Evaluation, ApprovalRequest},
             state::{generate_subject_id, Subject},
             Acceptance,
         },
@@ -31,7 +31,7 @@ use crate::{
         approval::create_approval_request, evaluator::create_evaluator_request,
         ledger::request_gov_event, validation::create_validator_request,
     },
-    ApprovalContent, DatabaseCollection, EventRequest, Notification, ValueWrapper,
+    ApprovalResponse, DatabaseCollection, EventRequest, Notification, ValueWrapper,
 };
 use std::hash::Hash;
 
@@ -59,7 +59,7 @@ pub struct EventCompleter<C: DatabaseCollection> {
     event_evaluations:
         HashMap<DigestIdentifier, HashSet<(UniqueSignature, Acceptance, DigestIdentifier)>>,
     // Approval HashMaps
-    event_proposals: HashMap<DigestIdentifier, Signed<Proposal>>,
+    event_proposals: HashMap<DigestIdentifier, Signed<ApprovalRequest>>,
     event_approvations: HashMap<DigestIdentifier, HashSet<UniqueApproval>>,
     // Validation HashMaps
     events_to_validate: HashMap<DigestIdentifier, Signed<Event>>,
@@ -451,7 +451,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         event_request: &Signed<EventRequest>,
         subject: &Subject,
         gov_version: u64,
-    ) -> Result<(Signed<Proposal>, DigestIdentifier), EventError> {
+    ) -> Result<(Signed<ApprovalRequest>, DigestIdentifier), EventError> {
         let hash_prev_event = DigestIdentifier::from_serializable_borsh(
             &self
                 .database
@@ -462,7 +462,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         .map_err(|_| {
             EventError::CryptoError("Error calculating the hash of the previous event".to_string())
         })?;
-        let proposal = Proposal::new(
+        let proposal = ApprovalRequest::new(
             event_request.clone(),
             subject.sn + 1,
             hash_prev_event,
@@ -484,7 +484,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 EventError::CryptoError(String::from("Error signing the hash of the proposal"))
             })?;
         Ok((
-            Signed::<Proposal>::new(proposal, subject_signature),
+            Signed::<ApprovalRequest>::new(proposal, subject_signature),
             proposal_hash,
         ))
     }
@@ -956,7 +956,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     "Error calculating the hash of the previous event".to_owned(),
                 )
             })?;
-            let proposal = Proposal::new(
+            let proposal = ApprovalRequest::new(
                 preevaluation_event.event_request.clone(),
                 preevaluation_event.sn,
                 hash_prev_event,
@@ -979,7 +979,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 Signature::new(&proposal, subject.public_key.clone(), &subject_keys).map_err(
                     |_| EventError::CryptoError(String::from("Error signing the proposal")),
                 )?;
-            let event_proposal = Signed::<Proposal>::new(proposal, subject_signature);
+            let event_proposal = Signed::<ApprovalRequest>::new(proposal, subject_signature);
             let metadata = Metadata {
                 namespace: subject.namespace.clone(),
                 subject_id: subject_id.clone(),
@@ -1051,14 +1051,14 @@ impl<C: DatabaseCollection> EventCompleter<C> {
 
     pub async fn approver_signatures(
         &mut self,
-        approval: Signed<ApprovalContent>,
+        approval: Signed<ApprovalResponse>,
     ) -> Result<(), EventError> {
         log::warn!("APPROVAL SIGNATURES");
         log::warn!("APPROVAL 1");
         // Mirar en que estado está el evento, si está en aprovación o no
         let event_proposal = match self
             .event_proposals
-            .get(&approval.content.event_proposal_hash)
+            .get(&approval.content.appr_req_hash)
         {
             Some(event_proposal) => event_proposal,
             None => {
@@ -1110,7 +1110,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         // Guardar aprobación
         let approval_set = match self
             .event_approvations
-            .get_mut(&approval.content.event_proposal_hash)
+            .get_mut(&approval.content.appr_req_hash)
         {
             Some(approval_set) => {
                 insert_or_replace_and_check(
@@ -1127,11 +1127,11 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     approval: approval.clone(),
                 });
                 self.event_approvations.insert(
-                    approval.content.event_proposal_hash.clone(),
+                    approval.content.appr_req_hash.clone(),
                     new_approval_set,
                 );
                 self.event_approvations
-            .get_mut(&approval.content.event_proposal_hash)
+            .get_mut(&approval.content.appr_req_hash)
             .expect("Acabamos de insertar el conjunto de approvals, por lo que debe estar presente")
             }
         };
@@ -1139,10 +1139,10 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         let num_approvals_with_same_acceptance = approval_set
             .iter()
             .filter(|unique_approval| {
-                unique_approval.approval.content.acceptance == approval.content.acceptance
+                unique_approval.approval.content.approved == approval.content.approved
             })
             .count() as u32;
-        let (quorum_size_now, execution) = match approval.content.acceptance {
+        let (quorum_size_now, execution) = match approval.content.approved {
             crate::commons::models::Acceptance::Ok => (quorum_size.0, true),
             crate::commons::models::Acceptance::Ko => (quorum_size.1, false),
         };
@@ -1185,13 +1185,13 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             let approvals = approval_set
                 .iter()
                 .filter(|unique_approval| {
-                    unique_approval.approval.content.acceptance == approval.content.acceptance
+                    unique_approval.approval.content.approved == approval.content.approved
                 })
                 .map(|approval| approval.approval.clone())
                 .collect();
             let event_proposal = self
                 .event_proposals
-                .remove(&approval.content.event_proposal_hash)
+                .remove(&approval.content.appr_req_hash)
                 .unwrap();
 
             let gov_version = self
@@ -1206,7 +1206,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 .map_err(|_| EventError::CryptoError("Error generating event hash".to_owned()))?;
             // Limpiar HashMaps
             self.event_approvations
-                .remove(&approval.content.event_proposal_hash);
+                .remove(&approval.content.appr_req_hash);
             let stage = ValidationStage::Validate;
             let (signers, quorum_size) =
                 self.get_signers_and_quorum(metadata, stage.clone()).await?;
@@ -1509,8 +1509,8 @@ impl<C: DatabaseCollection> EventCompleter<C> {
 
     fn create_event_prevalidated(
         &mut self,
-        event_proposal: Signed<Proposal>,
-        approvals: HashSet<Signed<ApprovalContent>>,
+        event_proposal: Signed<ApprovalRequest>,
+        approvals: HashSet<Signed<ApprovalResponse>>,
         subject: &Subject,
         execution: bool,
     ) -> Result<Signed<Event>, EventError> {

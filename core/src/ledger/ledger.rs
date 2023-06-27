@@ -26,7 +26,7 @@ use crate::{
     utils::message::ledger::{request_event, request_gov_event},
     DatabaseCollection,
 };
-use crate::{ApprovalContent, Event, KeyDerivator, ValueWrapper};
+use crate::{ApprovalResponse, Event, KeyDerivator, ValueWrapper};
 use std::collections::{hash_map::Entry, HashMap, HashSet};
 
 use super::errors::LedgerError;
@@ -2903,14 +2903,14 @@ fn check_context(
 }
 
 fn verify_approval_signatures(
-    approvals: &HashSet<Signed<ApprovalContent>>,
+    approvals: &HashSet<Signed<ApprovalResponse>>,
     signers: &HashSet<KeyIdentifier>,
     quorum_size: u32,
     event_proposal_hash: DigestIdentifier,
 ) -> Result<(), LedgerError> {
     let mut actual_signers = HashSet::new();
     for approval in approvals.iter() {
-        if approval.content.event_proposal_hash != event_proposal_hash {
+        if approval.content.appr_req_hash != event_proposal_hash {
             log::error!("Invalid Event Proposal Hash in Approval");
             continue;
         }

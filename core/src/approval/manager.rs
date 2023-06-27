@@ -12,7 +12,7 @@ use crate::{
     message::{MessageConfig, MessageTaskCommand},
     protocol::protocol_message_manager::TapleMessages,
     utils::message::event::create_approver_response,
-    DatabaseCollection, Notification, TapleSettings, signature::Signed, Proposal,
+    DatabaseCollection, Notification, TapleSettings, signature::Signed, ApprovalRequest,
 };
 
 use super::{
@@ -42,7 +42,7 @@ impl ApprovalAPI {
 
 #[async_trait]
 pub trait ApprovalAPIInterface {
-    async fn request_approval(&self, data: Signed<Proposal>) -> Result<(), ApprovalErrorResponse>;
+    async fn request_approval(&self, data: Signed<ApprovalRequest>) -> Result<(), ApprovalErrorResponse>;
     async fn emit_vote(
         &self,
         request_id: DigestIdentifier,
@@ -57,7 +57,7 @@ pub trait ApprovalAPIInterface {
 
 #[async_trait]
 impl ApprovalAPIInterface for ApprovalAPI {
-    async fn request_approval(&self, data: Signed<Proposal>) -> Result<(), ApprovalErrorResponse> {
+    async fn request_approval(&self, data: Signed<ApprovalRequest>) -> Result<(), ApprovalErrorResponse> {
         self.input_channel
             .tell(ApprovalMessages::RequestApproval(data))
             .await
