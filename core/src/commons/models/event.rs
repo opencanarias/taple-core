@@ -6,7 +6,6 @@ use crate::{
         crypto::{KeyMaterial, KeyPair},
         errors::SubjectError,
     },
-    event_content::Metadata,
     identifier::{DigestIdentifier, KeyIdentifier},
     request::{EventRequest, StartRequest},
     signature::{Signature, Signed},
@@ -20,7 +19,7 @@ use serde_json::json;
 use super::{
     approval::ApprovalRequest,
     state::{generate_subject_id, Subject},
-    value_wrapper::ValueWrapper,
+    value_wrapper::ValueWrapper, HashId,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
@@ -53,6 +52,12 @@ pub struct Event {
 //         }
 //     }
 // }
+impl HashId for Event {
+    fn hash_id(&self) -> Result<DigestIdentifier, SubjectError> {
+        DigestIdentifier::from_serializable_borsh(&self)
+            .map_err(|_| SubjectError::SignatureCreationFails("HashId for Event Fails".to_string()))
+    }
+}
 
 impl Signed<Event> {
     pub fn from_genesis_request(
@@ -110,9 +115,10 @@ impl Signed<Event> {
         self.signature.verify(&self.content)?;
         self.content.event_request.verify()?;
         // Verify evaluators signatures
-        
+
         // Verify approvers signatures
 
+        Ok(())
     }
 }
 

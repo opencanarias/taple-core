@@ -1,24 +1,20 @@
 use std::collections::HashSet;
 
-use super::{errors::ProtocolErrors, models::timestamp};
+use super::{
+    errors::ProtocolErrors,
+    models::{timestamp, HashId},
+};
 use crate::commons::{
     config::TapleSettings,
     crypto::{KeyMaterial, KeyPair, Payload, DSA},
-    identifier::{
-        derive::digest::DigestDerivator, Derivable, DigestIdentifier, KeyIdentifier,
-        SignatureIdentifier,
-    },
-    models::{
-        signature::{Signature},
-        timestamp::TimeStamp,
-    },
+    identifier::{derive::digest::DigestDerivator, KeyIdentifier},
+    models::signature::Signature,
 };
-use borsh::BorshSerialize;
 
 pub trait SelfSignatureInterface {
     fn change_settings(&mut self, settings: &TapleSettings);
     fn get_own_identifier(&self) -> KeyIdentifier;
-    fn sign<T: BorshSerialize>(&self, content: &T) -> Result<Signature, ProtocolErrors>;
+    fn sign<T: HashId>(&self, content: &T) -> Result<Signature, ProtocolErrors>;
     fn check_if_signature_present(&self, signers: &HashSet<KeyIdentifier>) -> bool;
 }
 
@@ -49,7 +45,7 @@ impl SelfSignatureInterface for SelfSignatureManager {
         self.identifier.clone()
     }
 
-    fn sign<T: BorshSerialize>(&self, content: &T) -> Result<Signature, ProtocolErrors> {
+    fn sign<T: HashId>(&self, content: &T) -> Result<Signature, ProtocolErrors> {
         Ok(Signature::new(content, self.identifier.clone(), &self.keys)
             .map_err(|_| ProtocolErrors::SignatureError)?)
     }

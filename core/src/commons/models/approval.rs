@@ -5,11 +5,13 @@ use crate::{
     commons::errors::SubjectError,
     identifier::DigestIdentifier,
     signature::{Signature, Signed},
-    EventRequest,
+    EventRequest, ValueWrapper,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 use std::hash::Hash;
+
+use super::HashId;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct ApprovalRequest {
@@ -18,9 +20,17 @@ pub struct ApprovalRequest {
     pub sn: u64,
     pub governance_version: u64,
     // Evaluation Response
-    pub patch: String, // cambiar
+    pub patch: ValueWrapper, // cambiar
     pub state_hash: DigestIdentifier,
     pub hash_prev_event: DigestIdentifier,
+}
+
+impl HashId for ApprovalRequest {
+    fn hash_id(&self) -> Result<DigestIdentifier, SubjectError> {
+        DigestIdentifier::from_serializable_borsh(&self).map_err(|_| {
+            SubjectError::SignatureCreationFails("HashId for ApprovalRequest Fails".to_string())
+        })
+    }
 }
 
 #[derive(
@@ -38,6 +48,14 @@ pub struct ApprovalRequest {
 pub struct ApprovalResponse {
     pub appr_req_hash: DigestIdentifier,
     pub approved: bool,
+}
+
+impl HashId for ApprovalResponse {
+    fn hash_id(&self) -> Result<DigestIdentifier, SubjectError> {
+        DigestIdentifier::from_serializable_borsh(&self).map_err(|_| {
+            SubjectError::SignatureCreationFails("HashId for ApprovalResponse Fails".to_string())
+        })
+    }
 }
 
 impl Signed<ApprovalResponse> {
@@ -78,8 +96,15 @@ impl Hash for UniqueApproval {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
-pub enum ApprovalStatus {
+pub enum ApprovalState {
     Pending,
-    Voted,
-    Finished,
+    Responded,
+    Obsolete,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
+pub struct ApprovalEntity {
+    request: Signed<ApprovalRequest>,
+    reponse: Option<Signed<ApprovalResponse>>,
+    state: ApprovalState
 }

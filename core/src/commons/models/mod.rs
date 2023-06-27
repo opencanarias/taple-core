@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::DigestIdentifier;
 
+use super::errors::SubjectError;
+
 pub mod approval;
 pub mod event;
 pub mod notary;
@@ -15,6 +17,7 @@ pub mod value_wrapper;
 pub mod evaluation;
 pub mod validation;
 
-pub trait HashId {
-    fn hash_id(&self) -> DigestIdentifier;
+
+pub trait HashId: BorshSerialize {
+    fn hash_id(&self) -> Result<DigestIdentifier, SubjectError>;
 }

@@ -21,7 +21,7 @@ use crate::event::manager::EventAPI;
 use crate::ledger::manager::EventManagerAPI;
 use crate::signature::Signature;
 use crate::{
-    approval::ApprovalPetitionData, commons::models::Acceptance, identifier::DigestIdentifier,
+    approval::ApprovalPetitionData,  identifier::DigestIdentifier,
     DatabaseCollection, DB,
 };
 use crate::{KeyDerivator, KeyIdentifier};
@@ -97,7 +97,7 @@ pub trait ApiModuleInterface {
     async fn approval_request(
         &self,
         request_id: DigestIdentifier,
-        acceptance: Acceptance,
+        acceptance: bool,
     ) -> Result<DigestIdentifier, ApiError>;
     /// It allows to obtain all the voting requests pending to be resolved in the node.
     /// These requests are received from other nodes in the network when they try to update
@@ -318,7 +318,7 @@ impl ApiModuleInterface for NodeAPI {
     async fn approval_request(
         &self,
         request_id: DigestIdentifier,
-        acceptance: Acceptance,
+        acceptance: bool,
     ) -> Result<DigestIdentifier, ApiError> {
         let response = self
             .sender

@@ -21,9 +21,7 @@ pub enum EventCommand {
         event_request: Signed<EventRequest>,
     },
     EvaluatorResponse {
-        evaluation: EvaluationResponse,
-        json_patch: ValueWrapper,
-        signature: Signature,
+        evaluator_response: Signed<EvaluationResponse>,
     },
     ApproverResponse {
         approval: Signed<ApprovalResponse>,

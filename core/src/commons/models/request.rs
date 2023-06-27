@@ -7,6 +7,8 @@ use crate::{
     DigestIdentifier, KeyIdentifier, ValueWrapper,
 };
 
+use super::HashId;
+
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub enum EventRequest {
     Create(StartRequest),
@@ -39,6 +41,14 @@ pub struct TransferRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct EOLRequest {
     pub subject_id: DigestIdentifier,
+}
+
+impl HashId for EventRequest {
+    fn hash_id(&self) -> Result<DigestIdentifier, SubjectError> {
+        DigestIdentifier::from_serializable_borsh(&self).map_err(|_| {
+            SubjectError::SignatureCreationFails("HashId for EventRequest Fails".to_string())
+        })
+    }
 }
 
 impl Signed<EventRequest> {

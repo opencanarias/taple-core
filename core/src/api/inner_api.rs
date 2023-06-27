@@ -4,7 +4,6 @@ use crate::approval::error::ApprovalErrorResponse;
 #[cfg(feature = "aproval")]
 use crate::approval::manager::{ApprovalAPI, ApprovalAPIInterface};
 use crate::authorized_subjecs::manager::AuthorizedSubjectsAPI;
-use crate::commons::models::Acceptance;
 use crate::commons::self_signature_manager::{SelfSignatureInterface, SelfSignatureManager};
 use crate::event::errors::EventError;
 use crate::event::manager::{EventAPI, EventAPIInterface};
@@ -85,7 +84,7 @@ impl<C: DatabaseCollection> InnerAPI<C> {
     pub async fn emit_vote(
         &self,
         request_id: DigestIdentifier,
-        acceptance: Acceptance,
+        acceptance: bool,
     ) -> Result<ApiResponses, APIInternalError> {
         // Es posible que en lugar de subject_id se prefiera un request_id
         let id_str = request_id.to_str();

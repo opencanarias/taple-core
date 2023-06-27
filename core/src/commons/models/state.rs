@@ -4,7 +4,8 @@ use crate::{
         errors::SubjectError,
         identifier::{DigestIdentifier, KeyIdentifier},
     },
-    Derivable, signature::Signed, Event,
+    signature::Signed,
+    Derivable, Event,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use json_patch::{patch, Patch};
@@ -119,7 +120,7 @@ impl Subject {
         init_state: ValueWrapper,
         keys: Option<KeyPair>,
     ) -> Result<Self, SubjectError> {
-        let EventRequest::Create(create_request) = event.content.event_proposal.content.event_request.content.clone() else {
+        let EventRequest::Create(create_request) = event.content.event_request.content.clone() else {
             return Err(SubjectError::NotCreateEvent)
         };
         let subject_id = generate_subject_id(
@@ -127,7 +128,7 @@ impl Subject {
             &create_request.schema_id,
             create_request.public_key.to_str(),
             create_request.governance_id.to_str(),
-            event.content.event_proposal.content.gov_version,
+            event.content.gov_version,
         )?;
         Ok(Subject {
             keys,
@@ -137,26 +138,12 @@ impl Subject {
             public_key: create_request.public_key,
             namespace: create_request.namespace.clone(),
             schema_id: create_request.schema_id.clone(),
-            owner: event
-                .content
-                .event_proposal
-                .content
-                .event_request
-                .signature
-                .signer
-                .clone(),
-            creator: event
-                .content
-                .event_proposal
-                .content
-                .event_request
-                .signature
-                .signer
-                .clone(),
+            owner: event.content.event_request.signature.signer.clone(),
+            creator: event.content.event_request.signature.signer.clone(),
             properties: init_state,
             active: true,
             name: create_request.name,
-            genesis_gov_version: event.content.event_proposal.content.gov_version,
+            genesis_gov_version: event.content.gov_version,
         })
     }
 

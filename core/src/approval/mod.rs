@@ -2,7 +2,6 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    commons::models::Acceptance,
     identifier::{DigestIdentifier, KeyIdentifier},
     signature::{Signature, Signed},
     request::EventRequest, ApprovalRequest, ValueWrapper,
@@ -61,5 +60,5 @@ pub struct RequestApproval {
 #[derive(Clone, Serialize, Deserialize, Debug, BorshSerialize, BorshDeserialize)]
 pub struct EmitVote {
     request_id: DigestIdentifier,
-    acceptance: Acceptance,
+    acceptance: bool,
 }

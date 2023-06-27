@@ -1,18 +1,13 @@
 //! Contains the data structures related to event  to send to approvers, or to validators if approval is not required.
-use std::collections::HashSet;
-
 use crate::{
-    commons::errors::SubjectError,
-    event_content::Metadata,
+    commons::models::event::Metadata,
     identifier::{DigestIdentifier, KeyIdentifier},
     request::StartRequest,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
-use json_patch::{diff, Patch};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
 
-use super::{approval::ApprovalRequest, state::Subject};
+use super::state::Subject;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct ValidationProof {

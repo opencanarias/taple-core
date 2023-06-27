@@ -4,7 +4,7 @@ use crate::commons::models::state::SubjectData;
 use crate::identifier::DigestIdentifier;
 use crate::signature::Signature;
 #[cfg(feature = "aproval")]
-use crate::{Acceptance, ApprovalPetitionData};
+use crate::{ ApprovalPetitionData};
 use crate::{KeyDerivator, KeyIdentifier, Event, EventRequest};
 use std::collections::HashSet;
 
@@ -25,7 +25,7 @@ pub enum APICommands {
     GetEvent(DigestIdentifier, u64),
     GetEvents(GetEvents),
     #[cfg(feature = "aproval")]
-    VoteResolve(Acceptance, DigestIdentifier),
+    VoteResolve(bool, DigestIdentifier),
     ExternalRequest(Signed<EventRequest>),
     #[cfg(feature = "aproval")]
     GetPendingRequests,

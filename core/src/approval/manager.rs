@@ -3,7 +3,6 @@ use async_trait::async_trait;
 use crate::{
     commons::{
         channel::{ChannelData, MpscChannel, SenderEnd},
-        models::Acceptance,
         self_signature_manager::SelfSignatureManager,
     },
     database::DB,
@@ -46,7 +45,7 @@ pub trait ApprovalAPIInterface {
     async fn emit_vote(
         &self,
         request_id: DigestIdentifier,
-        acceptance: Acceptance,
+        acceptance: bool,
     ) -> Result<(), ApprovalErrorResponse>;
     async fn get_all_requests(&self) -> Result<Vec<ApprovalPetitionData>, ApprovalErrorResponse>;
     async fn get_single_request(
@@ -67,7 +66,7 @@ impl ApprovalAPIInterface for ApprovalAPI {
     async fn emit_vote(
         &self,
         request_id: DigestIdentifier,
-        acceptance: Acceptance,
+        acceptance: bool,
     ) -> Result<(), ApprovalErrorResponse> {
         let result = self
             .input_channel

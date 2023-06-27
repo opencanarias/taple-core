@@ -1,7 +1,11 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 
-use crate::{signature::Signed, DigestIdentifier, EventRequest, ValueWrapper};
+use crate::{
+    commons::errors::SubjectError,
+    signature::{Signature, Signed},
+    DigestIdentifier, EventRequest, ValueWrapper,
+};
 
 use super::HashId;
 
@@ -36,13 +40,49 @@ pub struct EvaluationResponse {
 }
 
 impl HashId for EvaluationResponse {
-    fn hash_id(&self) -> DigestIdentifier {
-        todo!() // no incluimos el patch
+    fn hash_id(&self) -> Result<DigestIdentifier, SubjectError> {
+        DigestIdentifier::from_serializable_borsh(&(
+            &self.evaluation_req_hash,
+            self.state_hash,
+            self.evaluation_success,
+            self.approval_required,
+        ))
+        .map_err(|_| {
+            SubjectError::SignatureCreationFails("HashId for EvaluationResponse Fails".to_string())
+        })
     }
 }
 
 impl HashId for EvaluationRequest {
-    fn hash_id(&self) -> DigestIdentifier {
-        todo!()
+    fn hash_id(&self) -> Result<DigestIdentifier, SubjectError> {
+        DigestIdentifier::from_serializable_borsh(&self).map_err(|_| {
+            SubjectError::SignatureCreationFails("HashId for EvaluationRequest Fails".to_string())
+        })
+    }
+}
+
+impl Signed<EvaluationRequest> {
+    pub fn new(eval_request: EvaluationRequest, signature: Signature) -> Self {
+        Self {
+            content: eval_request,
+            signature,
+        }
+    }
+
+    pub fn verify(&self) -> Result<(), SubjectError> {
+        self.signature.verify(&self.content)
+    }
+}
+
+impl Signed<EvaluationResponse> {
+    pub fn new(eval_response: EvaluationResponse, signature: Signature) -> Self {
+        Self {
+            content: eval_response,
+            signature,
+        }
+    }
+
+    pub fn verify(&self) -> Result<(), SubjectError> {
+        self.signature.verify(&self.content)
     }
 }
