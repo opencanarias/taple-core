@@ -3,7 +3,10 @@ use serde_json::Value;
 use wasmtime::Engine;
 
 use crate::{
-    commons::{models::evaluation::EvaluationRequest, schema_handler::Schema},
+    commons::{
+        models::{evaluation::EvaluationRequest, HashId},
+        schema_handler::Schema,
+    },
     database::DB,
     evaluator::errors::ExecutorErrorResponses,
     governance::GovernanceInterface,
@@ -90,7 +93,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
                                 ExecutorErrorResponses::JSONPATCHDeserializationFailed
                             })?,
                         ),
-                        state_hash: DigestIdentifier::default(),
+                        state_hash: execute_contract.context.state.hash_id()?,
                         eval_req_hash: context_hash,
                         eval_success: false,
                         appr_required: false,
@@ -116,13 +119,15 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
                         }
                     };
                     return Ok(EvaluationResponse {
-                        json_patch: serde_json::from_str("")
-                            .map_err(|_| ExecutorErrorResponses::JSONPATCHDeserializationFailed)?,
-                        hash_new_state: DigestIdentifier::default(),
-                        governance_version,
-                        context_hash,
-                        success: Acceptance::Ko,
-                        approval_required: false,
+                        patch: ValueWrapper(
+                            serde_json::from_str("[]").map_err(|_| {
+                                ExecutorErrorResponses::JSONPATCHDeserializationFailed
+                            })?,
+                        ),
+                        state_hash: execute_contract.context.state.hash_id()?,
+                        eval_req_hash: context_hash,
+                        eval_success: false,
+                        appr_required: false,
                     });
                 }
                 Err(error) => return Err(ExecutorErrorResponses::DatabaseError(error.to_string())),
@@ -139,7 +144,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
             )
             .await?;
         let (patch, hash) = match contract_result.success {
-            Acceptance::Ok => {
+            true => {
                 match self
                     .validation_state(
                         &contract_result,
@@ -150,12 +155,12 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
                     .await
                 {
                     Ok(false) | Err(_) => {
-                        contract_result.success = Acceptance::Ko;
+                        contract_result.success = false;
                         (
                             serde_json::from_str("[]").map_err(|_| {
                                 ExecutorErrorResponses::JSONPATCHDeserializationFailed
                             })?,
-                            DigestIdentifier::default(),
+                            execute_contract.context.state.hash_id()?,
                         )
                     }
                     _ => (
@@ -165,19 +170,18 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
                     ),
                 }
             }
-            Acceptance::Ko => (
+            false => (
                 serde_json::from_str("[]")
                     .map_err(|_| ExecutorErrorResponses::JSONPATCHDeserializationFailed)?,
-                DigestIdentifier::default(),
+                execute_contract.context.state.hash_id()?,
             ),
         };
         Ok(EvaluationResponse {
-            json_patch: ValueWrapper(patch),
-            hash_new_state: hash,
-            governance_version,
-            context_hash,
-            success: contract_result.success,
-            approval_required: contract_result.approval_required,
+            patch: ValueWrapper(patch),
+            state_hash: hash,
+            eval_req_hash: context_hash,
+            eval_success: contract_result.success,
+            appr_required: contract_result.approval_required,
         })
     }
 
@@ -188,7 +192,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
         schema_id: String,
         governance_version: u64,
     ) -> Result<bool, ExecutorErrorResponses> {
-        if Acceptance::Ok == contract_result.success {
+        if contract_result.success {
             let new_state = &contract_result.final_state;
             // Comprobar el estado contra el esquema definido en la gobernanza
             let schema = self

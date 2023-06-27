@@ -6,6 +6,7 @@ use wasmtime::Engine;
 use super::compiler::manager::TapleCompiler;
 use super::errors::EvaluatorError;
 use super::{EvaluatorMessage, EvaluatorResponse};
+use crate::EvaluationResponse;
 use crate::commons::channel::{ChannelData, MpscChannel, SenderEnd};
 use crate::commons::self_signature_manager::{SelfSignatureInterface, SelfSignatureManager};
 use crate::database::{DatabaseCollection, DatabaseManager, DB};
@@ -15,6 +16,7 @@ use crate::governance::{GovernanceInterface, GovernanceUpdatedMessage};
 use crate::message::{MessageConfig, MessageTaskCommand};
 use crate::protocol::protocol_message_manager::TapleMessages;
 use crate::request::EventRequest;
+use crate::signature::Signed;
 use crate::utils::message::event::create_evaluator_response;
 
 pub struct EvaluatorManager<
@@ -140,7 +142,7 @@ impl<
                                     &executor_response.approval_required,
                                 ))
                                 .map_err(|_| EvaluatorError::SignatureGenerationFailed)?;
-                            let signed_evaluator_response = ;
+                            let signed_evaluator_response: crate::signature::Signed<crate::EvaluationResponse> = Signed<EvaluationResponse>::new();
                             let msg = create_evaluator_response(
                                 signed_evaluator_response
                             );
@@ -676,14 +678,12 @@ mod test {
             } else {
                 panic!("Unexpected");
             };
-            let (evaluation, json_patch, signature) =
+            let evaluator_response =
                 if let TapleMessages::EventMessage(event) = message {
                     match event {
                         EventCommand::EvaluatorResponse {
-                            evaluation,
-                            json_patch,
-                            signature,
-                        } => (evaluation, json_patch, signature),
+                            evaluator_response
+                        } => evaluator_response,
                         _ => {
                             panic!("Unexpected 4");
                         }
@@ -696,13 +696,12 @@ mod test {
                 two: 100,
                 three: 13,
             };
-            assert_eq!(evaluation.governance_version, 0);
             let new_state_json = serde_json::to_value(&new_state).unwrap();
             // let hash = DigestIdentifier::from_serializable_borsh(new_state_json).unwrap();
             // assert_eq!(hash, evaluation.state_hash); // arreglar
             println!("{:#?}\n{:#?}", initial_state_json, new_state_json);
             let patch = generate_json_patch(initial_state_json, new_state_json);
-            assert_eq!(patch, json_patch.0); // arreglar
+            assert_eq!(patch, evaluator_response.content.patch.0.0); // arreglar
                                              // let own_identifier = signature_manager.get_own_identifier();
                                              // assert_eq!(evaluation..signer, own_identifier); // arreglar
             handler.abort();
