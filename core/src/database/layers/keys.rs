@@ -2,8 +2,7 @@ use crate::utils::{deserialize, serialize};
 use super::utils::{get_key, Element};
 use crate::crypto::KeyPair;
 use crate::DbError;
-use crate::{DatabaseCollection, DatabaseManager, Derivable, DigestIdentifier, KeyIdentifier};
-use std::collections::HashSet;
+use crate::{DatabaseCollection, DatabaseManager, Derivable, KeyIdentifier};
 use std::sync::Arc;
 
 pub(crate) struct KeysDb<C: DatabaseCollection> {
