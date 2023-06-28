@@ -7,7 +7,7 @@ use crate::{
     commons::{
         errors::ChannelErrors,
         identifier::{Derivable, DigestIdentifier, KeyIdentifier},
-        models::{event_content::Metadata, state::Subject},
+        models::{event::Metadata, state::Subject},
         schema_handler::{
             gov_models::{Contract, Quorum, Role, Schema, Who},
             initial_state::get_governance_initial_state,
@@ -501,7 +501,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
             let mut gov_subject = Subject::from_genesis_event(gov_genesis, init_state, None)?;
             for i in 1..=governance_version {
                 let event = self.repo_access.get_event(governance_id, i)?;
-                gov_subject.update_subject(event.content.event_proposal.content.json_patch, i)?;
+                gov_subject.update_subject(event.content.patch, i)?;
             }
             Ok(gov_subject)
         } else {

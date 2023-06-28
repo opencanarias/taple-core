@@ -4,6 +4,10 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Number, Value};
 
+use crate::{commons::errors::SubjectError, DigestIdentifier};
+
+use super::HashId;
+
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct ValueWrapper(pub Value);
 
@@ -14,6 +18,13 @@ impl ValueWrapper {
 
     pub fn get(&self, key: &str) -> Option<&Value> {
         self.0.get(key)
+    }
+}
+
+impl HashId for ValueWrapper {
+    fn hash_id(&self) -> Result<DigestIdentifier, SubjectError> {
+        DigestIdentifier::from_serializable_borsh(&self)
+            .map_err(|_| SubjectError::CryptoError("Hashing error".to_string()))
     }
 }
 

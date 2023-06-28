@@ -3,10 +3,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
-    commons::models::{event_proposal::Evaluation, value_wrapper::ValueWrapper},
+    commons::models::{evaluation::EvaluationResponse, value_wrapper::ValueWrapper},
     identifier::DigestIdentifier,
     signature::{Signature, Signed},
-    EventRequestType, KeyIdentifier, ApprovalContent,
+    EventRequest, KeyIdentifier, ApprovalResponse,
 };
 
 use self::errors::EventError;
@@ -18,15 +18,13 @@ pub mod manager;
 #[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub enum EventCommand {
     Event {
-        event_request: Signed<EventRequestType>,
+        event_request: Signed<EventRequest>,
     },
     EvaluatorResponse {
-        evaluation: Evaluation,
-        json_patch: ValueWrapper,
-        signature: Signature,
+        evaluator_response: Signed<EvaluationResponse>,
     },
     ApproverResponse {
-        approval: Signed<ApprovalContent>,
+        approval: Signed<ApprovalResponse>,
     },
     ValidatorResponse {
         event_hash: DigestIdentifier,

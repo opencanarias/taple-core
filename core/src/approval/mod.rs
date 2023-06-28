@@ -2,10 +2,9 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    commons::models::Acceptance,
     identifier::{DigestIdentifier, KeyIdentifier},
     signature::{Signature, Signed},
-    EventRequestType, Proposal, ValueWrapper,
+    request::EventRequest, ApprovalRequest, ValueWrapper, commons::models::approval::ApprovalEntity,
 };
 
 use self::error::ApprovalErrorResponse;
@@ -18,34 +17,23 @@ pub(crate) mod manager;
 
 #[derive(Clone, Serialize, Deserialize, Debug, BorshSerialize, BorshDeserialize)]
 pub enum ApprovalMessages {
-    RequestApproval(Signed<Proposal>),
+    RequestApproval(Signed<ApprovalRequest>),
     EmitVote(EmitVote),
     GetAllRequest,
     GetSingleRequest(DigestIdentifier),
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
-pub struct ApprovalPetitionData {
-    pub subject_id: DigestIdentifier,
-    pub sn: u64,
-    pub governance_id: DigestIdentifier,
-    pub governance_version: u64,
-    pub hash_event_proporsal: DigestIdentifier,
-    pub sender: KeyIdentifier,
-    pub json_patch: ValueWrapper,
-}
-
 #[derive(Clone, Debug)]
 pub enum ApprovalResponses {
     RequestApproval(Result<(), ApprovalErrorResponse>),
-    EmitVote(Result<ApprovalPetitionData, ApprovalErrorResponse>),
-    GetAllRequest(Vec<ApprovalPetitionData>),
-    GetSingleRequest(Result<ApprovalPetitionData, ApprovalErrorResponse>),
+    EmitVote(Result<ApprovalEntity, ApprovalErrorResponse>),
+    GetAllRequest(Vec<ApprovalEntity>),
+    GetSingleRequest(Result<ApprovalEntity, ApprovalErrorResponse>),
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct RequestApproval {
-    request: Signed<EventRequestType>,
+    request: Signed<EventRequest>,
     sn: u64,
     context_hash: DigestIdentifier,
     hash_new_state: DigestIdentifier,
@@ -61,5 +49,5 @@ pub struct RequestApproval {
 #[derive(Clone, Serialize, Deserialize, Debug, BorshSerialize, BorshDeserialize)]
 pub struct EmitVote {
     request_id: DigestIdentifier,
-    acceptance: Acceptance,
+    acceptance: bool,
 }

@@ -1,8 +1,8 @@
 use crate::utils::{deserialize, serialize};
 use super::utils::{get_key, Element};
-use crate::commons::models::event::ValidationProof;
+use crate::commons::models::validation::ValidationProof;
 use crate::DbError;
-use crate::{DatabaseCollection, DatabaseManager, Derivable, DigestIdentifier, KeyIdentifier};
+use crate::{DatabaseCollection, DatabaseManager, Derivable, DigestIdentifier};
 use std::sync::Arc;
 
 pub(crate) struct NotaryDb<C: DatabaseCollection> {

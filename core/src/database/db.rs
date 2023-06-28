@@ -1,14 +1,14 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use crate::commons::models::approval::ApprovalStatus;
-use crate::commons::models::event::ValidationProof;
+use crate::commons::models::approval::ApprovalEntity;
 use crate::commons::models::request::TapleRequest;
 use crate::commons::models::state::Subject;
+use crate::commons::models::validation::ValidationProof;
 use crate::crypto::KeyPair;
 use crate::identifier::{DigestIdentifier, KeyIdentifier};
 use crate::signature::{Signature, Signed};
-use crate::{ApprovalPetitionData, EventContent, EventRequestType};
+use crate::{Event, EventRequest};
 
 use super::error::Error;
 use super::layers::lce_validation_proofs::LceValidationProofs;
@@ -137,7 +137,11 @@ impl<C: DatabaseCollection> DB<C> {
         self.subject_db.get_all_subjects()
     }
 
-    pub fn get_event(&self, subject_id: &DigestIdentifier, sn: u64) -> Result<Signed<EventContent>, Error> {
+    pub fn get_event(
+        &self,
+        subject_id: &DigestIdentifier,
+        sn: u64,
+    ) -> Result<Signed<Event>, Error> {
         self.event_db.get_event(subject_id, sn)
     }
 
@@ -146,12 +150,16 @@ impl<C: DatabaseCollection> DB<C> {
         subject_id: &DigestIdentifier,
         from: Option<i64>,
         quantity: isize,
-    ) -> Result<Vec<Signed<EventContent>>, Error> {
+    ) -> Result<Vec<Signed<Event>>, Error> {
         self.event_db
             .get_events_by_range(subject_id, from, quantity)
     }
 
-    pub fn set_event(&self, subject_id: &DigestIdentifier, event: Signed<EventContent>) -> Result<(), Error> {
+    pub fn set_event(
+        &self,
+        subject_id: &DigestIdentifier,
+        event: Signed<Event>,
+    ) -> Result<(), Error> {
         self.event_db.set_event(subject_id, event)
     }
 
@@ -159,7 +167,10 @@ impl<C: DatabaseCollection> DB<C> {
         self.event_db.del_event(subject_id, sn)
     }
 
-    pub fn get_prevalidated_event(&self, subject_id: &DigestIdentifier) -> Result<Signed<EventContent>, Error> {
+    pub fn get_prevalidated_event(
+        &self,
+        subject_id: &DigestIdentifier,
+    ) -> Result<Signed<Event>, Error> {
         self.prevalidated_event_db
             .get_prevalidated_event(subject_id)
     }
@@ -167,7 +178,7 @@ impl<C: DatabaseCollection> DB<C> {
     pub fn set_prevalidated_event(
         &self,
         subject_id: &DigestIdentifier,
-        event: Signed<EventContent>,
+        event: Signed<Event>,
     ) -> Result<(), Error> {
         self.prevalidated_event_db
             .set_prevalidated_event(subject_id, event)
@@ -178,18 +189,21 @@ impl<C: DatabaseCollection> DB<C> {
             .del_prevalidated_event(subject_id)
     }
 
-    pub fn get_request(&self, subject_id: &DigestIdentifier) -> Result<Signed<EventRequestType>, Error> {
+    pub fn get_request(
+        &self,
+        subject_id: &DigestIdentifier,
+    ) -> Result<Signed<EventRequest>, Error> {
         self.event_request_db.get_request(subject_id)
     }
 
-    pub fn get_all_request(&self) -> Vec<Signed<EventRequestType>> {
+    pub fn get_all_request(&self) -> Vec<Signed<EventRequest>> {
         self.event_request_db.get_all_request()
     }
 
     pub fn set_request(
         &self,
         subject_id: &DigestIdentifier,
-        request: Signed<EventRequestType>,
+        request: Signed<EventRequest>,
     ) -> Result<(), Error> {
         self.event_request_db.set_request(subject_id, request)
     }
@@ -399,29 +413,48 @@ impl<C: DatabaseCollection> DB<C> {
             .del_lce_validation_proof(subject_id)
     }
 
-    pub fn get_approval(
-        &self,
-        request_id: &DigestIdentifier,
-    ) -> Result<(ApprovalPetitionData, ApprovalStatus), Error> {
+    pub fn get_approval(&self, request_id: &DigestIdentifier) -> Result<ApprovalEntity, Error> {
         self.approvals_db.get_approval(request_id)
     }
 
-    pub fn get_approvals(
-        &self,
-        status: Option<String>,
-    ) -> Result<Vec<ApprovalPetitionData>, Error> {
+    pub fn get_approvals(&self, status: Option<String>) -> Result<Vec<ApprovalEntity>, Error> {
         self.approvals_db.get_approvals(status)
     }
 
     pub fn set_approval(
         &self,
         request_id: &DigestIdentifier,
-        approval: (ApprovalPetitionData, ApprovalStatus),
+        approval: ApprovalEntity,
     ) -> Result<(), Error> {
         self.approvals_db.set_approval(request_id, approval)
     }
 
     pub fn del_approval(&self, request_id: &DigestIdentifier) -> Result<(), Error> {
         self.approvals_db.del_approval(request_id)
+    }
+
+    pub fn get_approvals_by_subject(
+        &self,
+        subject_id: &DigestIdentifier,
+    ) -> Result<Vec<DigestIdentifier>, Error> {
+        self.approvals_db.get_approvals_by_subject(subject_id)
+    }
+
+    pub fn del_subject_aproval_index(
+        &self,
+        subject_id: &DigestIdentifier,
+        request_id: &DigestIdentifier,
+    ) -> Result<(), Error> {
+        self.approvals_db
+            .del_subject_aproval_index(subject_id, request_id)
+    }
+
+    pub fn set_subject_aproval_index(
+        &self,
+        subject_id: &DigestIdentifier,
+        request_id: &DigestIdentifier,
+    ) -> Result<(), Error> {
+        self.approvals_db
+            .set_subject_aproval_index(subject_id, request_id)
     }
 }

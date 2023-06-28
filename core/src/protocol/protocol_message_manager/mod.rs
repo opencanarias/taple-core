@@ -130,9 +130,22 @@ impl ProtocolManager {
                 log::warn!("Evaluation Message Received");
                 #[cfg(feature = "evaluation")]
                 {
+                    let evaluation_command = match data {
+                        EvaluatorMessage::EvaluationEvent {
+                            evaluation_request,
+                            sender,
+                        } => {
+                            log::error!("Evaluation Event Received in protocol manager");
+                            return Ok(());
+                        }
+                        EvaluatorMessage::AskForEvaluation(evaluation_request) => EvaluatorMessage::EvaluationEvent {
+                            evaluation_request,
+                            sender,
+                        },
+                    };
                     return Ok(self
                         .evaluation_sx
-                        .tell(data)
+                        .tell(evaluation_command)
                         .await
                         .map_err(|_| ProtocolErrors::ChannelClosed)?);
                 }

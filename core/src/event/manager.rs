@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 
 use super::{errors::EventError, event_completer::EventCompleter, EventCommand, EventResponse};
-use crate::EventRequestType;
+use crate::EventRequest;
 use crate::commons::self_signature_manager::SelfSignatureManager;
 use crate::database::{DB, DatabaseCollection};
 use crate::governance::error::RequestError;
@@ -30,12 +30,12 @@ impl EventAPI {
 
 #[async_trait]
 pub trait EventAPIInterface {
-    async fn send_event_request(&self, event_request: Signed<EventRequestType>) -> EventResponse;
+    async fn send_event_request(&self, event_request: Signed<EventRequest>) -> EventResponse;
 }
 
 #[async_trait]
 impl EventAPIInterface for EventAPI {
-    async fn send_event_request(&self, event_request: Signed<EventRequestType>) -> EventResponse {
+    async fn send_event_request(&self, event_request: Signed<EventRequest>) -> EventResponse {
         match self.sender.ask(EventCommand::Event { event_request }).await {
             Ok(response) => response,
             Err(error) => EventResponse::Event(Err(EventError::EventApiChannelNotAvailable)),
@@ -177,13 +177,11 @@ impl<C: DatabaseCollection> EventManager<C> {
                     EventResponse::Event(response)
                 }
                 EventCommand::EvaluatorResponse {
-                    evaluation,
-                    json_patch,
-                    signature,
+                    evaluator_response,
                 } => {
                     match self
                         .event_completer
-                        .evaluator_signatures(evaluation, json_patch, signature)
+                        .evaluator_signatures(evaluator_response)
                         .await
                     {
                         Err(error) => match error {

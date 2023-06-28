@@ -1,9 +1,8 @@
 use crate::utils::{deserialize, serialize};
-use super::utils::{get_by_range, get_key, Element, get_by_range_governances};
+use super::utils::{get_key, Element, get_by_range_governances};
 use crate::commons::models::state::Subject;
 use crate::DbError;
 use crate::{DatabaseCollection, DatabaseManager, Derivable, DigestIdentifier};
-use std::fmt::format;
 use std::sync::Arc;
 
 pub(crate) struct SubjectByGovernanceDb<C: DatabaseCollection> {

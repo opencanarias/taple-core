@@ -4,17 +4,16 @@ use crate::{
     commons::{
         channel::SenderEnd,
         errors::ChannelErrors,
-        models::event::ValidationProof,
+        models::validation::ValidationProof,
         self_signature_manager::{SelfSignatureInterface, SelfSignatureManager},
     },
     event::EventCommand,
-    event_content::Metadata,
     governance::{stage::ValidationStage, GovernanceAPI, GovernanceInterface},
     identifier::DigestIdentifier,
     message::{MessageConfig, MessageTaskCommand},
     protocol::protocol_message_manager::TapleMessages,
     signature::Signature,
-    Derivable, KeyIdentifier,
+    Derivable, KeyIdentifier, Metadata,
 };
 
 use super::{errors::NotaryError, NotaryEvent, NotaryEventResponse};

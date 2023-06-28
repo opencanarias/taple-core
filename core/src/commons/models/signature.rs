@@ -12,7 +12,7 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use super::timestamp::TimeStamp;
+use super::{timestamp::TimeStamp, HashId};
 
 /// Defines the data used to generate the signature, as well as the signer's identifier.
 // #[derive(
@@ -53,13 +53,14 @@ pub struct Signature {
 }
 
 impl Signature {
-    pub fn new<T: BorshSerialize>(
+    pub fn new<T: HashId>(
         content: &T,
         signer: KeyIdentifier,
         keys: &KeyPair,
     ) -> Result<Self, SubjectError> {
         let timestamp = TimeStamp::now();
-        let signature_hash = DigestIdentifier::from_serializable_borsh((&content, &timestamp))
+        let content_hash = content.hash_id()?;
+        let signature_hash = DigestIdentifier::from_serializable_borsh((&content_hash, &timestamp))
             .map_err(|_| {
                 SubjectError::SignatureCreationFails("Signature hash fails".to_string())
             })?;
@@ -72,7 +73,7 @@ impl Signature {
             value: SignatureIdentifier::new(signer.to_signature_derivator(), &signature),
         })
     }
-    pub fn verify<T: BorshSerialize>(&self, content: &T) -> Result<(), SubjectError> {
+    pub fn verify<T: HashId>(&self, content: &T) -> Result<(), SubjectError> {
         let hash_signed = DigestIdentifier::from_serializable_borsh((&content, &self.timestamp))
             .map_err(|_| SubjectError::SignatureVerifyFails("Signature hash fails".to_owned()))?;
         self.signer
@@ -100,7 +101,18 @@ impl Hash for UniqueSignature {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize, PartialOrd, Hash)]
+#[derive(
+    Debug,
+    Clone,
+    Serialize,
+    Deserialize,
+    Eq,
+    PartialEq,
+    BorshSerialize,
+    BorshDeserialize,
+    PartialOrd,
+    Hash,
+)]
 pub struct Signed<T: BorshSerialize + BorshDeserialize> {
     #[serde(flatten)]
     pub content: T,

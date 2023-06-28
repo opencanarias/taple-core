@@ -99,24 +99,26 @@ pub use api::{
     APICommands, ApiError, ApiModuleInterface, ApiResponses, GetEvents, GetSubject, GetSubjects,
     NodeAPI,
 };
-pub use approval::ApprovalPetitionData;
 pub use commons::crypto;
 pub use commons::identifier;
 pub use commons::identifier::{Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier};
-pub use commons::models::approval::ApprovalContent;
-pub use commons::models::event::EventContent;
-pub use commons::models::event_proposal::{Evaluation, Proposal};
-pub use commons::models::event_request::EventRequestType;
+pub use commons::models::approval::{ApprovalEntity, ApprovalState};
+pub use commons::models::approval::ApprovalRequest;
+pub use commons::models::approval::ApprovalResponse;
+pub use commons::models::evaluation::EvaluationRequest;
+pub use commons::models::evaluation::EvaluationResponse;
+pub use commons::models::event::Event;
+pub use commons::models::event::Metadata;
 pub use commons::models::request;
+pub use commons::models::request::EventRequest;
+pub use commons::models::signature;
 pub use commons::models::state::SubjectData;
-pub use commons::models::Acceptance;
-pub use commons::models::{event_content, event_request, signature};
 pub use commons::{
     config::{DatabaseSettings, NetworkSettings, NodeSettings, TapleSettings},
     identifier::derive::{digest::DigestDerivator, KeyDerivator},
-    models::event::ValidationProof,
     models::notification::Notification,
     models::timestamp::TimeStamp,
+    models::validation::ValidationProof,
     models::value_wrapper::ValueWrapper,
 };
 pub(crate) use database::DB;

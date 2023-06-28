@@ -1,6 +1,6 @@
+use crate::database::Error as DbError;
 use crate::{commons::errors::SubjectError, governance::error::RequestError};
 use thiserror::Error;
-use crate::database::Error as DbError;
 
 #[derive(Error, Debug, Clone)]
 pub enum LedgerError {
@@ -76,4 +76,6 @@ pub enum LedgerError {
     SubjectLifeEnd(String),
     #[error("Repeated Request ID: {0}")]
     RepeatedRequestId(String),
+    #[error("Subject Id generation does not match with event subject_id")]
+    SubjectIdError,
 }

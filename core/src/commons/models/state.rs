@@ -4,14 +4,15 @@ use crate::{
         errors::SubjectError,
         identifier::{DigestIdentifier, KeyIdentifier},
     },
-    Derivable, signature::Signed, EventContent,
+    signature::Signed,
+    Derivable, Event,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use json_patch::{patch, Patch};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::{event_request::EventRequestType, value_wrapper::ValueWrapper};
+use super::{evaluation::SubjectContext, request::EventRequest, value_wrapper::ValueWrapper};
 
 #[derive(Debug, Deserialize, Serialize, Clone, BorshSerialize, BorshDeserialize)]
 pub struct Subject {
@@ -114,12 +115,22 @@ impl Subject {
     //     })
     // }
 
+    pub fn get_subject_context(&self, invoker: KeyIdentifier) -> SubjectContext {
+        SubjectContext {
+            governance_id: self.governance_id.clone(),
+            schema_id: self.schema_id.clone(),
+            is_owner: invoker == self.owner,
+            state: self.properties.clone(),
+            namespace: self.namespace.clone(),
+        }
+    }
+
     pub fn from_genesis_event(
-        event: Signed<EventContent>,
+        event: Signed<Event>,
         init_state: ValueWrapper,
         keys: Option<KeyPair>,
     ) -> Result<Self, SubjectError> {
-        let EventRequestType::Create(create_request) = event.content.event_proposal.content.event_request.content.clone() else {
+        let EventRequest::Create(create_request) = event.content.event_request.content.clone() else {
             return Err(SubjectError::NotCreateEvent)
         };
         let subject_id = generate_subject_id(
@@ -127,7 +138,7 @@ impl Subject {
             &create_request.schema_id,
             create_request.public_key.to_str(),
             create_request.governance_id.to_str(),
-            event.content.event_proposal.content.gov_version,
+            event.content.gov_version,
         )?;
         Ok(Subject {
             keys,
@@ -137,26 +148,12 @@ impl Subject {
             public_key: create_request.public_key,
             namespace: create_request.namespace.clone(),
             schema_id: create_request.schema_id.clone(),
-            owner: event
-                .content
-                .event_proposal
-                .content
-                .event_request
-                .signature
-                .signer
-                .clone(),
-            creator: event
-                .content
-                .event_proposal
-                .content
-                .event_request
-                .signature
-                .signer
-                .clone(),
+            owner: event.content.event_request.signature.signer.clone(),
+            creator: event.content.event_request.signature.signer.clone(),
             properties: init_state,
             active: true,
             name: create_request.name,
-            genesis_gov_version: event.content.event_proposal.content.gov_version,
+            genesis_gov_version: event.content.gov_version,
         })
     }
 
