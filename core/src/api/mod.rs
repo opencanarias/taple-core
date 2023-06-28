@@ -4,7 +4,7 @@ use crate::commons::models::request::TapleRequest;
 use crate::commons::models::state::SubjectData;
 use crate::identifier::DigestIdentifier;
 use crate::signature::Signature;
-use crate::{KeyDerivator, KeyIdentifier, Event, EventRequest};
+use crate::{KeyDerivator, KeyIdentifier, Event, EventRequest, ValidationProof};
 use std::collections::HashSet;
 
 mod api;
@@ -60,7 +60,7 @@ pub enum ApiResponses {
     GetSingleRequest(Result<ApprovalEntity, ApiError>),
     GetEvent(Result<Signed<Event>, ApiError>),
     AddKeys(Result<KeyIdentifier, ApiError>),
-    GetValidationProof(Result<HashSet<Signature>, ApiError>),
+    GetValidationProof(Result<(HashSet<Signature>, ValidationProof), ApiError>),
     GetRequest(Result<TapleRequest, ApiError>),
     GetGovernanceSubjects(Result<Vec<SubjectData>, ApiError>),
     #[cfg(feature = "aproval")]

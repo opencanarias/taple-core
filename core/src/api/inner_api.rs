@@ -4,7 +4,6 @@ use crate::approval::error::ApprovalErrorResponse;
 #[cfg(feature = "aproval")]
 use crate::approval::manager::{ApprovalAPI, ApprovalAPIInterface};
 use crate::authorized_subjecs::manager::AuthorizedSubjectsAPI;
-use crate::commons::self_signature_manager::SelfSignatureManager;
 use crate::event::manager::{EventAPI, EventAPIInterface};
 use crate::event::EventResponse;
 use crate::identifier::Derivable;

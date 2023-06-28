@@ -8,7 +8,7 @@ use super::{
 use super::{GetEvents, GetGovernanceSubjects};
 #[cfg(feature = "aproval")]
 use crate::approval::manager::ApprovalAPI;
-use crate::commons::models::approval::ApprovalEntity;
+use crate::{commons::models::approval::ApprovalEntity, ValidationProof};
 use crate::commons::models::request::TapleRequest;
 use crate::commons::models::state::SubjectData;
 use crate::commons::{
@@ -138,7 +138,7 @@ pub trait ApiModuleInterface {
     async fn get_validation_proof(
         &self,
         subject_id: DigestIdentifier,
-    ) -> Result<HashSet<Signature>, ApiError>;
+    ) -> Result<(HashSet<Signature>, ValidationProof), ApiError>;
     async fn get_request(&self, request_id: DigestIdentifier) -> Result<TapleRequest, ApiError>;
     async fn get_governance_subjects(
         &self,
@@ -430,7 +430,7 @@ impl ApiModuleInterface for NodeAPI {
     async fn get_validation_proof(
         &self,
         subject_id: DigestIdentifier,
-    ) -> Result<HashSet<Signature>, ApiError> {
+    ) -> Result<(HashSet<Signature>, ValidationProof), ApiError> {
         let response = self
             .sender
             .ask(APICommands::GetValidationProof(subject_id))
