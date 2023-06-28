@@ -177,13 +177,11 @@ impl<C: DatabaseCollection> EventManager<C> {
                     EventResponse::Event(response)
                 }
                 EventCommand::EvaluatorResponse {
-                    evaluation,
-                    json_patch,
-                    signature,
+                    evaluator_response,
                 } => {
                     match self
                         .event_completer
-                        .evaluator_signatures(evaluation, json_patch, signature)
+                        .evaluator_signatures(evaluator_response)
                         .await
                     {
                         Err(error) => match error {

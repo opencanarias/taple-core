@@ -66,4 +66,6 @@ pub enum EventError {
     Event0NotCreate,
     #[error("Own Transfer Keys Db Error")]
     OwnTransferKeysDbError,
+    #[error("Approval Required When Eval Failed")]
+    ApprovalRequiredWhenEvalFailed,
 }

@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use crate::{commons::{
     identifier::{DigestIdentifier, KeyIdentifier},
-    models::event_content::Metadata,
+    models::event::Metadata,
     schema_handler::gov_models::{Contract},
 }, ValueWrapper};
 pub mod error;

@@ -7,7 +7,7 @@ use crate::{
     commons::{
         channel::{ChannelData, MpscChannel, SenderEnd},
         identifier::{DigestIdentifier, KeyIdentifier},
-        models::event_content::Metadata,
+        models::event::Metadata,
         schema_handler::{get_governance_schema, gov_models::Contract},
     },
     DatabaseCollection, DatabaseManager, ValueWrapper, DB,

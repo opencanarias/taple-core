@@ -33,6 +33,12 @@ impl HashId for ApprovalRequest {
     }
 }
 
+impl Signed<ApprovalRequest> {
+    pub fn varify(&self) -> Result<(), SubjectError> {
+        self.signature.verify(&self.content)
+    }
+}
+
 #[derive(
     Debug,
     Clone,
@@ -106,5 +112,5 @@ pub enum ApprovalState {
 pub struct ApprovalEntity {
     request: Signed<ApprovalRequest>,
     reponse: Option<Signed<ApprovalResponse>>,
-    state: ApprovalState
+    state: ApprovalState,
 }

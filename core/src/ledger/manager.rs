@@ -7,7 +7,7 @@ use crate::{
     governance::{error::RequestError, GovernanceAPI},
     message::MessageTaskCommand,
     protocol::protocol_message_manager::TapleMessages,
-    DatabaseCollection, KeyIdentifier, Notification, KeyDerivator,
+    DatabaseCollection, KeyDerivator, KeyIdentifier, Notification,
 };
 
 use super::{errors::LedgerError, ledger::Ledger, LedgerCommand, LedgerResponse};
@@ -226,7 +226,7 @@ impl<C: DatabaseCollection> EventManager<C> {
                     validation_proof,
                 } => {
                     log::error!("EXTERNAL EVENT RECIVED");
-                    log::warn!("LLEGA EVENTO CON SN {}", event.content.event_proposal.content.sn);
+                    log::warn!("LLEGA EVENTO CON SN {}", event.content.sn);
                     let response = self
                         .inner_ledger
                         .external_event(event, signatures, sender, validation_proof)
@@ -345,9 +345,9 @@ impl<C: DatabaseCollection> EventManager<C> {
                             _ => Err(error),
                         },
                         Ok(event) => {
-                            log::warn!("LLEGA EVENTO CON SN {}", event.0.content.event_proposal.content.sn);
+                            log::warn!("LLEGA EVENTO CON SN {}", event.0.content.sn);
                             Ok(event)
-                        },
+                        }
                     };
                     LedgerResponse::GetNextGov(response)
                 }
