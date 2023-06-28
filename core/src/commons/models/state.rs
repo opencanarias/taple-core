@@ -12,7 +12,7 @@ use json_patch::{patch, Patch};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::{request::EventRequest, value_wrapper::ValueWrapper};
+use super::{evaluation::SubjectContext, request::EventRequest, value_wrapper::ValueWrapper};
 
 #[derive(Debug, Deserialize, Serialize, Clone, BorshSerialize, BorshDeserialize)]
 pub struct Subject {
@@ -114,6 +114,16 @@ impl Subject {
     //         name: create_request.name,
     //     })
     // }
+
+    pub fn get_subject_context(&self, invoker: KeyIdentifier) -> SubjectContext {
+        SubjectContext {
+            governance_id: self.governance_id.clone(),
+            schema_id: self.schema_id.clone(),
+            is_owner: invoker == self.owner,
+            state: self.properties.clone(),
+            namespace: self.namespace.clone(),
+        }
+    }
 
     pub fn from_genesis_event(
         event: Signed<Event>,

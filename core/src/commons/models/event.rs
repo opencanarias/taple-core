@@ -129,9 +129,16 @@ impl Signed<Event> {
     pub fn verify_eval_appr(
         &self,
         subject_context: SubjectContext,
-        eval_sign_info: (&HashSet<KeyIdentifier>, u64),
-        appr_sign_info: (&HashSet<KeyIdentifier>, u64),
+        eval_sign_info: (&HashSet<KeyIdentifier>, u64, u64),
+        appr_sign_info: (&HashSet<KeyIdentifier>, u64, u64),
     ) -> Result<(), SubjectError> {
+        if !self.content.event_request.content.requires_eval_appr()
+            && self.content.eval_success
+            && self.content.approved
+            && !self.content.appr_required
+        {
+            return Ok(());
+        }
         // Verify evaluators signatures
         let eval_request = EvaluationRequest {
             event_request: self.content.event_request.clone(),
@@ -160,7 +167,12 @@ impl Signed<Event> {
                 "Incorrect Evaluators signed".to_string(),
             ));
         }
-        if evaluators.len() < eval_sign_info.1 as usize {
+        let quorum_size_eval = if self.content.eval_success {
+            eval_sign_info.1
+        } else {
+            eval_sign_info.2
+        };
+        if evaluators.len() < quorum_size_eval as usize {
             return Err(SubjectError::SignersError(
                 "Not enough Evaluators signed".to_string(),
             ));
@@ -192,6 +204,11 @@ impl Signed<Event> {
                 "Incorrect Approvers signed".to_string(),
             ));
         }
+        let quorum_size_appr = if self.content.approved {
+            appr_sign_info.1
+        } else {
+            appr_sign_info.2
+        };
         if approvers.len() < appr_sign_info.1 as usize {
             return Err(SubjectError::SignersError(
                 "Not enough Approvers signed".to_string(),
