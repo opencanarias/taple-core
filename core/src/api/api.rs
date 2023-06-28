@@ -8,8 +8,7 @@ use super::{
 use super::{GetEvents, GetGovernanceSubjects};
 #[cfg(feature = "aproval")]
 use crate::approval::manager::ApprovalAPI;
-use crate::{authorized_subjecs::manager::AuthorizedSubjectsAPI, EventRequest, signature::Signed, Event};
-use crate::commons::models::approval::ApprovalState;
+use crate::commons::models::approval::{ApprovalEntity};
 use crate::commons::models::request::TapleRequest;
 use crate::commons::models::state::SubjectData;
 use crate::commons::{
@@ -21,9 +20,9 @@ use crate::event::manager::EventAPI;
 use crate::ledger::manager::EventManagerAPI;
 use crate::signature::Signature;
 use crate::{
-    approval::ApprovalPetitionData,  identifier::DigestIdentifier,
-    DatabaseCollection, DB,
+    authorized_subjecs::manager::AuthorizedSubjectsAPI, signature::Signed, Event, EventRequest,
 };
+use crate::{identifier::DigestIdentifier, DatabaseCollection, DB};
 use crate::{KeyDerivator, KeyIdentifier};
 use async_trait::async_trait;
 use tokio::sync::watch::Sender;
@@ -76,7 +75,11 @@ pub trait ApiModuleInterface {
         quantity: Option<i64>,
     ) -> Result<Vec<Signed<Event>>, ApiError>;
 
-    async fn get_event(&self, subject_id: DigestIdentifier, sn: u64) -> Result<Signed<Event>, ApiError>;
+    async fn get_event(
+        &self,
+        subject_id: DigestIdentifier,
+        sn: u64,
+    ) -> Result<Signed<Event>, ApiError>;
     /// Allows to obtain a specified subject by specifying its identifier.
     /// # Possible errors
     /// • [ApiError::InvalidParameters] if the specified identifier does not match a valid [DigestIdentifier].<br />
@@ -106,7 +109,7 @@ pub trait ApiModuleInterface {
     /// # Possible errors
     /// • [ApiError::InternalError] if an internal error occurs during operation execution.
     #[cfg(feature = "aproval")]
-    async fn get_pending_requests(&self) -> Result<Vec<ApprovalPetitionData>, ApiError>;
+    async fn get_pending_requests(&self) -> Result<Vec<ApprovalEntity>, ApiError>;
     /// It allows to obtain a single voting request pending to be resolved in the node.
     /// This request is received from other nodes in the network when they try to update
     /// a governance subject. It is necessary to vote its agreement or disagreement with
@@ -118,7 +121,7 @@ pub trait ApiModuleInterface {
     async fn get_single_request(
         &self,
         id: DigestIdentifier,
-    ) -> Result<ApprovalPetitionData, ApiError>;
+    ) -> Result<ApprovalEntity, ApiError>;
     async fn add_preauthorize_subject(
         &self,
         subject_id: &DigestIdentifier,
@@ -140,12 +143,12 @@ pub trait ApiModuleInterface {
     async fn get_approval(
         &self,
         request_id: DigestIdentifier,
-    ) -> Result<(ApprovalPetitionData, ApprovalState), ApiError>;
+    ) -> Result<ApprovalEntity, ApiError>;
     #[cfg(feature = "aproval")]
     async fn get_approvals(
         &self,
         status: Option<String>,
-    ) -> Result<Vec<ApprovalPetitionData>, ApiError>;
+    ) -> Result<Vec<ApprovalEntity>, ApiError>;
 }
 
 /// Object that allows interaction with a TAPLE node.
@@ -193,7 +196,7 @@ impl ApiModuleInterface for NodeAPI {
     }
 
     #[cfg(feature = "aproval")]
-    async fn get_pending_requests(&self) -> Result<Vec<ApprovalPetitionData>, ApiError> {
+    async fn get_pending_requests(&self) -> Result<Vec<ApprovalEntity>, ApiError> {
         let response = self
             .sender
             .ask(APICommands::GetPendingRequests)
@@ -210,7 +213,7 @@ impl ApiModuleInterface for NodeAPI {
     async fn get_single_request(
         &self,
         id: DigestIdentifier,
-    ) -> Result<ApprovalPetitionData, ApiError> {
+    ) -> Result<ApprovalEntity, ApiError> {
         let response = self
             .sender
             .ask(APICommands::GetSingleRequest(id))
@@ -266,7 +269,11 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
-    async fn get_event(&self, subject_id: DigestIdentifier, sn: u64) -> Result<Signed<Event>, ApiError> {
+    async fn get_event(
+        &self,
+        subject_id: DigestIdentifier,
+        sn: u64,
+    ) -> Result<Signed<Event>, ApiError> {
         let response = self
             .sender
             .ask(APICommands::GetEvent(subject_id, sn))
@@ -416,7 +423,7 @@ impl ApiModuleInterface for NodeAPI {
     async fn get_approval(
         &self,
         request_id: DigestIdentifier,
-    ) -> Result<(ApprovalPetitionData, ApprovalState), ApiError> {
+    ) -> Result<ApprovalEntity, ApiError> {
         let response = self
             .sender
             .ask(APICommands::GetApproval(request_id))
@@ -433,7 +440,7 @@ impl ApiModuleInterface for NodeAPI {
     async fn get_approvals(
         &self,
         status: Option<String>,
-    ) -> Result<Vec<ApprovalPetitionData>, ApiError> {
+    ) -> Result<Vec<ApprovalEntity>, ApiError> {
         let response = self
             .sender
             .ask(APICommands::GetApprovals(status))
