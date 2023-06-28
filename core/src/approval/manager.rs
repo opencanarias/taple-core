@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use crate::{
     commons::{
         channel::{ChannelData, MpscChannel, SenderEnd},
+        models::approval::ApprovalEntity,
         self_signature_manager::SelfSignatureManager,
     },
     database::DB,
@@ -10,14 +11,15 @@ use crate::{
     identifier::DigestIdentifier,
     message::{MessageConfig, MessageTaskCommand},
     protocol::protocol_message_manager::TapleMessages,
+    signature::Signed,
     utils::message::event::create_approver_response,
-    DatabaseCollection, Notification, TapleSettings, signature::Signed, ApprovalRequest,
+    ApprovalRequest, DatabaseCollection, Notification, TapleSettings,
 };
 
 use super::{
     error::{ApprovalErrorResponse, ApprovalManagerError},
     inner_manager::{InnerApprovalManager, RequestNotifier},
-    ApprovalMessages, ApprovalPetitionData, ApprovalResponses, EmitVote,
+    ApprovalMessages, ApprovalResponses, EmitVote,
 };
 
 pub struct ApprovalManager<C: DatabaseCollection> {
@@ -41,22 +43,28 @@ impl ApprovalAPI {
 
 #[async_trait]
 pub trait ApprovalAPIInterface {
-    async fn request_approval(&self, data: Signed<ApprovalRequest>) -> Result<(), ApprovalErrorResponse>;
+    async fn request_approval(
+        &self,
+        data: Signed<ApprovalRequest>,
+    ) -> Result<(), ApprovalErrorResponse>;
     async fn emit_vote(
         &self,
         request_id: DigestIdentifier,
         acceptance: bool,
     ) -> Result<(), ApprovalErrorResponse>;
-    async fn get_all_requests(&self) -> Result<Vec<ApprovalPetitionData>, ApprovalErrorResponse>;
+    async fn get_all_requests(&self) -> Result<Vec<ApprovalEntity>, ApprovalErrorResponse>;
     async fn get_single_request(
         &self,
         request_id: DigestIdentifier,
-    ) -> Result<ApprovalPetitionData, ApprovalErrorResponse>;
+    ) -> Result<ApprovalEntity, ApprovalErrorResponse>;
 }
 
 #[async_trait]
 impl ApprovalAPIInterface for ApprovalAPI {
-    async fn request_approval(&self, data: Signed<ApprovalRequest>) -> Result<(), ApprovalErrorResponse> {
+    async fn request_approval(
+        &self,
+        data: Signed<ApprovalRequest>,
+    ) -> Result<(), ApprovalErrorResponse> {
         self.input_channel
             .tell(ApprovalMessages::RequestApproval(data))
             .await
@@ -81,7 +89,7 @@ impl ApprovalAPIInterface for ApprovalAPI {
             _ => unreachable!(),
         }
     }
-    async fn get_all_requests(&self) -> Result<Vec<ApprovalPetitionData>, ApprovalErrorResponse> {
+    async fn get_all_requests(&self) -> Result<Vec<ApprovalEntity>, ApprovalErrorResponse> {
         let result = self
             .input_channel
             .ask(ApprovalMessages::GetAllRequest)
@@ -95,7 +103,7 @@ impl ApprovalAPIInterface for ApprovalAPI {
     async fn get_single_request(
         &self,
         request_id: DigestIdentifier,
-    ) -> Result<ApprovalPetitionData, ApprovalErrorResponse> {
+    ) -> Result<ApprovalEntity, ApprovalErrorResponse> {
         let result = self
             .input_channel
             .ask(ApprovalMessages::GetSingleRequest(request_id))
@@ -139,9 +147,6 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
     }
 
     pub async fn start(mut self) {
-        if let Err(error) = self.inner_manager.init().await {
-            log::error!("{}", error);
-        }
         loop {
             tokio::select! {
                 command = self.input_channel.receive() => {
@@ -266,7 +271,7 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
                     .await?
                 {
                     Ok((vote, owner)) => {
-                        let msg = create_approver_response(vote);
+                        let msg = create_approver_response(vote.reponse.unwrap());
                         self.messenger_channel
                             .tell(MessageTaskCommand::Request(
                                 None,

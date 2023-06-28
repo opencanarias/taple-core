@@ -110,7 +110,8 @@ pub enum ApprovalState {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct ApprovalEntity {
-    request: Signed<ApprovalRequest>,
-    reponse: Option<Signed<ApprovalResponse>>,
-    state: ApprovalState,
+    pub id: DigestIdentifier,
+    pub request: Signed<ApprovalRequest>,
+    pub reponse: Option<Signed<ApprovalResponse>>,
+    pub state: ApprovalState
 }

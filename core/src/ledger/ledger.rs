@@ -315,7 +315,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                     signatures,
                     validation_proof, // Current Owner
                 )?;
-                let json_patch = event.content.json_patch.clone();
+                let json_patch = event.content.patch.clone();
                 subject.update_subject(json_patch, event.content.sn)?;
                 self.database.set_event(&subject_id, event.clone())?;
                 self.database.set_subject(&subject_id, subject)?;
@@ -363,8 +363,6 @@ impl<C: DatabaseCollection> Ledger<C> {
                 // Cambiar clave pública del sujeto y eliminar material criptográfico
                 subject.public_key = transfer_request.public_key.clone();
                 subject.owner = event
-                    .content
-                    .event_proposal
                     .content
                     .event_request
                     .signature
@@ -514,11 +512,9 @@ impl<C: DatabaseCollection> Ledger<C> {
         }
         // Comprobaciones criptográficas
         log::warn!("ANTES DE CHECK SIGNATURES");
-        event.verify()?;
+        event.verify_signatures()?;
         // Comprobar si es genesis o state
         match event
-            .content
-            .event_proposal
             .content
             .event_request
             .content
@@ -1336,7 +1332,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                             check_context(&event, &subject, metadata, subject.properties.clone())?;
                             let sn: u64 = event.content.sn;
                             let json_patch =
-                                event.content.json_patch.clone();
+                                event.content.patch.clone();
                             subject.update_subject(
                                 json_patch,
                                 event.content.sn,
@@ -1745,7 +1741,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                             .await?;
                         log::warn!("GET SIGNERS AND QUORUM");
                         let state_hash = subject.state_hash_after_apply(
-                            event.content.json_patch.clone(),
+                            event.content.patch.clone(),
                         )?;
 
                         let notary_hash = DigestIdentifier::from_serializable_borsh(

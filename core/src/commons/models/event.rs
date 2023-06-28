@@ -120,15 +120,18 @@ impl Signed<Event> {
         })
     }
 
-    pub fn verify(
+    pub fn verify_signatures(&self) -> Result<(), SubjectError> {
+        // Verify event and event_request signatures
+        self.signature.verify(&self.content)?;
+        self.content.event_request.verify()
+    }
+
+    pub fn verify_eval_appr(
         &self,
         subject_context: SubjectContext,
         eval_sign_info: (&HashSet<KeyIdentifier>, u64),
         appr_sign_info: (&HashSet<KeyIdentifier>, u64),
     ) -> Result<(), SubjectError> {
-        // Verify event and event_request signatures
-        self.signature.verify(&self.content)?;
-        self.content.event_request.verify()?;
         // Verify evaluators signatures
         let eval_request = EvaluationRequest {
             event_request: self.content.event_request.clone(),
