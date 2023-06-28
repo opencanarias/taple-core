@@ -149,7 +149,7 @@ impl Signed<Event> {
         let eval_response = EvaluationResponse {
             patch: self.content.patch.clone(), // Esto no hace falta realmente
             eval_req_hash: eval_request.hash_id()?,
-            state_hash: self.content.state_hash,
+            state_hash: self.content.state_hash.clone(),
             eval_success: self.content.eval_success,
             appr_required: self.content.appr_required,
         };

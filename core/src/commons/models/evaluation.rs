@@ -43,7 +43,7 @@ impl HashId for EvaluationResponse {
     fn hash_id(&self) -> Result<DigestIdentifier, SubjectError> {
         DigestIdentifier::from_serializable_borsh(&(
             &self.eval_req_hash,
-            self.state_hash,
+            &self.state_hash,
             self.eval_success,
             self.appr_required,
         ))

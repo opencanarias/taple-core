@@ -50,7 +50,7 @@ impl<C: DatabaseCollection> ApprovalsDb<C> {
             Element::S(request_id.to_str()),
         ];
         let key = get_key(key_elements)?;
-        self.index_collection.del(&key) 
+        self.index_collection.del(&key)
     }
 
     pub fn get_approvals_by_subject(
@@ -62,21 +62,19 @@ impl<C: DatabaseCollection> ApprovalsDb<C> {
             Element::S(subject_id.to_str()),
         ];
         let key = get_key(key_elements)?;
-        let iter = self.index_collection.iter(false, self.prefix);
+        let iter = self.index_collection.iter(false, self.prefix.clone());
         let mut result = Vec::new();
         let mut to_delete = Vec::new();
         for (_, data) in iter {
             let Ok(request_id) = deserialize::<DigestIdentifier>(&data) else {
-              return Err(DbError::SerializeError);
+                return Err(DbError::SerializeError);
             };
             // Comprobamos si existe en la colección base
             match self.get_approval(&request_id) {
-                Ok(data) => {
-                    match data.state {
-                        ApprovalState::Pending => result.push(request_id),
-                        _ => to_delete.push(request_id),
-                    }
-                }
+                Ok(data) => match data.state {
+                    ApprovalState::Pending => result.push(request_id),
+                    _ => to_delete.push(request_id),
+                },
                 Err(DbError::EntryNotFound) => to_delete.push(request_id),
                 Err(error) => return Err(error),
             }
