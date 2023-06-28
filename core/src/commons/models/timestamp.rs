@@ -16,7 +16,7 @@ use time::OffsetDateTime;
     Serialize,
     Deserialize,
 )]
-pub struct TimeStamp(u64);
+pub struct TimeStamp(pub u64);
 
 impl TimeStamp {
     pub fn now() -> Self {

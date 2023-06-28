@@ -26,9 +26,24 @@ pub enum ApprovalMessages {
 #[derive(Clone, Debug)]
 pub enum ApprovalResponses {
     RequestApproval(Result<(), ApprovalErrorResponse>),
-    EmitVote(Result<(), ApprovalErrorResponse>),
+    EmitVote(Result<ApprovalEntity, ApprovalErrorResponse>),
     GetAllRequest(Vec<ApprovalEntity>),
     GetSingleRequest(Result<ApprovalEntity, ApprovalErrorResponse>),
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct RequestApproval {
+    request: Signed<EventRequest>,
+    sn: u64,
+    context_hash: DigestIdentifier,
+    hash_new_state: DigestIdentifier,
+    governance_id: DigestIdentifier,
+    governance_version: u64,
+    success: bool,
+    approval_required: bool,
+    json_patch: String,
+    evaluator_signatures: Vec<Signature>,
+    subject_signature: Signature,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, BorshSerialize, BorshDeserialize)]

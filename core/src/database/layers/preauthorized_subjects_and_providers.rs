@@ -1,5 +1,5 @@
-use crate::utils::{deserialize, serialize};
 use super::utils::{get_by_range, get_key, Element};
+use crate::utils::{deserialize, serialize};
 use crate::{DatabaseCollection, DatabaseManager, Derivable, DigestIdentifier};
 use crate::{DbError, KeyIdentifier};
 use std::collections::HashSet;
@@ -35,9 +35,13 @@ impl<C: DatabaseCollection> PreauthorizedSbujectsAndProovidersDb<C> {
 
     pub fn get_preauthorized_subjects_and_providers(
         &self,
-        from: Option<String>,
+        from: Option<isize>,
         quantity: isize,
     ) -> Result<Vec<(DigestIdentifier, HashSet<KeyIdentifier>)>, DbError> {
+        let from = match from {
+            Some(from) => Some(from.to_string()),
+            None => None,
+        };
         let result = get_by_range(from, quantity, &self.collection, &self.prefix)?;
         let mut vec_result = vec![];
         for value in result {

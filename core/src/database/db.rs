@@ -375,7 +375,7 @@ impl<C: DatabaseCollection> DB<C> {
 
     pub fn get_preauthorized_subjects_and_providers(
         &self,
-        from: Option<String>,
+        from: Option<isize>,
         quantity: isize,
     ) -> Result<Vec<(DigestIdentifier, HashSet<KeyIdentifier>)>, Error> {
         self.preauthorized_subjects_and_providers_db

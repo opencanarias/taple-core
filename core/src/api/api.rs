@@ -3,18 +3,17 @@ use std::collections::HashSet;
 use super::{
     error::{APIInternalError, ApiError},
     inner_api::InnerAPI,
-    APICommands, ApiResponses,
+    APICommands, ApiResponses, GetPreauthorizedSubjects,
 };
 use super::{GetEvents, GetGovernanceSubjects};
 #[cfg(feature = "aproval")]
 use crate::approval::manager::ApprovalAPI;
-use crate::commons::models::approval::{ApprovalEntity};
+use crate::commons::models::approval::ApprovalEntity;
 use crate::commons::models::request::TapleRequest;
 use crate::commons::models::state::SubjectData;
 use crate::commons::{
     channel::{ChannelData, MpscChannel, SenderEnd},
     config::TapleSettings,
-    crypto::KeyPair,
 };
 use crate::event::manager::EventAPI;
 use crate::ledger::manager::EventManagerAPI;
@@ -62,6 +61,12 @@ pub trait ApiModuleInterface {
         from: Option<String>,
         quantity: Option<i64>,
     ) -> Result<Vec<SubjectData>, ApiError>;
+    async fn get_subjects_by_governance(
+        &self,
+        governance_id: DigestIdentifier,
+        from: Option<String>,
+        quantity: Option<i64>,
+    ) -> Result<Vec<SubjectData>, ApiError>;
     /// Allows to obtain events from a specific subject previously existing in the node.
     /// Paging can be performed by means of the optional arguments `from` and `quantity`.
     /// Regarding the former, it should be noted that negative values are allowed, in which case
@@ -101,7 +106,7 @@ pub trait ApiModuleInterface {
         &self,
         request_id: DigestIdentifier,
         acceptance: bool,
-    ) -> Result<DigestIdentifier, ApiError>;
+    ) -> Result<ApprovalEntity, ApiError>;
     /// It allows to obtain all the voting requests pending to be resolved in the node.
     /// These requests are received from other nodes in the network when they try to update
     /// a governance subject. It is necessary to vote their agreement or disagreement with
@@ -118,15 +123,17 @@ pub trait ApiModuleInterface {
     /// • [ApiError::InternalError] if an internal error occurs during operation execution.
     /// • [ApiError::NotFound] if the requested request does not exist.
     #[cfg(feature = "aproval")]
-    async fn get_single_request(
-        &self,
-        id: DigestIdentifier,
-    ) -> Result<ApprovalEntity, ApiError>;
+    async fn get_single_request(&self, id: DigestIdentifier) -> Result<ApprovalEntity, ApiError>;
     async fn add_preauthorize_subject(
         &self,
         subject_id: &DigestIdentifier,
         providers: &HashSet<KeyIdentifier>,
     ) -> Result<(), ApiError>;
+    async fn get_all_preauthorized_subjects_and_providers(
+        &self,
+        from: Option<i64>,
+        quantity: Option<i64>,
+    ) -> Result<Vec<(DigestIdentifier, HashSet<KeyIdentifier>)>, ApiError>;
     async fn add_keys(&self, derivator: KeyDerivator) -> Result<KeyIdentifier, ApiError>;
     async fn get_validation_proof(
         &self,
@@ -140,15 +147,9 @@ pub trait ApiModuleInterface {
         quantity: Option<i64>,
     ) -> Result<Vec<SubjectData>, ApiError>;
     #[cfg(feature = "aproval")]
-    async fn get_approval(
-        &self,
-        request_id: DigestIdentifier,
-    ) -> Result<ApprovalEntity, ApiError>;
+    async fn get_approval(&self, request_id: DigestIdentifier) -> Result<ApprovalEntity, ApiError>;
     #[cfg(feature = "aproval")]
-    async fn get_approvals(
-        &self,
-        status: Option<String>,
-    ) -> Result<Vec<ApprovalEntity>, ApiError>;
+    async fn get_approvals(&self, status: Option<String>) -> Result<Vec<ApprovalEntity>, ApiError>;
 }
 
 /// Object that allows interaction with a TAPLE node.
@@ -210,10 +211,7 @@ impl ApiModuleInterface for NodeAPI {
     }
 
     #[cfg(feature = "aproval")]
-    async fn get_single_request(
-        &self,
-        id: DigestIdentifier,
-    ) -> Result<ApprovalEntity, ApiError> {
+    async fn get_single_request(&self, id: DigestIdentifier) -> Result<ApprovalEntity, ApiError> {
         let response = self
             .sender
             .ask(APICommands::GetSingleRequest(id))
@@ -247,6 +245,32 @@ impl ApiModuleInterface for NodeAPI {
             unreachable!()
         }
     }
+
+    async fn get_subjects_by_governance(
+        &self,
+        governance_id: DigestIdentifier,
+        from: Option<String>,
+        quantity: Option<i64>,
+    ) -> Result<Vec<SubjectData>, ApiError> {
+        let response = self
+            .sender
+            .ask(APICommands::GetSubjectByGovernance(
+                super::GetSubjects {
+                    namespace: "".into(),
+                    from,
+                    quantity,
+                },
+                governance_id,
+            ))
+            .await
+            .unwrap();
+        if let ApiResponses::GetSubjectByGovernance(data) = response {
+            data
+        } else {
+            unreachable!()
+        }
+    }
+
     async fn get_governances(
         &self,
         namespace: String,
@@ -326,7 +350,7 @@ impl ApiModuleInterface for NodeAPI {
         &self,
         request_id: DigestIdentifier,
         acceptance: bool,
-    ) -> Result<DigestIdentifier, ApiError> {
+    ) -> Result<ApprovalEntity, ApiError> {
         let response = self
             .sender
             .ask(APICommands::VoteResolve(acceptance, request_id))
@@ -363,6 +387,28 @@ impl ApiModuleInterface for NodeAPI {
             .unwrap();
         if let ApiResponses::SetPreauthorizedSubjectCompleted = response {
             Ok(())
+        } else {
+            unreachable!()
+        }
+    }
+
+    async fn get_all_preauthorized_subjects_and_providers(
+        &self,
+        from: Option<i64>,
+        quantity: Option<i64>,
+    ) -> Result<Vec<(DigestIdentifier, HashSet<KeyIdentifier>)>, ApiError> {
+        let response = self
+            .sender
+            .ask(APICommands::GetAllPreauthorizedSubjects(
+                GetPreauthorizedSubjects {
+                    from: from.map(|val| val as isize),
+                    quantity,
+                },
+            ))
+            .await
+            .unwrap();
+        if let ApiResponses::GetAllPreauthorizedSubjects(data) = response {
+            data
         } else {
             unreachable!()
         }
@@ -420,10 +466,7 @@ impl ApiModuleInterface for NodeAPI {
     }
 
     #[cfg(feature = "aproval")]
-    async fn get_approval(
-        &self,
-        request_id: DigestIdentifier,
-    ) -> Result<ApprovalEntity, ApiError> {
+    async fn get_approval(&self, request_id: DigestIdentifier) -> Result<ApprovalEntity, ApiError> {
         let response = self
             .sender
             .ask(APICommands::GetApproval(request_id))
@@ -437,10 +480,7 @@ impl ApiModuleInterface for NodeAPI {
     }
 
     #[cfg(feature = "aproval")]
-    async fn get_approvals(
-        &self,
-        status: Option<String>,
-    ) -> Result<Vec<ApprovalEntity>, ApiError> {
+    async fn get_approvals(&self, status: Option<String>) -> Result<Vec<ApprovalEntity>, ApiError> {
         let response = self
             .sender
             .ask(APICommands::GetApprovals(status))
@@ -470,8 +510,6 @@ impl<C: DatabaseCollection> API<C> {
         authorized_subjects_api: AuthorizedSubjectsAPI,
         ledger_api: EventManagerAPI,
         settings_sender: Sender<TapleSettings>,
-        initial_settings: TapleSettings,
-        keys: KeyPair,
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
         db: DB<C>,
@@ -480,8 +518,6 @@ impl<C: DatabaseCollection> API<C> {
             input,
             _settings_sender: settings_sender,
             inner_api: InnerAPI::new(
-                keys,
-                &initial_settings,
                 event_api,
                 authorized_subjects_api,
                 db,
@@ -595,6 +631,14 @@ impl<C: DatabaseCollection> API<C> {
                     }
                     #[cfg(feature = "aproval")]
                     APICommands::GetApprovals(status) => self.inner_api.get_approvals(status).await,
+                    APICommands::GetAllPreauthorizedSubjects(data) => {
+                        self.inner_api
+                            .get_all_preauthorized_subjects_and_providers(data)
+                            .await?
+                    }
+                    APICommands::GetSubjectByGovernance(params, gov_id) => {
+                        self.inner_api.get_subjects_by_governance(params, gov_id)
+                    }
                 };
                 sx.send(response)
                     .map_err(|_| APIInternalError::OneshotUnavailable)?;
