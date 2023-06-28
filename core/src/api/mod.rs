@@ -19,6 +19,7 @@ mod inner_api;
 #[derive(Debug, Clone)]
 pub enum APICommands {
     GetSubjects(GetSubjects),
+    GetSubjectByGovernance(GetSubjects, DigestIdentifier),
     GetGovernances(GetSubjects),
     GetSubject(GetSubject),
     GetEvent(DigestIdentifier, u64),
@@ -31,6 +32,7 @@ pub enum APICommands {
     #[cfg(feature = "aproval")]
     GetSingleRequest(DigestIdentifier),
     SetPreauthorizedSubject(DigestIdentifier, HashSet<KeyIdentifier>),
+    GetAllPreauthorizedSubjects(GetPreauthorizedSubjects),
     AddKeys(KeyDerivator),
     GetValidationProof(DigestIdentifier),
     GetRequest(DigestIdentifier),
@@ -45,12 +47,13 @@ pub enum APICommands {
 #[derive(Debug, Clone)]
 pub enum ApiResponses {
     GetSubjects(Result<Vec<SubjectData>, ApiError>),
+    GetSubjectByGovernance(Result<Vec<SubjectData>, ApiError>),
     GetGovernances(Result<Vec<SubjectData>, ApiError>),
     GetSubject(Result<SubjectData, ApiError>),
     GetEvents(Result<Vec<Signed<Event>>, ApiError>),
     HandleExternalRequest(Result<DigestIdentifier, ApiError>),
     #[cfg(feature = "aproval")]
-    VoteResolve(Result<DigestIdentifier, ApiError>),
+    VoteResolve(Result<ApprovalEntity, ApiError>),
     #[cfg(feature = "aproval")]
     GetPendingRequests(Result<Vec<ApprovalEntity>, ApiError>),
     #[cfg(feature = "aproval")]
@@ -66,6 +69,7 @@ pub enum ApiResponses {
     GetApprovals(Result<Vec<ApprovalEntity>, ApiError>),
     ShutdownCompleted,
     SetPreauthorizedSubjectCompleted,
+    GetAllPreauthorizedSubjects(Result<Vec<(DigestIdentifier, HashSet<KeyIdentifier>)>, ApiError>)
 }
 
 #[derive(Debug, Clone)]
@@ -91,5 +95,11 @@ pub struct GetEvents {
 pub struct GetGovernanceSubjects {
     pub governance_id: DigestIdentifier,
     pub from: Option<String>,
+    pub quantity: Option<i64>,
+}
+
+#[derive(Debug, Clone)]
+pub struct GetPreauthorizedSubjects {
+    pub from: Option<isize>,
     pub quantity: Option<i64>,
 }

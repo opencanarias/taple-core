@@ -51,7 +51,7 @@ pub trait ApprovalAPIInterface {
         &self,
         request_id: DigestIdentifier,
         acceptance: bool,
-    ) -> Result<(), ApprovalErrorResponse>;
+    ) -> Result<ApprovalEntity, ApprovalErrorResponse>;
     async fn get_all_requests(&self) -> Result<Vec<ApprovalEntity>, ApprovalErrorResponse>;
     async fn get_single_request(
         &self,
@@ -75,7 +75,7 @@ impl ApprovalAPIInterface for ApprovalAPI {
         &self,
         request_id: DigestIdentifier,
         acceptance: bool,
-    ) -> Result<(), ApprovalErrorResponse> {
+    ) -> Result<ApprovalEntity, ApprovalErrorResponse> {
         let result = self
             .input_channel
             .ask(ApprovalMessages::EmitVote(EmitVote {
@@ -170,8 +170,11 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
                     match update {
                         Ok(data) => {
                             match data {
-                                GovernanceUpdatedMessage::GovernanceUpdated { governance_id, governance_version } => {
-                                    self.inner_manager.new_governance_version(&governance_id, governance_version);
+                                GovernanceUpdatedMessage::GovernanceUpdated { governance_id, governance_version: _ } => {
+                                    if let Err(_) = self.inner_manager.new_governance_version(&governance_id) {
+                                        self.shutdown_sender.send(()).expect("Channel Closed");
+                                        break;
+                                    }
                                 }
                             }
                         },
@@ -271,7 +274,7 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
                     .await?
                 {
                     Ok((vote, owner)) => {
-                        let msg = create_approver_response(vote.reponse.unwrap());
+                        let msg = create_approver_response(vote.reponse.clone().unwrap());
                         self.messenger_channel
                             .tell(MessageTaskCommand::Request(
                                 None,
@@ -284,7 +287,7 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
                         if sender.is_some() {
                             sender
                                 .unwrap()
-                                .send(ApprovalResponses::EmitVote(Ok(())))
+                                .send(ApprovalResponses::EmitVote(Ok(vote)))
                                 .map_err(|_| ApprovalManagerError::ResponseChannelClosed)?;
                         }
                     }

@@ -1,5 +1,4 @@
-use borsh::{BorshDeserialize, BorshSerialize};
-use serde::{Deserialize, Serialize};
+use borsh::{BorshSerialize};
 
 use crate::DigestIdentifier;
 

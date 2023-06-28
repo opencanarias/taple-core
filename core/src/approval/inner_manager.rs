@@ -136,7 +136,6 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
     pub fn new_governance_version(
         &mut self,
         governance_id: &DigestIdentifier,
-        governance_version: u64,
     ) -> Result<(), ApprovalManagerError> {
         // Comprobamos todas las peticiones guardadas y borramos las afectadas
         let affected_requests = self.database.get_approvals_by_subject(governance_id)
@@ -383,7 +382,7 @@ mod test {
 
     use async_trait::async_trait;
     use serde_json::Value;
-    use tokio::{runtime::Runtime, sync::broadcast::Receiver};
+    use tokio::{sync::broadcast::Receiver};
 
     use crate::{
         approval::RequestApproval,
@@ -397,7 +396,7 @@ mod test {
         database::{MemoryCollection, DB},
         event_content::Metadata,
         governance::{error::RequestError, stage::ValidationStage, GovernanceInterface},
-        identifier::{Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier},
+        identifier::{DigestIdentifier, KeyIdentifier},
         signature::{Signature, Signed},
         DatabaseManager, MemoryManager, Notification, TimeStamp, EventRequest,
     };

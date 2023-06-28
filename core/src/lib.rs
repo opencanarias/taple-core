@@ -102,7 +102,7 @@ pub use api::{
 pub use commons::crypto;
 pub use commons::identifier;
 pub use commons::identifier::{Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier};
-pub use commons::models::approval::ApprovalEntity;
+pub use commons::models::approval::{ApprovalEntity, ApprovalState};
 pub use commons::models::approval::ApprovalRequest;
 pub use commons::models::approval::ApprovalResponse;
 pub use commons::models::evaluation::EvaluationRequest;
