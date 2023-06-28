@@ -1,4 +1,3 @@
-use crate::commons::models::approval::ApprovalEntity;
 use crate::{signature::Signed};
 use crate::commons::models::request::TapleRequest;
 use crate::commons::models::state::SubjectData;

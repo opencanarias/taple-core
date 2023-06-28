@@ -1208,7 +1208,14 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 },
                             }
                         }
-                        self.check_event(event.clone(), metadata.clone()).await?;
+                        self.check_event(
+                            event.clone(),
+                            metadata.clone(),
+                            subject.get_subject_context(
+                                event.content.event_request.signature.signer.clone(),
+                            ),
+                        )
+                        .await?;
                         // Si no está en el mapa, añadirlo y enviar mensaje a gov de subject updated con el id y el sn
                         let subject_id = state_request.subject_id.clone();
                         let (signers, quorum) = self
@@ -1256,7 +1263,6 @@ impl<C: DatabaseCollection> Ledger<C> {
                             // Caso Evento Siguiente
                             // Comprobar ValidationProof
                             self.check_validation_proof(&validation_proof, &subject, &event_hash)?;
-                            check_context(&event, &subject, metadata, subject.properties.clone())?;
                             let sn: u64 = event.content.sn;
                             let json_patch = event.content.patch.clone();
                             subject.update_subject(json_patch, event.content.sn)?;
@@ -1474,7 +1480,15 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 },
                             }
                         }
-                        self.check_event(event.clone(), metadata.clone()).await?;
+                        // YA NO SE PUEDE HACER COMPROACION PORQUE VALIDATION PROOF NO INDICA QUIEN ES EL OWNER
+                        // self.check_event(
+                        //     event.clone(),
+                        //     metadata.clone(),
+                        //     subject.get_subject_context(
+                        //         event.content.event_request.signature.signer.clone(),
+                        //     ),
+                        // )
+                        // .await?;
                         // Si no está en el mapa, añadirlo y enviar mensaje a gov de subject updated con el id y el sn
                         let notary_hash = DigestIdentifier::from_serializable_borsh(
                             &validation_proof,
@@ -1637,7 +1651,14 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 },
                             }
                         }
-                        self.check_event(event.clone(), metadata.clone()).await?;
+                        self.check_event(
+                            event.clone(),
+                            metadata.clone(),
+                            subject.get_subject_context(
+                                event.content.event_request.signature.signer.clone(),
+                            ),
+                        )
+                        .await?;
                         log::warn!("CHECK EVENT");
                         // Si no está en el mapa, añadirlo y enviar mensaje a gov de subject updated con el id y el sn
                         let subject_id = eol_request.subject_id.clone();
@@ -1682,7 +1703,6 @@ impl<C: DatabaseCollection> Ledger<C> {
                             // Caso Evento Siguiente
                             // Comprobar ValidationProof
                             self.check_validation_proof(&validation_proof, &subject, &event_hash)?;
-                            check_context(&event, &subject, metadata, subject.properties.clone())?;
                             let sn: u64 = event.content.sn;
                             subject.eol_event();
                             self.database.set_signatures(
@@ -1897,7 +1917,15 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 },
                             }
                         }
-                        self.check_event(event.clone(), metadata.clone()).await?;
+                        // YA NO SE PUEDE HACER COMPROACION PORQUE VALIDATION PROOF NO INDICA QUIEN ES EL OWNER
+                        // self.check_event(
+                        //     event.clone(),
+                        //     metadata.clone(),
+                        //     subject.get_subject_context(
+                        //         event.content.event_request.signature.signer.clone(),
+                        //     ),
+                        // )
+                        // .await?;
                         // Si no está en el mapa, añadirlo y enviar mensaje a gov de subject updated con el id y el sn
                         let notary_hash = DigestIdentifier::from_serializable_borsh(
                             &validation_proof,
@@ -2044,14 +2072,19 @@ impl<C: DatabaseCollection> Ledger<C> {
                                             return Err(LedgerError::UnexpectedCreateEvent)
                                         }
                                         EventRequest::Fact(_) => {
-                                            self.check_event(event.clone(), metadata.clone())
-                                                .await?;
-                                            check_context(
-                                                &event,
-                                                &subject,
+                                            self.check_event(
+                                                event.clone(),
                                                 metadata.clone(),
-                                                subject.properties.clone(),
-                                            )?;
+                                                subject.get_subject_context(
+                                                    event
+                                                        .content
+                                                        .event_request
+                                                        .signature
+                                                        .signer
+                                                        .clone(),
+                                                ),
+                                            )
+                                            .await?;
                                         }
                                         EventRequest::Transfer(_) => {
                                             self.check_transfer_event(event.clone())?;
@@ -2657,89 +2690,18 @@ impl<C: DatabaseCollection> Ledger<C> {
         let (signers_eval, quorum_eval) = self
             .get_signers_and_quorum(metadata.clone(), ValidationStage::Evaluate)
             .await?;
-        let evaluation_hash =
-            DigestIdentifier::from_serializable_borsh(&event.content.evaluation.clone().unwrap())
-                .map_err(|_| {
-                LedgerError::CryptoError(String::from(
-                    "Error calculating the hash of the serializable evaluation",
-                ))
-            })?;
-        verify_signatures(
-            &event.content.evaluation_signatures,
-            &signers,
-            quorum,
-            &evaluation_hash,
-            &event.content,
+        let quorum_neg_eval = (signers_eval.len() as u32 - quorum_eval) + 1;
+        let (signers, quorum) = self
+            .get_signers_and_quorum(metadata, ValidationStage::Approve)
+            .await?;
+        let quorum_neg = (signers.len() as u32 - quorum) + 1;
+        event.verify_eval_appr(
+            subject_context,
+            (&signers_eval, quorum_eval, quorum_neg_eval),
+            (&signers, quorum, quorum_neg),
         )?;
-        if event.content.evaluation.clone().unwrap().approval_required {
-            let (signers, quorum) = self
-                .get_signers_and_quorum(metadata, ValidationStage::Approve)
-                .await?;
-            let event_proposal_hash = DigestIdentifier::from_serializable_borsh(
-                &event.content.clone(),
-            )
-            .map_err(|_| {
-                LedgerError::CryptoError(String::from(
-                    "Error calculating the hash of the serializable event proposal",
-                ))
-            })?;
-            verify_approval_signatures(
-                &event.content.approvals,
-                &signers,
-                quorum,
-                event_proposal_hash,
-            )?;
-        }
         Ok(())
     }
-}
-
-fn check_context(
-    event: &Signed<Event>,
-    subject: &Subject,
-    metadata: Metadata,
-    prev_properties: ValueWrapper,
-) -> Result<(), LedgerError> {
-    let event_preevaluation = EvaluationRequest {
-        event_request: event.content.event_request.clone(),
-        context: SubjectContext {
-            governance_id: metadata.governance_id,
-            schema_id: metadata.schema_id,
-            is_owner: subject.owner
-                == event
-                    .content
-                    .event_proposal
-                    .content
-                    .event_request
-                    .signature
-                    .signer,
-            namespace: metadata.namespace,
-            state: prev_properties,
-        },
-        sn: event.content.sn,
-        gov_version: event.content.gov_version,
-    };
-    let event_preevaluation_hash = DigestIdentifier::from_serializable_borsh(&event_preevaluation)
-        .map_err(|_| {
-            LedgerError::CryptoError(String::from(
-                "Error calculating the hash of the event pre-evaluation",
-            ))
-        })?;
-    if event_preevaluation_hash
-        != event
-            .content
-            .event_proposal
-            .content
-            .evaluation
-            .as_ref()
-            .unwrap()
-            .preevaluation_hash
-    {
-        return Err(LedgerError::CryptoError(String::from(
-            "The hash of the event pre-evaluation calculed does not match with the one in the event",
-        )));
-    }
-    Ok(())
 }
 
 fn verify_approval_signatures(

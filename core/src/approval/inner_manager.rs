@@ -265,7 +265,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         };
 
         // Tenemos que realizar un falso apply para comprobar si el state_hash es correcto
-        subject_data.update_subject(approval_request.content.patch, subject_data.sn + 1);
+        subject_data.update_subject(approval_request.content.patch.clone(), subject_data.sn + 1);
         
         let hash_state = match DigestIdentifier::from_serializable_borsh(&subject_data.properties).map_err(|_| ApprovalErrorResponse::ErrorHashing) {
             Ok(id) => id,

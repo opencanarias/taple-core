@@ -129,8 +129,8 @@ impl Signed<Event> {
     pub fn verify_eval_appr(
         &self,
         subject_context: SubjectContext,
-        eval_sign_info: (&HashSet<KeyIdentifier>, u64, u64),
-        appr_sign_info: (&HashSet<KeyIdentifier>, u64, u64),
+        eval_sign_info: (&HashSet<KeyIdentifier>, u32, u32),
+        appr_sign_info: (&HashSet<KeyIdentifier>, u32, u32),
     ) -> Result<(), SubjectError> {
         if !self.content.event_request.content.requires_eval_appr()
             && self.content.eval_success
@@ -176,6 +176,9 @@ impl Signed<Event> {
             return Err(SubjectError::SignersError(
                 "Not enough Evaluators signed".to_string(),
             ));
+        }
+        if self.content.approved && !self.content.appr_required {
+            return Ok(());
         }
         // Verify approvers signatures
         let appr_request = ApprovalRequest {

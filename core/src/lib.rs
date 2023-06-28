@@ -99,7 +99,6 @@ pub use api::{
     APICommands, ApiError, ApiModuleInterface, ApiResponses, GetEvents, GetSubject, GetSubjects,
     NodeAPI,
 };
-pub use approval::ApprovalPetitionData;
 pub use commons::crypto;
 pub use commons::identifier;
 pub use commons::identifier::{Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier};
