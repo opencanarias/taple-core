@@ -471,9 +471,9 @@ impl<C: DatabaseCollection> Ledger<C> {
             }
         }
         // Enviar a Distribution info del nuevo event y que lo distribuya
-        // self.distribution_channel
-        //     .tell(DistributionMessagesNew::SignaturesNeeded { subject_id, sn })
-        //     .await?;
+        self.distribution_channel
+            .tell(DistributionMessagesNew::SignaturesNeeded { subject_id, sn })
+            .await?;
         Ok(())
     }
 
@@ -640,7 +640,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 ))
                             })?
                         };
-                        let validation_proof = ValidationProof::new_from_transfer_event(
+                        let validation_proof_new = ValidationProof::new_from_transfer_event(
                             &subject,
                             event.content.sn,
                             prev_event_hash,
@@ -664,13 +664,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 "Error calculating the hash of the serializable",
                             ))
                         })?;
-                        verify_signatures(
-                            &signatures,
-                            &signers,
-                            quorum,
-                            &notary_hash,
-                            &event.content,
-                        )?;
+                        verify_signatures(&signatures, &signers, quorum, &validation_proof)?;
                         // Comprobar si es evento siguiente o LCE
                         if event.content.sn == subject.sn + 1 && ledger_state.head.is_none() {
                             // Caso Evento Siguiente
@@ -929,13 +923,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                         let (signers, quorum) = self
                             .get_signers_and_quorum(metadata.clone(), ValidationStage::Validate)
                             .await?;
-                        verify_signatures(
-                            &signatures,
-                            &signers,
-                            quorum,
-                            &notary_hash,
-                            &event.content,
-                        )?;
+                        verify_signatures(&signatures, &signers, quorum, &validation_proof)?;
                         let sn = event.content.sn;
                         self.database.set_signatures(
                             &transfer_request.subject_id,
@@ -1102,6 +1090,8 @@ impl<C: DatabaseCollection> Ledger<C> {
                     .await?;
             }
             EventRequest::Fact(state_request) => {
+                let is_gov = self.subject_is_gov.get(&state_request.subject_id).unwrap();
+                log::warn!("EL SUJETO ES  IS GOV: {}", is_gov);
                 // Comprobaciones criptográficas
                 let ledger_state = self.ledger_state.get(&state_request.subject_id);
                 let metadata = validation_proof.get_metadata();
@@ -1147,20 +1137,6 @@ impl<C: DatabaseCollection> Ledger<C> {
                         if !subject.active {
                             return Err(LedgerError::SubjectLifeEnd(subject.subject_id.to_str()));
                         }
-                        // Comprobar que invoker tiene permisos de invocación
-                        let invokers = self
-                            .gov_api
-                            .get_signers(metadata.clone(), ValidationStage::Invoke)
-                            .await
-                            .map_err(LedgerError::GovernanceError)?;
-                        if !invokers.contains(&event.content.event_request.signature.signer) {
-                            return Err(LedgerError::Unauthorized(format!(
-                                "Invokation unauthorized for KeyId: {}",
-                                event.content.event_request.signature.signer.to_str()
-                            )));
-                        }
-                        let is_gov = self.subject_is_gov.get(&state_request.subject_id).unwrap();
-                        log::warn!("EL SUJETO ES  IS GOV: {}", is_gov);
                         if *is_gov {
                             log::error!("State NO DEBERÍA");
                             // Al ser gov no tiene HEAD. Debemos comprobar si se trata del sn + 1
@@ -1186,6 +1162,23 @@ impl<C: DatabaseCollection> Ledger<C> {
                                     state_request.subject_id.to_str(),
                                 ));
                             }
+                        }
+                        // Comprobar que invoker tiene permisos de invocación
+                        if subject.owner != event.content.event_request.signature.signer
+                            && !self
+                                .gov_api
+                                .get_invoke_info(
+                                    metadata.clone(),
+                                    ValidationStage::Invoke,
+                                    event.content.event_request.signature.signer.clone(),
+                                )
+                                .await
+                                .map_err(LedgerError::GovernanceError)?
+                        {
+                            return Err(LedgerError::Unauthorized(format!(
+                                "Invokation unauthorized for KeyId: {}",
+                                event.content.event_request.signature.signer.to_str()
+                            )));
                         }
                         // Comprobar que las firmas son válidas y suficientes
                         // Si es el evento siguiente puedo obtener metadata de mi sistema, si es LCE lo tengo que obtener de la prueba de validación por si ha habido cambios de propietario u otros cambios
@@ -1250,13 +1243,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                         log::warn!("VALIDATION PROOF {:?}", validation_proof);
                         log::warn!("SIGNATURES SIZE: {}", signatures.len());
                         log::warn!("SIGNERS SIZE {}", signers.len());
-                        verify_signatures(
-                            &signatures,
-                            &signers,
-                            quorum,
-                            &notary_hash,
-                            &event.content,
-                        )?;
+                        verify_signatures(&signatures, &signers, quorum, &validation_proof)?;
                         log::warn!("PASA POR VERIFY");
                         // Comprobar si es evento siguiente o LCE
                         log::warn!("EL LEDGER STATE ACTUAL ES {:?}", ledger_state);
@@ -1340,6 +1327,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                             let is_gov = self.subject_is_gov.get(&subject_id).unwrap().to_owned();
                             if is_gov {
                                 // No me valen los LCE de Gov
+                                log::warn!("NO ME VALEN LOS LCE DE GOV");
                                 let msg = request_gov_event(
                                     self.our_id.clone(),
                                     subject_id,
@@ -1503,13 +1491,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                         let (signers, quorum) = self
                             .get_signers_and_quorum(metadata.clone(), ValidationStage::Validate)
                             .await?;
-                        verify_signatures(
-                            &signatures,
-                            &signers,
-                            quorum,
-                            &notary_hash,
-                            &event.content,
-                        )?;
+                        verify_signatures(&signatures, &signers, quorum, &validation_proof)?;
                         let sn = event.content.sn;
                         self.database.set_signatures(
                             &state_request.subject_id,
@@ -1692,13 +1674,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                         })?;
                         log::warn!("SIGNATURES SIZE: {}", signatures.len());
                         log::warn!("SIGNERS SIZE {}", signers.len());
-                        verify_signatures(
-                            &signatures,
-                            &signers,
-                            quorum,
-                            &notary_hash,
-                            &event.content,
-                        )?;
+                        verify_signatures(&signatures, &signers, quorum, &validation_proof)?;
                         log::warn!("PASA POR VERIFY");
                         // Comprobar si es evento siguiente o LCE
                         if event.content.sn == subject.sn + 1 && ledger_state.head.is_none() {
@@ -1940,13 +1916,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                         let (signers, quorum) = self
                             .get_signers_and_quorum(metadata.clone(), ValidationStage::Validate)
                             .await?;
-                        verify_signatures(
-                            &signatures,
-                            &signers,
-                            quorum,
-                            &notary_hash,
-                            &event.content,
-                        )?;
+                        verify_signatures(&signatures, &signers, quorum, &validation_proof)?;
                         let sn = event.content.sn;
                         self.database.set_signatures(
                             &eol_request.subject_id,
@@ -2752,14 +2722,13 @@ fn verify_signatures(
     signatures: &HashSet<Signature>,
     signers: &HashSet<KeyIdentifier>,
     quorum_size: u32,
-    event_hash: &DigestIdentifier,
-    event_content: &Event,
+    validation_proof: &ValidationProof,
 ) -> Result<(), LedgerError> {
-    log::warn!("EL EVENT HASH ES {}", event_hash.to_str());
+    log::warn!("EL EVENT HASH ES {}", "??".to_string());
     let mut actual_signers = HashSet::new();
     for signature in signatures.iter() {
         let signer = signature.signer.clone();
-        match signature.verify(event_content) {
+        match signature.verify(validation_proof) {
             Ok(_) => (),
             Err(_) => {
                 log::error!("Invalid Signature Detected");
@@ -2784,7 +2753,7 @@ fn verify_signatures(
             quorum_size,
             actual_signers.len()
         );
-        return Err(LedgerError::NotEnoughSignatures(event_hash.to_str()));
+        return Err(LedgerError::NotEnoughSignatures("buenas tardes".into()));
     }
     Ok(())
 }

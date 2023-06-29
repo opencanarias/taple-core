@@ -12,13 +12,13 @@ use crate::signature::Signature;
 use crate::utils::message::distribution::{
     create_distribution_request, create_distribution_response,
 };
-use crate::utils::message::ledger::request_lce;
-use crate::{TapleSettings, Metadata};
+use crate::utils::message::ledger::{request_gov_event, request_lce};
 use crate::{
     database::{Error as DbError, DB},
     governance::GovernanceInterface,
     DatabaseCollection,
 };
+use crate::{Metadata, TapleSettings};
 
 use super::error::{DistributionErrorResponses, DistributionManagerError};
 use super::StartDistribution;
@@ -359,10 +359,23 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
                         .map_err(|_| DistributionManagerError::MessageChannelNotAvailable)?;
                 } else if msg.sn > sn {
                     // No veo necesario un mensaje para el caso de MSG.SN = SN + 1
-                    let request = request_lce(
-                        self.signature_manager.get_own_identifier(),
-                        msg.subject_id.clone(),
-                    );
+                    let request = if self
+                        .governance
+                        .is_governance(msg.subject_id.clone())
+                        .await
+                        .map_err(|_| DistributionManagerError::GovernanceChannelNotAvailable)?
+                    {
+                        request_gov_event(
+                            self.signature_manager.get_own_identifier(),
+                            msg.subject_id.clone(),
+                            sn + 1,
+                        )
+                    } else {
+                        request_lce(
+                            self.signature_manager.get_own_identifier(),
+                            msg.subject_id.clone(),
+                        )
+                    };
                     self.messenger_channel
                         .tell(MessageTaskCommand::Request(
                             None,

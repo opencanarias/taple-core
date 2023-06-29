@@ -117,7 +117,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         for role in roles {
             match stage {
                 ValidationStage::Witness => {
-                    if role.role != stage.to_str()
+                    if role.role != stage.to_role()
                         && role.role != ValidationStage::Approve.to_role()
                     {
                         continue;
@@ -125,11 +125,11 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                 }
                 ValidationStage::Create | ValidationStage::Invoke => {
                     return Err(RequestError::SearchingSignersQuorumInWrongStage(
-                        stage.to_str().to_owned(),
+                        stage.to_role().to_owned(),
                     ))
                 }
                 _ => {
-                    if role.role != stage.to_str() {
+                    if role.role != stage.to_role() {
                         continue;
                     }
                 }
