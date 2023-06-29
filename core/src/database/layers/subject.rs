@@ -61,7 +61,7 @@ impl<C: DatabaseCollection> SubjectDb<C> {
         let subjects = get_by_range(from, quantity, &self.collection, &self.prefix.clone())?;
         Ok(subjects
             .iter()
-            .map(|subject| (deserialize::<Subject>(subject).unwrap()))
+            .map(|subject| deserialize::<Subject>(subject).unwrap())
             .collect())
     }
 

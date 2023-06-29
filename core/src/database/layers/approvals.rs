@@ -17,10 +17,10 @@ pub(crate) struct ApprovalsDb<C: DatabaseCollection> {
 impl<C: DatabaseCollection> ApprovalsDb<C> {
     pub fn new<M: DatabaseManager<C>>(manager: &Arc<M>) -> Self {
         Self {
-            index_collection: manager.create_collection("subject-approval-index"),
+            index_collection: manager.create_collection("subjindex-approval-index"),
             index_by_governance_collection: manager.create_collection("governance-approval-index"),
             collection: manager.create_collection("approvals"),
-            index_prefix: "subject-approval-index".to_string(),
+            index_prefix: "subjindex-approval-index".to_string(),
             prefix: "approvals".to_string(),
             governance_prefix: "governance-approval-index".to_string(),
         }
@@ -174,22 +174,16 @@ impl<C: DatabaseCollection> ApprovalsDb<C> {
         Ok(deserialize::<ApprovalEntity>(&approval).map_err(|_| DbError::DeserializeError)?)
     }
 
-    pub fn get_approvals(&self, status: Option<String>) -> Result<Vec<ApprovalEntity>, DbError> {
+    pub fn get_approvals(&self, status: Option<ApprovalState>) -> Result<Vec<ApprovalEntity>, DbError> {
         let mut result = Vec::new();
         match status {
             Some(value) => {
-                let real_status = match value.as_str() {
-                    "Pending" => ApprovalState::Pending,
-                    "Responded" => ApprovalState::Responded,
-                    "Obsolete" => ApprovalState::Obsolete,
-                    _ => return Err(DbError::NonExistentStatus),
-                };
                 for (_, approval) in self
                     .collection
                     .iter(false, format!("{}{}", self.prefix, char::MAX))
                 {
                     let approval = deserialize::<ApprovalEntity>(&approval).unwrap();
-                    if approval.state == real_status {
+                    if approval.state == value {
                         result.push(approval);
                     }
                 }

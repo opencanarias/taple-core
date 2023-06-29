@@ -103,7 +103,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
 
     pub fn get_all_request(&self) -> Vec<ApprovalEntity> {
         self.database
-            .get_approvals(Some("Pending".to_string()))
+            .get_approvals(Some(ApprovalState::Pending))
             .unwrap()
     }
 
@@ -372,6 +372,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             return Err(ApprovalManagerError::DatabaseError)
         };
         self.database.del_subject_aproval_index(&subject.subject_id, request_id).map_err(|_| ApprovalManagerError::DatabaseError)?;
+        self.database.del_governance_aproval_index(&subject.governance_id, request_id).map_err(|_| ApprovalManagerError::DatabaseError)?;
         log::error!("PARTE 11");
         Ok(Ok((data, subject.owner)))
     }

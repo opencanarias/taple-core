@@ -4,7 +4,7 @@ use crate::commons::models::request::TapleRequest;
 use crate::commons::models::state::SubjectData;
 use crate::identifier::DigestIdentifier;
 use crate::signature::Signature;
-use crate::{KeyDerivator, KeyIdentifier, Event, EventRequest, ValidationProof};
+use crate::{KeyDerivator, KeyIdentifier, Event, EventRequest, ValidationProof, ApprovalState};
 use std::collections::HashSet;
 
 mod api;
@@ -40,7 +40,7 @@ pub enum APICommands {
     #[cfg(feature = "aproval")]
     GetApproval(DigestIdentifier),
     #[cfg(feature = "aproval")]
-    GetApprovals(Option<String>),
+    GetApprovals(Option<ApprovalState>),
     Shutdown,
 }
 

@@ -149,7 +149,7 @@ pub trait ApiModuleInterface {
     #[cfg(feature = "aproval")]
     async fn get_approval(&self, request_id: DigestIdentifier) -> Result<ApprovalEntity, ApiError>;
     #[cfg(feature = "aproval")]
-    async fn get_approvals(&self, status: Option<String>) -> Result<Vec<ApprovalEntity>, ApiError>;
+    async fn get_approvals(&self, status: Option<crate::ApprovalState>) -> Result<Vec<ApprovalEntity>, ApiError>;
 }
 
 /// Object that allows interaction with a TAPLE node.
@@ -480,7 +480,7 @@ impl ApiModuleInterface for NodeAPI {
     }
 
     #[cfg(feature = "aproval")]
-    async fn get_approvals(&self, status: Option<String>) -> Result<Vec<ApprovalEntity>, ApiError> {
+    async fn get_approvals(&self, status: Option<crate::ApprovalState>) -> Result<Vec<ApprovalEntity>, ApiError> {
         let response = self
             .sender
             .ask(APICommands::GetApprovals(status))

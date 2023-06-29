@@ -10,6 +10,7 @@ use crate::identifier::Derivable;
 use crate::ledger::manager::{EventManagerAPI, EventManagerInterface};
 use crate::signature::Signed;
 use crate::{KeyDerivator, KeyIdentifier};
+use crate::ApprovalState;
 // use crate::ledger::errors::LedgerManagerError;
 use crate::{
     commons::{
@@ -337,7 +338,7 @@ impl<C: DatabaseCollection> InnerAPI<C> {
     }
 
     #[cfg(feature = "aproval")]
-    pub async fn get_approvals(&self, status: Option<String>) -> ApiResponses {
+    pub async fn get_approvals(&self, status: Option<ApprovalState>) -> ApiResponses {
         let result = match self.db.get_approvals(status) {
             Ok(approvals) => approvals,
             Err(error) => {
