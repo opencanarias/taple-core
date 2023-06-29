@@ -74,10 +74,13 @@ impl Signature {
         })
     }
     pub fn verify<T: HashId>(&self, content: &T) -> Result<(), SubjectError> {
-        let hash_signed = DigestIdentifier::from_serializable_borsh((&content, &self.timestamp))
-            .map_err(|_| SubjectError::SignatureVerifyFails("Signature hash fails".to_owned()))?;
+        let content_hash = content.hash_id()?;
+        let signature_hash =
+            DigestIdentifier::from_serializable_borsh((&content_hash, &self.timestamp)).map_err(
+                |_| SubjectError::SignatureCreationFails("Signature hash fails".to_string()),
+            )?;
         self.signer
-            .verify(&hash_signed.digest, &self.value)
+            .verify(&signature_hash.digest, &self.value)
             .map_err(|_| SubjectError::SignatureVerifyFails("Signature verify fails".to_owned()))
     }
 }

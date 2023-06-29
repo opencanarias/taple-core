@@ -153,6 +153,7 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
                     match command {
                         Some(command) => {
                             let result = self.process_command(command).await;
+                            log::info!("Approval Manager Result: {:?}", result);
                             if result.is_err() {
                                 self.shutdown_sender.send(()).expect("Channel Closed");
                             }

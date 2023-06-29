@@ -121,7 +121,6 @@ impl<C: DatabaseCollection> EventManager<C> {
         &mut self,
         command: ChannelData<LedgerCommand, LedgerResponse>,
     ) -> Result<(), LedgerError> {
-        log::warn!("MENSAJE EN EL LEDGER RECIBIDO");
         let (sender, data) = match command {
             ChannelData::AskData(data) => {
                 let (sender, data) = data.get();
@@ -136,6 +135,7 @@ impl<C: DatabaseCollection> EventManager<C> {
         let response = {
             match data {
                 LedgerCommand::GenerateKey(derivator) => {
+                    log::warn!("MENSAJE EN EL LEDGER RECIBIDO GK");
                     let response = self.inner_ledger.generate_key(derivator).await;
                     match &response {
                         Err(error) => match error {
@@ -162,6 +162,7 @@ impl<C: DatabaseCollection> EventManager<C> {
                     signatures,
                     validation_proof,
                 } => {
+                    log::warn!("MENSAJE EN EL LEDGER RECIBIDO OE");
                     let response = self
                         .inner_ledger
                         .event_validated(event, signatures, validation_proof)
@@ -194,6 +195,7 @@ impl<C: DatabaseCollection> EventManager<C> {
                     signatures,
                     validation_proof,
                 } => {
+                    log::warn!("MENSAJE EN EL LEDGER RECIBIDO GN");
                     let response = self
                         .inner_ledger
                         .genesis(event, signatures, validation_proof)
@@ -281,6 +283,7 @@ impl<C: DatabaseCollection> EventManager<C> {
                     subject_id,
                     sn,
                 } => {
+                    log::warn!("MENSAJE EN EL LEDGER RECIBIDO GE");
                     let response = self.inner_ledger.get_event(who_asked, subject_id, sn).await;
                     let response = match response {
                         Err(error) => match error.clone() {
@@ -303,6 +306,7 @@ impl<C: DatabaseCollection> EventManager<C> {
                     who_asked,
                     subject_id,
                 } => {
+                    log::warn!("MENSAJE EN EL LEDGER RECIBIDO GLCE");
                     let response = self.inner_ledger.get_lce(who_asked, subject_id).await;
                     let response = match response {
                         Err(error) => match error.clone() {
@@ -327,10 +331,12 @@ impl<C: DatabaseCollection> EventManager<C> {
                     subject_id,
                     sn,
                 } => {
+                    log::warn!("MENSAJE EN EL LEDGER RECIBIDO GNG");
                     let response = self
                         .inner_ledger
                         .get_next_gov(who_asked, subject_id, sn)
                         .await;
+                    log::info!("RESPUESTA DE GET NEXT GOV {:?}", response);
                     let response = match response {
                         Err(error) => match error.clone() {
                             LedgerError::ChannelClosed => {

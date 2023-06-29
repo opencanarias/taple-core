@@ -1021,7 +1021,8 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 let notary_event =
                     self.create_notary_event(&subject, &signed_event, gov_version)?;
                 let event_message = create_validator_request(notary_event.clone());
-                self.event_notary_events.insert(event_hash, notary_event);
+                self.event_notary_events.insert(event_hash.clone(), notary_event);
+                self.events_to_validate.insert(event_hash, signed_event);
                 (ValidationStage::Validate, event_message)
             };
             // Limpiar HashMaps
@@ -1243,7 +1244,9 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 self.get_signers_and_quorum(metadata, stage.clone()).await?;
             self.ask_signatures(&subject_id, event_message, signers.clone(), quorum_size)
                 .await?;
-            self.event_notary_events.insert(event_hash, notary_event);
+            self.event_notary_events
+                .insert(event_hash.clone(), notary_event);
+            self.events_to_validate.insert(event_hash, signed_event);
             // Hacer update de fase por la que va el evento
             self.subjects_completing_event
                 .insert(subject_id, (stage, signers, (quorum_size, 0)));
