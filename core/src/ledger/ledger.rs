@@ -1036,18 +1036,6 @@ impl<C: DatabaseCollection> Ledger<C> {
                         .await?;
                     self.subject_is_gov.insert(subject_id.clone(), true);
                 } else {
-                    // Comprobar que invoker tiene permisos de creación
-                    let creators = self
-                        .gov_api
-                        .get_signers(metadata.clone(), ValidationStage::Create)
-                        .await
-                        .map_err(LedgerError::GovernanceError)?;
-                    if !creators.contains(&event.content.event_request.signature.signer) {
-                        return Err(LedgerError::Unauthorized(format!(
-                            "Creation unauthorized for KeyId: {}",
-                            event.content.event_request.signature.signer.to_str()
-                        )));
-                    }
                     let witnesses = self.get_witnesses(metadata).await?;
                     if !witnesses.contains(&self.our_id) {
                         match self
@@ -2468,9 +2456,9 @@ impl<C: DatabaseCollection> Ledger<C> {
         if &create_request.schema_id != "governance" {
             let creation_roles = self
                 .gov_api
-                .get_signers(metadata.clone(), ValidationStage::Create)
+                .get_invoke_info(metadata.clone(), ValidationStage::Create, invoker)
                 .await?;
-            if !creation_roles.contains(&invoker) {
+            if !creation_roles {
                 return Err(LedgerError::Unauthorized("Crreator not allowed".into()));
             } // TODO: No estamos comprobando que pueda ser un external el que cree el subject y lo permitamos si tenia permisos.
         }
