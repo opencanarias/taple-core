@@ -11,6 +11,7 @@ pub(crate) struct ApprovalsDb<C: DatabaseCollection> {
     collection: C,
     index_prefix: String,
     prefix: String,
+    governance_prefix: String,
 }
 
 impl<C: DatabaseCollection> ApprovalsDb<C> {
@@ -21,6 +22,7 @@ impl<C: DatabaseCollection> ApprovalsDb<C> {
             collection: manager.create_collection("approvals"),
             index_prefix: "subject-approval-index".to_string(),
             prefix: "approvals".to_string(),
+            governance_prefix: "governance-approval-index".to_string(),
         }
     }
 
@@ -36,7 +38,7 @@ impl<C: DatabaseCollection> ApprovalsDb<C> {
         ];
         let key = get_key(key_elements)?;
         let Ok(data) = serialize::<DigestIdentifier>(request_id) else {
-          return Err(DbError::SerializeError);
+            return Err(DbError::SerializeError);
         };
         self.index_collection.put(&key, data)
     }
@@ -61,13 +63,13 @@ impl<C: DatabaseCollection> ApprovalsDb<C> {
         request_id: &DigestIdentifier,
     ) -> Result<(), DbError> {
         let key_elements: Vec<Element> = vec![
-            Element::S(self.index_prefix.clone()),
+            Element::S(self.governance_prefix.clone()),
             Element::S(governance_id.to_str()),
             Element::S(request_id.to_str()),
         ];
         let key = get_key(key_elements)?;
         let Ok(data) = serialize::<DigestIdentifier>(request_id) else {
-          return Err(DbError::SerializeError);
+            return Err(DbError::SerializeError);
         };
         self.index_by_governance_collection.put(&key, data)
     }
@@ -78,7 +80,7 @@ impl<C: DatabaseCollection> ApprovalsDb<C> {
         request_id: &DigestIdentifier,
     ) -> Result<(), DbError> {
         let key_elements: Vec<Element> = vec![
-            Element::S(self.index_prefix.clone()),
+            Element::S(self.governance_prefix.clone()),
             Element::S(governance_id.to_str()),
             Element::S(request_id.to_str()),
         ];
@@ -91,7 +93,7 @@ impl<C: DatabaseCollection> ApprovalsDb<C> {
         governance_id: &DigestIdentifier,
     ) -> Result<Vec<DigestIdentifier>, DbError> {
         let key_elements: Vec<Element> = vec![
-            Element::S(self.index_prefix.clone()),
+            Element::S(self.governance_prefix.clone()),
             Element::S(governance_id.to_str()),
         ];
         let key = get_key(key_elements)?;
@@ -114,7 +116,7 @@ impl<C: DatabaseCollection> ApprovalsDb<C> {
         }
         for request_id in to_delete {
             let key_elements: Vec<Element> = vec![
-                Element::S(self.index_prefix.clone()),
+                Element::S(self.governance_prefix.clone()),
                 Element::S(governance_id.to_str()),
                 Element::S(request_id.to_str()),
             ];

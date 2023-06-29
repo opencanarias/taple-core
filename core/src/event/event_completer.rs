@@ -519,6 +519,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     )
                     .await
                     .map_err(EventError::GovernanceError)?;
+                log::warn!("GOv version: {}", governance_version);
                 let creation_premission = self
                     .gov_api
                     .get_invoke_info(

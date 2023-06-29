@@ -341,12 +341,18 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         let is_member = members.0.contains(&invoker);
         let mut permisions_exists = false;
         log::warn!("IS MEMBER: {}", is_member);
+        log::warn!("ROLES_: {:?}", roles);
         for role in roles {
-            if role.role != stage.to_str() {
+            log::warn!("AAAAAAAAAAAA: {}", &role.role != stage.to_str());
+            log::warn!("ROLE: {}", role.role);
+            log::warn!("ROLE: {}", stage.to_role());
+            if &role.role != stage.to_role() {
                 continue;
             }
+            log::warn!("ROLE SCHEMA: {:?}", role.schema);
             match role.schema {
                 Schema::ID { ID } => {
+                    log::warn!("ID, id: {}, schema_id: {}", ID, schema_id);
                     if &ID != schema_id {
                         continue;
                     }
@@ -358,6 +364,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                 }
                 Schema::ALL => {}
             }
+            log::warn!("PASAMOS SCHEMA");
             if !namespace_contiene(&role.namespace, namespace) {
                 continue;
             }
