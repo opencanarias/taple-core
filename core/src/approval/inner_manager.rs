@@ -138,15 +138,22 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         governance_id: &DigestIdentifier,
     ) -> Result<(), ApprovalManagerError> {
         // Comprobamos todas las peticiones guardadas y borramos las afectadas
-        let affected_requests = self.database.get_approvals_by_subject(governance_id)
+        let affected_requests = self.database.get_approvals_by_governance(governance_id)
             .map_err(|_| ApprovalManagerError::DatabaseError)?;
+        log::error!("FAILED AFFTED REQUESTS");
         for request in affected_requests {
             // Borrarlas de la colección principal y del índice
+            let approval_entity = self.database.get_approval(&request).map_err(|_| ApprovalManagerError::DatabaseError)?;
+            let EventRequest::Fact(fact_data) = approval_entity.request.content.event_request.content else {
+                return Err(ApprovalManagerError::UnexpectedRequestType);
+            };
+            let subject_id = fact_data.subject_id;
             self.database.del_approval(&request).map_err(|_| ApprovalManagerError::DatabaseError)?;
-            self.database.del_subject_aproval_index(&governance_id, &request).map_err(|_| ApprovalManagerError::DatabaseError)?;
+            self.database.del_governance_aproval_index(&governance_id, &request).map_err(|_| ApprovalManagerError::DatabaseError)?;
+            self.database.del_subject_aproval_index(&subject_id, &request).map_err(|_| ApprovalManagerError::DatabaseError)?;
             self.notifier.request_deleted(
                 &request.to_str(),
-                &governance_id.to_str(),
+                &subject_id.to_str(),
             );
         }
         Ok(())
@@ -175,15 +182,18 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             intervención. En ese caso es precisar eliminar la petición y actualizar a la nueva.
             Debemos comprobar siempre si ya tenemos la petición que nos envían.
         */
+        log::error!("PARTE 1");
         let id = match DigestIdentifier::from_serializable_borsh(&approval_request.content).map_err(|_| ApprovalErrorResponse::ErrorHashing) {
             Ok(id) => id,
             Err(error) => return Ok(Err(error)),
         };
 
+        log::error!("PARTE 2");
         if let Ok(_data) = self.get_single_request(&id) {
             return Ok(Err(ApprovalErrorResponse::RequestAlreadyKnown));
         };
 
+        log::error!("PARTE 3");
         // Comprobamos si la request es de tipo State
         let EventRequest::Fact(state_request) = &approval_request.content.event_request.content else {
             return Ok(Err(ApprovalErrorResponse::NoFactEvent));
@@ -196,6 +206,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             Err(_error) => return Err(ApprovalManagerError::DatabaseError),
         };
 
+        log::error!("PARTE 4");
         if approval_request.content.sn > subject_data.sn + 1 {
             return Ok(Err(ApprovalErrorResponse::SubjectNotSynchronized));
         }
@@ -212,6 +223,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             return Err(ApprovalManagerError::MoreRequestThanMaxAllowed);
         }
 
+        log::error!("PARTE 5");
         // Comprobamos si la versión de la gobernanza es correcta
         let version = match self
             .get_governance_version(&subject_data.governance_id, &subject_data.subject_id)
@@ -238,7 +250,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
                 gov_id: subject_data.governance_id.clone(),
             }));
         }
-
+        log::error!("PARTE 6");
         let metadata = create_metadata(&subject_data, version);
 
         // Comprobar si somos aprobadores. Esto antes incluso que la firma del sujeto
@@ -251,7 +263,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         if !approvers_list.contains(&current_node) {
             return Ok(Err(ApprovalErrorResponse::NodeIsNotApprover));
         }
-
+        log::error!("PARTE 7");
         // Comprobamos validez criptográfica de la firma del sujeto
         // Empezamos comprobando que el firmante sea el sujeto
         if approval_request.signature.signer != subject_data.public_key {
@@ -264,7 +276,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         };
 
         // Tenemos que realizar un falso apply para comprobar si el state_hash es correcto
-        subject_data.update_subject(approval_request.content.patch.clone(), subject_data.sn + 1);
+        subject_data.update_subject(approval_request.content.patch.clone(), subject_data.sn + 1).map_err(|_| ApprovalManagerError::EventApplyFailed)?;
         
         let hash_state = match DigestIdentifier::from_serializable_borsh(&subject_data.properties).map_err(|_| ApprovalErrorResponse::ErrorHashing) {
             Ok(id) => id,
@@ -287,16 +299,22 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             reponse: None,
             state: ApprovalState::Pending
         };
-
+        log::error!("PARTE 8");
         self.database.set_subject_aproval_index(
             &subject_data.subject_id,
             &id)
         .map_err(|_| ApprovalManagerError::DatabaseError)?;
-        
+        if !subject_data.governance_id.digest.is_empty() {
+            self.database.set_governance_aproval_index(
+                &subject_data.governance_id,
+                &id)
+            .map_err(|_| ApprovalManagerError::DatabaseError)?;   
+        }
+        log::error!("PARTE 9");
         let Ok(_result) = self.database.set_approval(&id, approval_entity) else { 
             return Err(ApprovalManagerError::DatabaseError);
         };
-
+        log::error!("PARTE 10");
         self.notifier
             .request_reached(&id.to_str(), &subject_data.subject_id.to_str());
 
@@ -354,6 +372,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             return Err(ApprovalManagerError::DatabaseError)
         };
         self.database.del_subject_aproval_index(&subject.subject_id, request_id).map_err(|_| ApprovalManagerError::DatabaseError)?;
+        log::error!("PARTE 11");
         Ok(Ok((data, subject.owner)))
     }
 }

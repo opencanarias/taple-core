@@ -165,6 +165,7 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
                     }
                 },
                 _ = self.shutdown_receiver.recv() => {
+                    log::error!("SHUTDOWN RECV APPROVAL");
                     break;
                 },
                 update = self.governance_update_channel.recv() => {
@@ -172,7 +173,8 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
                         Ok(data) => {
                             match data {
                                 GovernanceUpdatedMessage::GovernanceUpdated { governance_id, governance_version: _ } => {
-                                    if let Err(_) = self.inner_manager.new_governance_version(&governance_id) {
+                                    if let Err(error) = self.inner_manager.new_governance_version(&governance_id) {
+                                        log::error!("NEW GOV VERSION APPROVAL: {}", error);
                                         self.shutdown_sender.send(()).expect("Channel Closed");
                                         break;
                                     }

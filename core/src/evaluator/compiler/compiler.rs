@@ -68,6 +68,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
             .get_contracts(governance_id.clone(), governance_version)
             .await
             .map_err(CompilerErrorResponses::GovernanceError)?;
+        log::error!("COMPILER AFTER GET CONTRACTS");
         for (contract_info, schema_id) in contracts {
             let contract_data = match self
                 .database
@@ -111,6 +112,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
                 &schema_id,
             )
             .await?;
+            log::error!("COMPILER AFTER COMPILER");
             let compiled_contract = self
                 .add_contract(&governance_id.to_str(), &schema_id)
                 .await?;
@@ -133,8 +135,6 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
         governance_id: &str,
         schema_id: &str,
     ) -> Result<(), CompilerErrorResponses> {
-        let a = format!("{}/src/lib.rs", self.contracts_path);
-        let path = Path::new(&a);
         fs::write(format!("{}/src/lib.rs", self.contracts_path), contract)
             .await
             .map_err(|_| CompilerErrorResponses::WriteFileError)?;

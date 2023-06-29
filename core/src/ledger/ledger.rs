@@ -319,9 +319,11 @@ impl<C: DatabaseCollection> Ledger<C> {
                 match is_gov {
                     Some(true) => {
                         // Enviar mensaje a gov de governance updated con el id y el sn
+                        log::error!("BEFORE GOVERNANCE UPDATED");
                         self.gov_api
                             .governance_updated(subject_id.clone(), sn)
                             .await?;
+                        log::error!("AFTER GOVERNANCE UPDATED");
                     }
                     Some(false) => {
                         self.database.del_signatures(&subject_id, sn - 1)?;
@@ -469,9 +471,9 @@ impl<C: DatabaseCollection> Ledger<C> {
             }
         }
         // Enviar a Distribution info del nuevo event y que lo distribuya
-        self.distribution_channel
-            .tell(DistributionMessagesNew::SignaturesNeeded { subject_id, sn })
-            .await?;
+        // self.distribution_channel
+        //     .tell(DistributionMessagesNew::SignaturesNeeded { subject_id, sn })
+        //     .await?;
         Ok(())
     }
 

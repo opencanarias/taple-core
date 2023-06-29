@@ -553,6 +553,7 @@ impl<C: DatabaseCollection> API<C> {
                         }
                     };
                     if must_shutdown {
+                        log::error!("must shutdown before unwrap");
                         let sender = self.shutdown_sender.take().unwrap();
                         sender.send(()).expect("Shutdown Channel Closed");
                         drop(sender);

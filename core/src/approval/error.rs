@@ -25,7 +25,9 @@ pub enum ApprovalManagerError {
     #[error("Unexpected request type found in database")]
     UnexpectedRequestType,
     #[error("More than one pending approval request detected")]
-    MoreRequestThanMaxAllowed
+    MoreRequestThanMaxAllowed,
+    #[error("Event Apply failed")]
+    EventApplyFailed
 }
 
 #[derive(Error, Debug, Clone)]

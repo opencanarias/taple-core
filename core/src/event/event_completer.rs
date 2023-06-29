@@ -283,6 +283,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         match self.subjects_by_governance.get(&governance_id).cloned() {
             Some(subjects_affected) => {
                 for subject_id in subjects_affected.iter() {
+                    log::error!("EVENT COMPLETER DEBAJO DEL FOR");
                     match self.database.get_request(subject_id) {
                         Ok(event_request) => {
                             let EventRequest::Fact(state_request) = &event_request.content else {

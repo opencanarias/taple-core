@@ -81,6 +81,7 @@ impl<M: DatabaseManager<C>, C: DatabaseCollection> Governance<M, C> {
                     (None, data)
                 }
             };
+            log::error!("governance DATA {:?}", data);
             if let Some(sender) = sender {
                 match data {
                     GovernanceMessage::GetSchema {
@@ -176,7 +177,9 @@ impl<M: DatabaseManager<C>, C: DatabaseCollection> Governance<M, C> {
                         // TODO: Revisar si hace falta tratar errores aquí
                         match result {
                             Ok(_) => {}
-                            Err(_) => {}
+                            Err(error) => {
+                                log::error!("Governance update error {}", error);
+                            }
                         }
                         Ok(())
                     }
