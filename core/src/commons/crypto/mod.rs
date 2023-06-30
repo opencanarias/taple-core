@@ -7,7 +7,9 @@ pub(crate) mod error;
 #[cfg(feature = "secp256k1")]
 pub(crate) mod secp256k1;
 
-use borsh::BorshSerialize;
+use std::io::Read;
+
+use borsh::{BorshDeserialize, BorshSerialize};
 use identifier::error::Error;
 
 use base64::encode_config;
@@ -17,39 +19,9 @@ pub use secp256k1::Secp256k1KeyPair;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    identifier::{self, derive::KeyDerivator, Derivable, DigestIdentifier},
-    signature::Signature,
+    identifier::{self, derive::KeyDerivator},
 };
 
-use self::error::CryptoError;
-
-pub fn check_cryptography<T: BorshSerialize>(
-    serializable: T,
-    signature: &Signature,
-) -> Result<DigestIdentifier, CryptoError> {
-    log::error!("AQUÍ 0");
-    let hash = DigestIdentifier::from_serializable_borsh(&serializable).map_err(|_| {
-        CryptoError::CryptoError(String::from(
-            "Error calculating the hash of the serializable",
-        ))
-    })?;
-    log::error!("AQUÍ 1");
-    if hash != signature.content.event_content_hash {
-        return Err(CryptoError::CryptoError(String::from(
-            "The hash does not match the content of the signature",
-        )));
-    }
-    log::error!("AQUÍ 2");
-    signature
-        .content
-        .signer
-        .verify(&hash.derivative(), &signature.signature)
-        .map_err(|_| {
-            CryptoError::CryptoError(String::from("The signature does not validate the hash"))
-        })?;
-    log::error!("AQUÍ 3");
-    Ok(hash)
-}
 
 /// Asymmetric key pair
 #[derive(Serialize, Deserialize, Debug)]
@@ -217,6 +189,49 @@ impl DSA for KeyPair {
             // KeyPair::X25519(_) => Err(Error::KeyPairError(
             //     "DSA is not supported for this key type".to_owned(),
             // )),
+        }
+    }
+}
+
+impl BorshSerialize for KeyPair {
+    #[inline]
+    fn serialize<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        match &self {
+            KeyPair::Ed25519(x) => {
+                BorshSerialize::serialize(&0u8, writer)?;
+                let a: [u8;32] = x.secret_key_bytes().try_into().unwrap();
+                BorshSerialize::serialize(&a, writer)
+            }
+            KeyPair::Secp256k1(x) => {
+                BorshSerialize::serialize(&1u8, writer)?;
+                let a: [u8;32] = x.secret_key_bytes().try_into().unwrap();
+                BorshSerialize::serialize(&a, writer)
+            }
+        }
+    }
+}
+
+impl BorshDeserialize for KeyPair {
+    #[inline]
+    fn deserialize_reader<R: Read>(reader: &mut R) -> std::io::Result<Self> {
+        let order: u8 = BorshDeserialize::deserialize_reader(reader)?;
+        match order {
+            0 => {
+                let data: [u8; 32] = BorshDeserialize::deserialize_reader(reader)?;
+                Ok(KeyPair::Ed25519(Ed25519KeyPair::from_secret_key(
+                    &data,
+                )))
+            }
+            1 => {
+                let data: [u8; 32] = BorshDeserialize::deserialize_reader(reader)?;
+                Ok(KeyPair::Secp256k1(Secp256k1KeyPair::from_secret_key(
+                    &data,
+                )))
+            }
+            _ => Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("Invalid Value representation: {}", order),
+            )),
         }
     }
 }

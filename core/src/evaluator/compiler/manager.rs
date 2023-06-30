@@ -4,7 +4,7 @@ use crate::{
     database::DB,
     evaluator::errors::CompilerError,
     governance::{GovernanceInterface, GovernanceUpdatedMessage},
-    DatabaseCollection
+    DatabaseCollection,
 };
 
 use super::compiler::Compiler;
@@ -53,6 +53,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface + Send> TapleCompiler<C, G> {
                     match command {
                         Ok(command) => {
                             let result = self.process_command(command).await;
+                            log::info!("Compiler result: {:?}", result);
                             if result.is_err() {
                                 match result.unwrap_err() {
                                     CompilerError::InitError(_) => unreachable!(),
@@ -97,9 +98,11 @@ impl<C: DatabaseCollection, G: GovernanceInterface + Send> TapleCompiler<C, G> {
                 governance_id,
                 governance_version,
             } => {
-                self.inner_compiler
+                let result = self
+                    .inner_compiler
                     .update_contracts(governance_id, governance_version)
-                    .await
+                    .await;
+                log::info!("CONTRACTS UPDATED: {:?}", result);
             }
         };
         Ok(CompilerCodes::Ok)

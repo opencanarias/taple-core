@@ -48,6 +48,7 @@ impl<T: TaskCommandContent + Serialize + DeserializeOwned + 'static> MessageTask
                 msg = self.receiver.receive() => {
                     let result = self.process_input(msg).await;
                     if result.is_err() {
+                        log::error!("{}", result.unwrap_err());
                         self.shutdown_sender.send(()).expect("Shutdown Channel Closed");
                         break;
                     }

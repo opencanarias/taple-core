@@ -4,17 +4,16 @@ use crate::{
     commons::{
         channel::SenderEnd,
         errors::ChannelErrors,
-        models::event::ValidationProof,
+        models::validation::ValidationProof,
         self_signature_manager::{SelfSignatureInterface, SelfSignatureManager},
     },
     event::EventCommand,
-    event_content::Metadata,
     governance::{stage::ValidationStage, GovernanceAPI, GovernanceInterface},
     identifier::DigestIdentifier,
     message::{MessageConfig, MessageTaskCommand},
     protocol::protocol_message_manager::TapleMessages,
     signature::Signature,
-    Derivable, KeyIdentifier,
+    Derivable, KeyIdentifier, Metadata,
 };
 
 use super::{errors::NotaryError, NotaryEvent, NotaryEventResponse};
@@ -107,8 +106,7 @@ impl<C: DatabaseCollection> Notary<C> {
         // Verificar firma de sujecto sobre proof
         let proof_hash = DigestIdentifier::from_serializable_borsh(&notary_event.proof)
             .map_err(|_| NotaryError::SubjectSignatureNotValid)?;
-        if notary_event.subject_signature.verify().is_err()
-            || proof_hash != notary_event.subject_signature.content.event_content_hash
+        if notary_event.subject_signature.verify(&notary_event.proof).is_err()
         {
             return Err(NotaryError::SubjectSignatureNotValid);
         }
@@ -120,7 +118,7 @@ impl<C: DatabaseCollection> Notary<C> {
                 last_proof,
             )
             .await?;
-        if notary_event.subject_signature.content.signer != subject_pk {
+        if notary_event.subject_signature.signer != subject_pk {
             return Err(NotaryError::SubjectSignatureNotValid);
         }
         self.database
@@ -131,7 +129,11 @@ impl<C: DatabaseCollection> Notary<C> {
             .signature_manager
             .sign(&notary_event.proof)
             .map_err(NotaryError::ProtocolErrors)?;
-        log::warn!("SE ENVÍA LA VALIDACIÓN A {}", sender.to_str());
+        log::warn!(
+            "SE ENVÍA LA VALIDACIÓN A {}: sn: {}",
+            sender.to_str(),
+            notary_event.proof.sn
+        );
         self.message_channel
             .tell(MessageTaskCommand::Request(
                 None,
@@ -159,6 +161,7 @@ impl<C: DatabaseCollection> Notary<C> {
     ) -> Result<KeyIdentifier, NotaryError> {
         match last_proof {
             Some(last_proof) => {
+                log::warn!("TENGO LAST PROOF: {:?}", last_proof);
                 // Comprobar que tenemos la prueba del evento anterior, si no tenemos que hacer la comprobación de la que nos llega en el mensaje como cuando no tenemos el registro
                 if last_proof.sn > new_proof.sn {
                     Err(NotaryError::EventSnLowerThanLastSigned)
@@ -170,6 +173,9 @@ impl<C: DatabaseCollection> Notary<C> {
                         Ok(last_proof.subject_public_key)
                     }
                 } else if last_proof.sn + 1 == new_proof.sn {
+                    if previous_proof.is_none() {
+                        return Err(NotaryError::PreviousProofLeft);
+                    }
                     // Comprobar que es similar a la prueba del evento anterior que nos llega en el mensaje
                     if !last_proof.is_similar(&previous_proof.unwrap()) {
                         Err(NotaryError::DifferentProofForEvent)
@@ -260,10 +266,10 @@ impl<C: DatabaseCollection> Notary<C> {
                     validation_signatures
                         .into_iter()
                         .map(|signature| {
-                            if signature.verify().is_err() {
+                            if signature.verify(&previous_proof).is_err() {
                                 return Err(NotaryError::InvalidSignature);
                             }
-                            Ok(signature.content.signer)
+                            Ok(signature.signer)
                         })
                         .collect();
                 let actual_signers = actual_signers?;

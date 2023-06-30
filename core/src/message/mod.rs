@@ -5,8 +5,13 @@ mod message_sender;
 mod message_task_manager;
 
 use crate::{
-    commons::{identifier::KeyIdentifier, self_signature_manager::{SelfSignatureManager, SelfSignatureInterface}},
-    signature::Signature,
+    commons::{
+        errors::SubjectError,
+        identifier::KeyIdentifier,
+        models::HashId,
+        self_signature_manager::{SelfSignatureInterface, SelfSignatureManager},
+    },
+    signature::{Signature, Signed},
     DigestIdentifier,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
@@ -19,11 +24,11 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use self::error::Error;
 
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, BorshSerialize, BorshDeserialize)]
-pub struct Message<T: TaskCommandContent> {
-    pub content: MessageContent<T>,
-    pub signature: Signature,
-}
+// #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, BorshSerialize, BorshDeserialize)]
+// pub struct Message<T: TaskCommandContent> {
+//     pub content: MessageContent<T>,
+//     pub signature: Signature,
+// }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct MessageContent<T: TaskCommandContent> {
@@ -32,26 +37,63 @@ pub struct MessageContent<T: TaskCommandContent> {
     pub receiver: KeyIdentifier,
 }
 
-impl<T: TaskCommandContent> Message<T> {
+impl<T: TaskCommandContent> HashId for MessageContent<T> {
+    fn hash_id(&self) -> Result<DigestIdentifier, SubjectError> {
+        DigestIdentifier::from_serializable_borsh(&self)
+            .map_err(|_| SubjectError::CryptoError("Hashing error in MessageContent".to_string()))
+    }
+}
+
+impl<T: TaskCommandContent> Signed<MessageContent<T>> {
     pub fn new(
         sender: KeyIdentifier,
         receiver: KeyIdentifier,
         content: T,
         sender_sm: &SelfSignatureManager,
     ) -> Result<Self, Error> {
-        let content = MessageContent {
+        let message_content = MessageContent {
             sender_id: sender.clone(),
             content,
             receiver,
         };
-        let content_hash = DigestIdentifier::from_serializable_borsh(&content)
-            .map_err(|_| Error::CreatingMessageError)?;
         let signature = sender_sm
-            .sign(&content_hash)
+            .sign(&message_content)
             .map_err(|_| Error::CreatingMessageError)?;
-        Ok(Self { content, signature })
+        Ok(Self {
+            content: message_content,
+            signature,
+        })
+    }
+
+    pub fn verify(&self) -> Result<(), SubjectError> {
+        self.signature.verify(&self.content)
     }
 }
+
+// impl<T: TaskCommandContent> Message<T> {
+//     pub fn new(
+//         sender: KeyIdentifier,
+//         receiver: KeyIdentifier,
+//         content: T,
+//         sender_sm: &SelfSignatureManager,
+//     ) -> Result<Self, Error> {
+//         let content = MessageContent {
+//             sender_id: sender.clone(),
+//             content,
+//             receiver,
+//         };
+//         let content_hash = DigestIdentifier::from_serializable_borsh(&content)
+//             .map_err(|_| Error::CreatingMessageError)?;
+//         let signature = sender_sm
+//             .sign(&content_hash)
+//             .map_err(|_| Error::CreatingMessageError)?;
+//         Ok(Self { content, signature })
+//     }
+
+//     pub fn verify(&self) -> Result<(), SubjectError> {
+//         self.signature.verify(&self.content)
+//     }
+// }
 
 pub trait TaskCommandContent:
     Serialize + std::fmt::Debug + Clone + Send + Sync + BorshDeserialize + BorshSerialize

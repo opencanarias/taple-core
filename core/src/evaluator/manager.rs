@@ -11,11 +11,13 @@ use crate::commons::self_signature_manager::{SelfSignatureInterface, SelfSignatu
 use crate::database::{DatabaseCollection, DatabaseManager, DB};
 use crate::evaluator::errors::ExecutorErrorResponses;
 use crate::evaluator::runner::manager::TapleRunner;
-use crate::event_request::EventRequestType;
 use crate::governance::{GovernanceInterface, GovernanceUpdatedMessage};
 use crate::message::{MessageConfig, MessageTaskCommand};
 use crate::protocol::protocol_message_manager::TapleMessages;
+use crate::request::EventRequest;
+use crate::signature::Signed;
 use crate::utils::message::event::create_evaluator_response;
+use crate::EvaluationResponse;
 
 pub struct EvaluatorManager<
     M: DatabaseManager<C>,
@@ -116,39 +118,32 @@ impl<
         };
         let response = 'response: {
             match data {
-                EvaluatorMessage::AskForEvaluation(data) => {
-                    let EventRequestType::Fact(state_data) = &data.event_request.request else {
+                EvaluatorMessage::EvaluationEvent {
+                    evaluation_request,
+                    sender,
+                } => {
+                    let EventRequest::Fact(state_data) = &evaluation_request.event_request.content else {
                         break 'response EvaluatorResponse::AskForEvaluation(Err(super::errors::EvaluatorErrorResponses::CreateRequestNotAllowed));
                     };
-                    let result = self.runner.execute_contract(&data, state_data).await;
-                    log::warn!("Execution result: {:?}", result);
+                    let result = self
+                        .runner
+                        .execute_contract(&evaluation_request, state_data)
+                        .await;
                     match result {
                         Ok(executor_response) => {
-                            let governance_version = executor_response.governance_version;
                             let signature = self
                                 .signature_manager
-                                .sign(&(
-                                    &executor_response.context_hash,
-                                    &executor_response.hash_new_state,
-                                    governance_version,
-                                    &executor_response.success,
-                                    &executor_response.approval_required,
-                                ))
+                                .sign(&executor_response)
                                 .map_err(|_| EvaluatorError::SignatureGenerationFailed)?;
-                            let msg = create_evaluator_response(
-                                executor_response.context_hash,
-                                executor_response.hash_new_state,
-                                governance_version,
-                                executor_response.success,
-                                executor_response.approval_required,
-                                executor_response.json_patch,
-                                signature,
-                            );
+                            let signed_evaluator_response: crate::signature::Signed<
+                                crate::EvaluationResponse,
+                            > = Signed::<EvaluationResponse>::new(executor_response, signature);
+                            let msg = create_evaluator_response(signed_evaluator_response);
                             self.messenger_channel
                                 .tell(MessageTaskCommand::Request(
                                     None,
                                     msg,
-                                    vec![data.context.owner],
+                                    vec![sender],
                                     MessageConfig::direct_response(),
                                 ))
                                 .await
@@ -162,11 +157,11 @@ impl<
                                     None,
                                     TapleMessages::EventMessage(
                                         crate::event::EventCommand::HigherGovernanceExpected {
-                                            governance_id: data.context.governance_id,
+                                            governance_id: evaluation_request.context.governance_id,
                                             who_asked: self.signature_manager.get_own_identifier(),
                                         },
                                     ),
-                                    vec![data.context.owner],
+                                    vec![sender],
                                     MessageConfig::direct_response(),
                                 ))
                                 .await
@@ -182,10 +177,10 @@ impl<
                                     TapleMessages::LedgerMessages(
                                         crate::ledger::LedgerCommand::GetLCE {
                                             who_asked: self.signature_manager.get_own_identifier(),
-                                            subject_id: data.context.governance_id,
+                                            subject_id: evaluation_request.context.governance_id,
                                         },
                                     ),
-                                    vec![data.context.owner],
+                                    vec![sender],
                                     MessageConfig::direct_response(),
                                 ))
                                 .await
@@ -208,8 +203,13 @@ impl<
                         }
                     }
                 }
+                EvaluatorMessage::AskForEvaluation(_) => {
+                    log::error!("Ask for Evaluation in Evaluator Manager");
+                    return Ok(());
+                }
             }
         };
+        log::info!("Response: {:?}", response);
         if sender.is_some() {
             sender
                 .unwrap()
@@ -236,7 +236,7 @@ mod test {
             channel::{ChannelData, MpscChannel, SenderEnd},
             crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair},
             models::{
-                event_preevaluation::{Context, EventPreEvaluation},
+                evaluation::{EvaluationRequest, SubjectContext},
                 state::Subject,
             },
             schema_handler::gov_models::Contract,
@@ -245,8 +245,6 @@ mod test {
         database::{MemoryCollection, DB},
         evaluator::{compiler::ContractType, EvaluatorMessage, EvaluatorResponse},
         event::EventCommand,
-        event_content::Metadata,
-        event_request::{EventRequest, EventRequestType, FactRequest},
         governance::{
             error::RequestError, stage::ValidationStage, GovernanceInterface,
             GovernanceUpdatedMessage,
@@ -254,7 +252,9 @@ mod test {
         identifier::{DigestIdentifier, KeyIdentifier},
         message::MessageTaskCommand,
         protocol::protocol_message_manager::TapleMessages,
-        MemoryManager, TimeStamp,
+        request::{EventRequest, FactRequest},
+        signature::Signed,
+        MemoryManager, TimeStamp, ValueWrapper, Metadata,
     };
 
     use crate::evaluator::manager::EvaluatorManager;
@@ -411,7 +411,7 @@ mod test {
             _governance_id: DigestIdentifier,
             _schema_id: String,
             _governance_version: u64,
-        ) -> Result<Value, RequestError> {
+        ) -> Result<ValueWrapper, RequestError> {
             unimplemented!()
         }
 
@@ -420,7 +420,7 @@ mod test {
             _governance_id: DigestIdentifier,
             _schema_id: String,
             _governance_version: u64,
-        ) -> Result<serde_json::Value, RequestError> {
+        ) -> Result<ValueWrapper, RequestError> {
             unimplemented!()
         }
 
@@ -565,7 +565,7 @@ mod test {
             two: 11,
             three: 13,
         };
-        let initial_state_json = serde_json::to_string(&initial_state).unwrap();
+        let initial_state_json = serde_json::to_value(&initial_state).unwrap();
         Subject {
             keys: None,
             subject_id: DigestIdentifier::from_str("JGSPR6FL-vE7iZxWMd17o09qn7NeTqlcImDVWmijXczw")
@@ -579,7 +579,7 @@ mod test {
             owner: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
             creator: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg")
                 .unwrap(),
-            properties: initial_state_json,
+            properties: ValueWrapper(initial_state_json),
             active: true,
             name: "".to_owned(),
             genesis_gov_version: 3,
@@ -587,24 +587,25 @@ mod test {
     }
 
     fn create_event_request(
-        json: String,
+        json: Value,
         signature_manager: &SelfSignatureManager,
-    ) -> EventRequest {
-        let request = EventRequestType::Fact(FactRequest {
+    ) -> Signed<EventRequest> {
+        let request = EventRequest::Fact(FactRequest {
             subject_id: DigestIdentifier::from_str("JXtZRpNgBWVg9v5YG9AaTNfCpPd-rCTTKrFW9cV8-JKs")
                 .unwrap(),
-            payload: json,
+            payload: ValueWrapper(json),
         });
         let signature = signature_manager.sign(&request).unwrap();
-        let event_request = EventRequest { request, signature };
+        let event_request = Signed::<EventRequest> {
+            content: request,
+            signature,
+        };
         event_request
     }
 
-    fn generate_json_patch(prev_state: &str, new_state: &str) -> String {
-        let prev_state = serde_json::to_value(prev_state).unwrap();
-        let new_state = serde_json::to_value(new_state).unwrap();
+    fn generate_json_patch(prev_state: Value, new_state: Value) -> Value {
         let patch = diff(&prev_state, &new_state);
-        serde_json::to_string(&patch).unwrap()
+        serde_json::to_value(&patch).unwrap()
     }
 
     #[test]
@@ -618,7 +619,7 @@ mod test {
                 two: 11,
                 three: 13,
             };
-            let initial_state_json = serde_json::to_string(&initial_state).unwrap();
+            let initial_state_json = serde_json::to_value(&initial_state).unwrap();
             let event = EventType::ModTwo {
                 data: 100,
                 chunk: vec![123, 45, 20],
@@ -639,30 +640,23 @@ mod test {
                 .unwrap();
             tokio::time::sleep(tokio::time::Duration::from_secs(5)).await; // Pausa para compilar el contrato
             let response = sx_evaluator
-                .ask(EvaluatorMessage::AskForEvaluation(EventPreEvaluation {
+                .ask(EvaluatorMessage::AskForEvaluation(EvaluationRequest {
                     event_request: create_event_request(
-                        serde_json::to_string(&event).unwrap(),
+                        serde_json::to_value(&event).unwrap(),
                         &signature_manager,
                     ),
-                    context: Context {
+                    context: SubjectContext {
                         governance_id: DigestIdentifier::from_str(
                             "JGSPR6FL-vE7iZxWMd17o09qn7NeTqlcImDVWmijXczw",
                         )
                         .unwrap(),
                         schema_id: "test".into(),
-                        creator: KeyIdentifier::from_str(
-                            "EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg",
-                        )
-                        .unwrap(),
-                        owner: KeyIdentifier::from_str(
-                            "EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg",
-                        )
-                        .unwrap(),
-                        actual_state: initial_state_json.clone(),
                         namespace: "namespace1".into(),
-                        governance_version: 0,
+                        is_owner: todo!(),
+                        state: todo!(),
                     },
                     sn: 1,
+                    gov_version: todo!(),
                 }))
                 .await
                 .unwrap();
@@ -677,35 +671,29 @@ mod test {
             } else {
                 panic!("Unexpected");
             };
-            let (evaluation, json_patch, signature) =
-                if let TapleMessages::EventMessage(event) = message {
-                    match event {
-                        EventCommand::EvaluatorResponse {
-                            evaluation,
-                            json_patch,
-                            signature,
-                        } => (evaluation, json_patch, signature),
-                        _ => {
-                            panic!("Unexpected 4");
-                        }
+            let evaluator_response = if let TapleMessages::EventMessage(event) = message {
+                match event {
+                    EventCommand::EvaluatorResponse { evaluator_response } => evaluator_response,
+                    _ => {
+                        panic!("Unexpected 4");
                     }
-                } else {
-                    panic!("Unexpected 3");
-                };
+                }
+            } else {
+                panic!("Unexpected 3");
+            };
             let new_state = Data {
                 one: 10,
                 two: 100,
                 three: 13,
             };
-            assert_eq!(evaluation.governance_version, 0);
-            let new_state_json = &serde_json::to_string(&new_state).unwrap();
+            let new_state_json = serde_json::to_value(&new_state).unwrap();
             // let hash = DigestIdentifier::from_serializable_borsh(new_state_json).unwrap();
             // assert_eq!(hash, evaluation.state_hash); // arreglar
             println!("{:#?}\n{:#?}", initial_state_json, new_state_json);
-            let patch = generate_json_patch(&initial_state_json, &new_state_json);
-            assert_eq!(patch, json_patch); // arreglar
-                                           // let own_identifier = signature_manager.get_own_identifier();
-                                           // assert_eq!(evaluation..signer, own_identifier); // arreglar
+            let patch = generate_json_patch(initial_state_json, new_state_json);
+            assert_eq!(patch, evaluator_response.content.patch.0); // arreglar
+                                                                   // let own_identifier = signature_manager.get_own_identifier();
+                                                                   // assert_eq!(evaluation..signer, own_identifier); // arreglar
             handler.abort();
         });
     }

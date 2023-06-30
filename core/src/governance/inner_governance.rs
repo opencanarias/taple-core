@@ -7,13 +7,14 @@ use crate::{
     commons::{
         errors::ChannelErrors,
         identifier::{Derivable, DigestIdentifier, KeyIdentifier},
-        models::{event_content::Metadata, state::Subject},
+        models::{event::Metadata, state::Subject},
         schema_handler::{
             gov_models::{Contract, Quorum, Role, Schema, Who},
             initial_state::get_governance_initial_state,
         },
     },
     database::Error as DbError,
+    ValueWrapper,
 };
 use serde_json::Value;
 
@@ -50,7 +51,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         governance_id: DigestIdentifier,
         schema_id: String,
         governance_version: u64,
-    ) -> Result<Result<Value, RequestError>, InternalError> {
+    ) -> Result<Result<ValueWrapper, RequestError>, InternalError> {
         if governance_id.digest.is_empty() {
             return Ok(Ok(get_governance_initial_state()));
         }
@@ -63,13 +64,13 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                 err => return Ok(Err(err)),
             },
         };
-        let properties: Value = serde_json::from_str(&governance.properties)
-            .map_err(|_| InternalError::DeserializationError)?;
-        let schemas = get_as_array(&properties, "schemas")?;
+        let schemas = get_as_array(&governance.properties.0, "schemas")?;
         for schema in schemas {
             let tmp = get_as_str(schema, "id")?;
             if tmp == &schema_id {
-                return Ok(Ok(schema.get("initial_value").unwrap().to_owned()));
+                return Ok(Ok(ValueWrapper(
+                    schema.get("initial_value").unwrap().to_owned(),
+                )));
             }
         }
         return Ok(Err(RequestError::SchemaNotFound(schema_id)));
@@ -81,9 +82,9 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         governance_id: DigestIdentifier,
         schema_id: String,
         governance_version: u64,
-    ) -> Result<Result<Value, RequestError>, InternalError> {
-        if governance_id.digest.is_empty() {
-            return Ok(Ok(self.governance_schema.clone()));
+    ) -> Result<Result<ValueWrapper, RequestError>, InternalError> {
+        if schema_id == "governance" {
+            return Ok(Ok(ValueWrapper(self.governance_schema.clone())));
         }
         let governance = match self.governance_event_sourcing(&governance_id, governance_version) {
             Ok(subject) => subject,
@@ -94,13 +95,11 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                 err => return Ok(Err(err)),
             },
         };
-        let properties: Value = serde_json::from_str(&governance.properties)
-            .map_err(|_| InternalError::DeserializationError)?;
-        let schemas = get_as_array(&properties, "schemas")?;
+        let schemas = get_as_array(&governance.properties.0, "schemas")?;
         for schema in schemas {
             let tmp = get_as_str(schema, "id")?;
             if tmp == &schema_id {
-                return Ok(Ok(schema.get("schema").unwrap().to_owned()));
+                return Ok(Ok(ValueWrapper(schema.get("schema").unwrap().to_owned())));
             }
         }
         return Ok(Err(RequestError::SchemaNotFound(schema_id)));
@@ -118,7 +117,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         for role in roles {
             match stage {
                 ValidationStage::Witness => {
-                    if role.role != stage.to_str()
+                    if role.role != stage.to_role()
                         && role.role != ValidationStage::Approve.to_role()
                     {
                         continue;
@@ -126,11 +125,11 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                 }
                 ValidationStage::Create | ValidationStage::Invoke => {
                     return Err(RequestError::SearchingSignersQuorumInWrongStage(
-                        stage.to_str().to_owned(),
+                        stage.to_role().to_owned(),
                     ))
                 }
                 _ => {
-                    if role.role != stage.to_str() {
+                    if role.role != stage.to_role() {
                         continue;
                     }
                 }
@@ -205,11 +204,10 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                     err => return Ok(Err(err)),
                 },
             };
-        let properties: Value = serde_json::from_str(&governance.properties)
-            .map_err(|_| InternalError::DeserializationError)?;
-        let roles: Vec<Role> = serde_json::from_value(properties.get("roles").unwrap().to_owned())
-            .map_err(|_| InternalError::DeserializationError)?;
-        let members = get_members_from_governance(&properties)?;
+        let roles: Vec<Role> =
+            serde_json::from_value(governance.properties.get("roles").unwrap().to_owned())
+                .map_err(|_| InternalError::DeserializationError)?;
+        let members = get_members_from_governance(&governance.properties.0)?;
         let get_signers_result = Self::get_signers_aux(
             roles,
             &schema_id,
@@ -256,9 +254,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                     err => return Ok(Err(err)),
                 },
             };
-        let properties: Value = serde_json::from_str(&governance.properties)
-            .map_err(|_| InternalError::DeserializationError)?;
-        let policies = get_as_array(&properties, "policies")?;
+        let policies = get_as_array(&governance.properties.0, "policies")?;
         let schema_policy = get_schema_from_policies(policies, &schema_id);
         let Ok(schema_policy) = schema_policy else {
             return Ok(Err(schema_policy.unwrap_err()));
@@ -317,11 +313,10 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                     err => return Ok(Err(err)),
                 },
             };
-        let properties: Value = serde_json::from_str(&governance.properties)
-            .map_err(|_| InternalError::DeserializationError)?;
-        let roles: Vec<Role> = serde_json::from_value(properties.get("roles").unwrap().to_owned())
-            .map_err(|_| InternalError::DeserializationError)?;
-        let members = get_members_from_governance(&properties)?;
+        let roles: Vec<Role> =
+            serde_json::from_value(governance.properties.get("roles").unwrap().to_owned())
+                .map_err(|_| InternalError::DeserializationError)?;
+        let members = get_members_from_governance(&governance.properties.0)?;
         let invoke_create_info_result = Self::invoke_create_info(
             roles,
             &schema_id,
@@ -344,12 +339,20 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         invoker: KeyIdentifier,
     ) -> Result<bool, RequestError> {
         let is_member = members.0.contains(&invoker);
+        let mut permisions_exists = false;
+        log::warn!("IS MEMBER: {}", is_member);
+        log::warn!("ROLES_: {:?}", roles);
         for role in roles {
-            if role.role != stage.to_str() {
+            log::warn!("AAAAAAAAAAAA: {}", &role.role != stage.to_str());
+            log::warn!("ROLE: {}", role.role);
+            log::warn!("ROLE: {}", stage.to_role());
+            if &role.role != stage.to_role() {
                 continue;
             }
+            log::warn!("ROLE SCHEMA: {:?}", role.schema);
             match role.schema {
                 Schema::ID { ID } => {
+                    log::warn!("ID, id: {}, schema_id: {}", ID, schema_id);
                     if &ID != schema_id {
                         continue;
                     }
@@ -361,6 +364,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                 }
                 Schema::ALL => {}
             }
+            log::warn!("PASAMOS SCHEMA");
             if !namespace_contiene(&role.namespace, namespace) {
                 continue;
             }
@@ -381,7 +385,12 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                         return Ok(true);
                     }
                 }
-                Who::MEMBERS | Who::ALL => return Ok(true),
+                Who::MEMBERS => {
+                    if is_member {
+                        return Ok(true);
+                    }
+                }
+                Who::ALL => return Ok(true),
                 Who::NOT_MEMBERS => {
                     if !is_member {
                         return Ok(true);
@@ -407,20 +416,18 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                 err => return Ok(Err(err)),
             },
         };
-        let properties: Value = serde_json::from_str(&governance.properties)
-            .map_err(|_| InternalError::DeserializationError)?;
-        let schemas = get_as_array(&properties, "schemas")?;
+        let schemas = get_as_array(&governance.properties.0, "schemas")?;
         let mut result = Vec::new();
         for schema in schemas {
             let schema_id = schema["id"].as_str().unwrap();
             let mut contract: Contract = serde_json::from_value(schema["contract"].clone())
                 .map_err(|_| InternalError::InvalidGovernancePayload("5".into()))?;
-            
+
             let decoded_bytes =
                 base64::decode(contract.raw).map_err(|_| InternalError::Base64DecodingError)?;
             contract.raw =
                 String::from_utf8(decoded_bytes).map_err(|_| InternalError::Base64DecodingError)?;
-            
+
             result.push((contract, schema_id.to_owned()));
         }
         Ok(Ok(result))
@@ -498,12 +505,10 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         } else if gov_subject.sn > governance_version {
             let gov_genesis = self.repo_access.get_event(governance_id, 0)?;
             let init_state = get_governance_initial_state();
-            let init_state = serde_json::to_string(&init_state)
-                .map_err(|_| RequestError::ErrorParsingJsonString("Init state".to_owned()))?;
-            let mut gov_subject = Subject::from_genesis_event(gov_genesis, init_state)?;
+            let mut gov_subject = Subject::from_genesis_event(gov_genesis, init_state, None)?;
             for i in 1..=governance_version {
                 let event = self.repo_access.get_event(governance_id, i)?;
-                gov_subject.update_subject(&event.content.event_proposal.proposal.json_patch, i)?;
+                gov_subject.update_subject(event.content.patch, i)?;
             }
             Ok(gov_subject)
         } else {

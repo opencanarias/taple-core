@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use crate::{
     commons::{
         channel::{ChannelData, MpscChannel, SenderEnd},
-        models::{event_proposal::EventProposal, Acceptance},
+        models::approval::ApprovalEntity,
         self_signature_manager::SelfSignatureManager,
     },
     database::DB,
@@ -11,14 +11,15 @@ use crate::{
     identifier::DigestIdentifier,
     message::{MessageConfig, MessageTaskCommand},
     protocol::protocol_message_manager::TapleMessages,
+    signature::Signed,
     utils::message::event::create_approver_response,
-    DatabaseCollection, Notification, TapleSettings,
+    ApprovalRequest, DatabaseCollection, Notification, TapleSettings,
 };
 
 use super::{
     error::{ApprovalErrorResponse, ApprovalManagerError},
     inner_manager::{InnerApprovalManager, RequestNotifier},
-    ApprovalMessages, ApprovalPetitionData, ApprovalResponses, EmitVote,
+    ApprovalMessages, ApprovalResponses, EmitVote,
 };
 
 pub struct ApprovalManager<C: DatabaseCollection> {
@@ -42,22 +43,28 @@ impl ApprovalAPI {
 
 #[async_trait]
 pub trait ApprovalAPIInterface {
-    async fn request_approval(&self, data: EventProposal) -> Result<(), ApprovalErrorResponse>;
+    async fn request_approval(
+        &self,
+        data: Signed<ApprovalRequest>,
+    ) -> Result<(), ApprovalErrorResponse>;
     async fn emit_vote(
         &self,
         request_id: DigestIdentifier,
-        acceptance: Acceptance,
-    ) -> Result<(), ApprovalErrorResponse>;
-    async fn get_all_requests(&self) -> Result<Vec<ApprovalPetitionData>, ApprovalErrorResponse>;
+        acceptance: bool,
+    ) -> Result<ApprovalEntity, ApprovalErrorResponse>;
+    async fn get_all_requests(&self) -> Result<Vec<ApprovalEntity>, ApprovalErrorResponse>;
     async fn get_single_request(
         &self,
         request_id: DigestIdentifier,
-    ) -> Result<ApprovalPetitionData, ApprovalErrorResponse>;
+    ) -> Result<ApprovalEntity, ApprovalErrorResponse>;
 }
 
 #[async_trait]
 impl ApprovalAPIInterface for ApprovalAPI {
-    async fn request_approval(&self, data: EventProposal) -> Result<(), ApprovalErrorResponse> {
+    async fn request_approval(
+        &self,
+        data: Signed<ApprovalRequest>,
+    ) -> Result<(), ApprovalErrorResponse> {
         self.input_channel
             .tell(ApprovalMessages::RequestApproval(data))
             .await
@@ -67,8 +74,8 @@ impl ApprovalAPIInterface for ApprovalAPI {
     async fn emit_vote(
         &self,
         request_id: DigestIdentifier,
-        acceptance: Acceptance,
-    ) -> Result<(), ApprovalErrorResponse> {
+        acceptance: bool,
+    ) -> Result<ApprovalEntity, ApprovalErrorResponse> {
         let result = self
             .input_channel
             .ask(ApprovalMessages::EmitVote(EmitVote {
@@ -82,7 +89,7 @@ impl ApprovalAPIInterface for ApprovalAPI {
             _ => unreachable!(),
         }
     }
-    async fn get_all_requests(&self) -> Result<Vec<ApprovalPetitionData>, ApprovalErrorResponse> {
+    async fn get_all_requests(&self) -> Result<Vec<ApprovalEntity>, ApprovalErrorResponse> {
         let result = self
             .input_channel
             .ask(ApprovalMessages::GetAllRequest)
@@ -96,7 +103,7 @@ impl ApprovalAPIInterface for ApprovalAPI {
     async fn get_single_request(
         &self,
         request_id: DigestIdentifier,
-    ) -> Result<ApprovalPetitionData, ApprovalErrorResponse> {
+    ) -> Result<ApprovalEntity, ApprovalErrorResponse> {
         let result = self
             .input_channel
             .ask(ApprovalMessages::GetSingleRequest(request_id))
@@ -140,15 +147,13 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
     }
 
     pub async fn start(mut self) {
-        if let Err(error) = self.inner_manager.init().await {
-            log::error!("{}", error);
-        }
         loop {
             tokio::select! {
                 command = self.input_channel.receive() => {
                     match command {
                         Some(command) => {
                             let result = self.process_command(command).await;
+                            log::info!("Approval Manager Result: {:?}", result);
                             if result.is_err() {
                                 self.shutdown_sender.send(()).expect("Channel Closed");
                             }
@@ -160,14 +165,19 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
                     }
                 },
                 _ = self.shutdown_receiver.recv() => {
+                    log::error!("SHUTDOWN RECV APPROVAL");
                     break;
                 },
                 update = self.governance_update_channel.recv() => {
                     match update {
                         Ok(data) => {
                             match data {
-                                GovernanceUpdatedMessage::GovernanceUpdated { governance_id, governance_version } => {
-                                    self.inner_manager.new_governance_version(&governance_id, governance_version);
+                                GovernanceUpdatedMessage::GovernanceUpdated { governance_id, governance_version: _ } => {
+                                    if let Err(error) = self.inner_manager.new_governance_version(&governance_id) {
+                                        log::error!("NEW GOV VERSION APPROVAL: {}", error);
+                                        self.shutdown_sender.send(()).expect("Channel Closed");
+                                        break;
+                                    }
                                 }
                             }
                         },
@@ -202,6 +212,7 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
                     return Err(ApprovalManagerError::AskNoAllowed);
                 }
                 let result = self.inner_manager.process_approval_request(message).await?;
+                log::error!("RESULT APPROVAL REQUEST: {:?}", result);
                 match result {
                     Ok(Some((approval, sender))) => {
                         let msg = create_approver_response(approval);
@@ -266,7 +277,7 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
                     .await?
                 {
                     Ok((vote, owner)) => {
-                        let msg = create_approver_response(vote);
+                        let msg = create_approver_response(vote.reponse.clone().unwrap());
                         self.messenger_channel
                             .tell(MessageTaskCommand::Request(
                                 None,
@@ -279,7 +290,7 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
                         if sender.is_some() {
                             sender
                                 .unwrap()
-                                .send(ApprovalResponses::EmitVote(Ok(())))
+                                .send(ApprovalResponses::EmitVote(Ok(vote)))
                                 .map_err(|_| ApprovalManagerError::ResponseChannelClosed)?;
                         }
                     }

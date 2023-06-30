@@ -28,5 +28,9 @@ pub enum Error {
     #[error("Node has previously executed with a different KeyPair. Please, specify the same KeyPair as before. Current ControllerID {0}")]
     InvalidKeyPairSpecified(String),
     #[error("A database error has ocurred at main component {0}")]
-    DatabaseError(String)
+    DatabaseError(String),
+    #[error("Serialization Error")]
+    SerializeError,
+    #[error("DeSerialization Error")]
+    DeSerializeError,
 }

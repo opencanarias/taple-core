@@ -19,7 +19,15 @@ pub enum ApprovalManagerError {
     #[error("Sign process failed")]
     SignProcessFailed,
     #[error("Response channel closed")]
-    ResponseChannelClosed
+    ResponseChannelClosed,
+    #[error("Invalid request type found")]
+    InvalidRequestTypeFound,
+    #[error("Unexpected request type found in database")]
+    UnexpectedRequestType,
+    #[error("More than one pending approval request detected")]
+    MoreRequestThanMaxAllowed,
+    #[error("Event Apply failed")]
+    EventApplyFailed
 }
 
 #[derive(Error, Debug, Clone)]
@@ -80,4 +88,12 @@ pub enum ApprovalErrorResponse {
     NoHashCorrelation,
     #[error("Invalid acceptance")]
     InvalidAcceptance,
+    #[error("Error Hashing")]
+    ErrorHashing,
+    #[error("Invalid state hash specified by request")]
+    InvalidStateHashAfterApply,
+    #[error("Request not found")]
+    RequestNotFound,
+    #[error("Request is not pending")]
+    NotPendingRequest
 }

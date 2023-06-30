@@ -8,8 +8,9 @@ use crate::{
     evaluator::{EvaluatorMessage, EvaluatorResponse},
     event::{EventCommand, EventResponse},
     ledger::{LedgerCommand, LedgerResponse},
-    message::{Message, TaskCommandContent},
+    message::{MessageContent, TaskCommandContent},
     notary::{NotaryCommand, NotaryResponse},
+    signature::Signed,
 };
 
 mod error;
@@ -28,7 +29,7 @@ pub enum TapleMessages {
 impl TaskCommandContent for TapleMessages {}
 
 pub struct ProtocolManager {
-    input: MpscChannel<Message<TapleMessages>, ()>,
+    input: MpscChannel<Signed<MessageContent<TapleMessages>>, ()>,
     distribution_sx: SenderEnd<DistributionMessagesNew, Result<(), DistributionErrorResponses>>,
     #[cfg(feature = "evaluation")]
     evaluation_sx: SenderEnd<EvaluatorMessage, EvaluatorResponse>,
@@ -44,7 +45,7 @@ pub struct ProtocolManager {
 
 impl ProtocolManager {
     pub fn new(
-        input: MpscChannel<Message<TapleMessages>, ()>,
+        input: MpscChannel<Signed<MessageContent<TapleMessages>>, ()>,
         distribution_sx: SenderEnd<DistributionMessagesNew, Result<(), DistributionErrorResponses>>,
         #[cfg(feature = "evaluation")] evaluation_sx: SenderEnd<
             EvaluatorMessage,
@@ -100,7 +101,7 @@ impl ProtocolManager {
 
     async fn process_command(
         &self,
-        command: ChannelData<Message<TapleMessages>, ()>,
+        command: ChannelData<Signed<MessageContent<TapleMessages>>, ()>,
     ) -> Result<(), ProtocolErrors> {
         let message = match command {
             ChannelData::AskData(_data) => {
@@ -129,9 +130,22 @@ impl ProtocolManager {
                 log::warn!("Evaluation Message Received");
                 #[cfg(feature = "evaluation")]
                 {
+                    let evaluation_command = match data {
+                        EvaluatorMessage::EvaluationEvent {
+                            evaluation_request,
+                            sender,
+                        } => {
+                            log::error!("Evaluation Event Received in protocol manager");
+                            return Ok(());
+                        }
+                        EvaluatorMessage::AskForEvaluation(evaluation_request) => EvaluatorMessage::EvaluationEvent {
+                            evaluation_request,
+                            sender,
+                        },
+                    };
                     return Ok(self
                         .evaluation_sx
-                        .tell(data)
+                        .tell(evaluation_command)
                         .await
                         .map_err(|_| ProtocolErrors::ChannelClosed)?);
                 }

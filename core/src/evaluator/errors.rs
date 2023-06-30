@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::governance::error::RequestError;
+use crate::{governance::error::RequestError, commons::errors::SubjectError};
 
 #[derive(Error, Debug)]
 pub enum EvaluatorError {
@@ -26,6 +26,8 @@ pub enum EvaluatorErrorResponses {
 
 #[derive(Error, Debug, Clone)]
 pub enum ExecutorErrorResponses {
+    #[error("Subject Error")]
+    SubjectError(#[from] SubjectError),
     #[error("A database error has ocurred at main component {0}")]
     DatabaseError(String),
     #[error("Contract for schema {0} of governance {1} not found")]
@@ -61,7 +63,13 @@ pub enum ExecutorErrorResponses {
     #[error("Governance module error {0}")]
     GovernanceError(#[from] RequestError),
     #[error("Schema compilation failed")]
-    SchemaCompilationFailed
+    SchemaCompilationFailed,
+    #[error("Value to string conversion failed")]
+    ValueToStringConversionFailed,
+    #[error("Borsh serialization failed")]
+    BorshSerializationError,
+    #[error("Borsh deerialization failed")]
+    BorshDeserializationError,
 }
 
 #[derive(Error, Debug, Clone)]

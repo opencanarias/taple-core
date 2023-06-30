@@ -4,21 +4,18 @@ use wasmtime::Engine;
 
 use crate::{
     commons::{
-        models::{event_preevaluation::EventPreEvaluation, Acceptance},
+        models::{evaluation::EvaluationRequest, HashId},
         schema_handler::Schema,
     },
     database::DB,
     evaluator::errors::ExecutorErrorResponses,
-    event_request::FactRequest,
-    governance::{GovernanceInterface},
+    governance::GovernanceInterface,
     identifier::DigestIdentifier,
-    DatabaseCollection, EventRequestType,
+    request::FactRequest,
+    DatabaseCollection, EvaluationResponse, EventRequest, ValueWrapper,
 };
 
-use super::{
-    executor::{ContractExecutor, ContractResult},
-    ExecuteContractResponse,
-};
+use super::executor::{ContractExecutor, ContractResult};
 use crate::database::Error as DbError;
 pub struct TapleRunner<C: DatabaseCollection, G: GovernanceInterface> {
     database: DB<C>,
@@ -36,7 +33,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
     }
 
     pub fn generate_context_hash(
-        execute_contract: &EventPreEvaluation,
+        execute_contract: &EvaluationRequest,
     ) -> Result<DigestIdentifier, ExecutorErrorResponses> {
         DigestIdentifier::from_serializable_borsh(execute_contract)
             .map_err(|_| ExecutorErrorResponses::ContextHashGenerationFailed)
@@ -44,12 +41,12 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
 
     pub async fn execute_contract(
         &self,
-        execute_contract: &EventPreEvaluation,
+        execute_contract: &EvaluationRequest,
         state_data: &FactRequest,
-    ) -> Result<ExecuteContractResponse, ExecutorErrorResponses> {
+    ) -> Result<EvaluationResponse, ExecutorErrorResponses> {
         // Check governance version
         let governance_id = if &execute_contract.context.schema_id == "governance" {
-            if let EventRequestType::Fact(data) = &execute_contract.event_request.request {
+            if let EventRequest::Fact(data) = &execute_contract.event_request.content {
                 data.subject_id.clone()
             } else {
                 return Err(ExecutorErrorResponses::CreateRequestNotAllowed);
@@ -65,10 +62,10 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
             }
             Err(error) => return Err(ExecutorErrorResponses::DatabaseError(error.to_string())),
         };
-        if governance.sn > execute_contract.context.governance_version {
+        if governance.sn > execute_contract.gov_version {
             // Nuestra gov es mayor: mandamos mensaje para que actualice el emisor
             return Err(ExecutorErrorResponses::OurGovIsHigher);
-        } else if governance.sn < execute_contract.context.governance_version {
+        } else if governance.sn < execute_contract.gov_version {
             // Nuestra gov es menor: no podemos hacer nada. Pedimos LCE al que nos lo envió
             return Err(ExecutorErrorResponses::OurGovIsLower);
         }
@@ -78,7 +75,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
         {
             match self.database.get_governance_contract() {
                 // TODO: Gestionar versión gobernanza
-                Ok(contract) => (contract, execute_contract.context.governance_version),
+                Ok(contract) => (contract, execute_contract.gov_version),
                 Err(DbError::EntryNotFound) => {
                     let governance_version = match self
                         .database
@@ -90,13 +87,16 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
                             return Err(ExecutorErrorResponses::DatabaseError(error.to_string()))
                         }
                     };
-                    return Ok(ExecuteContractResponse {
-                        json_patch: String::from(""),
-                        hash_new_state: DigestIdentifier::default(),
-                        governance_version,
-                        context_hash,
-                        success: Acceptance::Ko,
-                        approval_required: false,
+                    return Ok(EvaluationResponse {
+                        patch: ValueWrapper(
+                            serde_json::from_str("[]").map_err(|_| {
+                                ExecutorErrorResponses::JSONPATCHDeserializationFailed
+                            })?,
+                        ),
+                        state_hash: execute_contract.context.state.hash_id()?,
+                        eval_req_hash: context_hash,
+                        eval_success: false,
+                        appr_required: false,
                     });
                 }
                 Err(error) => return Err(ExecutorErrorResponses::DatabaseError(error.to_string())),
@@ -118,65 +118,70 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
                             return Err(ExecutorErrorResponses::DatabaseError(error.to_string()))
                         }
                     };
-                    return Ok(ExecuteContractResponse {
-                        json_patch: String::from(""),
-                        hash_new_state: DigestIdentifier::default(),
-                        governance_version,
-                        context_hash,
-                        success: Acceptance::Ko,
-                        approval_required: false,
+                    return Ok(EvaluationResponse {
+                        patch: ValueWrapper(
+                            serde_json::from_str("[]").map_err(|_| {
+                                ExecutorErrorResponses::JSONPATCHDeserializationFailed
+                            })?,
+                        ),
+                        state_hash: execute_contract.context.state.hash_id()?,
+                        eval_req_hash: context_hash,
+                        eval_success: false,
+                        appr_required: false,
                     });
                 }
                 Err(error) => return Err(ExecutorErrorResponses::DatabaseError(error.to_string())),
             }
         };
-        let previous_state = &execute_contract.context.actual_state.clone();
+        let previous_state = &execute_contract.context.state.clone();
         let mut contract_result = self
             .executor
             .execute_contract(
-                &execute_contract.context.actual_state,
+                &execute_contract.context.state,
                 &state_data.payload,
                 contract,
-                &execute_contract.event_request.signature.content.signer
-                    == &execute_contract.context.owner,
+                execute_contract.context.is_owner,
             )
             .await?;
-        log::warn!("Contract result: {:?}", contract_result);
         let (patch, hash) = match contract_result.success {
-            Acceptance::Ok => {
+            true => {
                 match self
                     .validation_state(
                         &contract_result,
                         &governance_id,
                         execute_contract.context.schema_id.clone(),
-                        execute_contract.context.governance_version,
+                        execute_contract.gov_version,
                     )
                     .await
                 {
                     Ok(false) | Err(_) => {
-                        contract_result.success = Acceptance::Ko;
-                        (String::from(""), DigestIdentifier::default())
+                        contract_result.success = false;
+                        (
+                            serde_json::from_str("[]").map_err(|_| {
+                                ExecutorErrorResponses::JSONPATCHDeserializationFailed
+                            })?,
+                            execute_contract.context.state.hash_id()?,
+                        )
                     }
                     _ => (
-                        generate_json_patch(&previous_state, &contract_result.final_state)?,
-                        DigestIdentifier::from_serializable_borsh(
-                            serde_json::from_str::<Value>(&contract_result.final_state)
-                                .unwrap()
-                                .to_string(),
-                        )
-                        .map_err(|_| ExecutorErrorResponses::StateHashGenerationFailed)?,
+                        generate_json_patch(&previous_state.0, &contract_result.final_state.0)?,
+                        DigestIdentifier::from_serializable_borsh(&contract_result.final_state)
+                            .map_err(|_| ExecutorErrorResponses::StateHashGenerationFailed)?,
                     ),
                 }
             }
-            Acceptance::Ko => (String::from(""), DigestIdentifier::default()),
+            false => (
+                serde_json::from_str("[]")
+                    .map_err(|_| ExecutorErrorResponses::JSONPATCHDeserializationFailed)?,
+                execute_contract.context.state.hash_id()?,
+            ),
         };
-        Ok(ExecuteContractResponse {
-            json_patch: patch,
-            hash_new_state: hash,
-            governance_version,
-            context_hash,
-            success: contract_result.success,
-            approval_required: contract_result.approval_required,
+        Ok(EvaluationResponse {
+            patch: ValueWrapper(patch),
+            state_hash: hash,
+            eval_req_hash: context_hash,
+            eval_success: contract_result.success,
+            appr_required: contract_result.approval_required,
         })
     }
 
@@ -187,14 +192,14 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
         schema_id: String,
         governance_version: u64,
     ) -> Result<bool, ExecutorErrorResponses> {
-        if Acceptance::Ok == contract_result.success {
+        if contract_result.success {
             let new_state = &contract_result.final_state;
             // Comprobar el estado contra el esquema definido en la gobernanza
             let schema = self
                 .gov_api
                 .get_schema(governance_id.clone(), schema_id, governance_version)
                 .await?;
-            let schema = Schema::compile(&schema)
+            let schema = Schema::compile(&schema.0)
                 .map_err(|_| ExecutorErrorResponses::SchemaCompilationFailed)?;
             Ok(schema.validate(
                 &serde_json::to_value(new_state)
@@ -207,14 +212,10 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
 }
 
 fn generate_json_patch(
-    prev_state: &str,
-    new_state: &str,
-) -> Result<String, ExecutorErrorResponses> {
-    let prev_state: Value = serde_json::from_str(prev_state)
-        .map_err(|_| ExecutorErrorResponses::StateJSONDeserializationFailed)?;
-    let new_state: Value = serde_json::from_str(new_state)
-        .map_err(|_| ExecutorErrorResponses::StateJSONDeserializationFailed)?;
+    prev_state: &Value,
+    new_state: &Value,
+) -> Result<Value, ExecutorErrorResponses> {
     let patch = diff(&prev_state, &new_state);
-    Ok(serde_json::to_string(&patch)
+    Ok(serde_json::to_value(&patch)
         .map_err(|_| ExecutorErrorResponses::JSONPATCHDeserializationFailed)?)
 }

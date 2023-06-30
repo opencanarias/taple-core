@@ -27,13 +27,15 @@ use crate::governance::{governance::Governance, GovernanceMessage, GovernanceRes
 use crate::ledger::manager::EventManagerAPI;
 use crate::ledger::{manager::EventManager as LedgerManager, LedgerCommand, LedgerResponse};
 use crate::message::{
-    Message, MessageReceiver, MessageSender, MessageTaskCommand, MessageTaskManager, NetworkEvent,
+    MessageContent, MessageReceiver, MessageSender, MessageTaskCommand, MessageTaskManager,
+    NetworkEvent,
 };
 use crate::network::network::{NetworkProcessor, SendMode};
 #[cfg(feature = "validation")]
 use crate::notary::manager::NotaryManager;
 use crate::notary::{NotaryCommand, NotaryResponse};
 use crate::protocol::protocol_message_manager::{ProtocolManager, TapleMessages};
+use crate::signature::Signed;
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use libp2p::{Multiaddr, PeerId};
@@ -314,7 +316,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
             MpscChannel::<MessageTaskCommand<TapleMessages>, ()>::new(BUFFER_SIZE);
         // Receiver and sender of protocol messages
         let (protocol_receiver, protocol_sender) =
-            MpscChannel::<Message<TapleMessages>, ()>::new(BUFFER_SIZE);
+            MpscChannel::<Signed<MessageContent<TapleMessages>>, ()>::new(BUFFER_SIZE);
         // Receiver and sender of distribution messages
         let (distribution_receiver, distribution_sender) = MpscChannel::<
             DistributionMessagesNew,
@@ -335,7 +337,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
         // Shutdown channel
         let (bsx, _brx) = tokio::sync::broadcast::channel::<()>(10);
         // Creation Watch Channel
-        let (wath_sender, watch_receiver): (
+        let (wath_sender, _watch_receiver): (
             tokio::sync::watch::Sender<TapleSettings>,
             tokio::sync::watch::Receiver<TapleSettings>,
         ) = tokio::sync::watch::channel(self.settings.clone());
@@ -468,8 +470,6 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
             AuthorizedSubjectsAPI::new(as_sender),
             EventManagerAPI::new(ledger_sender),
             wath_sender,
-            self.settings.clone(),
-            kp.clone(),
             bsx.clone(),
             bsx.subscribe(),
             DB::new(db.clone()),

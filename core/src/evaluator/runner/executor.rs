@@ -1,24 +1,22 @@
-use crate::{
-    commons::models::{Acceptance},
-    evaluator::errors::ExecutorErrorResponses,
-};
+use crate::{evaluator::errors::ExecutorErrorResponses, ValueWrapper};
 
 use super::context::MemoryManager;
+use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 use wasmtime::{Caller, Engine, Linker, Module, Store};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 struct WasmContractResult {
-    pub final_state: String,
+    pub final_state: ValueWrapper,
     pub approval_required: bool,
     pub success: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ContractResult {
-    pub final_state: String,
+    pub final_state: ValueWrapper,
     pub approval_required: bool,
-    pub success: Acceptance,
+    pub success: bool,
 }
 
 pub struct ContractExecutor {
@@ -32,15 +30,15 @@ impl ContractExecutor {
 
     pub async fn execute_contract(
         &self,
-        state: &str,
-        event: &str,
+        state: &ValueWrapper,
+        event: &ValueWrapper,
         compiled_contract: Vec<u8>,
         is_owner: bool,
     ) -> Result<ContractResult, ExecutorErrorResponses> {
         // Cargar wasm
         let module = unsafe { Module::deserialize(&self.engine, compiled_contract).unwrap() };
         // Generar contexto
-        let (context, state_ptr, event_ptr) = self.generate_context(state, event);
+        let (context, state_ptr, event_ptr) = self.generate_context(&state, &event)?;
         let mut store = Store::new(&self.engine, context);
         // Generar Linker
         let linker = self.generate_linker(&self.engine)?;
@@ -63,11 +61,23 @@ impl ContractExecutor {
         Ok(contract_result)
     }
 
-    fn generate_context(&self, state: &str, event: &str) -> (MemoryManager, u32, u32) {
+    fn generate_context(
+        &self,
+        state: &ValueWrapper,
+        event: &ValueWrapper,
+    ) -> Result<(MemoryManager, u32, u32), ExecutorErrorResponses> {
         let mut context = MemoryManager::new();
-        let state_ptr = context.add_date_raw(state.as_bytes());
-        let event_ptr = context.add_date_raw(event.as_bytes());
-        (context, state_ptr as u32, event_ptr as u32)
+        let state_ptr = context.add_data_raw(
+            &state
+                .try_to_vec()
+                .map_err(|_| ExecutorErrorResponses::BorshSerializationError)?,
+        );
+        let event_ptr = context.add_data_raw(
+            &event
+                .try_to_vec()
+                .map_err(|_| ExecutorErrorResponses::BorshSerializationError)?,
+        );
+        Ok((context, state_ptr as u32, event_ptr as u32))
     }
 
     fn get_result(
@@ -76,15 +86,12 @@ impl ContractExecutor {
         pointer: u32,
     ) -> Result<ContractResult, ExecutorErrorResponses> {
         let bytes = store.data().read_data(pointer as usize)?;
-        let contract_result: WasmContractResult = bincode::deserialize(bytes)
+        let contract_result: WasmContractResult = BorshDeserialize::try_from_slice(bytes)
             .map_err(|_| ExecutorErrorResponses::CantGenerateContractResult)?;
         let result = ContractResult {
             final_state: contract_result.final_state,
             approval_required: contract_result.approval_required,
-            success: match contract_result.success {
-                true => Acceptance::Ok,
-                false => Acceptance::Ko,
-            },
+            success: contract_result.success,
         };
         Ok(result)
     }
@@ -144,4 +151,3 @@ impl ContractExecutor {
         Ok(linker)
     }
 }
-

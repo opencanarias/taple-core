@@ -1,3 +1,4 @@
+use crate::utils::{deserialize, serialize};
 use super::utils::{get_key, Element};
 use crate::commons::models::request::TapleRequest;
 use crate::DbError;
@@ -25,7 +26,7 @@ impl<C: DatabaseCollection> RequestDb<C> {
         let key = get_key(key_elements)?;
         let request = self.collection.get(&key)?;
         Ok(
-            bincode::deserialize::<TapleRequest>(&request)
+            deserialize::<TapleRequest>(&request)
                 .map_err(|_| DbError::DeserializeError)?,
         )
     }
@@ -36,7 +37,7 @@ impl<C: DatabaseCollection> RequestDb<C> {
             .collection
             .iter(false, format!("{}{}", self.prefix, char::MAX))
         {
-            let request = bincode::deserialize::<TapleRequest>(&request).unwrap();
+            let request = deserialize::<TapleRequest>(&request).unwrap();
             result.push(request);
         }
         result
@@ -52,7 +53,7 @@ impl<C: DatabaseCollection> RequestDb<C> {
             Element::S(request_id.to_str()),
         ];
         let key = get_key(key_elements)?;
-        let Ok(data) = bincode::serialize::<TapleRequest>(request) else {
+        let Ok(data) = serialize::<TapleRequest>(request) else {
             return Err(DbError::SerializeError);
         };
         self.collection.put(&key, data)

@@ -1,7 +1,8 @@
+use crate::utils::{deserialize, serialize};
 use super::utils::{get_key, Element};
-use crate::commons::models::event::ValidationProof;
+use crate::commons::models::validation::ValidationProof;
 use crate::DbError;
-use crate::{DatabaseCollection, DatabaseManager, Derivable, DigestIdentifier, KeyIdentifier};
+use crate::{DatabaseCollection, DatabaseManager, Derivable, DigestIdentifier};
 use std::sync::Arc;
 
 pub(crate) struct NotaryDb<C: DatabaseCollection> {
@@ -27,7 +28,7 @@ impl<C: DatabaseCollection> NotaryDb<C> {
         ];
         let key = get_key(key_elements)?;
         let notary_register = self.collection.get(&key)?;
-        Ok(bincode::deserialize::<ValidationProof>(&notary_register)
+        Ok(deserialize::<ValidationProof>(&notary_register)
             .map_err(|_| DbError::DeserializeError)?)
     }
 
@@ -41,7 +42,7 @@ impl<C: DatabaseCollection> NotaryDb<C> {
             Element::S(subject_id.to_str()),
         ];
         let key = get_key(key_elements)?;
-        let Ok(data) = bincode::serialize::<ValidationProof>(validation_proof) else {
+        let Ok(data) = serialize::<ValidationProof>(validation_proof) else {
             return Err(DbError::SerializeError);
         };
         self.collection.put(&key, data)

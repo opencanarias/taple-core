@@ -40,6 +40,7 @@ impl RoutingBehaviour {
         };
         // Add Bootstrap addresses to Kademlia routing table
         for (peer_id, addr) in &bootstrap_nodes {
+            log::info!("ADDING; {:?} {:?}", peer_id, addr);
             kademlia.add_address(peer_id, addr.clone());
         }
         RoutingBehaviour { kademlia, identify }

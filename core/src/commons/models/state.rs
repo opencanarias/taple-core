@@ -1,18 +1,20 @@
 use crate::{
     commons::{
-        crypto::{KeyPair},
+        crypto::KeyPair,
         errors::SubjectError,
         identifier::{DigestIdentifier, KeyIdentifier},
     },
-    Derivable,
+    signature::Signed,
+    Derivable, Event,
 };
+use borsh::{BorshDeserialize, BorshSerialize};
 use json_patch::{patch, Patch};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use super::{event::Event, event_request::EventRequestType};
+use super::{evaluation::SubjectContext, request::EventRequest, value_wrapper::ValueWrapper};
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, BorshSerialize, BorshDeserialize)]
 pub struct Subject {
     pub keys: Option<KeyPair>,
     /// Subject identifier
@@ -33,7 +35,7 @@ pub struct Subject {
     /// Subject creator identifier
     pub creator: KeyIdentifier,
     /// Current status of the subject
-    pub properties: String,
+    pub properties: ValueWrapper,
     /// Indicates if the subject is active or not
     pub active: bool,
 }
@@ -56,7 +58,7 @@ pub struct SubjectData {
     /// Subject creator identifier
     pub creator: KeyIdentifier,
     /// Current status of the subject
-    pub properties: String,
+    pub properties: ValueWrapper,
     /// Indicates if the subject is active or not
     pub active: bool,
 }
@@ -113,8 +115,22 @@ impl Subject {
     //     })
     // }
 
-    pub fn from_genesis_event(event: Event, init_state: String) -> Result<Self, SubjectError> {
-        let EventRequestType::Create(create_request) = event.content.event_proposal.proposal.event_request.request.clone() else {
+    pub fn get_subject_context(&self, invoker: KeyIdentifier) -> SubjectContext {
+        SubjectContext {
+            governance_id: self.governance_id.clone(),
+            schema_id: self.schema_id.clone(),
+            is_owner: invoker == self.owner,
+            state: self.properties.clone(),
+            namespace: self.namespace.clone(),
+        }
+    }
+
+    pub fn from_genesis_event(
+        event: Signed<Event>,
+        init_state: ValueWrapper,
+        keys: Option<KeyPair>,
+    ) -> Result<Self, SubjectError> {
+        let EventRequest::Create(create_request) = event.content.event_request.content.clone() else {
             return Err(SubjectError::NotCreateEvent)
         };
         let subject_id = generate_subject_id(
@@ -122,57 +138,38 @@ impl Subject {
             &create_request.schema_id,
             create_request.public_key.to_str(),
             create_request.governance_id.to_str(),
-            event.content.event_proposal.proposal.gov_version,
+            event.content.gov_version,
         )?;
         Ok(Subject {
-            keys: None,
+            keys,
             subject_id,
             governance_id: create_request.governance_id.clone(),
             sn: 0,
             public_key: create_request.public_key,
             namespace: create_request.namespace.clone(),
             schema_id: create_request.schema_id.clone(),
-            owner: event
-                .content
-                .event_proposal
-                .proposal
-                .event_request
-                .signature
-                .content
-                .signer
-                .clone(),
-            creator: event
-                .content
-                .event_proposal
-                .proposal
-                .event_request
-                .signature
-                .content
-                .signer
-                .clone(),
+            owner: event.content.event_request.signature.signer.clone(),
+            creator: event.content.event_request.signature.signer.clone(),
             properties: init_state,
             active: true,
             name: create_request.name,
-            genesis_gov_version: event.content.event_proposal.proposal.gov_version,
+            genesis_gov_version: event.content.gov_version,
         })
     }
 
-    pub fn update_subject(&mut self, json_patch: &str, new_sn: u64) -> Result<(), SubjectError> {
+    pub fn update_subject(
+        &mut self,
+        json_patch: ValueWrapper,
+        new_sn: u64,
+    ) -> Result<(), SubjectError> {
         let prev_properties = self.properties.as_str();
-        let Ok(patch_json) = serde_json::from_str::<Patch>(json_patch) else {
-                    return Err(SubjectError::ErrorParsingJsonString(json_patch.to_owned()));
+        let Ok(patch_json) = serde_json::from_value::<Patch>(json_patch.0) else {
+                    return Err(SubjectError::ErrorParsingJsonString("Json Patch conversion fails".to_owned()));
                 };
-        let Ok(mut state) = serde_json::from_str::<Value>(prev_properties) else {
-                    return Err(SubjectError::ErrorParsingJsonString(prev_properties.to_owned()));
+        let Ok(()) = patch(&mut self.properties.0, &patch_json) else {
+                    return Err(SubjectError::ErrorApplyingPatch("Error Applying Patch".to_owned()));
                 };
-        let Ok(()) = patch(&mut state, &patch_json) else {
-                    return Err(SubjectError::ErrorApplyingPatch(json_patch.to_owned()));
-                };
-        let state = serde_json::to_string(&state).map_err(|_| {
-            SubjectError::ErrorParsingJsonString("New State after patch".to_owned())
-        })?;
         self.sn = new_sn;
-        self.properties = state;
         Ok(())
     }
 
@@ -190,12 +187,8 @@ impl Subject {
     }
 
     pub fn get_state_hash(&self) -> Result<DigestIdentifier, SubjectError> {
-        let subject_properties = serde_json::from_str::<Value>(&self.properties)
-            .map_err(|_| SubjectError::CryptoError(String::from("Error parsing the state")))?;
-        let subject_properties_str = serde_json::to_string(&subject_properties)
-            .map_err(|_| SubjectError::CryptoError(String::from("Error serializing the state")))?;
         Ok(
-            DigestIdentifier::from_serializable_borsh(&subject_properties_str).map_err(|_| {
+            DigestIdentifier::from_serializable_borsh(&self.properties).map_err(|_| {
                 SubjectError::CryptoError(String::from("Error calculating the hash of the state"))
             })?,
         )
@@ -207,19 +200,16 @@ impl Subject {
 
     pub fn state_hash_after_apply(
         &self,
-        json_patch: &str,
+        json_patch: ValueWrapper,
     ) -> Result<DigestIdentifier, SubjectError> {
-        let mut subject_properties = serde_json::from_str::<Value>(&self.properties)
-            .map_err(|_| SubjectError::CryptoError(String::from("Error parsing the state")))?;
-        let json_patch = serde_json::from_str::<Patch>(json_patch)
+        let mut subject_properties = self.properties.clone();
+        let json_patch = serde_json::from_value::<Patch>(json_patch.0)
             .map_err(|_| SubjectError::CryptoError(String::from("Error parsing the json patch")))?;
-        patch(&mut subject_properties, &json_patch).map_err(|_| {
+        patch(&mut subject_properties.0, &json_patch).map_err(|_| {
             SubjectError::CryptoError(String::from("Error applying the json patch"))
         })?;
-        let subject_properties_str = serde_json::to_string(&subject_properties)
-            .map_err(|_| SubjectError::CryptoError(String::from("Error serializing the state")))?;
         Ok(
-            DigestIdentifier::from_serializable_borsh(&subject_properties_str).map_err(|_| {
+            DigestIdentifier::from_serializable_borsh(&subject_properties).map_err(|_| {
                 SubjectError::CryptoError(String::from("Error calculating the hash of the state"))
             })?,
         )

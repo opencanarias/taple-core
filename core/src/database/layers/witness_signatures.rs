@@ -1,3 +1,4 @@
+use crate::utils::{deserialize, serialize};
 use super::utils::{get_key, Element};
 use crate::signature::Signature;
 use crate::DbError;
@@ -30,7 +31,7 @@ impl<C: DatabaseCollection> WitnessSignaturesDb<C> {
         let key = get_key(key_elements)?;
         let witness_signatures = self.collection.get(&key)?;
         Ok(
-            bincode::deserialize::<(u64, HashSet<Signature>)>(&witness_signatures)
+            deserialize::<(u64, HashSet<Signature>)>(&witness_signatures)
                 .map_err(|_| DbError::DeserializeError)?,
         )
     }
@@ -41,7 +42,7 @@ impl<C: DatabaseCollection> WitnessSignaturesDb<C> {
         let iter = self.collection.iter(false, format!("{}{}", self.prefix, char::MAX));
         Ok(iter
             .map(|ws| {
-                let ws_1 = bincode::deserialize::<(u64, HashSet<Signature>)>(&ws.1).unwrap();
+                let ws_1 = deserialize::<(u64, HashSet<Signature>)>(&ws.1).unwrap();
                 (DigestIdentifier::from_str(&ws.0).unwrap(), ws_1.0, ws_1.1)
             })
             .collect())
@@ -60,7 +61,7 @@ impl<C: DatabaseCollection> WitnessSignaturesDb<C> {
         let key = get_key(key_elements)?;
         let total_signatures = match self.collection.get(&key) {
             Ok(other) => {
-                let other = bincode::deserialize::<(u64, HashSet<Signature>)>(&other).unwrap();
+                let other = deserialize::<(u64, HashSet<Signature>)>(&other).unwrap();
                 signatures.union(&other.1).cloned().collect()
             }
             Err(DbError::EntryNotFound) => signatures,
@@ -68,7 +69,7 @@ impl<C: DatabaseCollection> WitnessSignaturesDb<C> {
                 return Err(error);
             }
         };
-        let Ok(data) = bincode::serialize::<(u64, HashSet<Signature>)>(&(sn, total_signatures)) else {
+        let Ok(data) = serialize::<(u64, HashSet<Signature>)>(&(sn, total_signatures)) else {
             return Err(DbError::SerializeError);
         };
         self.collection.put(&key, data)

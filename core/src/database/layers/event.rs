@@ -1,6 +1,8 @@
 use super::utils::{get_by_range, get_key, Element};
-use crate::{DatabaseCollection, DatabaseManager, Derivable, DigestIdentifier};
-use crate::{DbError, Event};
+use crate::signature::Signed;
+use crate::utils::{deserialize, serialize};
+use crate::DbError;
+use crate::{DatabaseCollection, DatabaseManager, Derivable, DigestIdentifier, Event};
 use std::sync::Arc;
 
 pub(crate) struct EventDb<C: DatabaseCollection> {
@@ -16,7 +18,11 @@ impl<C: DatabaseCollection> EventDb<C> {
         }
     }
 
-    pub fn get_event(&self, subject_id: &DigestIdentifier, sn: u64) -> Result<Event, DbError> {
+    pub fn get_event(
+        &self,
+        subject_id: &DigestIdentifier,
+        sn: u64,
+    ) -> Result<Signed<Event>, DbError> {
         let key_elements: Vec<Element> = vec![
             Element::S(self.prefix.clone()),
             Element::S(subject_id.to_str()),
@@ -24,9 +30,7 @@ impl<C: DatabaseCollection> EventDb<C> {
         ];
         let key = get_key(key_elements)?;
         let event = self.collection.get(&key)?;
-        Ok(bincode::deserialize::<Event>(&event).map_err(|_| {
-            DbError::DeserializeError
-        })?)
+        Ok(deserialize::<Signed<Event>>(&event).map_err(|_| DbError::DeserializeError)?)
     }
 
     pub fn get_events_by_range(
@@ -34,7 +38,7 @@ impl<C: DatabaseCollection> EventDb<C> {
         subject_id: &DigestIdentifier,
         from: Option<i64>,
         quantity: isize,
-    ) -> Result<Vec<Event>, DbError> {
+    ) -> Result<Vec<Signed<Event>>, DbError> {
         let key_elements: Vec<Element> = vec![
             Element::S(self.prefix.clone()),
             Element::S(subject_id.to_str()),
@@ -44,25 +48,26 @@ impl<C: DatabaseCollection> EventDb<C> {
             Some(from) => Some(from.to_string()),
             None => None,
         };
-        let events_by_subject =
-            get_by_range(from, quantity, &self.collection, &key)?;
+        let events_by_subject = get_by_range(from, quantity, &self.collection, &key)?;
         Ok(events_by_subject
             .iter()
-            .map(|event| {
-                bincode::deserialize::<Event>(event).unwrap()
-            })
+            .map(|event| deserialize::<Signed<Event>>(event).unwrap())
             .collect())
     }
 
-    pub fn set_event(&self, subject_id: &DigestIdentifier, event: Event) -> Result<(), DbError> {
-        let sn = event.content.event_proposal.proposal.sn;
+    pub fn set_event(
+        &self,
+        subject_id: &DigestIdentifier,
+        event: Signed<Event>,
+    ) -> Result<(), DbError> {
+        let sn = event.content.sn;
         let key_elements: Vec<Element> = vec![
             Element::S(self.prefix.clone()),
             Element::S(subject_id.to_str()),
             Element::N(sn),
         ];
         let key = get_key(key_elements)?;
-        let Ok(data) = bincode::serialize::<Event>(&event) else {
+        let Ok(data) = serialize::<Signed<Event>>(&event) else {
             return Err(DbError::SerializeError);
         };
         self.collection.put(&key, data)

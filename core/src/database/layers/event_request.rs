@@ -1,6 +1,7 @@
+use crate::signature::Signed;
+use crate::utils::{deserialize, serialize};
 use super::utils::{get_key, Element};
-use crate::event_request::EventRequest;
-use crate::DbError;
+use crate::{DbError, EventRequest};
 use crate::{DatabaseCollection, DatabaseManager, Derivable, DigestIdentifier};
 use std::sync::Arc;
 
@@ -17,22 +18,22 @@ impl<C: DatabaseCollection> EventRequestDb<C> {
         }
     }
 
-    pub fn get_request(&self, subject_id: &DigestIdentifier) -> Result<EventRequest, DbError> {
+    pub fn get_request(&self, subject_id: &DigestIdentifier) -> Result<Signed<EventRequest>, DbError> {
         let key_elements: Vec<Element> = vec![
             Element::S(self.prefix.clone()),
             Element::S(subject_id.to_str()),
         ];
         let key = get_key(key_elements)?;
         let request = self.collection.get(&key)?;
-        Ok(bincode::deserialize::<EventRequest>(&request).map_err(|_| {
+        Ok(deserialize::<Signed<EventRequest>>(&request).map_err(|_| {
             DbError::DeserializeError
         })?)
     }
 
-    pub fn get_all_request(&self) -> Vec<EventRequest> {
+    pub fn get_all_request(&self) -> Vec<Signed<EventRequest>> {
         let mut result = Vec::new();
         for (_, request) in self.collection.iter(false, format!("{}{}", self.prefix, char::MAX)) {
-            let request = bincode::deserialize::<EventRequest>(&request).unwrap();
+            let request = deserialize::<Signed<EventRequest>>(&request).unwrap();
             result.push(request);
         }
         result
@@ -41,14 +42,14 @@ impl<C: DatabaseCollection> EventRequestDb<C> {
     pub fn set_request(
         &self,
         subject_id: &DigestIdentifier,
-        request: EventRequest,
+        request: Signed<EventRequest>,
     ) -> Result<(), DbError> {
         let key_elements: Vec<Element> = vec![
             Element::S(self.prefix.clone()),
             Element::S(subject_id.to_str()),
         ];
         let key = get_key(key_elements)?;
-        let Ok(data) = bincode::serialize::<EventRequest>(&request) else {
+        let Ok(data) = serialize::<Signed<EventRequest>>(&request) else {
             return Err(DbError::SerializeError);
         };
         self.collection.put(&key, data)

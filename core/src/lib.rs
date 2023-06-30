@@ -77,48 +77,51 @@
 //! ```
 //!
 pub(crate) mod api;
+pub(crate) mod approval;
+pub(crate) mod authorized_subjecs;
 pub(crate) mod commons;
+pub(crate) mod database;
+pub(crate) mod distribution;
 pub mod error;
+pub(crate) mod evaluator;
 pub(crate) mod governance;
 pub(crate) mod ledger;
 pub(crate) mod message;
 pub(crate) mod network;
-pub(crate) mod approval;
-pub(crate) mod database;
-pub(crate) mod distribution;
-pub(crate) mod evaluator;
 pub(crate) mod notary;
 pub(crate) mod utils;
-pub(crate) mod authorized_subjecs;
 
 pub mod event;
 pub mod protocol;
 
 mod unitary_component;
 pub use api::{
-    APICommands, ApiError, ApiModuleInterface, ApiResponses, GetSubjects, GetEvents,
-    GetSubject, NodeAPI,
+    APICommands, ApiError, ApiModuleInterface, ApiResponses, GetEvents, GetSubject, GetSubjects,
+    NodeAPI,
 };
-pub use approval::ApprovalPetitionData;
-pub use commons::identifier;
 pub use commons::crypto;
-pub use commons::identifier::{DigestIdentifier, KeyIdentifier, Derivable, SignatureIdentifier};
-pub use commons::models::approval::{Approval, ApprovalContent};
-pub use commons::models::event::{Event, EventContent};
-pub use commons::models::event_proposal::{EventProposal, Evaluation, Proposal};
-pub use commons::models::event_request::EventRequestType;
-pub use commons::models::Acceptance;
-pub use commons::models::state::SubjectData;
-pub use commons::models::{event_content, event_request, signature};
+pub use commons::identifier;
+pub use commons::identifier::{Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier};
+pub use commons::models::approval::{ApprovalEntity, ApprovalState};
+pub use commons::models::approval::ApprovalRequest;
+pub use commons::models::approval::ApprovalResponse;
+pub use commons::models::evaluation::EvaluationRequest;
+pub use commons::models::evaluation::EvaluationResponse;
+pub use commons::models::event::Event;
+pub use commons::models::event::Metadata;
 pub use commons::models::request;
+pub use commons::models::request::EventRequest;
+pub use commons::models::signature;
+pub use commons::models::state::SubjectData;
 pub use commons::{
     config::{DatabaseSettings, NetworkSettings, NodeSettings, TapleSettings},
     identifier::derive::{digest::DigestDerivator, KeyDerivator},
     models::notification::Notification,
     models::timestamp::TimeStamp,
-    models::event::ValidationProof
+    models::validation::ValidationProof,
+    models::value_wrapper::ValueWrapper,
 };
-pub use error::Error;
-pub use unitary_component::{NotificationHandler, Taple};
 pub(crate) use database::DB;
 pub use database::{DatabaseCollection, DatabaseManager, Error as DbError, MemoryManager};
+pub use error::Error;
+pub use unitary_component::{NotificationHandler, Taple};

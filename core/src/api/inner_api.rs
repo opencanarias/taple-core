@@ -1,29 +1,21 @@
 use super::error::APIInternalError;
-use super::ApiResponses;
+use super::{ApiResponses, GetPreauthorizedSubjects};
 use crate::approval::error::ApprovalErrorResponse;
 #[cfg(feature = "aproval")]
 use crate::approval::manager::{ApprovalAPI, ApprovalAPIInterface};
 use crate::authorized_subjecs::manager::AuthorizedSubjectsAPI;
-use crate::commons::models::Acceptance;
-use crate::commons::self_signature_manager::{SelfSignatureInterface, SelfSignatureManager};
-use crate::event::errors::EventError;
 use crate::event::manager::{EventAPI, EventAPIInterface};
 use crate::event::EventResponse;
 use crate::identifier::Derivable;
 use crate::ledger::manager::{EventManagerAPI, EventManagerInterface};
-use crate::signature::Signature;
+use crate::signature::Signed;
+use crate::ApprovalState;
 use crate::{KeyDerivator, KeyIdentifier};
 // use crate::ledger::errors::LedgerManagerError;
 use crate::{
     commons::{
-        config::TapleSettings,
-        crypto::KeyPair,
         identifier::DigestIdentifier,
-        models::{
-            event_request::{EventRequest, EventRequestType},
-            state::SubjectData,
-            timestamp::TimeStamp,
-        },
+        models::{request::EventRequest, state::SubjectData},
     },
     DatabaseCollection, DB,
 };
@@ -37,7 +29,6 @@ use super::{
 use crate::database::Error as DbError;
 
 pub(crate) struct InnerAPI<C: DatabaseCollection> {
-    signature_manager: SelfSignatureManager,
     event_api: EventAPI,
     #[cfg(feature = "aproval")]
     approval_api: ApprovalAPI,
@@ -50,8 +41,6 @@ const MAX_QUANTITY: isize = 100;
 
 impl<C: DatabaseCollection> InnerAPI<C> {
     pub fn new(
-        keys: KeyPair,
-        settings: &TapleSettings,
         event_api: EventAPI,
         authorized_subjects_api: AuthorizedSubjectsAPI,
         db: DB<C>,
@@ -59,7 +48,6 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         ledger_api: EventManagerAPI,
     ) -> Self {
         Self {
-            signature_manager: SelfSignatureManager::new(keys, settings),
             event_api,
             #[cfg(feature = "aproval")]
             approval_api,
@@ -71,7 +59,7 @@ impl<C: DatabaseCollection> InnerAPI<C> {
 
     pub async fn handle_external_request(
         &self,
-        request: EventRequest,
+        request: Signed<EventRequest>,
     ) -> Result<ApiResponses, APIInternalError> {
         let EventResponse::Event(response) = self.event_api.send_event_request(request).await else {
             return Err(APIInternalError::UnexpectedManagerResponse);
@@ -85,13 +73,13 @@ impl<C: DatabaseCollection> InnerAPI<C> {
     pub async fn emit_vote(
         &self,
         request_id: DigestIdentifier,
-        acceptance: Acceptance,
+        acceptance: bool,
     ) -> Result<ApiResponses, APIInternalError> {
         // Es posible que en lugar de subject_id se prefiera un request_id
         let id_str = request_id.to_str();
         let result = self.approval_api.emit_vote(request_id, acceptance).await;
         match result {
-            Ok(_) => return Ok(ApiResponses::VoteResolve(Ok(DigestIdentifier::default()))), // Cambiar al digestIdentifier del sujeto o de la misma request
+            Ok(data) => return Ok(ApiResponses::VoteResolve(Ok(data))), // Cambiar al digestIdentifier del sujeto o de la misma request
             Err(ApprovalErrorResponse::ApprovalRequestNotFound) => {
                 return Ok(ApiResponses::VoteResolve(Err(ApiError::NotFound(format!(
                     "Request {} not found",
@@ -105,7 +93,7 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         };
     }
 
-    pub fn get_all_subjects(&self, data: GetSubjects) -> ApiResponses {
+    fn get_from_and_quantity(&self, data: GetSubjects) -> (Option<String>, isize) {
         let from = if data.from.is_none() {
             None
         } else {
@@ -116,6 +104,33 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         } else {
             (data.quantity.unwrap() as isize).min(MAX_QUANTITY)
         };
+        (from, quantity)
+    }
+
+    pub fn get_subjects_by_governance(
+        &self,
+        data: GetSubjects,
+        governance_id: DigestIdentifier,
+    ) -> ApiResponses {
+        let (from, quantity) = self.get_from_and_quantity(data);
+        let result = match self
+            .db
+            .get_governance_subjects(&governance_id, from, quantity)
+        {
+            Ok(subjects) => subjects,
+            Err(error) => {
+                return ApiResponses::GetSubjects(Err(ApiError::DatabaseError(error.to_string())))
+            }
+        };
+        let result = result
+            .into_iter()
+            .map(|subject| subject.into())
+            .collect::<Vec<SubjectData>>();
+        ApiResponses::GetSubjectByGovernance(Ok(result))
+    }
+
+    pub fn get_all_subjects(&self, data: GetSubjects) -> ApiResponses {
+        let (from, quantity) = self.get_from_and_quantity(data);
         let result = match self.db.get_subjects(from, quantity) {
             Ok(subjects) => subjects,
             Err(error) => {
@@ -130,16 +145,7 @@ impl<C: DatabaseCollection> InnerAPI<C> {
     }
 
     pub async fn get_all_governances(&self, data: GetSubjects) -> ApiResponses {
-        let from = if data.from.is_none() {
-            None
-        } else {
-            Some(format!("{}", data.from.unwrap()))
-        };
-        let quantity = if data.quantity.is_none() {
-            MAX_QUANTITY
-        } else {
-            (data.quantity.unwrap() as isize).min(MAX_QUANTITY)
-        };
+        let (from, quantity) = self.get_from_and_quantity(data);
         let result = match self.db.get_governances(from, quantity) {
             Ok(subjects) => subjects,
             Err(error) => {
@@ -251,6 +257,24 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         Ok(ApiResponses::SetPreauthorizedSubjectCompleted)
     }
 
+    pub async fn get_all_preauthorized_subjects_and_providers(
+        &self,
+        data: GetPreauthorizedSubjects,
+    ) -> Result<ApiResponses, APIInternalError> {
+        let quantity = if data.quantity.is_none() {
+            MAX_QUANTITY
+        } else {
+            (data.quantity.unwrap() as isize).min(MAX_QUANTITY)
+        };
+        match self
+            .db
+            .get_preauthorized_subjects_and_providers(data.from, quantity)
+        {
+            Ok(data) => Ok(ApiResponses::GetAllPreauthorizedSubjects(Ok(data))),
+            Err(error) => Err(APIInternalError::DatabaseError(error.to_string())),
+        }
+    }
+
     pub async fn generate_keys(
         &self,
         derivator: KeyDerivator,
@@ -314,8 +338,23 @@ impl<C: DatabaseCollection> InnerAPI<C> {
     }
 
     #[cfg(feature = "aproval")]
-    pub async fn get_approvals(&self, status: Option<String>) -> ApiResponses {
-        let result = match self.db.get_approvals(status) {
+    pub async fn get_approvals(
+        &self,
+        status: Option<ApprovalState>,
+        from: Option<String>,
+        quantity: Option<i64>,
+    ) -> ApiResponses {
+        let quantity = if quantity.is_none() {
+            MAX_QUANTITY
+        } else {
+            let tmp = quantity.unwrap();
+            if tmp == 0 {
+                MAX_QUANTITY
+            } else {
+                tmp as isize
+            }
+        };
+        let result = match self.db.get_approvals(status, from, quantity) {
             Ok(approvals) => approvals,
             Err(error) => {
                 return ApiResponses::GetApprovals(Err(ApiError::DatabaseError(error.to_string())))

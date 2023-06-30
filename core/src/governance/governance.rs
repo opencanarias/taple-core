@@ -7,10 +7,10 @@ use crate::{
     commons::{
         channel::{ChannelData, MpscChannel, SenderEnd},
         identifier::{DigestIdentifier, KeyIdentifier},
-        models::event_content::Metadata,
+        models::event::Metadata,
         schema_handler::{get_governance_schema, gov_models::Contract},
     },
-    DatabaseCollection, DatabaseManager, DB,
+    DatabaseCollection, DatabaseManager, ValueWrapper, DB,
 };
 
 use super::{
@@ -81,6 +81,7 @@ impl<M: DatabaseManager<C>, C: DatabaseCollection> Governance<M, C> {
                     (None, data)
                 }
             };
+            log::error!("governance DATA {:?}", data);
             if let Some(sender) = sender {
                 match data {
                     GovernanceMessage::GetSchema {
@@ -176,7 +177,9 @@ impl<M: DatabaseManager<C>, C: DatabaseCollection> Governance<M, C> {
                         // TODO: Revisar si hace falta tratar errores aquí
                         match result {
                             Ok(_) => {}
-                            Err(_) => {}
+                            Err(error) => {
+                                log::error!("Governance update error {}", error);
+                            }
                         }
                         Ok(())
                     }
@@ -198,13 +201,13 @@ pub trait GovernanceInterface: Sync + Send {
         governance_id: DigestIdentifier,
         schema_id: String,
         governance_version: u64,
-    ) -> Result<Value, RequestError>;
+    ) -> Result<ValueWrapper, RequestError>;
     async fn get_schema(
         &self,
         governance_id: DigestIdentifier,
         schema_id: String,
         governance_version: u64,
-    ) -> Result<serde_json::Value, RequestError>;
+    ) -> Result<ValueWrapper, RequestError>;
 
     async fn get_signers(
         &self,
@@ -264,7 +267,7 @@ impl GovernanceInterface for GovernanceAPI {
         governance_id: DigestIdentifier,
         schema_id: String,
         governance_version: u64,
-    ) -> Result<Value, RequestError> {
+    ) -> Result<ValueWrapper, RequestError> {
         let response = self
             .sender
             .ask(GovernanceMessage::GetInitState {
@@ -286,7 +289,7 @@ impl GovernanceInterface for GovernanceAPI {
         governance_id: DigestIdentifier,
         schema_id: String,
         governance_version: u64,
-    ) -> Result<serde_json::Value, RequestError> {
+    ) -> Result<ValueWrapper, RequestError> {
         let response = self
             .sender
             .ask(GovernanceMessage::GetSchema {

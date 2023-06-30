@@ -1,3 +1,4 @@
+use crate::utils::{deserialize, serialize};
 use super::utils::{get_key, Element};
 use crate::{DatabaseCollection, DatabaseManager, Derivable, DigestIdentifier};
 use crate::{DbError};
@@ -28,7 +29,7 @@ impl<C: DatabaseCollection> ContractDb<C> {
         ];
         let key = get_key(key_elements)?;
         let contract = self.collection.get(&key)?;
-        Ok(bincode::deserialize::<(Vec<u8>, DigestIdentifier, u64)>(&contract).map_err(|_| {
+        Ok(deserialize::<(Vec<u8>, DigestIdentifier, u64)>(&contract).map_err(|_| {
             DbError::DeserializeError
         })?)
     }
@@ -47,7 +48,7 @@ impl<C: DatabaseCollection> ContractDb<C> {
             Element::S(schema_id.to_string()),
         ];
         let key = get_key(key_elements)?;
-        let Ok(data) = bincode::serialize::<(Vec<u8>, DigestIdentifier, u64)>(&(contract, hash, gov_version)) else {
+        let Ok(data) = serialize::<(Vec<u8>, DigestIdentifier, u64)>(&(contract, hash, gov_version)) else {
             return Err(DbError::SerializeError);
         };
         self.collection.put(&key, data)
@@ -60,7 +61,7 @@ impl<C: DatabaseCollection> ContractDb<C> {
         ];
         let key = get_key(key_elements)?;
         let contract = self.collection.get(&key)?;
-        let contract = bincode::deserialize::<(Vec<u8>, DigestIdentifier, u64)>(&contract).map_err(|_| {
+        let contract = deserialize::<(Vec<u8>, DigestIdentifier, u64)>(&contract).map_err(|_| {
             DbError::DeserializeError
         })?;
         Ok(contract.0)
@@ -72,7 +73,7 @@ impl<C: DatabaseCollection> ContractDb<C> {
             Element::S("governance".to_string()),
         ];
         let key = get_key(key_elements)?;
-        let Ok(data) = bincode::serialize::<(Vec<u8>, DigestIdentifier, u64)>(&(contract, DigestIdentifier::default(), 0)) else {
+        let Ok(data) = serialize::<(Vec<u8>, DigestIdentifier, u64)>(&(contract, DigestIdentifier::default(), 0)) else {
             return Err(DbError::SerializeError);
         };
         self.collection.put(&key, data)

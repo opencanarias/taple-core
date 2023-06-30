@@ -1,5 +1,7 @@
-pub fn get_governance_initial_state() -> serde_json::Value {
-    serde_json::json!({
+use crate::ValueWrapper;
+
+pub fn get_governance_initial_state() -> ValueWrapper {
+    ValueWrapper(serde_json::json!({
         "members": [],
         "roles": [],
         "schemas": [],
@@ -17,7 +19,7 @@ pub fn get_governance_initial_state() -> serde_json::Value {
             }
           }
         ]
-    })
+    }))
 }
 
 #[cfg(test)]
@@ -29,7 +31,7 @@ mod test {
         let gov_schema = get_governance_schema();
         let schema = Schema::compile(&gov_schema).expect("gov schema compiles");
         let init_state = super::get_governance_initial_state();
-        assert!(schema.validate(&init_state))
+        assert!(schema.validate(&init_state.0))
         // let schema =
     }
 }
