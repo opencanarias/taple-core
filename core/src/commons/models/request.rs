@@ -74,14 +74,6 @@ impl Signed<EventRequest> {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
-pub struct EventRequestState {
-    pub id: DigestIdentifier,
-    pub subject_id: Option<DigestIdentifier>,
-    pub sn: Option<u64>,
-    pub state: RequestState,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub enum RequestState {
     Finished,
     Error,
@@ -95,6 +87,7 @@ pub struct TapleRequest {
     pub sn: Option<u64>,
     pub event_request: Signed<EventRequest>,
     pub state: RequestState,
+    pub success: Option<bool>
 }
 
 impl TryFrom<Signed<EventRequest>> for TapleRequest {
@@ -115,6 +108,7 @@ impl TryFrom<Signed<EventRequest>> for TapleRequest {
             sn: None,
             event_request,
             state: RequestState::Processing,
+            success: None
         })
     }
 }

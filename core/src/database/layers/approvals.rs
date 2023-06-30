@@ -234,8 +234,8 @@ impl<C: DatabaseCollection> ApprovalsDb<C> {
             let approvals = get_by_range(
                 from,
                 quantity,
-                &self.pending_collection,
-                &self.pending_prefix,
+                &self.collection,
+                &self.prefix,
             )?;
             for approval in approvals.iter() {
                 let approval = deserialize::<ApprovalEntity>(&approval).unwrap();
