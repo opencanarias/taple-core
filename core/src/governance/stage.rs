@@ -16,7 +16,7 @@ impl ValidationStage {
             ValidationStage::Validate => "validate",
             ValidationStage::Witness => "witness",
             ValidationStage::Create => "create",
-            ValidationStage::Invoke => "invoke",
+            ValidationStage::Invoke => "issue",
         }
     }
 
@@ -27,7 +27,7 @@ impl ValidationStage {
             ValidationStage::Validate => "VALIDATOR",
             ValidationStage::Witness => "WITNESS",
             ValidationStage::Create => "CREATOR",
-            ValidationStage::Invoke => "INVOKER",
+            ValidationStage::Invoke => "ISSUER",
         }
     }
 }

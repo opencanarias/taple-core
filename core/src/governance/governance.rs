@@ -132,7 +132,7 @@ impl<M: DatabaseManager<C>, C: DatabaseCollection> Governance<M, C> {
                     } => {
                         let to_send = self
                             .inner_governance
-                            .get_invoke_create_info(metadata, stage, invoker)?;
+                            .get_issue_create_info(metadata, stage, invoker)?;
                         Ok(sender
                             .send(GovernanceResponse::GetInvokeInfo(to_send))
                             .map_err(|_| InternalError::OneshotClosed)?)

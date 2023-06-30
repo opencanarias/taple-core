@@ -283,7 +283,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
     }
 
     // NEW
-    pub fn get_invoke_create_info(
+    pub fn get_issue_create_info(
         &self,
         metadata: Metadata,
         stage: ValidationStage,
@@ -317,7 +317,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
             serde_json::from_value(governance.properties.get("roles").unwrap().to_owned())
                 .map_err(|_| InternalError::DeserializationError)?;
         let members = get_members_from_governance(&governance.properties.0)?;
-        let invoke_create_info_result = Self::invoke_create_info(
+        let invoke_create_info_result = Self::issue_create_info(
             roles,
             &schema_id,
             &metadata.namespace,
@@ -329,7 +329,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         Ok(invoke_create_info_result)
     }
 
-    fn invoke_create_info(
+    fn issue_create_info(
         roles: Vec<Role>,
         schema_id: &str,
         namespace: &str,

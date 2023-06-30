@@ -48,7 +48,7 @@ pub fn get_governance_schema() -> Value {
       "$defs": {
         "role": {
           "type": "string",
-          "enum": ["VALIDATOR", "CREATOR", "INVOKER", "WITNESS", "APPROVER", "EVALUATOR"]
+          "enum": ["VALIDATOR", "CREATOR", "ISSUER", "WITNESS", "APPROVER", "EVALUATOR"]
         },
         "quorum": {
           "oneOf": [
