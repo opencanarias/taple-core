@@ -8,7 +8,7 @@ use crate::commons::models::validation::ValidationProof;
 use crate::crypto::KeyPair;
 use crate::identifier::{DigestIdentifier, KeyIdentifier};
 use crate::signature::{Signature, Signed};
-use crate::{Event, EventRequest, ApprovalState};
+use crate::{ApprovalState, Event, EventRequest};
 
 use super::error::Error;
 use super::layers::lce_validation_proofs::LceValidationProofs;
@@ -417,8 +417,13 @@ impl<C: DatabaseCollection> DB<C> {
         self.approvals_db.get_approval(request_id)
     }
 
-    pub fn get_approvals(&self, status: Option<ApprovalState>) -> Result<Vec<ApprovalEntity>, Error> {
-        self.approvals_db.get_approvals(status)
+    pub fn get_approvals(
+        &self,
+        status: Option<ApprovalState>,
+        from: Option<String>,
+        quantity: isize,
+    ) -> Result<Vec<ApprovalEntity>, Error> {
+        self.approvals_db.get_approvals(status, from, quantity)
     }
 
     pub fn set_approval(

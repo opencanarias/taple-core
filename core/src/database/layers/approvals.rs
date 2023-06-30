@@ -1,4 +1,4 @@
-use super::utils::{get_key, Element};
+use super::utils::{get_by_range, get_key, Element};
 use crate::commons::models::approval::{ApprovalEntity, ApprovalState};
 use crate::utils::{deserialize, serialize};
 use crate::DbError;
@@ -9,9 +9,11 @@ pub(crate) struct ApprovalsDb<C: DatabaseCollection> {
     index_collection: C,
     index_by_governance_collection: C,
     collection: C,
+    pending_collection: C,
     index_prefix: String,
     prefix: String,
     governance_prefix: String,
+    pending_prefix: String,
 }
 
 impl<C: DatabaseCollection> ApprovalsDb<C> {
@@ -23,6 +25,8 @@ impl<C: DatabaseCollection> ApprovalsDb<C> {
             index_prefix: "subjindex-approval-index".to_string(),
             prefix: "approvals".to_string(),
             governance_prefix: "governance-approval-index".to_string(),
+            pending_prefix: "pending-approval-index".to_string(),
+            pending_collection: manager.create_collection("pending-approval-index"),
         }
     }
 
@@ -174,32 +178,77 @@ impl<C: DatabaseCollection> ApprovalsDb<C> {
         Ok(deserialize::<ApprovalEntity>(&approval).map_err(|_| DbError::DeserializeError)?)
     }
 
-    pub fn get_approvals(&self, status: Option<ApprovalState>) -> Result<Vec<ApprovalEntity>, DbError> {
+    pub fn get_approvals(
+        &self,
+        status: Option<ApprovalState>,
+        from: Option<String>,
+        quantity: isize,
+    ) -> Result<Vec<ApprovalEntity>, DbError> {
         let mut result = Vec::new();
-        match status {
-            Some(value) => {
-                for (_, approval) in self
-                    .collection
-                    .iter(false, format!("{}{}", self.prefix, char::MAX))
-                {
-                    let approval = deserialize::<ApprovalEntity>(&approval).unwrap();
-                    if approval.state == value {
-                        result.push(approval);
+        let quantity_is_positive = quantity > 0;
+        let mut quantity = quantity;
+        let mut from = from;
+        if let Some(ApprovalState::Pending) = status {
+            while quantity != 0 {
+                let approvals = get_by_range(
+                    from.clone(),
+                    quantity,
+                    &self.pending_collection,
+                    &self.pending_prefix,
+                )?;
+                for approval_id in approvals.iter() {
+                    let approval_id = deserialize::<DigestIdentifier>(&approval_id)
+                        .map_err(|_| DbError::DeserializeError)?;
+                    let key_elements: Vec<Element> = vec![
+                        Element::S(self.prefix.clone()),
+                        Element::S(approval_id.to_str()),
+                    ];
+                    let key: String = get_key(key_elements)?;
+                    from = Some(key.clone());
+                    match self.collection.get(&key) {
+                        Ok(approval) => {
+                            let approval_entity = deserialize::<ApprovalEntity>(&approval)
+                                .map_err(|_| DbError::DeserializeError)?;
+                            if approval_entity.state != ApprovalState::Pending {
+                                self.pending_collection.del(&key)?;
+                                continue;
+                            }
+                            if quantity_is_positive {
+                                quantity -= 1;
+                            } else {
+                                quantity += 1;
+                            }
+                            result.push(approval_entity);
+                        }
+                        Err(e) => match e {
+                            DbError::EntryNotFound => {
+                                self.pending_collection.del(&key)?;
+                                continue;
+                            }
+                            _ => return Err(e),
+                        },
                     }
                 }
-                return Ok(result);
             }
-            None => {
-                for (_, approval) in self
-                    .collection
-                    .iter(false, format!("{}{}", self.prefix, char::MAX))
-                {
-                    let approval = deserialize::<ApprovalEntity>(&approval).unwrap();
+        } else {
+            let approvals = get_by_range(
+                from,
+                quantity,
+                &self.pending_collection,
+                &self.pending_prefix,
+            )?;
+            for approval in approvals.iter() {
+                let approval = deserialize::<ApprovalEntity>(&approval).unwrap();
+                if status.is_some() {
+                    if status.as_ref().unwrap() == &approval.state {
+                        result.push(approval);
+                    }
+                } else {
                     result.push(approval);
                 }
-                return Ok(result);
             }
         }
+        return Ok(result);
     }
 
     pub fn set_approval(
@@ -215,7 +264,23 @@ impl<C: DatabaseCollection> ApprovalsDb<C> {
         let Ok(data) = serialize::<ApprovalEntity>(&approval) else {
             return Err(DbError::SerializeError);
         };
-        self.collection.put(&key, data)
+        // We assume that we only have pending and voted status.
+        let index_key_elements: Vec<Element> = vec![
+            Element::S(self.pending_prefix.clone()),
+            Element::S(request_id.to_str()),
+        ];
+        let key2 = get_key(index_key_elements)?;
+        // If it is a pending status request, it is first saved in the index and then in the supper collection.
+        if approval.state == ApprovalState::Pending {
+            let Ok(data2) = serialize::<DigestIdentifier>(&request_id) else {
+                return Err(DbError::SerializeError);
+            };
+            self.pending_collection.put(&key2, data2)?;
+        } else if approval.state != ApprovalState::Pending {
+            self.pending_collection.del(&key2)?;
+        }
+        self.collection.put(&key, data)?;
+        Ok(())
     }
 
     pub fn del_approval(&self, request_id: &DigestIdentifier) -> Result<(), DbError> {

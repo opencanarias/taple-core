@@ -8,7 +8,6 @@ use super::{
 use super::{GetEvents, GetGovernanceSubjects};
 #[cfg(feature = "aproval")]
 use crate::approval::manager::ApprovalAPI;
-use crate::{commons::models::approval::ApprovalEntity, ValidationProof};
 use crate::commons::models::request::TapleRequest;
 use crate::commons::models::state::SubjectData;
 use crate::commons::{
@@ -21,6 +20,7 @@ use crate::signature::Signature;
 use crate::{
     authorized_subjecs::manager::AuthorizedSubjectsAPI, signature::Signed, Event, EventRequest,
 };
+use crate::{commons::models::approval::ApprovalEntity, ValidationProof};
 use crate::{identifier::DigestIdentifier, DatabaseCollection, DB};
 use crate::{KeyDerivator, KeyIdentifier};
 use async_trait::async_trait;
@@ -149,7 +149,10 @@ pub trait ApiModuleInterface {
     #[cfg(feature = "aproval")]
     async fn get_approval(&self, request_id: DigestIdentifier) -> Result<ApprovalEntity, ApiError>;
     #[cfg(feature = "aproval")]
-    async fn get_approvals(&self, status: Option<crate::ApprovalState>) -> Result<Vec<ApprovalEntity>, ApiError>;
+    async fn get_approvals(
+        &self,
+        status: Option<crate::ApprovalState>,
+    ) -> Result<Vec<ApprovalEntity>, ApiError>;
 }
 
 /// Object that allows interaction with a TAPLE node.
@@ -480,7 +483,10 @@ impl ApiModuleInterface for NodeAPI {
     }
 
     #[cfg(feature = "aproval")]
-    async fn get_approvals(&self, status: Option<crate::ApprovalState>) -> Result<Vec<ApprovalEntity>, ApiError> {
+    async fn get_approvals(
+        &self,
+        status: Option<crate::ApprovalState>,
+    ) -> Result<Vec<ApprovalEntity>, ApiError> {
         let response = self
             .sender
             .ask(APICommands::GetApprovals(status))
@@ -631,7 +637,15 @@ impl<C: DatabaseCollection> API<C> {
                         self.inner_api.get_approval(request_id).await
                     }
                     #[cfg(feature = "aproval")]
-                    APICommands::GetApprovals(status) => self.inner_api.get_approvals(status).await,
+                    APICommands::GetApprovals(get_approvals) => {
+                        self.inner_api
+                            .get_approvals(
+                                get_approvals.state,
+                                get_approvals.from,
+                                get_approvals.quantity,
+                            )
+                            .await
+                    }
                     APICommands::GetAllPreauthorizedSubjects(data) => {
                         self.inner_api
                             .get_all_preauthorized_subjects_and_providers(data)

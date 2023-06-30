@@ -1,10 +1,10 @@
 use crate::commons::models::approval::ApprovalEntity;
-use crate::{signature::Signed};
 use crate::commons::models::request::TapleRequest;
 use crate::commons::models::state::SubjectData;
 use crate::identifier::DigestIdentifier;
 use crate::signature::Signature;
-use crate::{KeyDerivator, KeyIdentifier, Event, EventRequest, ValidationProof, ApprovalState};
+use crate::signature::Signed;
+use crate::{ApprovalState, Event, EventRequest, KeyDerivator, KeyIdentifier, ValidationProof};
 use std::collections::HashSet;
 
 mod api;
@@ -40,7 +40,7 @@ pub enum APICommands {
     #[cfg(feature = "aproval")]
     GetApproval(DigestIdentifier),
     #[cfg(feature = "aproval")]
-    GetApprovals(Option<ApprovalState>),
+    GetApprovals(GetApprovals),
     Shutdown,
 }
 
@@ -69,7 +69,14 @@ pub enum ApiResponses {
     GetApprovals(Result<Vec<ApprovalEntity>, ApiError>),
     ShutdownCompleted,
     SetPreauthorizedSubjectCompleted,
-    GetAllPreauthorizedSubjects(Result<Vec<(DigestIdentifier, HashSet<KeyIdentifier>)>, ApiError>)
+    GetAllPreauthorizedSubjects(Result<Vec<(DigestIdentifier, HashSet<KeyIdentifier>)>, ApiError>),
+}
+
+#[derive(Debug, Clone)]
+pub struct GetApprovals {
+    pub state: Option<ApprovalState>,
+    pub from: Option<String>,
+    pub quantity: isize,
 }
 
 #[derive(Debug, Clone)]
