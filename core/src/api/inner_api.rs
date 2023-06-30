@@ -342,8 +342,18 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         &self,
         status: Option<ApprovalState>,
         from: Option<String>,
-        quantity: isize,
+        quantity: Option<i64>,
     ) -> ApiResponses {
+        let quantity = if quantity.is_none() {
+            MAX_QUANTITY
+        } else {
+            let tmp = quantity.unwrap();
+            if tmp == 0 {
+                MAX_QUANTITY
+            } else {
+                tmp as isize
+            }
+        };
         let result = match self.db.get_approvals(status, from, quantity) {
             Ok(approvals) => approvals,
             Err(error) => {

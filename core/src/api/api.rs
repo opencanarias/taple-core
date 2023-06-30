@@ -153,7 +153,7 @@ pub trait ApiModuleInterface {
         &self,
         state: Option<crate::ApprovalState>,
         from: Option<String>,
-        quantity: isize,
+        quantity: Option<i64>,
     ) -> Result<Vec<ApprovalEntity>, ApiError>;
 }
 
@@ -489,7 +489,7 @@ impl ApiModuleInterface for NodeAPI {
         &self,
         state: Option<crate::ApprovalState>,
         from: Option<String>,
-        quantity: isize,
+        quantity: Option<i64>,
     ) -> Result<Vec<ApprovalEntity>, ApiError> {
         let response = self
             .sender

@@ -76,7 +76,7 @@ pub enum ApiResponses {
 pub struct GetApprovals {
     pub state: Option<ApprovalState>,
     pub from: Option<String>,
-    pub quantity: isize,
+    pub quantity: Option<i64>,
 }
 
 #[derive(Debug, Clone)]
