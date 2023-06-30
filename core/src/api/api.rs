@@ -151,7 +151,9 @@ pub trait ApiModuleInterface {
     #[cfg(feature = "aproval")]
     async fn get_approvals(
         &self,
-        status: Option<crate::ApprovalState>,
+        state: Option<crate::ApprovalState>,
+        from: Option<String>,
+        quantity: isize,
     ) -> Result<Vec<ApprovalEntity>, ApiError>;
 }
 
@@ -485,11 +487,17 @@ impl ApiModuleInterface for NodeAPI {
     #[cfg(feature = "aproval")]
     async fn get_approvals(
         &self,
-        status: Option<crate::ApprovalState>,
+        state: Option<crate::ApprovalState>,
+        from: Option<String>,
+        quantity: isize,
     ) -> Result<Vec<ApprovalEntity>, ApiError> {
         let response = self
             .sender
-            .ask(APICommands::GetApprovals(status))
+            .ask(APICommands::GetApprovals(super::GetApprovals {
+                state,
+                from,
+                quantity,
+            }))
             .await
             .unwrap();
         if let ApiResponses::GetApprovals(data) = response {

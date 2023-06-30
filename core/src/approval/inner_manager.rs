@@ -103,7 +103,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
 
     pub fn get_all_request(&self) -> Vec<ApprovalEntity> {
         self.database
-            .get_approvals(Some(ApprovalState::Pending))
+            .get_approvals(Some(ApprovalState::Pending), None, isize::MAX)
             .unwrap()
     }
 
