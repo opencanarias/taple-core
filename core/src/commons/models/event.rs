@@ -24,21 +24,33 @@ use super::{
     HashId,
 };
 
+/// A struct representing an event.
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct Event {
+    /// The identifier of the subject of the event.
     pub subject_id: DigestIdentifier,
+    /// The signed event request.
     pub event_request: Signed<EventRequest>,
+    /// The sequence number of the event.
     pub sn: u64,
+    /// The version of the governance contract.
     pub gov_version: u64,
-    pub patch: ValueWrapper, // cambiar
+    /// The patch to apply to the state.
+    pub patch: ValueWrapper,
+    /// The hash of the state after applying the patch.
     pub state_hash: DigestIdentifier,
-    // Si EventRequest
-    pub eval_success: bool, //Acceptance?  Se ejecutó con exito y se validó el resultado contra el esquema. Si no se evalua es true
-    pub appr_required: bool, // no puede ser true si evaluation_success = false
-    pub approved: bool,     // por defecto true, si approval_required = false
+    /// Whether the evaluation was successful and the result was validated against the schema.
+    pub eval_success: bool,
+    /// Whether approval is required for the event to be applied to the state.
+    pub appr_required: bool,
+    /// Whether the event has been approved.
+    pub approved: bool,
+    /// The hash of the previous event.
     pub hash_prev_event: DigestIdentifier,
-    pub evaluators: HashSet<Signature>, //hace falta la firma? Hashset
-    pub approvers: HashSet<Signature>,  //hace falta la firma? Hashset
+    /// The set of evaluators who have evaluated the event.
+    pub evaluators: HashSet<Signature>,
+    /// The set of approvers who have approved the event.
+    pub approvers: HashSet<Signature>,
 }
 
 // impl Event {
@@ -221,12 +233,17 @@ impl Signed<Event> {
     }
 }
 
-/// Metadata of a TAPLE Event
+/// A struct representing the metadata of a TAPLE event.
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct Metadata {
+    /// The namespace of the event.
     pub namespace: String,
+    /// The identifier of the subject of the event.
     pub subject_id: DigestIdentifier,
+    /// The identifier of the governance contract.
     pub governance_id: DigestIdentifier,
+    /// The version of the governance contract.
     pub governance_version: u64,
+    /// The identifier of the schema used to validate the event.
     pub schema_id: String,
 }

@@ -296,7 +296,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         let approval_entity = ApprovalEntity {
             id: id.clone(),
             request: approval_request,
-            reponse: None,
+            response: None,
             state: ApprovalState::Pending
         };
         log::error!("PARTE 8");
@@ -325,14 +325,14 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
                     .generate_vote(&id, true)
                     .await?
                     .expect("Request should be in data structure");
-                return Ok(Ok(Some((vote.reponse.unwrap(), sender))));
+                return Ok(Ok(Some((vote.response.unwrap(), sender))));
             }
             VotationType::AlwaysReject => {
                 let (vote, sender) = self
                     .generate_vote(&id, false)
                     .await?
                     .expect("Request should be in data structure");
-                return Ok(Ok(Some((vote.reponse.unwrap(), sender))));
+                return Ok(Ok(Some((vote.response.unwrap(), sender))));
             }
         }
     }
@@ -364,7 +364,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             .sign(&response)
             .map_err(|_| ApprovalManagerError::SignProcessFailed)?;
         data.state = ApprovalState::Responded;
-        data.reponse = Some(Signed::<ApprovalResponse> {
+        data.response = Some(Signed::<ApprovalResponse> {
             content: response,
             signature,
         });

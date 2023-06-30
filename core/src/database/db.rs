@@ -24,21 +24,37 @@ use super::{
     DatabaseCollection, DatabaseManager,
 };
 
+/// A struct representing a database that stores TAPLE data.
 pub struct DB<C: DatabaseCollection> {
+    /// The signature database.
     signature_db: SignatureDb<C>,
+    /// The subject database.
     subject_db: SubjectDb<C>,
+    /// The event database.
     event_db: EventDb<C>,
+    /// The prevalidated event database.
     prevalidated_event_db: PrevalidatedEventDb<C>,
+    /// The event request database.
     event_request_db: EventRequestDb<C>,
+    /// The request database.
     request_db: RequestDb<C>,
+    /// The controller ID database.
     controller_id_db: ControllerIdDb<C>,
+    /// The notary database.
     notary_db: NotaryDb<C>,
+    /// The contract database.
     contract_db: ContractDb<C>,
+    /// The witness signatures database.
     witness_signatures_db: WitnessSignaturesDb<C>,
+    /// The subject by governance database.
     subject_by_governance_db: SubjectByGovernanceDb<C>,
+    /// The keys database.
     keys_db: KeysDb<C>,
+    /// The preauthorized subjects and providers database.
     preauthorized_subjects_and_providers_db: PreauthorizedSbujectsAndProovidersDb<C>,
+    /// The LCE validation proofs database.
     lce_validation_proofs_db: LceValidationProofs<C>,
+    /// The approvals database.
     approvals_db: ApprovalsDb<C>,
 }
 

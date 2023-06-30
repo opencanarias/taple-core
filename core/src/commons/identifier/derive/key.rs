@@ -8,7 +8,7 @@ use std::str::FromStr;
 use super::{Derivator, SignatureDerivator};
 use crate::identifier::{error::Error, key_identifier::KeyIdentifier};
 
-/// Enumeration with key derivator types
+/// An enumeration of key derivator types.
 #[derive(
     Debug,
     PartialEq,
@@ -23,7 +23,9 @@ use crate::identifier::{error::Error, key_identifier::KeyIdentifier};
     PartialOrd,
 )]
 pub enum KeyDerivator {
+    /// The Ed25519 key derivator.
     Ed25519,
+    /// The Secp256k1 key derivator.
     Secp256k1,
 }
 

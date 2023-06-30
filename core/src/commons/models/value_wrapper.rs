@@ -8,6 +8,7 @@ use crate::{commons::errors::SubjectError, DigestIdentifier};
 
 use super::HashId;
 
+/// A struct representing a wrapper around a JSON value.
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct ValueWrapper(pub Value);
 

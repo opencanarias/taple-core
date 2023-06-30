@@ -15,10 +15,15 @@ where
     fn create_collection(&self, identifier: &str) -> C;
 }
 
+/// A trait representing a collection of key-value pairs in a database.
 pub trait DatabaseCollection: Sync + Send {
+    /// Retrieves the value associated with the given key.
     fn get(&self, key: &str) -> Result<Vec<u8>, Error>;
+    /// Associates the given value with the given key.
     fn put(&self, key: &str, data: Vec<u8>) -> Result<(), Error>;
+    /// Removes the value associated with the given key.
     fn del(&self, key: &str) -> Result<(), Error>;
+    /// Returns an iterator over the key-value pairs in the collection.
     fn iter<'a>(
         &'a self,
         reverse: bool,

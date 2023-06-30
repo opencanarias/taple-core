@@ -9,18 +9,30 @@ use serde::{Deserialize, Serialize};
 
 use super::{state::Subject, HashId};
 
+/// A struct representing a validation proof.
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct ValidationProof {
+    /// The identifier of the subject being validated.
     pub subject_id: DigestIdentifier,
+    /// The identifier of the schema used to validate the subject.
     pub schema_id: String,
+    /// The namespace of the subject being validated.
     pub namespace: String,
+    /// The name of the subject being validated.
     pub name: String,
+    /// The identifier of the public key of the subject being validated.
     pub subject_public_key: KeyIdentifier,
+    /// The identifier of the governance contract associated with the subject being validated.
     pub governance_id: DigestIdentifier,
+    /// The version of the governance contract that created the subject being validated.
     pub genesis_governance_version: u64,
+    /// The sequence number of the subject being validated.
     pub sn: u64,
+    /// The identifier of the previous event in the validation chain.
     pub prev_event_hash: DigestIdentifier,
+    /// The identifier of the current event in the validation chain.
     pub event_hash: DigestIdentifier,
+    /// The version of the governance contract used to validate the subject.
     pub governance_version: u64,
 }
 

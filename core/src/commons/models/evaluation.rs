@@ -9,11 +9,16 @@ use crate::{
 
 use super::HashId;
 
+/// A struct representing an evaluation request.
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct EvaluationRequest {
+    /// The signed event request.
     pub event_request: Signed<EventRequest>,
+    /// The context in which the evaluation is being performed.
     pub context: SubjectContext,
+    /// The sequence number of the event.
     pub sn: u64,
+    /// The version of the governance contract.
     pub gov_version: u64,
 }
 // firmada por sujeto
@@ -30,12 +35,18 @@ pub struct SubjectContext {
     //pub governance_version: u64, // está en evento
 }
 
+/// A struct representing an evaluation response.
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct EvaluationResponse {
-    pub patch: ValueWrapper, // cambiar
+    /// The patch to apply to the state.
+    pub patch: ValueWrapper,
+    /// The hash of the evaluation request being responded to.
     pub eval_req_hash: DigestIdentifier,
+    /// The hash of the state after applying the patch.
     pub state_hash: DigestIdentifier,
-    pub eval_success: bool, // Se ejecutó con exito y se validó el resultado contra el esquema
+    /// Whether the evaluation was successful and the result was validated against the schema.
+    pub eval_success: bool,
+    /// Whether approval is required for the evaluation to be applied to the state.
     pub appr_required: bool,
 }
 

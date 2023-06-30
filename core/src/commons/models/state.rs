@@ -14,52 +14,59 @@ use serde_json::Value;
 
 use super::{evaluation::SubjectContext, request::EventRequest, value_wrapper::ValueWrapper};
 
+/// A struct representing a TAPLE subject.
 #[derive(Debug, Deserialize, Serialize, Clone, BorshSerialize, BorshDeserialize)]
 pub struct Subject {
+    /// The key pair associated with the subject, if any.
     pub keys: Option<KeyPair>,
-    /// Subject identifier
+    /// The identifier of the subject.
     pub subject_id: DigestIdentifier,
-    /// Governance identifier
+    /// The identifier of the governance contract associated with the subject.
     pub governance_id: DigestIdentifier,
-    /// Current sequence number of the subject
+    /// The current sequence number of the subject.
     pub sn: u64,
+    /// The version of the governance contract that created the subject.
     pub genesis_gov_version: u64,
-    /// Public key of the subject
+    /// The identifier of the public key of the subject owner.
     pub public_key: KeyIdentifier,
+    /// The namespace of the subject.
     pub namespace: String,
+    /// The name of the subject.
     pub name: String,
-    /// Identifier of the schema used by the subject and defined in associated governance
+    /// The identifier of the schema used to validate the subject.
     pub schema_id: String,
-    /// Subject owner identifier
+    /// The identifier of the public key of the subject owner.
     pub owner: KeyIdentifier,
-    /// Subject creator identifier
+    /// The identifier of the public key of the subject creator.
     pub creator: KeyIdentifier,
-    /// Current status of the subject
+    /// The current status of the subject.
     pub properties: ValueWrapper,
-    /// Indicates if the subject is active or not
+    /// Indicates whether the subject is active or not.
     pub active: bool,
 }
 
+/// A struct representing the data associated with a TAPLE subject.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct SubjectData {
-    /// Subject identifier
+    /// The identifier of the subject.
     pub subject_id: DigestIdentifier,
-    /// Governance identifier
+    /// The identifier of the governance contract associated with the subject.
     pub governance_id: DigestIdentifier,
-    /// Current sequence number of the subject
+    /// The current sequence number of the subject.
     pub sn: u64,
-    /// Public key of the subject
+    /// The identifier of the public key of the subject owner.
     pub public_key: KeyIdentifier,
+    /// The namespace of the subject.
     pub namespace: String,
-    /// Identifier of the schema used by the subject and defined in associated governance
+    /// The identifier of the schema used to validate the subject.
     pub schema_id: String,
-    /// Subject owner identifier
+    /// The identifier of the public key of the subject owner.
     pub owner: KeyIdentifier,
-    /// Subject creator identifier
+    /// The identifier of the public key of the subject creator.
     pub creator: KeyIdentifier,
-    /// Current status of the subject
+    /// The current status of the subject.
     pub properties: ValueWrapper,
-    /// Indicates if the subject is active or not
+    /// Indicates whether the subject is active or not.
     pub active: bool,
 }
 

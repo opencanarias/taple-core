@@ -13,15 +13,20 @@ use std::hash::Hash;
 
 use super::HashId;
 
+/// A struct representing an approval request.
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct ApprovalRequest {
-    // Evaluation Request
+    /// The signed event request.
     pub event_request: Signed<EventRequest>,
+    /// The sequence number of the event.
     pub sn: u64,
+    /// The version of the governance contract.
     pub gov_version: u64,
-    // Evaluation Response
-    pub patch: ValueWrapper, // cambiar
+    /// The patch to apply to the state.
+    pub patch: ValueWrapper,
+    /// The hash of the state after applying the patch.
     pub state_hash: DigestIdentifier,
+    /// The hash of the previous event.
     pub hash_prev_event: DigestIdentifier,
 }
 
@@ -39,6 +44,7 @@ impl Signed<ApprovalRequest> {
     }
 }
 
+/// A struct representing an approval response.
 #[derive(
     Debug,
     Clone,
@@ -52,7 +58,9 @@ impl Signed<ApprovalRequest> {
     Hash,
 )]
 pub struct ApprovalResponse {
+    /// The hash of the approval request being responded to.
     pub appr_req_hash: DigestIdentifier,
+    /// Whether the approval request was approved or not.
     pub approved: bool,
 }
 
@@ -101,17 +109,26 @@ impl Hash for UniqueApproval {
     }
 }
 
+/// An enum representing the state of an approval entity.
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub enum ApprovalState {
+    /// The approval entity is pending a response.
     Pending,
+    /// The approval entity has received a response.
     Responded,
+    /// The approval entity is obsolete.
     Obsolete,
 }
 
+/// A struct representing an approval entity.
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct ApprovalEntity {
+    /// The identifier of the approval entity.
     pub id: DigestIdentifier,
+    /// The signed approval request.
     pub request: Signed<ApprovalRequest>,
-    pub reponse: Option<Signed<ApprovalResponse>>,
-    pub state: ApprovalState
+    /// The signed approval response, if one has been received.
+    pub response: Option<Signed<ApprovalResponse>>,
+    /// The state of the approval entity.
+    pub state: ApprovalState,
 }

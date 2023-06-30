@@ -277,7 +277,7 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
                     .await?
                 {
                     Ok((vote, owner)) => {
-                        let msg = create_approver_response(vote.reponse.clone().unwrap());
+                        let msg = create_approver_response(vote.response.clone().unwrap());
                         self.messenger_channel
                             .tell(MessageTaskCommand::Request(
                                 None,
