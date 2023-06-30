@@ -188,14 +188,18 @@ impl<C: DatabaseCollection> ApprovalsDb<C> {
         let quantity_is_positive = quantity > 0;
         let mut quantity = quantity;
         let mut from = from;
+        let mut continue_while: bool = true;
         if let Some(ApprovalState::Pending) = status {
-            while quantity != 0 {
+            while quantity != 0 && continue_while {
                 let approvals = get_by_range(
                     from.clone(),
                     quantity,
                     &self.pending_collection,
                     &self.pending_prefix,
                 )?;
+                if approvals.len() < quantity.abs() as usize {
+                    continue_while = false;
+                }
                 for approval_id in approvals.iter() {
                     let approval_id = deserialize::<DigestIdentifier>(&approval_id)
                         .map_err(|_| DbError::DeserializeError)?;
