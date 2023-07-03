@@ -58,6 +58,8 @@ pub struct SubjectData {
     pub public_key: KeyIdentifier,
     /// The namespace of the subject.
     pub namespace: String,
+    /// The name of the subject.
+    pub name: String,
     /// The identifier of the schema used to validate the subject.
     pub schema_id: String,
     /// The identifier of the public key of the subject owner.
@@ -83,6 +85,7 @@ impl From<Subject> for SubjectData {
             creator: subject.creator,
             properties: subject.properties,
             active: subject.active,
+            name: subject.name,
         }
     }
 }
