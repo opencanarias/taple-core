@@ -25,7 +25,7 @@ use crate::{
     utils::message::ledger::{request_event, request_gov_event},
     DatabaseCollection,
 };
-use crate::{ApprovalResponse, Event, KeyDerivator, Metadata, ValueWrapper};
+use crate::{ApprovalResponse, Event, KeyDerivator, Metadata, ValueWrapper, Notification};
 use std::collections::{hash_map::Entry, HashMap, HashSet};
 
 use super::errors::LedgerError;
@@ -45,6 +45,7 @@ pub struct Ledger<C: DatabaseCollection> {
     distribution_channel:
         SenderEnd<DistributionMessagesNew, Result<(), DistributionErrorResponses>>,
     our_id: KeyIdentifier,
+    notification_sender: tokio::sync::broadcast::Sender<Notification>,
 }
 
 impl<C: DatabaseCollection> Ledger<C> {
@@ -57,6 +58,7 @@ impl<C: DatabaseCollection> Ledger<C> {
             Result<(), DistributionErrorResponses>,
         >,
         our_id: KeyIdentifier,
+        notification_sender: tokio::sync::broadcast::Sender<Notification>,
     ) -> Self {
         Self {
             gov_api,
@@ -66,6 +68,7 @@ impl<C: DatabaseCollection> Ledger<C> {
             message_channel,
             distribution_channel,
             our_id,
+            notification_sender,
         }
     }
 

@@ -44,16 +44,15 @@ impl EventManagerInterface for EventManagerAPI {
     }
 }
 
-pub struct EventManager<C: DatabaseCollection> {
+pub struct LedgerManager<C: DatabaseCollection> {
     /// Communication channel for incoming petitions
     input_channel: MpscChannel<LedgerCommand, LedgerResponse>,
     inner_ledger: Ledger<C>,
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
-    notification_sender: tokio::sync::broadcast::Sender<Notification>,
 }
 
-impl<C: DatabaseCollection> EventManager<C> {
+impl<C: DatabaseCollection> LedgerManager<C> {
     pub fn new(
         input_channel: MpscChannel<LedgerCommand, LedgerResponse>,
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
@@ -76,10 +75,10 @@ impl<C: DatabaseCollection> EventManager<C> {
                 message_channel,
                 distribution_channel,
                 our_id,
+                notification_sender,
             ),
             shutdown_receiver,
             shutdown_sender,
-            notification_sender,
         }
     }
 
