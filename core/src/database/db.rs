@@ -389,13 +389,13 @@ impl<C: DatabaseCollection> DB<C> {
             .get_preauthorized_subject_and_providers(subject_id)
     }
 
-    pub fn get_preauthorized_subjects_and_providers(
+    pub fn get_allowed_subjects_and_providers(
         &self,
-        from: Option<isize>,
+        from: Option<String>,
         quantity: isize,
     ) -> Result<Vec<(DigestIdentifier, HashSet<KeyIdentifier>)>, Error> {
         self.preauthorized_subjects_and_providers_db
-            .get_preauthorized_subjects_and_providers(from, quantity)
+            .get_allowed_subjects_and_providers(from, quantity)
     }
 
     pub fn set_preauthorized_subject_and_providers(

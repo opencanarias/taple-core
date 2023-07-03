@@ -1,5 +1,5 @@
 use super::error::APIInternalError;
-use super::{ApiResponses, GetPreauthorizedSubjects};
+use super::{ApiResponses, GetAllowedSubjects};
 use crate::approval::error::ApprovalErrorResponse;
 #[cfg(feature = "aproval")]
 use crate::approval::manager::{ApprovalAPI, ApprovalAPIInterface};
@@ -259,7 +259,7 @@ impl<C: DatabaseCollection> InnerAPI<C> {
 
     pub async fn get_all_preauthorized_subjects_and_providers(
         &self,
-        data: GetPreauthorizedSubjects,
+        data: GetAllowedSubjects,
     ) -> Result<ApiResponses, APIInternalError> {
         let quantity = if data.quantity.is_none() {
             MAX_QUANTITY
@@ -268,7 +268,7 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         };
         match self
             .db
-            .get_preauthorized_subjects_and_providers(data.from, quantity)
+            .get_allowed_subjects_and_providers(data.from, quantity)
         {
             Ok(data) => Ok(ApiResponses::GetAllPreauthorizedSubjects(Ok(data))),
             Err(error) => Err(APIInternalError::DatabaseError(error.to_string())),

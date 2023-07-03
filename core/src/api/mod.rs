@@ -32,7 +32,7 @@ pub enum APICommands {
     #[cfg(feature = "aproval")]
     GetSingleRequest(DigestIdentifier),
     SetPreauthorizedSubject(DigestIdentifier, HashSet<KeyIdentifier>),
-    GetAllPreauthorizedSubjects(GetPreauthorizedSubjects),
+    GetAllPreauthorizedSubjects(GetAllowedSubjects),
     AddKeys(KeyDerivator),
     GetValidationProof(DigestIdentifier),
     GetRequest(DigestIdentifier),
@@ -106,7 +106,7 @@ pub struct GetGovernanceSubjects {
 }
 
 #[derive(Debug, Clone)]
-pub struct GetPreauthorizedSubjects {
-    pub from: Option<isize>,
+pub struct GetAllowedSubjects {
+    pub from: Option<String>,
     pub quantity: Option<i64>,
 }

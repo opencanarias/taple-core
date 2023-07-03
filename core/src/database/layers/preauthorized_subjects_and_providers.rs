@@ -33,15 +33,11 @@ impl<C: DatabaseCollection> PreauthorizedSbujectsAndProovidersDb<C> {
         Ok(result.1)
     }
 
-    pub fn get_preauthorized_subjects_and_providers(
+    pub fn get_allowed_subjects_and_providers(
         &self,
-        from: Option<isize>,
+        from: Option<String>,
         quantity: isize,
     ) -> Result<Vec<(DigestIdentifier, HashSet<KeyIdentifier>)>, DbError> {
-        let from = match from {
-            Some(from) => Some(from.to_string()),
-            None => None,
-        };
         let result = get_by_range(from, quantity, &self.collection, &self.prefix)?;
         let mut vec_result = vec![];
         for value in result {

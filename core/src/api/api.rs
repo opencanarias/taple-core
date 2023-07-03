@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use super::{
     error::{APIInternalError, ApiError},
     inner_api::InnerAPI,
-    APICommands, ApiResponses, GetPreauthorizedSubjects,
+    APICommands, ApiResponses, GetAllowedSubjects,
 };
 use super::{GetEvents, GetGovernanceSubjects};
 #[cfg(feature = "aproval")]
@@ -129,9 +129,9 @@ pub trait ApiModuleInterface {
         subject_id: &DigestIdentifier,
         providers: &HashSet<KeyIdentifier>,
     ) -> Result<(), ApiError>;
-    async fn get_all_preauthorized_subjects_and_providers(
+    async fn get_all_allowed_subjects_and_providers(
         &self,
-        from: Option<i64>,
+        from: Option<String>,
         quantity: Option<i64>,
     ) -> Result<Vec<(DigestIdentifier, HashSet<KeyIdentifier>)>, ApiError>;
     async fn add_keys(&self, derivator: KeyDerivator) -> Result<KeyIdentifier, ApiError>;
@@ -397,16 +397,16 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
-    async fn get_all_preauthorized_subjects_and_providers(
+    async fn get_all_allowed_subjects_and_providers(
         &self,
-        from: Option<i64>,
+        from: Option<String>,
         quantity: Option<i64>,
     ) -> Result<Vec<(DigestIdentifier, HashSet<KeyIdentifier>)>, ApiError> {
         let response = self
             .sender
             .ask(APICommands::GetAllPreauthorizedSubjects(
-                GetPreauthorizedSubjects {
-                    from: from.map(|val| val as isize),
+                GetAllowedSubjects {
+                    from,
                     quantity,
                 },
             ))

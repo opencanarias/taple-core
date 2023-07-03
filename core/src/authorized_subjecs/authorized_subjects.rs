@@ -50,7 +50,7 @@ impl<C: DatabaseCollection> AuthorizedSubjects<C> {
         // Obtenemos todos los sujetos preautorizados de la base de datos.
         let preauthorized_subjects = match self
             .database
-            .get_preauthorized_subjects_and_providers(None, 10000)
+            .get_allowed_subjects_and_providers(None, 10000)
         {
             Ok(psp) => psp,
             Err(error) => {
