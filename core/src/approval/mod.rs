@@ -2,9 +2,11 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    commons::models::approval::ApprovalEntity,
     identifier::{DigestIdentifier, KeyIdentifier},
+    request::EventRequest,
     signature::{Signature, Signed},
-    request::EventRequest, ApprovalRequest, ValueWrapper, commons::models::approval::ApprovalEntity,
+    ApprovalRequest, ValueWrapper,
 };
 
 use self::error::ApprovalErrorResponse;
@@ -18,6 +20,10 @@ pub(crate) mod manager;
 #[derive(Clone, Serialize, Deserialize, Debug, BorshSerialize, BorshDeserialize)]
 pub enum ApprovalMessages {
     RequestApproval(Signed<ApprovalRequest>),
+    RequestApprovalWithSender {
+        approval: Signed<ApprovalRequest>,
+        sender: KeyIdentifier,
+    },
     EmitVote(EmitVote),
     GetAllRequest,
     GetSingleRequest(DigestIdentifier),

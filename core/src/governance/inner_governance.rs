@@ -117,9 +117,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         for role in roles {
             match stage {
                 ValidationStage::Witness => {
-                    if role.role != stage.to_role()
-                        && role.role != ValidationStage::Approve.to_role()
-                    {
+                    if role.role != stage.to_role() {
                         continue;
                     }
                 }
@@ -339,13 +337,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         invoker: KeyIdentifier,
     ) -> Result<bool, RequestError> {
         let is_member = members.0.contains(&invoker);
-        let mut permisions_exists = false;
-        log::warn!("IS MEMBER: {}", is_member);
-        log::warn!("ROLES_: {:?}", roles);
         for role in roles {
-            log::warn!("AAAAAAAAAAAA: {}", &role.role != stage.to_str());
-            log::warn!("ROLE: {}", role.role);
-            log::warn!("ROLE: {}", stage.to_role());
             if &role.role != stage.to_role() {
                 continue;
             }

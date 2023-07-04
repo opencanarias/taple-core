@@ -28,6 +28,8 @@ pub struct ApprovalRequest {
     pub state_hash: DigestIdentifier,
     /// The hash of the previous event.
     pub hash_prev_event: DigestIdentifier,
+    /// The hash of the previous event.
+    pub gov_id: DigestIdentifier,
 }
 
 impl HashId for ApprovalRequest {
