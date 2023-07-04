@@ -25,7 +25,7 @@ use crate::event::{EventCommand, EventResponse};
 use crate::governance::GovernanceAPI;
 use crate::governance::{governance::Governance, GovernanceMessage, GovernanceResponse};
 use crate::ledger::manager::EventManagerAPI;
-use crate::ledger::{manager::EventManager as LedgerManager, LedgerCommand, LedgerResponse};
+use crate::ledger::{manager::LedgerManager as LedgerManager, LedgerCommand, LedgerResponse};
 use crate::message::{
     MessageContent, MessageReceiver, MessageSender, MessageTaskCommand, MessageTaskManager,
     NetworkEvent,
