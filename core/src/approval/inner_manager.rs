@@ -21,8 +21,7 @@ use crate::database::Error as DbError;
 use crate::governance::stage::ValidationStage;
 
 pub trait NotifierInterface {
-    fn request_reached(&self, id: &str, subject_id: &str);
-    fn request_deleted(&self, id: &str, subject_id: &str);
+    fn request_reached(&self, id: &str, subject_id: &str, sn: u64);
 }
 
 pub struct RequestNotifier {
@@ -36,25 +35,11 @@ impl RequestNotifier {
 }
 
 impl NotifierInterface for RequestNotifier {
-    fn request_reached(&self, id: &str, subject_id: &str) {
-        let _ = self.sender.send(Notification::RequestReached {
-            request_id: id.clone().to_owned(),
-            subject_id: subject_id.clone().to_owned(),
-            default_message: format!(
-                "Se ha recibido la petición {} del sujeto {}",
-                id, subject_id
-            ),
-        });
-    }
-
-    fn request_deleted(&self, id: &str, subject_id: &str) {
-        let _ = self.sender.send(Notification::RequestDeleted {
-            request_id: id.clone().to_owned(),
-            subject_id: subject_id.clone().to_owned(),
-            default_message: format!(
-                "Se ha borrado la petición {} del sujeto {} debido a un cambio en la gobernanza",
-                id, subject_id
-            ),
+    fn request_reached(&self, id: &str, subject_id: &str, sn: u64) {
+        let _ = self.sender.send(Notification::ApprovalReceived {
+            id: id.to_owned(),
+            subject_id: subject_id.to_owned(),
+            sn
         });
     }
 }
@@ -151,10 +136,6 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             self.database.del_approval(&request).map_err(|_| ApprovalManagerError::DatabaseError)?;
             self.database.del_governance_aproval_index(&governance_id, &request).map_err(|_| ApprovalManagerError::DatabaseError)?;
             self.database.del_subject_aproval_index(&subject_id, &request).map_err(|_| ApprovalManagerError::DatabaseError)?;
-            self.notifier.request_deleted(
-                &request.to_str(),
-                &subject_id.to_str(),
-            );
         }
         Ok(())
     }
@@ -292,7 +273,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         // - VotationType::Normal => Se guarda en el sistema a espera del usuario
         // - VotarionType::AlwaysAccept => Se emite voto afirmativo
         // - VotarionType::AlwaysReject => Se emite voto negativo
-
+        let sn = approval_request.content.sn;
         let approval_entity = ApprovalEntity {
             id: id.clone(),
             request: approval_request,
@@ -316,7 +297,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         };
         log::error!("PARTE 10");
         self.notifier
-            .request_reached(&id.to_str(), &subject_data.subject_id.to_str());
+            .request_reached(&id.to_str(), &subject_data.subject_id.to_str(), sn);
 
         match self.pass_votation {
             VotationType::Normal => return Ok(Ok(None)),
