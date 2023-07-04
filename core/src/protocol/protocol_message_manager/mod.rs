@@ -138,10 +138,12 @@ impl ProtocolManager {
                             log::error!("Evaluation Event Received in protocol manager");
                             return Ok(());
                         }
-                        EvaluatorMessage::AskForEvaluation(evaluation_request) => EvaluatorMessage::EvaluationEvent {
-                            evaluation_request,
-                            sender,
-                        },
+                        EvaluatorMessage::AskForEvaluation(evaluation_request) => {
+                            EvaluatorMessage::EvaluationEvent {
+                                evaluation_request,
+                                sender,
+                            }
+                        }
                     };
                     return Ok(self
                         .evaluation_sx
@@ -180,9 +182,21 @@ impl ProtocolManager {
             TapleMessages::ApprovalMessages(data) => {
                 #[cfg(feature = "aproval")]
                 {
+                    let approval_command = match data {
+                        ApprovalMessages::RequestApproval(approval) => {
+                            ApprovalMessages::RequestApprovalWithSender { approval, sender }
+                        }
+                        ApprovalMessages::RequestApprovalWithSender { approval, sender } => {
+                            log::error!(
+                                "Request Approval with Sender Received in protocol manager"
+                            );
+                            return Ok(());
+                        }
+                        _ => data,
+                    };
                     return Ok(self
                         .approval_sx
-                        .tell(data)
+                        .tell(approval_command)
                         .await
                         .map_err(|_| ProtocolErrors::ChannelClosed)?);
                 }
