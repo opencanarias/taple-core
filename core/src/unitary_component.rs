@@ -25,7 +25,7 @@ use crate::event::{EventCommand, EventResponse};
 use crate::governance::GovernanceAPI;
 use crate::governance::{governance::Governance, GovernanceMessage, GovernanceResponse};
 use crate::ledger::manager::EventManagerAPI;
-use crate::ledger::{manager::LedgerManager as LedgerManager, LedgerCommand, LedgerResponse};
+use crate::ledger::{manager::LedgerManager, LedgerCommand, LedgerResponse};
 use crate::message::{
     MessageContent, MessageReceiver, MessageSender, MessageTaskCommand, MessageTaskManager,
     NetworkEvent,
@@ -33,7 +33,8 @@ use crate::message::{
 use crate::network::network::{NetworkProcessor, SendMode};
 #[cfg(feature = "validation")]
 use crate::notary::manager::NotaryManager;
-use crate::notary::{NotaryCommand, NotaryResponse};
+use crate::notary::NotaryCommand;
+use crate::notary::NotaryResponse;
 use crate::protocol::protocol_message_manager::{ProtocolManager, TapleMessages};
 use crate::signature::Signed;
 use futures::future::BoxFuture;

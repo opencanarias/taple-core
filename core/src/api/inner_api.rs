@@ -364,6 +364,7 @@ impl<C: DatabaseCollection> InnerAPI<C> {
     }
 }
 
+#[allow(dead_code)]
 fn get_init_and_end<T>(
     from: Option<usize>,
     quantity: Option<usize>,

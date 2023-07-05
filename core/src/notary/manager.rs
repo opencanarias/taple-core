@@ -11,10 +11,12 @@ use crate::{
 };
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub struct NotaryAPI {
     sender: SenderEnd<NotaryCommand, NotaryResponse>,
 }
 
+#[allow(dead_code)]
 impl NotaryAPI {
     pub fn new(sender: SenderEnd<NotaryCommand, NotaryResponse>) -> Self {
         Self { sender }

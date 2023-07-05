@@ -6,7 +6,7 @@ use crate::{
     identifier::{DigestIdentifier, KeyIdentifier},
     request::EventRequest,
     signature::{Signature, Signed},
-    ApprovalRequest, ValueWrapper,
+    ApprovalRequest,
 };
 
 use self::error::ApprovalErrorResponse;
@@ -30,6 +30,7 @@ pub enum ApprovalMessages {
 }
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub enum ApprovalResponses {
     RequestApproval(Result<(), ApprovalErrorResponse>),
     EmitVote(Result<ApprovalEntity, ApprovalErrorResponse>),

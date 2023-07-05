@@ -45,6 +45,7 @@ macro_rules! test_database_manager_trait {
                 value: String,
             }
 
+            #[allow(dead_code)]
             fn get_data() -> Result<Vec<Vec<u8>>, Error> {
                 let data1 = Data {
                     id: 1,
@@ -127,6 +128,7 @@ macro_rules! test_database_manager_trait {
                 assert_eq!(result.unwrap(), data[0]);
             }
 
+            #[allow(dead_code)]
             fn build_state(collection: &$type2) {
                 let data = get_data().unwrap();
                 let result = collection.put("a", data[0].to_owned());
@@ -137,6 +139,7 @@ macro_rules! test_database_manager_trait {
                 assert!(result.is_ok());
             }
 
+            #[allow(dead_code)]
             fn build_initial_data() -> (Vec<&'static str>, Vec<Vec<u8>>) {
                 let keys = vec!["a", "b", "c"];
                 let data = get_data().unwrap();

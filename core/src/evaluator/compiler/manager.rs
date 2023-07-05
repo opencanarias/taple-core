@@ -17,6 +17,7 @@ pub struct TapleCompiler<C: DatabaseCollection, G: GovernanceInterface> {
 }
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 enum CompilerCodes {
     MustShutdown,
     Ok,
@@ -93,7 +94,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface + Send> TapleCompiler<C, G> {
         &mut self,
         command: GovernanceUpdatedMessage,
     ) -> Result<CompilerCodes, CompilerError> {
-        let response = match command {
+        let _response = match command {
             GovernanceUpdatedMessage::GovernanceUpdated {
                 governance_id,
                 governance_version,

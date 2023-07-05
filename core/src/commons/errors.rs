@@ -182,6 +182,7 @@ pub enum SubjectError {
 }
 
 #[derive(Error, Debug, Clone, PartialEq)]
+#[allow(dead_code)]
 pub enum ProtocolErrors {
     #[error("Errors that can never happen")]
     InfalibleError {

@@ -17,8 +17,6 @@ use crate::{
 use super::{
     error::{ApprovalErrorResponse, ApprovalManagerError},
 };
-use crate::database::Error as DbError;
-use crate::governance::stage::ValidationStage;
 
 pub trait NotifierInterface {
     fn request_reached(&self, id: &str, subject_id: &str, sn: u64);
@@ -101,6 +99,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             .unwrap()
     }
 
+    #[allow(dead_code)]
     pub fn change_pass_votation(&mut self, pass_votation: VotationType) {
         self.pass_votation = pass_votation;
     }
@@ -368,6 +367,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
     }
 }
 
+#[allow(dead_code)]
 fn event_proposal_hash_gen(
     approval_request: &Signed<ApprovalRequest>,
 ) -> Result<DigestIdentifier, ApprovalManagerError> {
@@ -375,6 +375,7 @@ fn event_proposal_hash_gen(
         .map_err(|_| ApprovalManagerError::HashGenerationFailed)?)
 }
 
+#[allow(dead_code)]
 fn create_metadata(subject_data: &Subject, governance_version: u64) -> Metadata {
     Metadata {
         namespace: subject_data.namespace.clone(),

@@ -35,7 +35,7 @@ mod test {
         },
         identity::Keypair,
         noise,
-        request_response::{RequestId, RequestResponseEvent},
+        request_response::RequestResponseEvent,
         swarm::{Swarm, SwarmEvent},
         yamux, Multiaddr,
     };
@@ -59,9 +59,9 @@ mod test {
                             assert_eq!(peer, remote_peer1);
                             match message {
                                 libp2p::request_response::RequestResponseMessage::Request {
-                                    request_id,
                                     request,
                                     channel,
+                                    ..
                                 } => {
                                     println!("Request s2");
                                     assert_eq!(request, payload);
@@ -71,14 +71,12 @@ mod test {
                                         .expect("va bien");
                                 }
                                 libp2p::request_response::RequestResponseMessage::Response {
-                                    request_id,
-                                    response,
+                                    ..
                                 } => panic!(),
                             }
                         }
                         SwarmEvent::Behaviour(RequestResponseEvent::ResponseSent {
-                            peer,
-                            request_id,
+                            peer, ..
                         }) => {
                             println!("Response sent s2");
                             assert_eq!(peer, remote_peer1);
@@ -95,7 +93,6 @@ mod test {
             });
             swarm1.dial(addr2).unwrap();
             let mut response_received = false;
-            let mut req_id: Option<RequestId> = None;
             loop {
                 match swarm1.select_next_some().await {
                     SwarmEvent::Behaviour(RequestResponseEvent::Message { peer, message }) => {
@@ -103,15 +100,13 @@ mod test {
                         assert_eq!(peer, remote_peer2);
                         match message {
                             libp2p::request_response::RequestResponseMessage::Request {
-                                request_id,
-                                request,
-                                channel,
+                                ..
                             } => {
                                 panic!()
                             }
                             libp2p::request_response::RequestResponseMessage::Response {
-                                request_id,
                                 response,
+                                ..
                             } => {
                                 println!("Response s1");
                                 assert_eq!(response, b"world!".to_vec());
@@ -124,11 +119,9 @@ mod test {
                     }
                     SwarmEvent::ConnectionEstablished { peer_id, .. } => {
                         println!("Request s1");
-                        req_id = Some(
-                            swarm1
-                                .behaviour_mut()
-                                .send_request(&peer_id, b"Hello!".to_vec()),
-                        );
+                        swarm1
+                            .behaviour_mut()
+                            .send_request(&peer_id, b"Hello!".to_vec());
                     }
                     SwarmEvent::ConnectionClosed { .. } => {
                         sleep(Duration::from_secs(1));

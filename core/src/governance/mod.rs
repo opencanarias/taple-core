@@ -13,7 +13,6 @@ pub mod stage;
 pub use governance::{GovernanceAPI, GovernanceInterface};
 
 use error::RequestError;
-use serde_json::Value;
 
 use self::stage::ValidationStage;
 

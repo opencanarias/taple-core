@@ -663,7 +663,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                         let (signers, quorum) = self
                             .get_signers_and_quorum(metadata.clone(), ValidationStage::Validate)
                             .await?;
-                        let prev_event_hash = if event.content.sn == 0 {
+                        let _prev_event_hash = if event.content.sn == 0 {
                             return Err(LedgerError::StateEventWithZeroSNDetected);
                         } else {
                             DigestIdentifier::from_serializable_borsh(
@@ -678,30 +678,30 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 ))
                             })?
                         };
-                        let validation_proof_new = ValidationProof::new_from_transfer_event(
-                            &subject,
-                            event.content.sn,
-                            prev_event_hash,
-                            event_hash.clone(),
-                            event.content.gov_version,
-                            transfer_request.public_key.clone(),
-                        );
-                        // let validation_proof = ValidationProof::new(
-                        //     &subject,7 7
+                        // let validation_proof_new = ValidationProof::new_from_transfer_event(
+                        //     &subject,
                         //     event.content.sn,
                         //     prev_event_hash,
-                        //     event.signature.content.event_content_hash.clone(),
-                        //     state_hash,
+                        //     event_hash.clone(),
                         //     event.content.gov_version,
+                        //     transfer_request.public_key.clone(),
                         // );
-                        let notary_hash = DigestIdentifier::from_serializable_borsh(
-                            &validation_proof,
-                        )
-                        .map_err(|_| {
-                            LedgerError::CryptoError(String::from(
-                                "Error calculating the hash of the serializable",
-                            ))
-                        })?;
+                        // // let validation_proof = ValidationProof::new(
+                        // //     &subject,7 7
+                        // //     event.content.sn,
+                        // //     prev_event_hash,
+                        // //     event.signature.content.event_content_hash.clone(),
+                        // //     state_hash,
+                        // //     event.content.gov_version,
+                        // // );
+                        // let notary_hash = DigestIdentifier::from_serializable_borsh(
+                        //     &validation_proof,
+                        // )
+                        // .map_err(|_| {
+                        //     LedgerError::CryptoError(String::from(
+                        //         "Error calculating the hash of the serializable",
+                        //     ))
+                        // })?;
                         verify_signatures(&signatures, &signers, quorum, &validation_proof)?;
                         // Comprobar si es evento siguiente o LCE
                         if event.content.sn == subject.sn + 1 && ledger_state.head.is_none() {
@@ -940,14 +940,14 @@ impl<C: DatabaseCollection> Ledger<C> {
                         self.check_transfer_event(event.clone())?;
                         // self.check_event(event.clone(), metadata.clone()).await?;
                         // Si no está en el mapa, añadirlo y enviar mensaje a gov de subject updated con el id y el sn
-                        let notary_hash = DigestIdentifier::from_serializable_borsh(
-                            &validation_proof,
-                        )
-                        .map_err(|_| {
-                            LedgerError::CryptoError(String::from(
-                                "Error calculating the hash of the serializable",
-                            ))
-                        })?;
+                        // let notary_hash = DigestIdentifier::from_serializable_borsh(
+                        //     &validation_proof,
+                        // )
+                        // .map_err(|_| {
+                        //     LedgerError::CryptoError(String::from(
+                        //         "Error calculating the hash of the serializable",
+                        //     ))
+                        // })?;
                         let (signers, quorum) = self
                             .get_signers_and_quorum(metadata.clone(), ValidationStage::Validate)
                             .await?;
@@ -1228,7 +1228,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                         let (signers, quorum) = self
                             .get_signers_and_quorum(metadata.clone(), ValidationStage::Validate)
                             .await?;
-                        let prev_event_hash = if event.content.sn == 0 {
+                        let _prev_event_hash = if event.content.sn == 0 {
                             DigestIdentifier::default()
                         } else {
                             DigestIdentifier::from_serializable_borsh(
@@ -1500,14 +1500,14 @@ impl<C: DatabaseCollection> Ledger<C> {
                         // )
                         // .await?;
                         // Si no está en el mapa, añadirlo y enviar mensaje a gov de subject updated con el id y el sn
-                        let notary_hash = DigestIdentifier::from_serializable_borsh(
-                            &validation_proof,
-                        )
-                        .map_err(|_| {
-                            LedgerError::CryptoError(String::from(
-                                "Error calculating the hash of the serializable",
-                            ))
-                        })?;
+                        // let notary_hash = DigestIdentifier::from_serializable_borsh(
+                        //     &validation_proof,
+                        // )
+                        // .map_err(|_| {
+                        //     LedgerError::CryptoError(String::from(
+                        //         "Error calculating the hash of the serializable",
+                        //     ))
+                        // })?;
                         let (signers, quorum) = self
                             .get_signers_and_quorum(metadata.clone(), ValidationStage::Validate)
                             .await?;
@@ -1672,9 +1672,8 @@ impl<C: DatabaseCollection> Ledger<C> {
                             .get_signers_and_quorum(metadata.clone(), ValidationStage::Validate)
                             .await?;
                         log::warn!("GET SIGNERS AND QUORUM");
-                        let state_hash =
-                            subject.state_hash_after_apply(event.content.patch.clone())?;
-
+                        // let state_hash =
+                        //     subject.state_hash_after_apply(event.content.patch.clone())?;
                         let notary_hash = DigestIdentifier::from_serializable_borsh(
                             &validation_proof,
                         )
@@ -1686,14 +1685,14 @@ impl<C: DatabaseCollection> Ledger<C> {
 
                         log::warn!("NOTARY HASH QUE ME LLEGA {}", notary_hash.to_str());
                         log::warn!("VALIDATION PROOF {:?}", validation_proof);
-                        let notary_hash = DigestIdentifier::from_serializable_borsh(
-                            &validation_proof,
-                        )
-                        .map_err(|_| {
-                            LedgerError::CryptoError(String::from(
-                                "Error calculating the hash of the serializable",
-                            ))
-                        })?;
+                        // let notary_hash = DigestIdentifier::from_serializable_borsh(
+                        //     &validation_proof,
+                        // )
+                        // .map_err(|_| {
+                        //     LedgerError::CryptoError(String::from(
+                        //         "Error calculating the hash of the serializable",
+                        //     ))
+                        // })?;
                         log::warn!("SIGNATURES SIZE: {}", signatures.len());
                         log::warn!("SIGNERS SIZE {}", signers.len());
                         verify_signatures(&signatures, &signers, quorum, &validation_proof)?;
@@ -1929,14 +1928,14 @@ impl<C: DatabaseCollection> Ledger<C> {
                         // )
                         // .await?;
                         // Si no está en el mapa, añadirlo y enviar mensaje a gov de subject updated con el id y el sn
-                        let notary_hash = DigestIdentifier::from_serializable_borsh(
-                            &validation_proof,
-                        )
-                        .map_err(|_| {
-                            LedgerError::CryptoError(String::from(
-                                "Error calculating the hash of the serializable",
-                            ))
-                        })?;
+                        // let notary_hash = DigestIdentifier::from_serializable_borsh(
+                        //     &validation_proof,
+                        // )
+                        // .map_err(|_| {
+                        //     LedgerError::CryptoError(String::from(
+                        //         "Error calculating the hash of the serializable",
+                        //     ))
+                        // })?;
                         let (signers, quorum) = self
                             .get_signers_and_quorum(metadata.clone(), ValidationStage::Validate)
                             .await?;
@@ -2202,7 +2201,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                                 head: Some(head),
                                             },
                                         );
-                                        let subject_owner =
+                                        let _subject_owner =
                                             self.database.get_subject(&subject_id)?.owner;
                                         // No se llega hasta el LCE con el event sourcing
                                         // Pedir siguiente evento
@@ -2679,7 +2678,7 @@ impl<C: DatabaseCollection> Ledger<C> {
             EventRequest::Fact(state_request) => {
                 self.event_sourcing_state(state_request.subject_id.clone(), event.content.sn, event)
             }
-            EventRequest::EOL(eol_request) => self.event_sourcing_eol(event),
+            EventRequest::EOL(_) => self.event_sourcing_eol(event),
         }
     }
 
@@ -2724,7 +2723,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                 subject_id: subject.subject_id.to_str(),
             })
             .map_err(|_| LedgerError::NotificationChannelError)?;
-        self.database.set_subject(&subject_id, subject);
+        self.database.set_subject(&subject_id, subject)?;
         Ok(())
     }
 
@@ -2767,6 +2766,7 @@ impl<C: DatabaseCollection> Ledger<C> {
     }
 }
 
+#[allow(dead_code)]
 fn verify_approval_signatures(
     approvals: &HashSet<Signed<ApprovalResponse>>,
     signers: &HashSet<KeyIdentifier>,

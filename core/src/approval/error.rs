@@ -3,6 +3,7 @@ use thiserror::Error;
 use crate::{DigestIdentifier, KeyIdentifier};
 
 #[derive(Error, Debug, Clone)]
+#[allow(dead_code)]
 pub enum ApprovalManagerError {
     #[error("Ask not allowed for this module")]
     AskNoAllowed,

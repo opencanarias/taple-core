@@ -276,7 +276,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                 let result = (signers.len() as f64 * porcentaje).ceil() as u32;
                 Ok(Ok(result))
             }
-            Quorum::BFT { BFT } => todo!(),
+            Quorum::BFT { .. } => todo!(),
         }
     }
 
@@ -474,7 +474,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                 governance_id: governance_id.clone(),
                 governance_version,
             })
-            .map_err(|e| InternalError::ChannelError {
+            .map_err(|_| InternalError::ChannelError {
                 source: ChannelErrors::ChannelClosed,
             })?;
         Ok(Ok(()))
@@ -586,6 +586,7 @@ fn get_members_from_governance(
     Ok(member_ids_names)
 }
 
+#[allow(dead_code)]
 fn contains_common_element(set1: &HashSet<String>, vec2: &[String]) -> bool {
     vec2.iter().any(|s| set1.contains(s))
 }

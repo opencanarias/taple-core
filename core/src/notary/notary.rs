@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use crate::{
     commons::{
@@ -9,7 +9,6 @@ use crate::{
     },
     event::EventCommand,
     governance::{stage::ValidationStage, GovernanceAPI, GovernanceInterface},
-    identifier::DigestIdentifier,
     message::{MessageConfig, MessageTaskCommand},
     protocol::protocol_message_manager::TapleMessages,
     signature::Signature,
@@ -104,9 +103,10 @@ impl<C: DatabaseCollection> Notary<C> {
             }
         };
         // Verificar firma de sujecto sobre proof
-        let proof_hash = DigestIdentifier::from_serializable_borsh(&notary_event.proof)
-            .map_err(|_| NotaryError::SubjectSignatureNotValid)?;
-        if notary_event.subject_signature.verify(&notary_event.proof).is_err()
+        if notary_event
+            .subject_signature
+            .verify(&notary_event.proof)
+            .is_err()
         {
             return Err(NotaryError::SubjectSignatureNotValid);
         }

@@ -1,18 +1,18 @@
 use crate::{commons, identifier::DigestIdentifier};
 
-use super::errors::CompilerErrorResponses;
 use base64::decode;
-use serde::{Serialize, Deserialize};
 mod compiler;
 mod gov_contract;
 pub(crate) mod manager;
 
 #[derive(Clone, Debug)]
+#[allow(dead_code)]
 pub enum ContractType {
     String(String),
     Base64(String),
 }
 
+#[allow(dead_code)]
 impl ContractType {
     pub fn get_digest(&self) -> Result<DigestIdentifier, commons::errors::Error> {
         match self {

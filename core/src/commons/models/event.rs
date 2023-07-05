@@ -7,7 +7,7 @@ use crate::{
         errors::SubjectError,
     },
     identifier::{DigestIdentifier, KeyIdentifier},
-    request::{EventRequest, StartRequest},
+    request::{EventRequest},
     signature::{Signature, Signed},
     ApprovalResponse, Derivable, EvaluationRequest, EvaluationResponse,
 };
@@ -19,7 +19,7 @@ use serde_json::json;
 use super::{
     approval::ApprovalRequest,
     evaluation::SubjectContext,
-    state::{generate_subject_id, Subject},
+    state::{generate_subject_id},
     value_wrapper::ValueWrapper,
     HashId,
 };
@@ -226,7 +226,7 @@ impl Signed<Event> {
         } else {
             appr_sign_info.2
         };
-        if approvers.len() < appr_sign_info.1 as usize {
+        if approvers.len() < quorum_size_appr as usize {
             return Err(SubjectError::SignersError(
                 "Not enough Approvers signed".to_string(),
             ));

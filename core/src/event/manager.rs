@@ -38,7 +38,7 @@ impl EventAPIInterface for EventAPI {
     async fn send_event_request(&self, event_request: Signed<EventRequest>) -> EventResponse {
         match self.sender.ask(EventCommand::Event { event_request }).await {
             Ok(response) => response,
-            Err(error) => EventResponse::Event(Err(EventError::EventApiChannelNotAvailable)),
+            Err(_) => EventResponse::Event(Err(EventError::EventApiChannelNotAvailable)),
         }
     }
 }

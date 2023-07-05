@@ -10,7 +10,6 @@ use crate::{
 use borsh::{BorshDeserialize, BorshSerialize};
 use json_patch::{patch, Patch};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 use super::{evaluation::SubjectContext, request::EventRequest, value_wrapper::ValueWrapper};
 

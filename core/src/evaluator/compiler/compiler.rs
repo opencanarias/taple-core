@@ -5,7 +5,6 @@ use crate::identifier::{DigestIdentifier, Derivable};
 use crate::{database::DB, evaluator::errors::CompilerErrorResponses, DatabaseCollection};
 use async_std::fs;
 use std::collections::HashSet;
-use std::path::Path;
 use std::process::Command;
 use wasm_gc::garbage_collect_file;
 use wasmtime::{Engine, ExternType};

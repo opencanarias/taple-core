@@ -4,7 +4,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    commons::models::{validation::ValidationProof, notary::NotaryEventResponse},
+    commons::models::{notary::NotaryEventResponse, validation::ValidationProof},
     signature::Signature,
     KeyIdentifier,
 };
@@ -27,6 +27,7 @@ pub enum NotaryCommand {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum NotaryResponse {
     NotaryEventResponse(Result<NotaryEventResponse, NotaryError>),
 }

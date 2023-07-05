@@ -207,7 +207,7 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
         };
 
         match data {
-            ApprovalMessages::RequestApproval(message) => {
+            ApprovalMessages::RequestApproval(_) => {
                 log::error!("Request Approval without sender in approval manager");
                 return Ok(())
             }
