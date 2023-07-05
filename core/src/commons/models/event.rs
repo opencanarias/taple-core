@@ -151,6 +151,7 @@ impl Signed<Event> {
         {
             return Ok(());
         }
+        let gov_id = subject_context.governance_id.clone();
         // Verify evaluators signatures
         let eval_request = EvaluationRequest {
             event_request: self.content.event_request.clone(),
@@ -200,6 +201,7 @@ impl Signed<Event> {
             patch: self.content.patch.clone(),
             state_hash: self.content.state_hash.clone(),
             hash_prev_event: self.content.hash_prev_event.clone(),
+            gov_id,
         };
         let appr_response = ApprovalResponse {
             appr_req_hash: appr_request.hash_id()?,

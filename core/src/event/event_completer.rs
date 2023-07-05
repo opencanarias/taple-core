@@ -447,6 +447,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             ),
             state_hash: subject.properties.hash_id()?,
             hash_prev_event,
+            gov_id: subject.governance_id.clone(),
         };
         let subject_signature = Signature::new(
             &approval_request,
@@ -953,6 +954,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     patch: evaluator_response.content.patch,
                     state_hash: evaluator_response.content.state_hash,
                     hash_prev_event,
+                    gov_id: subject.governance_id.clone(),
                 };
                 let approval_request_hash =
                     DigestIdentifier::from_serializable_borsh(&approval_request).map_err(|_| {
@@ -1023,7 +1025,8 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 let notary_event =
                     self.create_notary_event(&subject, &signed_event, gov_version)?;
                 let event_message = create_validator_request(notary_event.clone());
-                self.event_notary_events.insert(event_hash.clone(), notary_event);
+                self.event_notary_events
+                    .insert(event_hash.clone(), notary_event);
                 self.events_to_validate.insert(event_hash, signed_event);
                 (ValidationStage::Validate, event_message)
             };

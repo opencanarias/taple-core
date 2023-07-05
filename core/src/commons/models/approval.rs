@@ -5,7 +5,7 @@ use crate::{
     commons::errors::SubjectError,
     identifier::DigestIdentifier,
     signature::{Signature, Signed},
-    EventRequest, ValueWrapper,
+    EventRequest, ValueWrapper, KeyIdentifier,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
@@ -28,6 +28,8 @@ pub struct ApprovalRequest {
     pub state_hash: DigestIdentifier,
     /// The hash of the previous event.
     pub hash_prev_event: DigestIdentifier,
+    /// The hash of the previous event.
+    pub gov_id: DigestIdentifier,
 }
 
 impl HashId for ApprovalRequest {
@@ -131,4 +133,6 @@ pub struct ApprovalEntity {
     pub response: Option<Signed<ApprovalResponse>>,
     /// The state of the approval entity.
     pub state: ApprovalState,
+    /// The state of the approval entity.
+    pub sender: KeyIdentifier,
 }
