@@ -156,6 +156,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
                 {
                     Ok(false) | Err(_) => {
                         contract_result.success = false;
+                        contract_result.approval_required = false;
                         (
                             serde_json::from_str("[]").map_err(|_| {
                                 ExecutorErrorResponses::JSONPATCHDeserializationFailed

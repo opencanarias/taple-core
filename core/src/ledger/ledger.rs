@@ -1102,7 +1102,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                     .await?;
             }
             EventRequest::Fact(state_request) => {
-                let is_gov = self.subject_is_gov.get(&state_request.subject_id).unwrap();
+                let is_gov = self.subject_is_gov.get(&state_request.subject_id).unwrap_or(&false);
                 log::warn!("EL SUJETO ES  IS GOV: {}", is_gov);
                 // Comprobaciones criptográficas
                 let ledger_state = self.ledger_state.get(&state_request.subject_id);
