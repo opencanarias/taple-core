@@ -204,13 +204,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
 
         // Comprobamos si ya estamos aprobando el sujeto para un evento igual o mayor.
         // En caso de no haber request previa, continuamos.
-        let subject_id = {
-            match approval_request.content.event_request.content {
-                EventRequest::Fact(ref fact_request) => fact_request.subject_id.clone(),
-                EventRequest::Create(ref create_request) => generate_subject_id(&create_request.namespace, &create_request.schema_id, create_request.public_key.to_str(), create_request.governance_id.to_str(), approval_request.content.gov_version).map_err(|_| ApprovalManagerError::UnexpectedError)?,
-                _ => return Err(ApprovalManagerError::UnexpectedRequestType),
-            }
-        };
+        let subject_id = subject_id_by_request(&approval_request.content.event_request.content, approval_request.content.gov_version)?;
         let request_queue = self.database.get_approvals_by_subject(&subject_id).map_err(|_| ApprovalManagerError::DatabaseError)?;
         if request_queue.len() == 1 {
             let data = self.get_single_request(&request_queue[0]).unwrap();
@@ -296,7 +290,8 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             id: id.clone(),
             request: approval_request,
             response: None,
-            state: ApprovalState::Pending
+            state: ApprovalState::Pending,
+            sender,
         };
         log::error!("PARTE 8");
         self.database.set_subject_aproval_index(
@@ -348,16 +343,11 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         let ApprovalState::Pending = data.state else {
             return Ok(Err(ApprovalErrorResponse::NotPendingRequest));
         };
-        let EventRequest::Fact(fact_data) = &data.request.content.event_request.content else {
-            return Err(ApprovalManagerError::UnexpectedRequestType);
-        };
-        // Obtenemos sujeto
-        let subject = self.database.get_subject(&fact_data.subject_id).map_err(|_| ApprovalManagerError::DatabaseError)?;
-        
         let response = ApprovalResponse {
             appr_req_hash: request_id.clone(),
             approved: acceptance,
         };
+        let subject_id = subject_id_by_request(&data.request.content.event_request.content, data.request.content.gov_version)?;
         let signature = self
             .signature_manager
             .sign(&response)
@@ -370,10 +360,11 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         let Ok(_result) = self.database.set_approval(&request_id, data.clone()) else {
             return Err(ApprovalManagerError::DatabaseError)
         };
-        self.database.del_subject_aproval_index(&subject.subject_id, request_id).map_err(|_| ApprovalManagerError::DatabaseError)?;
-        self.database.del_governance_aproval_index(&subject.governance_id, request_id).map_err(|_| ApprovalManagerError::DatabaseError)?;
+        self.database.del_subject_aproval_index(&subject_id, request_id).map_err(|_| ApprovalManagerError::DatabaseError)?;
+        self.database.del_governance_aproval_index(&data.request.content.gov_id, request_id).map_err(|_| ApprovalManagerError::DatabaseError)?;
         log::error!("PARTE 11");
-        Ok(Ok((data, subject.owner)))
+        let sender = data.sender.clone();
+        Ok(Ok((data, sender)))
     }
 }
 
@@ -392,6 +383,15 @@ fn create_metadata(subject_data: &Subject, governance_version: u64) -> Metadata 
         governance_version,
         schema_id: subject_data.schema_id.clone(),
     }
+}
+
+fn subject_id_by_request(request: &EventRequest, gov_version: u64) -> Result<DigestIdentifier, ApprovalManagerError> {
+        let subject_id = match request {
+            EventRequest::Fact(ref fact_request) => fact_request.subject_id.clone(),
+            EventRequest::Create(ref create_request) => generate_subject_id(&create_request.namespace, &create_request.schema_id, create_request.public_key.to_str(), create_request.governance_id.to_str(), gov_version).map_err(|_| ApprovalManagerError::UnexpectedError)?,
+            _ => return Err(ApprovalManagerError::UnexpectedRequestType),
+        };
+        Ok(subject_id)
 }
 
 /*
