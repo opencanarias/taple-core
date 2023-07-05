@@ -14,19 +14,27 @@
 //!
 //! # Basic usage
 //! ```
-//!use core::{ApiModuleInterface, Taple, identifier::Derivable};
-//!use std::{error::Error, time::Duration};
-//!use commons::crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial};
+//! use crate::crypto::Ed25519KeyPair;
+//! use crate::crypto::KeyGenerator;
+//! use crate::crypto::KeyMaterial;
+//! use crate::database::MemoryCollection;
+//! use crate::request::StartRequest;
+//! use crate::signature::Signature;
+//! use crate::signature::Signed;
+//! use instant::Duration;
 //!
-//!#[tokio::main]
-//!async fn main() -> Result<(), Box<dyn Error>> {
-//!    let mut settings = Taple::get_default_settings();
-//!    // Generate ramdon cryptographic material
-//!    let keypair = Ed25519KeyPair::from_seed(&[]);
+//! #[tokio::main]
+//! async fn main() -> Result<(), ()> {
+//!    let mut settings = Taple::<MemoryManager, MemoryCollection>::get_default_settings();
+//!   // Generate ramdon cryptographic material
+//!    let keypair = Ed25519KeyPair::from_seed(&[0; 32]);
 //!    let hex_private_key = hex::encode(&keypair.secret_key_bytes());
 //!    settings.node.secret_key = Some(hex_private_key);
-//!    
-//!    let mut taple = Taple::new(settings);
+//!    let kp = crypto::KeyPair::Ed25519(keypair);
+//!    let public_key = kp.public_key_bytes();
+//!    let key_identifier = KeyIdentifier::new(kp.get_key_derivator(), &public_key);
+//!
+//!    let mut taple = Taple::new(settings, MemoryManager::new());
 //!    // The TAPLE node generates several Tokyo tasks to manage the different
 //!    // components of its architecture.
 //!    // The "start" method initiates these tasks and returns the control flow.
@@ -36,35 +44,57 @@
 //!    // To do so, the main thread of the application must not terminate.
 //!    let api = taple.get_api();
 //!
-//!    // First we need to create the governance, the game set of rules of our future network, to start creating subject on it.
-//!    let payload = taple.get_default_governance();
-//!
-//!    // Next we will send the request to create a governance and we will save the response in a variable for later use.
-//!    let response = api
-//!        .create_governance(payload)
+//!    // First we need to add the keys for our Subject
+//!    let pk_added = api
+//!        .add_keys(KeyDerivator::Ed25519)
 //!        .await
 //!        .expect("Error getting server response");
-//!    let subject_id = response
+//!
+//!    // Create the request
+//!    let event_request = EventRequest::Create(StartRequest {
+//!        governance_id: DigestIdentifier::default(),
+//!        name: "Paco23".to_string(),
+//!        namespace: "".to_string(),
+//!        schema_id: "governance".to_string(),
+//!        public_key: pk_added,
+//!    });
+//!
+//!    let signature = Signature::new(&event_request, key_identifier, &kp).unwrap();
+//!
+//!    let er_signed = Signed::<EventRequest> {
+//!        content: event_request.clone(),
+//!        signature,
+//!    };
+//!
+//!    // First we need to create the governance, the game set of rules of our future network, to start creating subject on it.
+//!    let request_id = api.external_request(er_signed).await.unwrap();
+//!    tokio::time::sleep(Duration::from_millis(1000)).await;
+//!
+//!    // Next we will send the request to create a governance and we will save the response in a variable for later use.
+//!    let subject_id = api
+//!        .get_request(request_id)
+//!        .await
+//!        .unwrap()
 //!        .subject_id
-//!        .expect("Error.Response returned empty subject_id");
+//!        .unwrap();
 //!
 //!    // wait until validation phase is resolved
 //!    let max_attemps = 4;
 //!    let mut attemp = 0;
 //!    while attemp <= max_attemps {
-//!        if let Ok(data) = api.get_signatures(subject_id.clone(), 0, None, None).await {
-//!            if data.len() == 1 {
+//!        if let Ok(data) = api.get_validation_proof(subject_id.clone()).await {
+//!            if data.0.len() == 1 {
 //!                break;
 //!            }
 //!        }
-//!        tokio::time::sleep(Duration::from_millis(100)).await;
+//!        tokio::time::sleep(Duration::from_millis(500)).await;
 //!        attemp += 1;
 //!    }
 //!    // Our governance is treated like a subject so, when we create it, inside the response, we have it's subject_id.
 //!    // We can use this to retrieve our governance data:
 //!    let subject = api.get_subject(subject_id.clone()).await.expect(&format!(
 //!        "Error getting subject content with id: {}",
-//!        subject_id
+//!        subject_id.to_str()
 //!    ));
 //!
 //!    println!("Governance subject Id: {:#?}", subject.subject_id.to_str());
@@ -102,9 +132,9 @@ pub use api::{
 pub use commons::crypto;
 pub use commons::identifier;
 pub use commons::identifier::{Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier};
-pub use commons::models::approval::{ApprovalEntity, ApprovalState};
 pub use commons::models::approval::ApprovalRequest;
 pub use commons::models::approval::ApprovalResponse;
+pub use commons::models::approval::{ApprovalEntity, ApprovalState};
 pub use commons::models::evaluation::EvaluationRequest;
 pub use commons::models::evaluation::EvaluationResponse;
 pub use commons::models::event::Event;
