@@ -243,7 +243,7 @@ mod test {
             self_signature_manager::{SelfSignatureInterface, SelfSignatureManager},
         },
         database::{MemoryCollection, DB},
-        evaluator::{compiler::ContractType, EvaluatorMessage, EvaluatorResponse},
+        evaluator::{EvaluatorMessage, EvaluatorResponse},
         event::EventCommand,
         governance::{
             error::RequestError, stage::ValidationStage, GovernanceInterface,
@@ -254,7 +254,7 @@ mod test {
         protocol::protocol_message_manager::TapleMessages,
         request::{EventRequest, FactRequest},
         signature::Signed,
-        MemoryManager, TimeStamp, ValueWrapper, Metadata,
+        MemoryManager, ValueWrapper, Metadata,
     };
 
     use crate::evaluator::manager::EvaluatorManager;
@@ -460,9 +460,7 @@ mod test {
             {
                 Ok(vec![(
                     Contract {
-                        raw: ContractType::String(String::from("test"))
-                            .to_string()
-                            .unwrap(),
+                        raw: String::from("test")
                     },
                     "test".to_owned(),
                 )])
@@ -472,7 +470,7 @@ mod test {
             {
                 Ok(vec![(
                     Contract {
-                        raw: ContractType::String(get_file_wrong()).to_string().unwrap(),
+                        raw: get_file_wrong().to_string()
                     },
                     "test".to_owned(),
                 )])
@@ -482,14 +480,14 @@ mod test {
             {
                 Ok(vec![(
                     Contract {
-                        raw: ContractType::String(get_file_wrong2()).to_string().unwrap(),
+                        raw: get_file_wrong2().to_string()
                     },
                     "test".to_owned(),
                 )])
             } else {
                 Ok(vec![(
                     Contract {
-                        raw: ContractType::String(get_file()).to_string().unwrap(),
+                        raw: get_file().to_string()
                     },
                     "test".to_owned(),
                 )])

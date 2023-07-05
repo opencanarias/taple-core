@@ -93,7 +93,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface + Send> TapleCompiler<C, G> {
         &mut self,
         command: GovernanceUpdatedMessage,
     ) -> Result<CompilerCodes, CompilerError> {
-        let response = match command {
+        let _response = match command {
             GovernanceUpdatedMessage::GovernanceUpdated {
                 governance_id,
                 governance_version,
