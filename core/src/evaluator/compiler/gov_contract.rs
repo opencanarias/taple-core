@@ -211,7 +211,7 @@ pub struct Role {
 pub enum RoleEnum {
     VALIDATOR,
     CREATOR,
-    INVOKER,
+    ISSUER,
     WITNESS,
     APPROVER,
     EVALUATOR,
