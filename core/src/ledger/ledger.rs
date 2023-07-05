@@ -234,11 +234,11 @@ impl<C: DatabaseCollection> Ledger<C> {
         self.database
             .set_governance_index(&subject_id, &subject.governance_id)?;
         self.database.set_subject(&subject_id, subject)?;
-        self.notification_sender
-            .send(Notification::NewSubject {
-                subject_id: subject_id.to_str(),
-            })
-            .map_err(|_| LedgerError::NotificationChannelError)?;
+        let _ =  self.notification_sender
+        .send(Notification::NewSubject {
+            subject_id: subject_id.to_str(),
+        })
+        .map_err(|_| LedgerError::NotificationChannelError);
         self.database.set_signatures(
             &subject_id,
             event.content.sn,
@@ -246,12 +246,12 @@ impl<C: DatabaseCollection> Ledger<C> {
             validation_proof, // Current Owner
         )?;
         self.database.set_event(&subject_id, event)?;
-        self.notification_sender
-            .send(Notification::NewEvent {
-                sn,
-                subject_id: subject_id.to_str(),
-            })
-            .map_err(|_| LedgerError::NotificationChannelError)?;
+        let _ = self.notification_sender
+        .send(Notification::NewEvent {
+            sn,
+            subject_id: subject_id.to_str(),
+        })
+        .map_err(|_| LedgerError::NotificationChannelError);
         self.set_finished_request(&request_id, ev_request, sn, subject_id.clone(), true)?;
         // Actualizar Ledger State
         match self.ledger_state.entry(subject_id.clone()) {
@@ -324,19 +324,19 @@ impl<C: DatabaseCollection> Ledger<C> {
                 )?;
                 let json_patch = event.content.patch.clone();
                 subject.update_subject(json_patch, event.content.sn)?;
-                self.notification_sender
-                    .send(Notification::StateUpdated {
-                        sn: event.content.sn,
-                        subject_id: subject.subject_id.to_str(),
-                    })
-                    .map_err(|_| LedgerError::NotificationChannelError)?;
+                let _ = self.notification_sender
+                .send(Notification::StateUpdated {
+                    sn: event.content.sn,
+                    subject_id: subject.subject_id.to_str(),
+                })
+                .map_err(|_| LedgerError::NotificationChannelError);
                 self.database.set_event(&subject_id, event.clone())?;
-                self.notification_sender
-                    .send(Notification::NewEvent {
-                        sn,
-                        subject_id: subject_id.to_str(),
-                    })
-                    .map_err(|_| LedgerError::NotificationChannelError)?;
+                let _ = self.notification_sender
+                .send(Notification::NewEvent {
+                    sn,
+                    subject_id: subject_id.to_str(),
+                })
+                .map_err(|_| LedgerError::NotificationChannelError);
                 self.database.set_subject(&subject_id, subject)?;
                 // Comprobar is_gov
                 let is_gov = self.subject_is_gov.get(&subject_id);
@@ -397,12 +397,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                     validation_proof,
                 )?;
                 self.database.set_event(&subject_id, event.clone())?;
-                self.notification_sender
+                let _ = self.notification_sender
                     .send(Notification::NewEvent {
                         sn,
                         subject_id: subject_id.to_str(),
                     })
-                    .map_err(|_| LedgerError::NotificationChannelError)?;
+                    .map_err(|_| LedgerError::NotificationChannelError);
                 subject.sn = event.content.sn;
                 self.database.set_subject(&subject_id, subject)?;
                 let is_gov = self.subject_is_gov.get(&subject_id);
@@ -442,12 +442,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                     validation_proof,
                 )?;
                 self.database.set_event(&subject_id, event.clone())?;
-                self.notification_sender
+                let _ = self.notification_sender
                     .send(Notification::NewEvent {
                         sn,
                         subject_id: subject_id.to_str(),
                     })
-                    .map_err(|_| LedgerError::NotificationChannelError)?;
+                    .map_err(|_| LedgerError::NotificationChannelError);
                 self.set_finished_request(
                     &request_id,
                     event_request.clone(),
@@ -1267,12 +1267,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                             let sn: u64 = event.content.sn;
                             let json_patch = event.content.patch.clone();
                             subject.update_subject(json_patch, event.content.sn)?;
-                            self.notification_sender
+                            let _ = self.notification_sender
                                 .send(Notification::StateUpdated {
                                     sn: event.content.sn,
                                     subject_id: subject.subject_id.to_str(),
                                 })
-                                .map_err(|_| LedgerError::NotificationChannelError)?;
+                                .map_err(|_| LedgerError::NotificationChannelError);
                             self.database.set_signatures(
                                 &state_request.subject_id,
                                 sn,
@@ -1287,12 +1287,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 event.content.eval_success && event.content.approved,
                             )?;
                             self.database.set_event(&state_request.subject_id, event)?;
-                            self.notification_sender
+                            let _ = self.notification_sender
                                 .send(Notification::NewEvent {
                                     sn,
                                     subject_id: subject_id.to_str(),
                                 })
-                                .map_err(|_| LedgerError::NotificationChannelError)?;
+                                .map_err(|_| LedgerError::NotificationChannelError);
                             self.database
                                 .set_subject(&state_request.subject_id, subject)?;
                             if self.subject_is_gov.get(&subject_id).unwrap().to_owned() {
@@ -1400,12 +1400,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 event.content.eval_success && event.content.approved,
                             )?;
                             self.database.set_event(&state_request.subject_id, event)?;
-                            self.notification_sender
+                            let _ = self.notification_sender
                                 .send(Notification::NewEvent {
                                     sn,
                                     subject_id: subject_id.to_str(),
                                 })
-                                .map_err(|_| LedgerError::NotificationChannelError)?;
+                                .map_err(|_| LedgerError::NotificationChannelError);
                             if last_lce.is_some() {
                                 let last_lce_sn = last_lce.unwrap();
                                 self.database
@@ -1521,12 +1521,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                         )?;
                         let success = event.content.eval_success && event.content.approved;
                         self.database.set_event(&state_request.subject_id, event)?;
-                        self.notification_sender
+                        let _ = self.notification_sender
                             .send(Notification::NewEvent {
                                 sn,
                                 subject_id: subject_id.to_str(),
                             })
-                            .map_err(|_| LedgerError::NotificationChannelError)?;
+                            .map_err(|_| LedgerError::NotificationChannelError);
                         self.set_finished_request(
                             &request_id,
                             event_request.clone(),
@@ -1719,12 +1719,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 true,
                             )?;
                             self.database.set_event(&eol_request.subject_id, event)?;
-                            self.notification_sender
+                            let _ = self.notification_sender
                                 .send(Notification::NewEvent {
                                     sn,
                                     subject_id: subject_id.to_str(),
                                 })
-                                .map_err(|_| LedgerError::NotificationChannelError)?;
+                                .map_err(|_| LedgerError::NotificationChannelError);
                             self.database
                                 .set_subject(&eol_request.subject_id, subject)?;
                             if self.subject_is_gov.get(&subject_id).unwrap().to_owned() {
@@ -1830,12 +1830,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 event.content.eval_success && event.content.approved,
                             )?;
                             self.database.set_event(&eol_request.subject_id, event)?;
-                            self.notification_sender
+                            let _ = self.notification_sender
                                 .send(Notification::NewEvent {
                                     sn,
                                     subject_id: subject_id.to_str(),
                                 })
-                                .map_err(|_| LedgerError::NotificationChannelError)?;
+                                .map_err(|_| LedgerError::NotificationChannelError);
                             if last_lce.is_some() {
                                 let last_lce_sn = last_lce.unwrap();
                                 self.database
@@ -1957,12 +1957,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                         })?;
                         let success = event.content.eval_success && event.content.approved;
                         self.database.set_event(&eol_request.subject_id, event)?;
-                        self.notification_sender
+                        let _ = self.notification_sender
                             .send(Notification::NewEvent {
                                 sn,
                                 subject_id: subject_id.to_str(),
                             })
-                            .map_err(|_| LedgerError::NotificationChannelError)?;
+                            .map_err(|_| LedgerError::NotificationChannelError);
                         self.set_finished_request(
                             &request_id,
                             event_request.clone(),
@@ -1976,13 +1976,13 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 if let ApprovalState::Pending = data.state {
                                     data.state = ApprovalState::Obsolete;
                                     self.database.set_approval(&proposal_hash, data)?;
-                                    self.notification_sender
+                                    let _ = self.notification_sender
                                         .send(Notification::ObsoletedApproval {
                                             id: proposal_hash.to_str(),
                                             subject_id: subject_id.to_str(),
                                             sn,
                                         })
-                                        .map_err(|_| LedgerError::NotificationChannelError)?;
+                                        .map_err(|_| LedgerError::NotificationChannelError);
                                 }
                             }
                             Err(error) => match error {
@@ -2112,12 +2112,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                                         EventRequest::EOL(_) => unreachable!(),
                                     }
                                     self.database.set_event(&subject_id, event.clone())?;
-                                    self.notification_sender
+                                    let _ = self.notification_sender
                                         .send(Notification::NewEvent {
                                             sn: event.content.sn,
                                             subject_id: subject_id.to_str(),
                                         })
-                                        .map_err(|_| LedgerError::NotificationChannelError)?;
+                                        .map_err(|_| LedgerError::NotificationChannelError);
                                     self.set_finished_request(
                                         &request_id,
                                         event_request.clone(),
@@ -2138,7 +2138,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                             if let ApprovalState::Pending = data.state {
                                                 data.state = ApprovalState::Obsolete;
                                                 self.database.set_approval(&proposal_hash, data)?;
-                                                self.notification_sender
+                                                let _ = self.notification_sender
                                                     .send(Notification::ObsoletedApproval {
                                                         id: proposal_hash.to_str(),
                                                         subject_id: subject_id.to_str(),
@@ -2146,7 +2146,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                                     })
                                                     .map_err(|_| {
                                                         LedgerError::NotificationChannelError
-                                                    })?;
+                                                    });
                                             }
                                         }
                                         Err(error) => match error {
@@ -2559,12 +2559,12 @@ impl<C: DatabaseCollection> Ledger<C> {
         let sn = event.content.sn;
         let success = event.content.eval_success && event.content.approved;
         self.database.set_event(&subject_id, event)?;
-        self.notification_sender
+        let _ = self.notification_sender
             .send(Notification::NewEvent {
                 sn,
                 subject_id: subject_id.to_str(),
             })
-            .map_err(|_| LedgerError::NotificationChannelError)?;
+            .map_err(|_| LedgerError::NotificationChannelError);
         self.set_finished_request(
             &request_id,
             event_request.clone(),
@@ -2573,11 +2573,11 @@ impl<C: DatabaseCollection> Ledger<C> {
             success,
         )?;
         self.database.set_subject(&subject_id, subject)?;
-        self.notification_sender
+        let _ = self.notification_sender
             .send(Notification::NewSubject {
                 subject_id: subject_id.to_str(),
             })
-            .map_err(|_| LedgerError::NotificationChannelError)?;
+            .map_err(|_| LedgerError::NotificationChannelError);
         Ok(metadata)
     }
 
@@ -2718,13 +2718,13 @@ impl<C: DatabaseCollection> Ledger<C> {
         // };
         // check_context(&event, metadata, subject.properties.clone())?;
         subject.update_subject(event.content.patch, event.content.sn)?;
-        self.notification_sender
+        let _ = self.notification_sender
             .send(Notification::StateUpdated {
                 sn: event.content.sn,
                 subject_id: subject.subject_id.to_str(),
             })
             .map_err(|_| LedgerError::NotificationChannelError)?;
-        self.database.set_subject(&subject_id, subject)?;
+        self.database.set_subject(&subject_id, subject);
         Ok(())
     }
 
