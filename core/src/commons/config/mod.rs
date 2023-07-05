@@ -9,7 +9,6 @@ use serde::Deserialize;
 pub struct TapleSettings {
     pub network: NetworkSettings,
     pub node: NodeSettings,
-    pub database: DatabaseSettings,
 }
 
 /// P2P network configuration parameters of a TAPLE node.
@@ -44,7 +43,6 @@ pub struct NodeSettings {
     /// Secret key to be used by the node
     #[serde(rename = "secretkey")]
     pub secret_key: Option<String>,
-    pub seed: Option<String>,
     /// [DigestDerivator] to be used for future event and subject identifiers
     #[serde(rename = "digestderivator")]
     pub digest_derivator: DigestDerivator,
@@ -53,21 +51,10 @@ pub struct NodeSettings {
     pub replication_factor: f64,
     /// Timeout to be used between protocol iterations
     pub timeout: u32,
-    /// Use Request-Response protocol to send messages throught the network
-    pub req_res: bool,
     #[doc(hidden)]
     pub passvotation: u8,
-    #[doc(hidden)]
-    #[serde(rename = "devmode")]
-    pub dev_mode: bool,
+    #[cfg(feature = "evaluation")]
     pub smartcontracts_directory: String,
-}
-
-/// Configuration parameters of the database
-#[derive(Debug, Deserialize, Clone)]
-pub struct DatabaseSettings {
-    /// Path where the database will be stored
-    pub path: String,
 }
 
 impl From<AccessPoint> for Value {

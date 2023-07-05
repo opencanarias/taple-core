@@ -114,7 +114,7 @@ pub use commons::models::request::EventRequest;
 pub use commons::models::signature;
 pub use commons::models::state::SubjectData;
 pub use commons::{
-    config::{DatabaseSettings, NetworkSettings, NodeSettings, TapleSettings},
+    config::{NetworkSettings, NodeSettings, TapleSettings},
     identifier::derive::{digest::DigestDerivator, KeyDerivator},
     models::notification::Notification,
     models::timestamp::TimeStamp,
@@ -124,4 +124,4 @@ pub use commons::{
 pub(crate) use database::DB;
 pub use database::{DatabaseCollection, DatabaseManager, Error as DbError, MemoryManager};
 pub use error::Error;
-pub use unitary_component::{NotificationHandler, Taple};
+pub use unitary_component::{NotificationHandler, Taple, get_default_settings, TapleShutdownManager};

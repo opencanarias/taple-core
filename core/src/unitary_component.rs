@@ -6,7 +6,7 @@ use crate::authorized_subjecs::manager::{AuthorizedSubjectsAPI, AuthorizedSubjec
 use crate::authorized_subjecs::{AuthorizedSubjectsCommand, AuthorizedSubjectsResponse};
 use crate::commons::channel::MpscChannel;
 use crate::commons::config::NetworkSettings;
-use crate::commons::config::{DatabaseSettings, NodeSettings, TapleSettings};
+use crate::commons::config::{NodeSettings, TapleSettings};
 use crate::commons::crypto::{
     Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair, Secp256k1KeyPair,
 };
@@ -47,6 +47,29 @@ use crate::api::{APICommands, ApiResponses, NodeAPI, API};
 use crate::error::Error;
 
 const BUFFER_SIZE: usize = 1000;
+
+/// Instance a default settings to start a new Taple Node
+pub fn get_default_settings() -> TapleSettings {
+    TapleSettings {
+        network: NetworkSettings {
+            p2p_port: 50000u32,
+            addr: "/ip4/0.0.0.0/tcp".into(),
+            known_nodes: Vec::<String>::new(),
+            external_address: vec![],
+        },
+        node: NodeSettings {
+            key_derivator: KeyDerivator::Ed25519,
+            secret_key: Option::<String>::None,
+            digest_derivator:
+                crate::commons::identifier::derive::digest::DigestDerivator::Blake3_256,
+            replication_factor: 0.25f64,
+            timeout: 3000u32,
+            passvotation: 0,
+            #[cfg(feature = "evaluation")]
+            smartcontracts_directory: "./contracts".into(),
+        },
+    }
+}
 
 /// Object that allows receiving [notifications](Notification) of the
 /// different events of relevance that a node performs and/or detects.
@@ -104,6 +127,47 @@ impl NotificationHandler {
     }
 }
 
+pub struct TapleShutdownManager {
+    shutdown_sender: tokio::sync::broadcast::Sender<()>,
+    shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+}
+
+impl TapleShutdownManager {
+    pub(crate) fn new(sender: tokio::sync::broadcast::Sender<()>) -> Self {
+        Self {
+            shutdown_receiver: sender.subscribe(),
+            shutdown_sender: sender,
+        }
+    }
+    pub fn get_raw_receiver(&self) -> tokio::sync::broadcast::Receiver<()> {
+        self.shutdown_sender.subscribe()
+    }
+
+    pub fn get_raw_sender(&self) -> tokio::sync::broadcast::Sender<()> {
+        self.shutdown_sender.clone()
+    }
+
+    pub async fn wait_for_shutdown(mut self) {
+        loop {
+            match self.shutdown_receiver.recv().await {
+                Err(RecvError::Lagged(_)) => continue,
+                _ => break,
+            }
+        }
+    }
+
+    pub async fn shutdown(mut self) {
+        self.shutdown_sender.send(()).unwrap();
+        drop(self.shutdown_sender);
+        loop {
+            match self.shutdown_receiver.recv().await {
+                Err(RecvError::Closed) => break,
+                _ => continue,
+            }
+        }
+    }
+}
+
 /// Structure representing a node of a TAPLE network.
 ///
 /// A node must be instantiated using the [`Taple::new`] method, which requires a set
@@ -119,6 +183,8 @@ pub struct Taple<M: DatabaseManager<C>, C: DatabaseCollection> {
     notification_sender: tokio::sync::broadcast::Sender<Notification>,
     settings: TapleSettings,
     database: Option<M>,
+    shutdown_sender: Option<tokio::sync::broadcast::Sender<()>>,
+    _shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
     _c: PhantomData<C>,
 }
 
@@ -160,18 +226,24 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
         }
     }
 
+    /// This method allows to get the receiver of the shutdown channel used by the node.
+    /// This can be used by the user/client to detect when the node has emmited the signal to .
+    pub fn get_shutdown_manager(&self) -> TapleShutdownManager {
+        TapleShutdownManager::new(self.shutdown_sender.as_ref().unwrap().clone())
+    }
+
     /// This method allows the creation of cryptographic material through a
     /// given public key.
     fn generate_mc(&mut self, stored_public_key: Option<String>) -> Result<KeyPair, Error> {
         let kp = Self::create_key_pair(
             &self.settings.node.key_derivator,
-            self.settings.node.seed.clone(),
+            None,
             self.settings.node.secret_key.clone(),
         )?;
         let public_key = kp.public_key_bytes();
         let key_identifier = KeyIdentifier::new(kp.get_key_derivator(), &public_key).to_str();
         if let Some(key) = stored_public_key {
-            if (key_identifier != key) && !self.settings.node.dev_mode {
+            if (key_identifier != key) {
                 log::error!("Invalid MC specified. There is a previous defined MC in the system");
                 return Err(Error::InvalidKeyPairSpecified(key_identifier));
             }
@@ -183,9 +255,10 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
 
     /// Main and unique method to create an instance of a TAPLE node.
     pub fn new(settings: TapleSettings, database: M) -> Self {
-        check_dev_settings(&settings);
         let (api_input, api_sender) = MpscChannel::new(BUFFER_SIZE);
         let (sender, _) = tokio::sync::broadcast::channel(BUFFER_SIZE);
+        // Shutdown channel
+        let (bsx, brx) = tokio::sync::broadcast::channel::<()>(10);
         let api = NodeAPI { sender: api_sender };
         Self {
             api,
@@ -196,88 +269,11 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
             notification_sender: sender,
             settings,
             database: Some(database),
+            shutdown_sender: Some(bsx),
+            _shutdown_receiver: brx,
             _c: PhantomData::default(),
         }
     }
-
-    /// Instance a default settings to start a new Taple Node
-    pub fn get_default_settings() -> TapleSettings {
-        TapleSettings {
-            network: NetworkSettings {
-                p2p_port: 50000u32,
-                addr: "/ip4/0.0.0.0/tcp".into(),
-                known_nodes: Vec::<String>::new(),
-                external_address: vec![],
-            },
-            node: NodeSettings {
-                key_derivator: KeyDerivator::Ed25519,
-                secret_key: Option::<String>::None,
-                seed: None,
-                digest_derivator:
-                    crate::commons::identifier::derive::digest::DigestDerivator::Blake3_256,
-                replication_factor: 0.25f64,
-                timeout: 3000u32,
-                passvotation: 0,
-                dev_mode: false,
-                smartcontracts_directory: "../../../contracts".into(),
-                req_res: false,
-            },
-            database: DatabaseSettings { path: "".into() },
-        }
-    }
-
-    // // Instance a default governance settings
-    // pub fn get_default_governance(&self) -> RequestPayload {
-    //     RequestPayload::Json(
-    //         serde_json::to_string(&serde_json::json!({
-    //                             "members": [
-    //                                 {
-    //                                     "id": "Company",
-    //                                     "tags": {},
-    //                                     "description": "Basic Usage",
-    //                                     "key": self.controller_id().unwrap()
-    //                                 },
-    //                             ],
-    //                             "schemas": [],
-    //                             "policies": [
-    //                                 {
-    //                                     "id": "governance",
-    //                                     "validation": {
-    //                                         "quorum": 0.5,
-    //                                         "validators": [
-    //                                             self.controller_id().unwrap()
-    //                                         ]
-    //                                     },
-    //                                     "approval": {
-    //                                         "quorum": 0.5,
-    //                                         "approvers": [
-    //         ]
-    //                                     },
-    //                                     "invokation": {
-    //                                         "owner": {
-    //                                             "allowance": true,
-    //                                             "approvalRequired": false
-    //                                         },
-    //                                         "set": {
-    //                                             "allowance": false,
-    //                                             "approvalRequired": false,
-    //                                             "invokers": []
-    //                                         },
-    //                                         "all": {
-    //                                             "allowance": false,
-    //                                             "approvalRequired": false,
-    //                                         },
-    //                                         "external": {
-    //                                             "allowance": false,
-    //                                             "approvalRequired": false
-    //                                         }
-    //                                     }
-    //                                 }
-    //                             ]
-    //                     }))
-    //         .unwrap(),
-    //     )
-    // }
 
     /// This method initializes a TAPLE node, generating each of its internal components
     /// and allowing subsequent interaction with the node. Each of the aforementioned
@@ -291,6 +287,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
     /// This method panics if it has not been possible to generate the network layer.
     pub async fn start(&mut self) -> Result<(), Error> {
         // Create channels
+        let shutdown_sender = self.shutdown_sender.take().unwrap();
         // Channels for network
         let (sender_network, receiver_network): (
             tokio::sync::mpsc::Sender<NetworkEvent>,
@@ -334,8 +331,6 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
         #[cfg(feature = "validation")]
         let (validation_receiver, validation_sender) =
             MpscChannel::<NotaryCommand, NotaryResponse>::new(BUFFER_SIZE);
-        // Shutdown channel
-        let (bsx, _brx) = tokio::sync::broadcast::channel::<()>(10);
         // Creation Watch Channel
         let (wath_sender, _watch_receiver): (
             tokio::sync::watch::Sender<TapleSettings>,
@@ -371,12 +366,8 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
             network_access_points(&self.settings.network.known_nodes)?, // TODO: Provide Bootraps nodes per configuration
             sender_network,
             kp.clone(),
-            bsx.subscribe(),
-            if self.settings.node.req_res {
-                SendMode::RequestResponse
-            } else {
-                SendMode::Tell
-            },
+            shutdown_sender.subscribe(),
+            SendMode::Tell,
             external_addresses(&self.settings.network.external_address)?,
         )
         .await
@@ -388,7 +379,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
         let network_receiver = MessageReceiver::new(
             receiver_network,
             protocol_sender,
-            bsx.subscribe(),
+            shutdown_sender.subscribe(),
             signature_manager.get_own_identifier(),
         );
         // Creation NetworkSender
@@ -401,8 +392,8 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
         let mut task_manager = MessageTaskManager::new(
             network_sender.clone(),
             task_receiver,
-            bsx.clone(),
-            bsx.subscribe(),
+            shutdown_sender.clone(),
+            shutdown_sender.subscribe(),
         );
         // Creation ProtocolManager
         let protocol_manager = ProtocolManager::new(
@@ -416,13 +407,13 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
             #[cfg(feature = "aproval")]
             approval_sender.clone(),
             ledger_sender.clone(),
-            bsx.clone(),
+            shutdown_sender.clone(),
         );
         // Creation Governance
         let mut governance_manager = Governance::<M, C>::new(
             governance_receiver,
-            bsx.clone(),
-            bsx.subscribe(),
+            shutdown_sender.clone(),
+            shutdown_sender.subscribe(),
             DB::new(db.clone()),
             governance_update_sx.clone(),
         );
@@ -432,8 +423,8 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
             governance_update_rx,
             GovernanceAPI::new(governance_sender.clone()),
             DB::new(db.clone()),
-            bsx.clone(),
-            bsx.subscribe(),
+            shutdown_sender.clone(),
+            shutdown_sender.subscribe(),
             task_sender.clone(),
             self.notification_sender.clone(),
             ledger_sender.clone(),
@@ -443,8 +434,8 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
         // Creation LedgerManager
         let ledger_manager = LedgerManager::new(
             ledger_receiver,
-            bsx.clone(),
-            bsx.subscribe(),
+            shutdown_sender.clone(),
+            shutdown_sender.subscribe(),
             self.notification_sender.clone(),
             GovernanceAPI::new(governance_sender.clone()),
             DB::new(db.clone()),
@@ -458,8 +449,8 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
             DB::new(db.clone()),
             task_sender.clone(),
             key_identifier.clone(),
-            bsx.clone(),
-            bsx.subscribe(),
+            shutdown_sender.clone(),
+            shutdown_sender.subscribe(),
         );
         // Creation API module
         let api = API::new(
@@ -470,8 +461,8 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
             AuthorizedSubjectsAPI::new(as_sender),
             EventManagerAPI::new(ledger_sender),
             wath_sender,
-            bsx.clone(),
-            bsx.subscribe(),
+            shutdown_sender.clone(),
+            shutdown_sender.subscribe(),
             DB::new(db.clone()),
         );
         #[cfg(feature = "evaluation")]
@@ -481,8 +472,8 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
             db.clone(),
             signature_manager.clone(),
             governance_update_sx.subscribe(),
-            bsx.clone(),
-            bsx.subscribe(),
+            shutdown_sender.clone(),
+            shutdown_sender.subscribe(),
             GovernanceAPI::new(governance_sender.clone()),
             self.settings.node.smartcontracts_directory.clone(),
             task_sender.clone(),
@@ -492,8 +483,8 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
         let approval_manager = ApprovalManager::new(
             GovernanceAPI::new(governance_sender.clone()),
             approval_receiver,
-            bsx.clone(),
-            bsx.subscribe(),
+            shutdown_sender.clone(),
+            shutdown_sender.subscribe(),
             task_sender.clone(),
             governance_update_sx.subscribe(),
             signature_manager.clone(),
@@ -505,8 +496,8 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
         let distribution_manager = DistributionManager::new(
             distribution_receiver,
             governance_update_sx.subscribe(),
-            bsx.clone(),
-            bsx.subscribe(),
+            shutdown_sender.clone(),
+            shutdown_sender.subscribe(),
             task_sender.clone(),
             GovernanceAPI::new(governance_sender.clone()),
             signature_manager.clone(),
@@ -519,8 +510,8 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
             GovernanceAPI::new(governance_sender),
             DB::new(db.clone()),
             signature_manager,
-            bsx.clone(),
-            bsx.subscribe(),
+            shutdown_sender.clone(),
+            shutdown_sender.subscribe(),
             task_sender,
         );
         // Module initialization
@@ -605,15 +596,6 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
             Err(Error::PkConflict)
         } else {
             Err(Error::NoMCAvailable)
-        }
-    }
-}
-
-fn check_dev_settings(settings: &TapleSettings) {
-    if !settings.node.dev_mode {
-        if settings.node.passvotation == 1 || settings.node.passvotation == 2 {
-            log::error!("Invalid Settings for normal mode, try in dev mode");
-            panic!("Invalid Settings for normal mode, try in dev mode")
         }
     }
 }
