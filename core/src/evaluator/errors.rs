@@ -92,10 +92,10 @@ pub enum CompilerErrorResponses {
     BorshSerializeContractError,
     #[error("Write File Error")]
     WriteFileError,
+    #[error("Folder {0} could not be created: {1}")]
+    FolderNotCreated(String, String),
     #[error("Cargo Exec Error")]
     CargoExecError,
-    #[error("Garbage Collector Error")]
-    GarbageCollectorFail,
     #[error("Contract Addition Error")]
     AddContractFail,
     #[error("Governance Error")]

@@ -102,9 +102,9 @@ pub use api::{
 pub use commons::crypto;
 pub use commons::identifier;
 pub use commons::identifier::{Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier};
-pub use commons::models::approval::{ApprovalEntity, ApprovalState};
 pub use commons::models::approval::ApprovalRequest;
 pub use commons::models::approval::ApprovalResponse;
+pub use commons::models::approval::{ApprovalEntity, ApprovalState};
 pub use commons::models::evaluation::EvaluationRequest;
 pub use commons::models::evaluation::EvaluationResponse;
 pub use commons::models::event::Event;
@@ -114,7 +114,8 @@ pub use commons::models::request::EventRequest;
 pub use commons::models::signature;
 pub use commons::models::state::SubjectData;
 pub use commons::{
-    config::{NetworkSettings, NodeSettings, TapleSettings},
+    errors::ListenAddrErrors,
+    config::{NetworkSettings, NodeSettings, TapleSettings, ListenAddr},
     identifier::derive::{digest::DigestDerivator, KeyDerivator},
     models::notification::Notification,
     models::timestamp::TimeStamp,
@@ -124,4 +125,6 @@ pub use commons::{
 pub(crate) use database::DB;
 pub use database::{DatabaseCollection, DatabaseManager, Error as DbError, MemoryManager};
 pub use error::Error;
-pub use unitary_component::{NotificationHandler, Taple, get_default_settings, TapleShutdownManager};
+pub use unitary_component::{
+    get_default_settings, NotificationHandler, Taple, TapleShutdownManager,
+};

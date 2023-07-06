@@ -1,3 +1,4 @@
+use crate::ListenAddr;
 #[cfg(feature = "aproval")]
 use crate::approval::manager::{ApprovalAPI, ApprovalManager};
 #[cfg(feature = "aproval")]
@@ -52,8 +53,7 @@ const BUFFER_SIZE: usize = 1000;
 pub fn get_default_settings() -> TapleSettings {
     TapleSettings {
         network: NetworkSettings {
-            p2p_port: 50000u32,
-            addr: "/ip4/0.0.0.0/tcp".into(),
+            listen_addr: vec![ListenAddr::default()],
             known_nodes: Vec::<String>::new(),
             external_address: vec![],
         },
@@ -350,19 +350,8 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
         let public_key = kp.public_key_bytes();
         let key_identifier = KeyIdentifier::new(kp.get_key_derivator(), &public_key);
         // Creation Network
-        let addr = {
-            if &self.settings.network.addr == "" || self.settings.network.p2p_port == 0 {
-                None
-            } else {
-                Some(format!(
-                    "{}/{}",
-                    self.settings.network.addr.clone(),
-                    self.settings.network.p2p_port.clone()
-                ))
-            }
-        };
         let network_manager = NetworkProcessor::new(
-            addr,
+            self.settings.network.listen_addr.clone(),
             network_access_points(&self.settings.network.known_nodes)?, // TODO: Provide Bootraps nodes per configuration
             sender_network,
             kp.clone(),

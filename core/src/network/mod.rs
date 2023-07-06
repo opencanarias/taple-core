@@ -2,10 +2,11 @@ pub mod network;
 pub mod reqres;
 pub mod routing;
 pub mod tell;
+mod error;
 
 #[cfg(test)]
 mod tests {
-    use crate::{message::Command, network::routing::RoutingComposedEvent};
+    use crate::{message::Command, network::routing::RoutingComposedEvent, ListenAddr};
     pub use crate::message::{MessageReceiver, MessageSender, NetworkEvent};
     use crate::network::{
         network::{NetworkComposedEvent, NetworkProcessor, TapleNetworkBehavior},
@@ -48,7 +49,7 @@ mod tests {
             let (sender_boot, receiver_boot) = mpsc::channel(10000);
             let (bsx, brx) = tokio::sync::broadcast::channel::<()>(10);
             let bootstrap_network = NetworkProcessor::new(
-                Some(String::from("/memory/647988")),
+                vec![ListenAddr::try_from(String::from("/memory/647988")).unwrap()],
                 vec![],
                 sender_boot,
                 mc1,
@@ -66,7 +67,7 @@ mod tests {
             ));
             let (sender1, receiver1) = mpsc::channel(10000);
             let node1_network = NetworkProcessor::new(
-                Some(String::from("/memory/647999")),
+                vec![ListenAddr::try_from(String::from("/memory/647999")).unwrap()],
                 vec![(bt_pid, String::from("/memory/647988").parse().unwrap())],
                 sender1,
                 mc2,
@@ -131,7 +132,7 @@ mod tests {
             let (sender_boot, receiver_boot) = mpsc::channel(10000);
             let (bsx, brx) = tokio::sync::broadcast::channel::<()>(10);
             let bootstrap_network = NetworkProcessor::new(
-                Some(String::from("/memory/647988")),
+                vec![ListenAddr::try_from(String::from("/memory/647988")).unwrap()],
                 vec![],
                 sender_boot,
                 mc1,
@@ -149,7 +150,7 @@ mod tests {
             ));
             let (sender1, receiver1) = mpsc::channel(10000);
             let node1_network = NetworkProcessor::new(
-                Some(String::from("/memory/647999")),
+                vec![ListenAddr::try_from(String::from("/memory/647999")).unwrap()],
                 vec![(bt_pid, String::from("/memory/647988").parse().unwrap())],
                 sender1,
                 mc2,

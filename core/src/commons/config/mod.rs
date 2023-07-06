@@ -1,6 +1,9 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, result};
 
-use super::identifier::derive::{digest::DigestDerivator, KeyDerivator};
+use super::{
+    errors::ListenAddrErrors,
+    identifier::derive::{digest::DigestDerivator, KeyDerivator},
+};
 use config::Value;
 use serde::Deserialize;
 
@@ -14,17 +17,194 @@ pub struct TapleSettings {
 /// P2P network configuration parameters of a TAPLE node.
 #[derive(Debug, Deserialize, Clone)]
 pub struct NetworkSettings {
-    /// P2P Port
-    #[serde(rename = "p2pport")]
-    pub p2p_port: u32,
     /// [Multiaddr](https://github.com/multiformats/multiaddr) to consider by the node.
-    pub addr: String,
+    pub listen_addr: Vec<ListenAddr>,
     #[serde(rename = "knownnodes")]
     /// List of bootstrap nodes to connect to.
     pub known_nodes: Vec<String>,
     #[serde(rename = "externaladdress")]
     /// List of bootstrap nodes to connect to.
     pub external_address: Vec<String>,
+}
+
+const DEFAULT_PORT: u32 = 40040;
+
+#[derive(Debug, Deserialize, Clone)]
+pub enum ListenAddr {
+    Memory {
+        port: Option<u32>,
+    },
+    IP4 {
+        addr: Option<std::net::Ipv4Addr>,
+        port: Option<u32>,
+    },
+    IP6 {
+        addr: Option<std::net::Ipv6Addr>,
+        port: Option<u32>,
+    },
+}
+
+impl Default for ListenAddr {
+    fn default() -> Self {
+        Self::IP4 {
+            addr: Some(std::net::Ipv4Addr::new(0, 0, 0, 0)),
+            port: Some(DEFAULT_PORT),
+        }
+    }
+}
+
+impl ListenAddr {
+    pub fn get_port(&self) -> Option<u32> {
+        match self {
+            Self::IP4 { port, .. } => port.clone(),
+            Self::IP6 { port, .. } => port.clone(),
+            Self::Memory { port } => port.clone(),
+        }
+    }
+
+    pub fn increment_port(&mut self, offset: u32) {
+        match self {
+            Self::IP4 { port, .. } => port.as_mut().map(|p| *p += offset),
+            Self::IP6 { port, .. } => port.as_mut().map(|p| *p += offset),
+            Self::Memory { port } => port.as_mut().map(|p| *p += offset),
+        };
+    }
+
+    pub fn to_string(&self) -> Result<String, ListenAddrErrors> {
+        let result = match self {
+            ListenAddr::Memory { port } => {
+                let mut result = format!("/memory");
+                if let Some(port) = port {
+                    result.push_str(&format!("/{}", port));
+                }
+                result
+            }
+            ListenAddr::IP4 { addr, port } => {
+                let mut result = format!("/ip4");
+                if let Some(ip) = addr {
+                    result.push_str(&format!(
+                        "/{}/tcp/{}",
+                        ip.to_string(),
+                        port.ok_or(ListenAddrErrors::InvalidCombination)?
+                    ));
+                }
+                result
+            }
+            ListenAddr::IP6 { addr, port } => {
+                let mut result = format!("/ip6");
+                if let Some(ip) = addr {
+                    result.push_str(&format!(
+                        "/{}/tcp/{}",
+                        ip.to_string(),
+                        port.ok_or(ListenAddrErrors::InvalidCombination)?
+                    ));
+                }
+                result
+            }
+        };
+        Ok(result)
+    }
+}
+
+impl TryFrom<String> for ListenAddr {
+    type Error = ListenAddrErrors;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let mut sections = value.split("/");
+        // Addr must start with "/"
+        let Some(data) = sections.next() else {
+            return Err(ListenAddrErrors::InvalidListenAddr);
+        };
+        if !data.is_empty() {
+            return Err(ListenAddrErrors::InvalidListenAddr);
+        }
+        // The specification of the protocol
+        let Some(protocol) = sections.next() else {
+            return Err(ListenAddrErrors::InvalidListenAddr);
+        };
+        match protocol {
+            "ip4" => {
+                if let Some(ip) = sections.next() {
+                    let ip = ip
+                        .parse::<std::net::Ipv4Addr>()
+                        .map_err(|_| ListenAddrErrors::InvalidIP4)?;
+                    // Check TCP
+                    let Some(tcp) = sections.next() else {
+                        return Err(ListenAddrErrors::NoTransportProtocolSpecified);
+                    };
+                    if tcp != "tcp" {
+                        return Err(ListenAddrErrors::NoTCP);
+                    }
+                    if let Some(port) = sections.next() {
+                        // Port must be u32
+                        let port = port
+                            .parse::<u32>()
+                            .map_err(|_| ListenAddrErrors::NoU32Port)?;
+                        return Ok(ListenAddr::IP4 {
+                            addr: Some(ip),
+                            port: Some(port),
+                        });
+                    } else {
+                        return Ok(ListenAddr::IP4 {
+                            addr: Some(ip),
+                            port: None,
+                        });
+                    }
+                } else {
+                    return Ok(ListenAddr::IP4 {
+                        addr: None,
+                        port: None,
+                    });
+                }
+            }
+            "ip6" => {
+                if let Some(ip) = sections.next() {
+                    let ip = ip
+                        .parse::<std::net::Ipv6Addr>()
+                        .map_err(|_| ListenAddrErrors::InvalidIP6)?;
+                    // Check TCP
+                    let Some(tcp) = sections.next() else {
+                        return Err(ListenAddrErrors::NoTransportProtocolSpecified);
+                    };
+                    if tcp != "tcp" {
+                        return Err(ListenAddrErrors::NoTCP);
+                    }
+                    if let Some(port) = sections.next() {
+                        // Port must be u32
+                        let port = port
+                            .parse::<u32>()
+                            .map_err(|_| ListenAddrErrors::NoU32Port)?;
+                        return Ok(ListenAddr::IP6 {
+                            addr: Some(ip),
+                            port: Some(port),
+                        });
+                    } else {
+                        return Ok(ListenAddr::IP6 {
+                            addr: Some(ip),
+                            port: None,
+                        });
+                    }
+                } else {
+                    return Ok(ListenAddr::IP6 {
+                        addr: None,
+                        port: None,
+                    });
+                }
+            }
+            "memory" => {
+                // Check for the port
+                if let Some(port) = sections.next() {
+                    // Port must be u32
+                    let port = port
+                        .parse::<u32>()
+                        .map_err(|_| ListenAddrErrors::NoU32Port)?;
+                    return Ok(ListenAddr::Memory { port: Some(port) });
+                } else {
+                    return Ok(ListenAddr::Memory { port: None });
+                }
+            }
+            _ => Err(ListenAddrErrors::InvalidProtocolSpecified),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Clone)]

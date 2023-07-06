@@ -1,10 +1,14 @@
 use super::{
+    error::NetworkErrors,
     reqres::{codec::TapleCodec, create_request_response_behaviour},
     routing::{RoutingBehaviour, RoutingComposedEvent},
     tell::{TellBehaviour, TellBehaviourEvent},
 };
-use crate::commons::crypto::{KeyMaterial, KeyPair};
 use crate::message::{Command, NetworkEvent};
+use crate::{
+    commons::crypto::{KeyMaterial, KeyPair},
+    ListenAddr,
+};
 
 use futures::StreamExt;
 use instant::Duration;
@@ -136,9 +140,29 @@ impl TapleNetworkBehavior {
     }
 }
 
+fn check_listen_addr_integrity(addrs: &Vec<ListenAddr>) -> Result<ListenProtocols, NetworkErrors> {
+    let mut has_memory = false;
+    let mut has_ip = false;
+    for addr in addrs {
+        match addr {
+            ListenAddr::Memory { .. } => has_memory = true,
+            ListenAddr::IP4 { .. } => has_ip = true,
+            ListenAddr::IP6 { .. } => has_ip = true,
+        }
+    }
+    if has_memory && has_ip {
+        return Err(NetworkErrors::ProtocolConflict);
+    }
+    if has_ip {
+        return Ok(ListenProtocols::IP);
+    } else {
+        return Ok(ListenProtocols::Memory);
+    }
+}
+
 /// Network Structure for connect message-sender, message-receiver and LibP2P network stack
 pub struct NetworkProcessor {
-    addr: Option<Multiaddr>,
+    addr: Vec<ListenAddr>,
     swarm: Swarm<TapleNetworkBehavior>,
     command_sender: mpsc::Sender<Command>,
     command_receiver: mpsc::Receiver<Command>,
@@ -159,9 +183,14 @@ pub struct NetworkProcessor {
     external_addresses: Vec<Multiaddr>,
 }
 
+enum ListenProtocols {
+    Memory,
+    IP,
+}
+
 impl NetworkProcessor {
     pub async fn new(
-        addr: Option<String>,
+        addr: Vec<ListenAddr>,
         bootstrap_nodes: Vec<(PeerId, Multiaddr)>,
         event_sender: mpsc::Sender<NetworkEvent>,
         controller_mc: KeyPair,
@@ -169,6 +198,7 @@ impl NetworkProcessor {
         send_mode: SendMode,
         external_addresses: Vec<Multiaddr>,
     ) -> Result<Self, Box<dyn Error>> {
+        let transport_protocol = check_listen_addr_integrity(&addr)?;
         let public_key = controller_mc.public_key_bytes();
         let local_key = {
             let sk = ed25519::SecretKey::from_bytes(controller_mc.secret_key_bytes())
@@ -181,12 +211,7 @@ impl NetworkProcessor {
                 .into_authentic(&local_key)
                 .expect("Signing libp2p-noise static DH keypair failed.");
 
-        let addr: Option<Multiaddr> = match addr {
-            Some(add) => Some(add.parse().expect("String para multiaddress es válida")),
-            None => None,
-        };
-
-        let transport = create_transport_by_protocol(addr.clone(), noise_key);
+        let transport = create_transport_by_protocol(transport_protocol, noise_key);
         let peer_id = local_key.public().to_peer_id();
 
         // Swarm creation
@@ -240,10 +265,17 @@ impl NetworkProcessor {
             self.swarm
                 .add_external_address(external_address, AddressScore::Infinite);
         }
-        if self.addr.is_some() {
-            let a = self.swarm.listen_on(self.addr.clone().unwrap());
-            if a.is_err() {
-                println!("Error: {:?}", a.unwrap_err());
+        for addr in self.addr.iter() {
+            if let Some(port) = addr.get_port() {
+                let multiadd: Multiaddr = addr
+                    .to_string()
+                    .unwrap()
+                    .parse()
+                    .expect("String para multiaddress es válida");
+                let result = self.swarm.listen_on(multiadd);
+                if result.is_err() {
+                    println!("Error: {:?}", result.unwrap_err());
+                }
             }
         }
         for (_peer_id, addr) in self.bootstrap_nodes.iter() {
@@ -789,30 +821,15 @@ fn create_ip4_ip6_transport(
 }
 
 fn create_transport_by_protocol(
-    addr: Option<Multiaddr>,
+    protocol: ListenProtocols,
     noise_key: noise::AuthenticKeypair<noise::X25519Spec>,
 ) -> Boxed<(PeerId, StreamMuxerBox)> {
-    let mut transport: Option<Boxed<(PeerId, StreamMuxerBox)>> = None;
-    if addr.is_some() {
-        for protocol in addr.unwrap().iter() {
-            if let Protocol::Ip4(_) | Protocol::Ip6(_) = protocol {
-                transport = Some(create_ip4_ip6_transport(noise_key));
-                break;
-            } else if let Protocol::Memory(_) = protocol {
-                transport = Some(
-                    MemoryTransport
-                        .upgrade(upgrade::Version::V1)
-                        .authenticate(
-                            noise::NoiseConfig::xx(noise_key.clone()).into_authenticated(),
-                        )
-                        .multiplex(yamux::YamuxConfig::default())
-                        .boxed(),
-                );
-                break;
-            }
-        }
-    } else {
-        transport = Some(create_ip4_ip6_transport(noise_key));
+    match protocol {
+        ListenProtocols::IP => create_ip4_ip6_transport(noise_key),
+        ListenProtocols::Memory => MemoryTransport
+            .upgrade(upgrade::Version::V1)
+            .authenticate(noise::NoiseConfig::xx(noise_key.clone()).into_authenticated())
+            .multiplex(yamux::YamuxConfig::default())
+            .boxed(),
     }
-    transport.expect("String for address in constructor is valid and has ipv4 or memory protocol")
 }

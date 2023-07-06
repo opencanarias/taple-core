@@ -1,13 +1,17 @@
 use crate::database::Error as DbError;
 use crate::evaluator::errors::CompilerError;
 use crate::governance::GovernanceInterface;
-use crate::identifier::{DigestIdentifier, Derivable};
+use crate::identifier::{Derivable, DigestIdentifier};
 use crate::{database::DB, evaluator::errors::CompilerErrorResponses, DatabaseCollection};
 use async_std::fs;
 use std::collections::HashSet;
+use std::fs::create_dir;
+use std::path::Path;
 use std::process::Command;
 use wasm_gc::garbage_collect_file;
 use wasmtime::{Engine, ExternType};
+
+use super::manifest::get_toml;
 
 pub struct Compiler<C: DatabaseCollection, G: GovernanceInterface> {
     database: DB<C>,
@@ -32,6 +36,20 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
     pub async fn init(&self) -> Result<(), CompilerError> {
         // Comprueba si existe el contrato de gobernanza en el sistema
         // Si no existe, lo compila y lo guarda
+        let cargo_path = format!("{}/Cargo.toml", self.contracts_path);
+        if !Path::new(&cargo_path).exists() {
+            let toml: String = get_toml();
+            // Escribimos cargo.toml
+            fs::write(cargo_path, toml)
+                .await
+                .map_err(|_| CompilerErrorResponses::WriteFileError)?;
+        }
+        let src_path = format!("{}/src", self.contracts_path);
+        if !Path::new(&src_path).exists() {
+            create_dir(&src_path).map_err(|e| {
+                CompilerErrorResponses::FolderNotCreated(src_path.to_string(), e.to_string())
+            })?;
+        }
         match self.database.get_governance_contract() {
             Ok(_) => return Ok(()),
             Err(DbError::EntryNotFound) => {
@@ -43,13 +61,13 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
                 .await
                 .map_err(|e| CompilerError::InitError(e.to_string()))?;
                 let compiled_contract = self
-                    .add_contract("taple", "governance")
+                    .add_contract()
                     .await
                     .map_err(|e| CompilerError::InitError(e.to_string()))?;
                 self.database
                     .put_governance_contract(compiled_contract)
                     .map_err(|error| CompilerError::DatabaseError(error.to_string()))?;
-            },
+            }
             Err(error) => return Err(CompilerError::DatabaseError(error.to_string())),
         }
         Ok(())
@@ -69,10 +87,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
             .map_err(CompilerErrorResponses::GovernanceError)?;
         log::error!("COMPILER AFTER GET CONTRACTS");
         for (contract_info, schema_id) in contracts {
-            let contract_data = match self
-                .database
-                .get_contract(&governance_id, &schema_id)
-            {
+            let contract_data = match self.database.get_contract(&governance_id, &schema_id) {
                 Ok((contract, hash, contract_gov_version)) => {
                     Some((contract, hash, contract_gov_version))
                 }
@@ -105,15 +120,11 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
                     continue;
                 }
             }
-            self.compile(
-                contract_info.raw,
-                &governance_id.to_str(),
-                &schema_id,
-            )
-            .await?;
+            self.compile(contract_info.raw, &governance_id.to_str(), &schema_id)
+                .await?;
             log::error!("COMPILER AFTER COMPILER");
             let compiled_contract = self
-                .add_contract(&governance_id.to_str(), &schema_id)
+                .add_contract()
                 .await?;
             self.database
                 .put_contract(
@@ -162,29 +173,16 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
         ))
         .map_err(|_| CompilerErrorResponses::TempFolderCreationFailed)?;
 
-        garbage_collect_file(
-            format!(
-                "{}/target/wasm32-unknown-unknown/release/contract.wasm",
-                self.contracts_path
-            ),
-            format!(
-                "/tmp/taple_contracts/{}/{}/contract.wasm",
-                governance_id, schema_id
-            ),
-        )
-        .map_err(|_| CompilerErrorResponses::GarbageCollectorFail)?;
         Ok(())
     }
 
     async fn add_contract(
         &self,
-        governance_id: &str,
-        schema_id: &str,
     ) -> Result<Vec<u8>, CompilerErrorResponses> {
         // AOT COMPILATION
         let file = fs::read(format!(
-            "/tmp/taple_contracts/{}/{}/contract.wasm",
-            governance_id, schema_id
+            "{}/target/wasm32-unknown-unknown/release/contract.wasm",
+            self.contracts_path
         ))
         .await
         .map_err(|_| CompilerErrorResponses::AddContractFail)?;
@@ -206,7 +204,6 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
                 _ => return Err(CompilerErrorResponses::InvalidImportFound),
             }
         }
-        println!("{:?}", pending_sdk);
         if !pending_sdk.is_empty() {
             return Err(CompilerErrorResponses::NoSDKFound);
         }
@@ -221,7 +218,7 @@ fn get_sdk_functions_identifier() -> HashSet<String> {
             "write_byte".to_owned(),
             "pointer_len".to_owned(),
             "read_byte".to_owned(),
-            "cout".to_owned(),
+            // "cout".to_owned(),
         ]
         .into_iter(),
     )
