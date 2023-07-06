@@ -442,9 +442,9 @@ mod test {
 
         async fn get_invoke_info(
             &self,
-            metadata: Metadata,
-            stage: ValidationStage,
-            invoker: KeyIdentifier,
+            _metadata: Metadata,
+            _stage: ValidationStage,
+            _invoker: KeyIdentifier,
         ) -> Result<bool, RequestError> {
             unreachable!()
         }
@@ -610,8 +610,7 @@ mod test {
     fn contract_execution() {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async move {
-            let (evaluator, sx_evaluator, sx_compiler, signature_manager, mut msg_rx) =
-                build_module();
+            let (evaluator, sx_evaluator, sx_compiler, signature_manager, mut msg_rx) = build_module();
             let initial_state = Data {
                 one: 10,
                 two: 11,
@@ -650,11 +649,11 @@ mod test {
                         .unwrap(),
                         schema_id: "test".into(),
                         namespace: "namespace1".into(),
-                        is_owner: todo!(),
-                        state: todo!(),
+                        is_owner: true,
+                        state: ValueWrapper(serde_json::json!("{}")),
                     },
                     sn: 1,
-                    gov_version: todo!(),
+                    gov_version: 0,
                 }))
                 .await
                 .unwrap();

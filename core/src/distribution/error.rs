@@ -1,6 +1,7 @@
 use thiserror::Error;
 
 #[derive(Error, Debug, Clone)]
+#[allow(dead_code)]
 pub enum DistributionManagerError {
   #[error("Tell not allowed for this module")]
   TellNoAllowed,

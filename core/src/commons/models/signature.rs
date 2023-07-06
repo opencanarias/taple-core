@@ -8,7 +8,6 @@ use crate::{
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashSet,
     hash::{Hash, Hasher},
 };
 

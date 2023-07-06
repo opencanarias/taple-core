@@ -7,112 +7,27 @@ pub enum Notification {
     /// A new subject has been generated
     NewSubject {
         subject_id: String,
-        default_message: String,
     },
     /// A new event has been generated
     NewEvent {
         sn: u64,
         subject_id: String,
-        default_message: String,
     },
     /// A subject has been synchronized
-    SubjectSynchronized {
-        subject_id: String,
-        default_message: String,
-    },
-    /// An event has reached validation quorum
-    QuroumReached {
+    StateUpdated {
         sn: u64,
         subject_id: String,
-        default_message: String,
     },
-    /// An event has been signed
-    EventSigned {
+    // Approval Received
+    ApprovalReceived {
+        id: String,
+        subject_id: String,
         sn: u64,
-        subject_id: String,
-        default_message: String,
     },
-    /// A new requesst has been detected
-    RequestReached {
-        request_id: String,
+    /// Approval Obsoleted because gov version changed or event confirmed without us
+    ObsoletedApproval {
+        id: String,
         subject_id: String,
-        default_message: String,
-    },
-    /// An event request has been rejected by the approvers
-    RequestNegativeQuroumReached {
-        request_id: String,
-        subject_id: String,
-        default_message: String,
-    },
-    /// An event request has been accepted by the approvers
-    RequestQuroumReached {
-        request_id: String,
-        subject_id: String,
-        default_message: String,
-    },
-    RequestDeleted {
-        request_id: String,
-        subject_id: String,
-        default_message: String,
-    }
-}
-
-impl Notification {
-    pub(crate) fn subject_synchronized(subject_id: &str) -> Notification {
-        Notification::SubjectSynchronized {
-            subject_id: subject_id.to_owned(),
-            default_message: format!("Subject {} synchronized", subject_id),
-        }
-    }
-
-    pub(crate) fn new_subject(subject_id: &str) -> Notification {
-        Notification::NewSubject {
-            subject_id: subject_id.to_owned(),
-            default_message: format!("Subject {} created", subject_id)
-        }
-    }
-
-    pub(crate) fn new_event(subject_id: &str, sn: u64) -> Notification {
-        Notification::NewEvent {
-            sn,
-            subject_id: subject_id.to_owned(),
-            default_message: format!("Event {} of subject {} created", sn, subject_id)
-        }
-    }
-}
-
-impl Notification {
-    pub fn to_message(self) -> String {
-        match self {
-            Notification::NewSubject {
-                default_message, ..
-            } => default_message,
-            Notification::NewEvent {
-                default_message, ..
-            } => default_message,
-            Notification::SubjectSynchronized {
-                default_message, ..
-            } => default_message,
-            Notification::QuroumReached {
-                default_message, ..
-            } => default_message,
-            Notification::EventSigned {
-                default_message, ..
-            } => default_message,
-            Notification::RequestReached {
-                default_message, ..
-            } => default_message,
-            Notification::RequestNegativeQuroumReached {
-                default_message, ..
-            } => default_message,
-            Notification::RequestQuroumReached {
-                default_message, ..
-            } => default_message,
-            Notification::RequestDeleted {
-                request_id,
-                subject_id,
-                default_message
-            } => default_message,
-        }
+        sn: u64,
     }
 }

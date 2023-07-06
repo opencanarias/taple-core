@@ -11,7 +11,7 @@ use crate::{
         models::HashId,
         self_signature_manager::{SelfSignatureInterface, SelfSignatureManager},
     },
-    signature::{Signature, Signed},
+    signature::Signed,
     DigestIdentifier,
 };
 use borsh::{BorshDeserialize, BorshSerialize};

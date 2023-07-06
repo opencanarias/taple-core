@@ -1,12 +1,9 @@
 use std::collections::HashSet;
 
-use super::{
-    errors::ProtocolErrors,
-    models::{timestamp, HashId},
-};
+use super::{errors::ProtocolErrors, models::HashId};
 use crate::commons::{
     config::TapleSettings,
-    crypto::{KeyMaterial, KeyPair, Payload, DSA},
+    crypto::{KeyMaterial, KeyPair},
     identifier::{derive::digest::DigestDerivator, KeyIdentifier},
     models::signature::Signature,
 };

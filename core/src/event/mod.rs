@@ -1,12 +1,11 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 use crate::{
-    commons::models::{evaluation::EvaluationResponse, value_wrapper::ValueWrapper},
+    commons::models::evaluation::EvaluationResponse,
     identifier::DigestIdentifier,
     signature::{Signature, Signed},
-    EventRequest, KeyIdentifier, ApprovalResponse,
+    ApprovalResponse, EventRequest, KeyIdentifier,
 };
 
 use self::errors::EventError;

@@ -78,4 +78,6 @@ pub enum LedgerError {
     RepeatedRequestId(String),
     #[error("Subject Id generation does not match with event subject_id")]
     SubjectIdError,
+    #[error("Notification Channel Error")]
+    NotificationChannelError,
 }

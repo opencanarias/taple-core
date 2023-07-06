@@ -2,9 +2,9 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    approval::{error::ApprovalErrorResponse, ApprovalMessages, ApprovalResponses},
+    approval::{ApprovalMessages, ApprovalResponses},
     commons::channel::{ChannelData, MpscChannel, SenderEnd},
-    distribution::{error::DistributionErrorResponses, DistributionMessagesNew, LedgerMessages},
+    distribution::{error::DistributionErrorResponses, DistributionMessagesNew},
     evaluator::{EvaluatorMessage, EvaluatorResponse},
     event::{EventCommand, EventResponse},
     ledger::{LedgerCommand, LedgerResponse},
@@ -132,16 +132,17 @@ impl ProtocolManager {
                 {
                     let evaluation_command = match data {
                         EvaluatorMessage::EvaluationEvent {
-                            evaluation_request,
-                            sender,
+                            ..
                         } => {
                             log::error!("Evaluation Event Received in protocol manager");
                             return Ok(());
                         }
-                        EvaluatorMessage::AskForEvaluation(evaluation_request) => EvaluatorMessage::EvaluationEvent {
-                            evaluation_request,
-                            sender,
-                        },
+                        EvaluatorMessage::AskForEvaluation(evaluation_request) => {
+                            EvaluatorMessage::EvaluationEvent {
+                                evaluation_request,
+                                sender,
+                            }
+                        }
                     };
                     return Ok(self
                         .evaluation_sx
@@ -157,8 +158,7 @@ impl ProtocolManager {
                 {
                     let notary_command = match data {
                         NotaryCommand::NotaryEvent {
-                            notary_event,
-                            sender,
+                            ..
                         } => {
                             log::error!("Notary Event Received in protocol manager");
                             return Ok(());
@@ -180,9 +180,21 @@ impl ProtocolManager {
             TapleMessages::ApprovalMessages(data) => {
                 #[cfg(feature = "aproval")]
                 {
+                    let approval_command = match data {
+                        ApprovalMessages::RequestApproval(approval) => {
+                            ApprovalMessages::RequestApprovalWithSender { approval, sender }
+                        }
+                        ApprovalMessages::RequestApprovalWithSender { .. } => {
+                            log::error!(
+                                "Request Approval with Sender Received in protocol manager"
+                            );
+                            return Ok(());
+                        }
+                        _ => data,
+                    };
                     return Ok(self
                         .approval_sx
-                        .tell(data)
+                        .tell(approval_command)
                         .await
                         .map_err(|_| ProtocolErrors::ChannelClosed)?);
                 }

@@ -3,6 +3,7 @@ use thiserror::Error;
 use crate::{governance::error::RequestError, commons::errors::SubjectError};
 
 #[derive(Error, Debug)]
+#[allow(dead_code)]
 pub enum EvaluatorError {
     #[error("A database error has ocurred at main component {0}")]
     DatabaseError(String),
@@ -17,6 +18,7 @@ pub enum EvaluatorError {
 }
 
 #[derive(Error, Debug, Clone)]
+#[allow(dead_code)]
 pub enum EvaluatorErrorResponses {
     #[error("Create Request not allowed")]
     CreateRequestNotAllowed,
@@ -25,6 +27,7 @@ pub enum EvaluatorErrorResponses {
 }
 
 #[derive(Error, Debug, Clone)]
+#[allow(dead_code)]
 pub enum ExecutorErrorResponses {
     #[error("Subject Error")]
     SubjectError(#[from] SubjectError),
@@ -73,6 +76,7 @@ pub enum ExecutorErrorResponses {
 }
 
 #[derive(Error, Debug, Clone)]
+#[allow(dead_code)]
 pub enum CompilerError {
     #[error("A database error has ocurred at main component {0}")]
     DatabaseError(String),
@@ -85,6 +89,7 @@ pub enum CompilerError {
 }
 
 #[derive(Error, Debug, Clone)]
+#[allow(dead_code)]
 pub enum CompilerErrorResponses {
     #[error("A database error has ocurred at main component {0}")]
     DatabaseError(String),

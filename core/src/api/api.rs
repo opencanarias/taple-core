@@ -17,10 +17,11 @@ use crate::commons::{
 use crate::event::manager::EventAPI;
 use crate::ledger::manager::EventManagerAPI;
 use crate::signature::Signature;
+use crate::ApprovalEntity;
+use crate::ValidationProof;
 use crate::{
     authorized_subjecs::manager::AuthorizedSubjectsAPI, signature::Signed, Event, EventRequest,
 };
-use crate::{commons::models::approval::ApprovalEntity, ValidationProof};
 use crate::{identifier::DigestIdentifier, DatabaseCollection, DB};
 use crate::{KeyDerivator, KeyIdentifier};
 use async_trait::async_trait;
@@ -405,10 +406,7 @@ impl ApiModuleInterface for NodeAPI {
         let response = self
             .sender
             .ask(APICommands::GetAllPreauthorizedSubjects(
-                GetAllowedSubjects {
-                    from,
-                    quantity,
-                },
+                GetAllowedSubjects { from, quantity },
             ))
             .await
             .unwrap();

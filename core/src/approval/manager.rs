@@ -195,7 +195,7 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
         &mut self,
         command: ChannelData<ApprovalMessages, ApprovalResponses>,
     ) -> Result<(), ApprovalManagerError> {
-        let (sender, data) = match command {
+        let (sender_top, data) = match command {
             ChannelData::AskData(data) => {
                 let (sender, data) = data.get();
                 (Some(sender), data)
@@ -207,11 +207,15 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
         };
 
         match data {
-            ApprovalMessages::RequestApproval(message) => {
-                if sender.is_some() {
+            ApprovalMessages::RequestApproval(_) => {
+                log::error!("Request Approval without sender in approval manager");
+                return Ok(())
+            }
+            ApprovalMessages::RequestApprovalWithSender { approval, sender } => {
+                if sender_top.is_some() {
                     return Err(ApprovalManagerError::AskNoAllowed);
                 }
-                let result = self.inner_manager.process_approval_request(message).await?;
+                let result = self.inner_manager.process_approval_request(approval, sender).await?;
                 log::error!("RESULT APPROVAL REQUEST: {:?}", result);
                 match result {
                     Ok(Some((approval, sender))) => {
@@ -287,16 +291,16 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
                             ))
                             .await
                             .map_err(|_| ApprovalManagerError::MessageChannelFailed)?;
-                        if sender.is_some() {
-                            sender
+                        if sender_top.is_some() {
+                            sender_top
                                 .unwrap()
                                 .send(ApprovalResponses::EmitVote(Ok(vote)))
                                 .map_err(|_| ApprovalManagerError::ResponseChannelClosed)?;
                         }
                     }
                     Err(error) => {
-                        if sender.is_some() {
-                            sender
+                        if sender_top.is_some() {
+                            sender_top
                                 .unwrap()
                                 .send(ApprovalResponses::EmitVote(Err(error)))
                                 .map_err(|_| ApprovalManagerError::ResponseChannelClosed)?;
@@ -306,8 +310,8 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
             }
             ApprovalMessages::GetAllRequest => {
                 let result = self.inner_manager.get_all_request();
-                if sender.is_some() {
-                    sender
+                if sender_top.is_some() {
+                    sender_top
                         .unwrap()
                         .send(ApprovalResponses::GetAllRequest(result))
                         .map_err(|_| ApprovalManagerError::ResponseChannelClosed)?;
@@ -315,8 +319,8 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
             }
             ApprovalMessages::GetSingleRequest(request_id) => {
                 let result = self.inner_manager.get_single_request(&request_id);
-                if sender.is_some() {
-                    sender
+                if sender_top.is_some() {
+                    sender_top
                         .unwrap()
                         .send(ApprovalResponses::GetSingleRequest(result))
                         .map_err(|_| ApprovalManagerError::ResponseChannelClosed)?;

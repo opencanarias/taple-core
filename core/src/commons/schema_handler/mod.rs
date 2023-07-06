@@ -8,10 +8,12 @@ pub mod initial_state;
 use crate::commons::{errors::Error, identifier::KeyIdentifier};
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct Schema {
     json_schema: JSONSchema,
 }
 
+#[allow(dead_code)]
 impl Schema {
     pub fn compile(schema: &Value) -> Result<Self, Error> {
         match JSONSchema::options()
@@ -712,6 +714,6 @@ mod test {
     #[test]
     fn compile_gov_schema() {
         let gov_schema = super::get_governance_schema();
-        let schema = Schema::compile(&gov_schema).expect("gov schema compiles");
+        let _schema = Schema::compile(&gov_schema).expect("gov schema compiles");
     }
 }

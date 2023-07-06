@@ -143,7 +143,7 @@ impl ContractExecutor {
             .func_wrap(
                 "env",
                 "cout",
-                |mut caller: Caller<'_, MemoryManager>, ptr: u32| {
+                |_caller: Caller<'_, MemoryManager>, ptr: u32| {
                     println!("{}", ptr);
                 },
             )

@@ -1,8 +1,7 @@
-use std::collections::HashSet;
-
 use serde::{de::Visitor, ser::SerializeMap, Deserialize, Serialize};
 
 #[derive(Debug)]
+#[allow(non_snake_case)]
 pub enum Quorum {
     MAJORITY,
     FIXED { fixed: u32 },
@@ -61,8 +60,8 @@ impl<'de> Deserialize<'de> for Quorum {
                         Quorum::FIXED { fixed }
                     }
                     "BFT" => {
-                        let BFT: f64 = map.next_value()?;
-                        Quorum::BFT { BFT }
+                        let bft: f64 = map.next_value()?;
+                        Quorum::BFT { BFT: bft }
                     }
                     "PORCENTAJE" => {
                         let porcentaje: f64 = map.next_value()?;

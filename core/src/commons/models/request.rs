@@ -123,7 +123,7 @@ impl TryFrom<Signed<EventRequest>> for TapleRequest {
         let id = DigestIdentifier::from_serializable_borsh(&event_request)
             .map_err(|_| SubjectError::CryptoError("Error generation request hash".to_owned()))?;
         let subject_id = match &event_request.content {
-            crate::EventRequest::Create(create_request) => None,
+            crate::EventRequest::Create(_) => None,
             crate::EventRequest::Fact(fact_request) => Some(fact_request.subject_id.clone()),
             crate::EventRequest::Transfer(transfer_res) => Some(transfer_res.subject_id.clone()),
             crate::EventRequest::EOL(eol_request) => Some(eol_request.subject_id.clone()),

@@ -42,6 +42,7 @@ const TIMEOUT: u32 = 2000;
 // const GET_ALL: isize = 200;
 const QUORUM_PORCENTAGE_AMPLIFICATION: f64 = 0.2;
 
+#[allow(dead_code)]
 pub struct EventCompleter<C: DatabaseCollection> {
     gov_api: GovernanceAPI,
     database: DB<C>,
@@ -70,6 +71,7 @@ pub struct EventCompleter<C: DatabaseCollection> {
     signature_manager: SelfSignatureManager,
 }
 
+#[allow(dead_code)]
 impl<C: DatabaseCollection> EventCompleter<C> {
     pub fn new(
         gov_api: GovernanceAPI,
@@ -447,6 +449,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             ),
             state_hash: subject.properties.hash_id()?,
             hash_prev_event,
+            gov_id: subject.governance_id.clone(),
         };
         let subject_signature = Signature::new(
             &approval_request,
@@ -668,7 +671,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 )
                 .await?;
             }
-            EventRequest::Fact(state_request) => {
+            EventRequest::Fact(_) => {
                 // Request evaluation signatures, sending request, sn and signature of everything about the subject
                 // Get the list of evaluators
                 let (metadata, stage) = (
@@ -915,7 +918,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             // Crear Event Proposal
             let evaluator_signatures: HashSet<Signature> = signatures_set
                 .iter()
-                .filter(|(signature, acceptance, hash)| {
+                .filter(|(_, acceptance, hash)| {
                     hash == &evaluation_hash && quorum_reached.as_ref().unwrap() == acceptance
                 })
                 .map(|(signature, _, _)| signature.signature.clone())
@@ -953,6 +956,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     patch: evaluator_response.content.patch,
                     state_hash: evaluator_response.content.state_hash,
                     hash_prev_event,
+                    gov_id: subject.governance_id.clone(),
                 };
                 let approval_request_hash =
                     DigestIdentifier::from_serializable_borsh(&approval_request).map_err(|_| {
@@ -985,7 +989,6 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 (ValidationStage::Approve, msg)
             } else {
                 // No se necesita aprobación
-                let execution = evaluator_response.content.eval_success;
                 let gov_version = self
                     .gov_api
                     .get_governance_version(
@@ -1023,7 +1026,8 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 let notary_event =
                     self.create_notary_event(&subject, &signed_event, gov_version)?;
                 let event_message = create_validator_request(notary_event.clone());
-                self.event_notary_events.insert(event_hash.clone(), notary_event);
+                self.event_notary_events
+                    .insert(event_hash.clone(), notary_event);
                 self.events_to_validate.insert(event_hash, signed_event);
                 (ValidationStage::Validate, event_message)
             };
@@ -1047,7 +1051,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 subject_id.clone(),
                 (stage, signers, (quorum_size, negative_quorum_size)),
             );
-            let tmp = self.subjects_completing_event.get(&subject_id);
+            // let tmp = self.subjects_completing_event.get(&subject_id);
         }
         Ok(())
     }
@@ -1140,7 +1144,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 unique_approval.approval.content.approved == approval.content.approved
             })
             .count() as u32;
-        let (quorum_size_now, execution) = match approval.content.approved {
+        let (quorum_size_now, _) = match approval.content.approved {
             true => (quorum_size.0, true),
             false => (quorum_size.1, false),
         };
@@ -1604,7 +1608,7 @@ fn count_signatures_with_event_content_hash(
 ) -> (u32, u32) {
     let mut ok: u32 = 0;
     let mut ko: u32 = 0;
-    for (signature, acceptance, hash) in signatures.iter() {
+    for (_, acceptance, hash) in signatures.iter() {
         if hash == target_event_content_hash {
             match acceptance {
                 true => ok += 1,

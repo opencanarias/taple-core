@@ -117,9 +117,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         for role in roles {
             match stage {
                 ValidationStage::Witness => {
-                    if role.role != stage.to_role()
-                        && role.role != ValidationStage::Approve.to_role()
-                    {
+                    if role.role != stage.to_role() {
                         continue;
                     }
                 }
@@ -278,7 +276,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                 let result = (signers.len() as f64 * porcentaje).ceil() as u32;
                 Ok(Ok(result))
             }
-            Quorum::BFT { BFT } => todo!(),
+            Quorum::BFT { .. } => todo!(),
         }
     }
 
@@ -339,13 +337,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         invoker: KeyIdentifier,
     ) -> Result<bool, RequestError> {
         let is_member = members.0.contains(&invoker);
-        let mut permisions_exists = false;
-        log::warn!("IS MEMBER: {}", is_member);
-        log::warn!("ROLES_: {:?}", roles);
         for role in roles {
-            log::warn!("AAAAAAAAAAAA: {}", &role.role != stage.to_str());
-            log::warn!("ROLE: {}", role.role);
-            log::warn!("ROLE: {}", stage.to_role());
             if &role.role != stage.to_role() {
                 continue;
             }
@@ -482,7 +474,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                 governance_id: governance_id.clone(),
                 governance_version,
             })
-            .map_err(|e| InternalError::ChannelError {
+            .map_err(|_| InternalError::ChannelError {
                 source: ChannelErrors::ChannelClosed,
             })?;
         Ok(Ok(()))
@@ -594,6 +586,7 @@ fn get_members_from_governance(
     Ok(member_ids_names)
 }
 
+#[allow(dead_code)]
 fn contains_common_element(set1: &HashSet<String>, vec2: &[String]) -> bool {
     vec2.iter().any(|s| set1.contains(s))
 }

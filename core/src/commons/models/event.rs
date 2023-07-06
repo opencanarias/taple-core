@@ -7,7 +7,7 @@ use crate::{
         errors::SubjectError,
     },
     identifier::{DigestIdentifier, KeyIdentifier},
-    request::{EventRequest, StartRequest},
+    request::{EventRequest},
     signature::{Signature, Signed},
     ApprovalResponse, Derivable, EvaluationRequest, EvaluationResponse,
 };
@@ -19,7 +19,7 @@ use serde_json::json;
 use super::{
     approval::ApprovalRequest,
     evaluation::SubjectContext,
-    state::{generate_subject_id, Subject},
+    state::{generate_subject_id},
     value_wrapper::ValueWrapper,
     HashId,
 };
@@ -151,6 +151,7 @@ impl Signed<Event> {
         {
             return Ok(());
         }
+        let gov_id = subject_context.governance_id.clone();
         // Verify evaluators signatures
         let eval_request = EvaluationRequest {
             event_request: self.content.event_request.clone(),
@@ -200,6 +201,7 @@ impl Signed<Event> {
             patch: self.content.patch.clone(),
             state_hash: self.content.state_hash.clone(),
             hash_prev_event: self.content.hash_prev_event.clone(),
+            gov_id,
         };
         let appr_response = ApprovalResponse {
             appr_req_hash: appr_request.hash_id()?,
@@ -224,7 +226,7 @@ impl Signed<Event> {
         } else {
             appr_sign_info.2
         };
-        if approvers.len() < appr_sign_info.1 as usize {
+        if approvers.len() < quorum_size_appr as usize {
             return Err(SubjectError::SignersError(
                 "Not enough Approvers signed".to_string(),
             ));

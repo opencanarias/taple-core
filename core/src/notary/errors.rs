@@ -6,6 +6,7 @@ use crate::{
 };
 
 #[derive(Error, Debug, Clone, PartialEq)]
+#[allow(dead_code)]
 pub enum NotaryError {
     #[error("ProtocolErrors Error")]
     ProtocolErrors(#[from] ProtocolErrors),
