@@ -16,13 +16,6 @@ pub struct TapleCompiler<C: DatabaseCollection, G: GovernanceInterface> {
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
 }
 
-#[derive(Clone, Debug)]
-#[allow(dead_code)]
-enum CompilerCodes {
-    MustShutdown,
-    Ok,
-}
-
 impl<C: DatabaseCollection, G: GovernanceInterface + Send> TapleCompiler<C, G> {
     pub fn new(
         input_channel: tokio::sync::broadcast::Receiver<GovernanceUpdatedMessage>,
@@ -56,26 +49,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface + Send> TapleCompiler<C, G> {
                             let result = self.process_command(command).await;
                             log::info!("Compiler result: {:?}", result);
                             if result.is_err() {
-                                match result.unwrap_err() {
-                                    CompilerError::InitError(_) => unreachable!(),
-                                    CompilerError::DatabaseError(_) => return,
-                                    CompilerError::ChannelNotAvailable => return,
-                                    CompilerError::InternalError(internal_error) => match internal_error {
-                                        crate::evaluator::errors::CompilerErrorResponses::DatabaseError(_) => return,
-                                        crate::evaluator::errors::CompilerErrorResponses::BorshSerializeContractError => return,
-                                        crate::evaluator::errors::CompilerErrorResponses::WriteFileError |
-                                        crate::evaluator::errors::CompilerErrorResponses::CargoExecError |
-                                        crate::evaluator::errors::CompilerErrorResponses::GarbageCollectorFail |
-                                        crate::evaluator::errors::CompilerErrorResponses::TempFolderCreationFailed |
-                                        crate::evaluator::errors::CompilerErrorResponses::InvalidImportFound |
-                                        crate::evaluator::errors::CompilerErrorResponses::NoSDKFound |
-                                        crate::evaluator::errors::CompilerErrorResponses::AddContractFail => todo!(),
-                                        crate::evaluator::errors::CompilerErrorResponses::GovernanceError(_) => return,
-                                    },
-                                }
-                            }
-                            if let CompilerCodes::MustShutdown = result.unwrap() {
-                                return;
+                                log::error!("Evaluator error: {}", result.unwrap_err())
                             }
                         }
                         Err(_) => {
@@ -93,7 +67,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface + Send> TapleCompiler<C, G> {
     async fn process_command(
         &mut self,
         command: GovernanceUpdatedMessage,
-    ) -> Result<CompilerCodes, CompilerError> {
+    ) -> Result<(), CompilerError> {
         let _response = match command {
             GovernanceUpdatedMessage::GovernanceUpdated {
                 governance_id,
@@ -106,6 +80,6 @@ impl<C: DatabaseCollection, G: GovernanceInterface + Send> TapleCompiler<C, G> {
                 log::info!("CONTRACTS UPDATED: {:?}", result);
             }
         };
-        Ok(CompilerCodes::Ok)
+        Ok(())
     }
 }

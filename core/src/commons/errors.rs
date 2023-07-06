@@ -213,3 +213,23 @@ pub enum ProtocolErrors {
         source: RequestError,
     },
 }
+
+#[derive(Error, Debug, Clone)]
+pub enum ListenAddrErrors {
+    #[error("Invalid ListenAddr provided. Neither a valid IP or memory multiaddress")]
+    InvalidListenAddr,
+    #[error("Invalid multiaddres protocol specified. Supported are IP and Memory")]
+    InvalidProtocolSpecified,
+    #[error("The IPv4 specified is not valid")]
+    InvalidIP4,
+    #[error("The IPv6 specified is not valid")]
+    InvalidIP6,
+    #[error("No transport protocol specified")]
+    NoTransportProtocolSpecified,
+    #[error("Transpor protocol must be tcp")]
+    NoTCP,
+    #[error("Port must be a 32 bits unsigned")]
+    NoU32Port,
+    #[error("An IP must be combined with a tcp port")]
+    InvalidCombination
+}
