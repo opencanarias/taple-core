@@ -177,14 +177,23 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             Debemos comprobar siempre si ya tenemos la petición que nos envían.
         */
         log::error!("PARTE 1");
-        let id = match DigestIdentifier::from_serializable_borsh(&approval_request.content).map_err(|_| ApprovalErrorResponse::ErrorHashing) {
+        let id: DigestIdentifier = match DigestIdentifier::from_serializable_borsh(&approval_request.content).map_err(|_| ApprovalErrorResponse::ErrorHashing) {
             Ok(id) => id,
             Err(error) => return Ok(Err(error)),
         };
 
         log::error!("PARTE 2");
-        if let Ok(_data) = self.get_single_request(&id) {
-            return Ok(Err(ApprovalErrorResponse::RequestAlreadyKnown));
+        if let Ok(data) = self.get_single_request(&id) {
+            match data.state {
+                ApprovalState::Pending | ApprovalState::Obsolete => return Ok(Err(ApprovalErrorResponse::RequestAlreadyKnown)),
+                ApprovalState::Responded => {
+                    let (vote, sender) = self
+                    .generate_vote(&id, data.response.expect("Should be").content.approved)
+                    .await?
+                    .expect("Request should be in data structure");
+                return Ok(Ok(Some((vote.response.unwrap(), sender))))
+                },
+            }
         };
 
         log::error!("PARTE 3");

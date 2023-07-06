@@ -3,7 +3,16 @@ use crate::ValueWrapper;
 pub fn get_governance_initial_state() -> ValueWrapper {
     ValueWrapper(serde_json::json!({
         "members": [],
-        "roles": [],
+        "roles": [
+          {
+            "namespace": "",
+            "role": "WITNESS",
+            "schema": {
+                "ID": "governance"
+            },
+            "who": "MEMBERS"
+          }
+        ],
         "schemas": [],
         "policies": [
           {
