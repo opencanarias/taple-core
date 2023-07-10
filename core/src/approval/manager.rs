@@ -209,13 +209,16 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
         match data {
             ApprovalMessages::RequestApproval(_) => {
                 log::error!("Request Approval without sender in approval manager");
-                return Ok(())
+                return Ok(());
             }
             ApprovalMessages::RequestApprovalWithSender { approval, sender } => {
                 if sender_top.is_some() {
                     return Err(ApprovalManagerError::AskNoAllowed);
                 }
-                let result = self.inner_manager.process_approval_request(approval, sender).await?;
+                let result = self
+                    .inner_manager
+                    .process_approval_request(approval, sender)
+                    .await?;
                 log::error!("RESULT APPROVAL REQUEST: {:?}", result);
                 match result {
                     Ok(Some((approval, sender))) => {
@@ -275,11 +278,12 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
                 }
             }
             ApprovalMessages::EmitVote(message) => {
-                match self
+                let result = self
                     .inner_manager
                     .generate_vote(&message.request_id, message.acceptance)
-                    .await?
-                {
+                    .await?;
+                log::info!("RESULT EMIT VOTE: {:?}", result);
+                match result {
                     Ok((vote, owner)) => {
                         let msg = create_approver_response(vote.response.clone().unwrap());
                         self.messenger_channel

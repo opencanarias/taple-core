@@ -187,10 +187,12 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             match data.state {
                 ApprovalState::Pending | ApprovalState::Obsolete => return Ok(Err(ApprovalErrorResponse::RequestAlreadyKnown)),
                 ApprovalState::Responded => {
-                    let (vote, sender) = self
+                    let result = self
                     .generate_vote(&id, data.response.expect("Should be").content.approved)
-                    .await?
-                    .expect("Request should be in data structure");
+                    .await?;
+                log::info!("RESULT AAAAAAAAAAAAAAAAAa: {:?}", result);
+                let (vote, sender) = result
+                .expect("Request should be in data structure");
                 return Ok(Ok(Some((vote.response.unwrap(), sender))))
                 },
             }
@@ -347,9 +349,6 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         // Obtenemos la petición
         let Ok(mut data) = self.get_single_request(&request_id) else {
             return Ok(Err(ApprovalErrorResponse::RequestNotFound));
-        };
-        let ApprovalState::Pending = data.state else {
-            return Ok(Err(ApprovalErrorResponse::NotPendingRequest));
         };
         let response = ApprovalResponse {
             appr_req_hash: request_id.clone(),
