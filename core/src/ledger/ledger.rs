@@ -707,7 +707,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                         if event.content.sn == subject.sn + 1 && ledger_state.head.is_none() {
                             // Caso Evento Siguiente
                             // Comprobar ValidationProof
-                            self.check_validation_proof(&validation_proof, &subject, &event_hash)?;
+                            self.check_validation_proof(&validation_proof, &subject, &event_hash, &transfer_request.public_key)?;
                             let sn: u64 = event.content.sn;
                             // Comprobamos si estamos esperando la transferencia y si esta es a nosotros
                             let (keypair, to_delete) =
@@ -1263,7 +1263,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                             log::error!("EN EXTERNAL EVENT SE HACE E.SN == S.SN + 1");
                             // Caso Evento Siguiente
                             // Comprobar ValidationProof
-                            self.check_validation_proof(&validation_proof, &subject, &event_hash)?;
+                            self.check_validation_proof(&validation_proof, &subject, &event_hash, &subject.public_key)?;
                             let sn: u64 = event.content.sn;
                             let json_patch = event.content.patch.clone();
                             subject.update_subject(json_patch, event.content.sn)?;
@@ -1701,7 +1701,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                         if event.content.sn == subject.sn + 1 && ledger_state.head.is_none() {
                             // Caso Evento Siguiente
                             // Comprobar ValidationProof
-                            self.check_validation_proof(&validation_proof, &subject, &event_hash)?;
+                            self.check_validation_proof(&validation_proof, &subject, &event_hash, &subject.public_key)?;
                             let sn: u64 = event.content.sn;
                             subject.eol_event();
                             self.database.set_signatures(
@@ -2171,10 +2171,16 @@ impl<C: DatabaseCollection> Ledger<C> {
                                         let validation_proof =
                                             self.database.get_lce_validation_proof(&subject_id)?;
                                         // TODO: Si falla aquí inutilizamos sujeto???
+                                        let public_key = if let EventRequest::Transfer(data) = &event.content.event_request.content {
+                                            data.public_key.clone()
+                                        } else {
+                                            subject.public_key.clone()
+                                        };
                                         self.check_validation_proof(
                                             &validation_proof,
                                             &subject,
                                             &event_hash,
+                                            &public_key
                                         )?;
                                         self.event_sourcing(head_event)?;
                                         self.ledger_state.insert(
@@ -2271,10 +2277,16 @@ impl<C: DatabaseCollection> Ledger<C> {
                                         let validation_proof =
                                             self.database.get_lce_validation_proof(&subject_id)?;
                                         // TODO: Si falla aquí inutilizamos sujeto???
+                                        let public_key = if let EventRequest::Transfer(data) = &event.content.event_request.content {
+                                            data.public_key.clone()
+                                        } else {
+                                            subject.public_key.clone()
+                                        };
                                         self.check_validation_proof(
                                             &validation_proof,
                                             &subject,
                                             &event_hash,
+                                            &public_key
                                         )?;
                                         // Hacer event sourcing del evento 1 tambien y actualizar subject
                                         self.event_sourcing(head_event)?;
@@ -2448,6 +2460,7 @@ impl<C: DatabaseCollection> Ledger<C> {
         validation_proof: &ValidationProof,
         subject: &Subject,
         event_hash: &DigestIdentifier,
+        public_key: &KeyIdentifier
     ) -> Result<(), LedgerError> {
         let hash_prev_event = match self.database.get_event(&subject.subject_id, subject.sn) {
             Ok(event) => {
@@ -2496,7 +2509,7 @@ impl<C: DatabaseCollection> Ledger<C> {
             return Err(LedgerError::ValidationProofError(
                 "Hash Event does not match".to_string(),
             ));
-        } else if validation_proof.subject_public_key != subject.public_key {
+        } else if validation_proof.subject_public_key != *public_key {
             return Err(LedgerError::ValidationProofError(
                 "Subject Public Key does not match".to_string(),
             ));
