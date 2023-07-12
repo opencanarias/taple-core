@@ -500,6 +500,9 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             if event_request.signature.signer != self.own_identifier {
                 return Err(EventError::ExternalGenesisEvent);
             }
+            if create_request.public_key.public_key.is_empty() {
+                return Err(EventError::PublicKeyIsEmpty);
+            }
             log::warn!("PREKEYS");
             // Check if i have the keys
             let subject_keys = match self.database.get_keys(&create_request.public_key) {

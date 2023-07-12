@@ -4,6 +4,7 @@ use crate::approval::error::ApprovalErrorResponse;
 #[cfg(feature = "aproval")]
 use crate::approval::manager::{ApprovalAPI, ApprovalAPIInterface};
 use crate::authorized_subjecs::manager::AuthorizedSubjectsAPI;
+use crate::event::errors::EventError;
 use crate::event::manager::{EventAPI, EventAPIInterface};
 use crate::event::EventResponse;
 use crate::identifier::Derivable;
@@ -64,9 +65,11 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         let EventResponse::Event(response) = self.event_api.send_event_request(request).await else {
             return Err(APIInternalError::UnexpectedManagerResponse);
         };
-        Ok(ApiResponses::HandleExternalRequest(
-            response.map_err(|e| ApiError::EventCreationError { source: e }),
-        ))
+        match response {
+            Ok(data) => Ok(ApiResponses::HandleExternalRequest(Ok(data))),
+            Err(EventError::PublicKeyIsEmpty) => Ok(ApiResponses::HandleExternalRequest(Err(ApiError::InvalidParameters(format!("{}", response.unwrap_err()))))),
+            Err(error) => Ok(ApiResponses::HandleExternalRequest(Err(ApiError::EventCreationError { source: error })))
+        }
     }
 
     #[cfg(feature = "aproval")]
@@ -80,7 +83,7 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         let result = self.approval_api.emit_vote(request_id, acceptance).await;
         match result {
             Ok(data) => return Ok(ApiResponses::VoteResolve(Ok(data))), // Cambiar al digestIdentifier del sujeto o de la misma request
-            Err(ApprovalErrorResponse::ApprovalRequestNotFound) => {
+            Err(ApprovalErrorResponse::RequestNotFound) => {
                 return Ok(ApiResponses::VoteResolve(Err(ApiError::NotFound(format!(
                     "Request {} not found",
                     id_str

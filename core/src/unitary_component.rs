@@ -244,7 +244,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
         let public_key = kp.public_key_bytes();
         let key_identifier = KeyIdentifier::new(kp.get_key_derivator(), &public_key).to_str();
         if let Some(key) = stored_public_key {
-            if (key_identifier != key) {
+            if key_identifier != key {
                 log::error!("Invalid MC specified. There is a previous defined MC in the system");
                 return Err(Error::InvalidKeyPairSpecified(key_identifier));
             }

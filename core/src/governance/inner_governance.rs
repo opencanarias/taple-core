@@ -191,9 +191,19 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         } else {
             is_gov = false;
         }
+        let governance_version = if let ValidationStage::Witness = stage {
+            let result = match self.repo_access.get_subject(&governance_id) {
+                Ok(data) => data,
+                Err(DbError::EntryNotFound) => return Ok(Err(RequestError::SubjectNotFound)),
+                Err(data) => return Err(InternalError::DatabaseError { source: data })
+            };
+            result.sn
+        } else {
+            metadata.governance_version
+        };
         let schema_id = metadata.schema_id.clone();
         let governance =
-            match self.governance_event_sourcing(&governance_id, metadata.governance_version) {
+            match self.governance_event_sourcing(&governance_id, governance_version) {
                 Ok(subject) => subject,
                 Err(error) => match error {
                     RequestError::DatabaseError(err) => {
