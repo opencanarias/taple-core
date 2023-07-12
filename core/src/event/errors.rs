@@ -68,4 +68,6 @@ pub enum EventError {
     OwnTransferKeysDbError,
     #[error("Approval Required When Eval Failed")]
     ApprovalRequiredWhenEvalFailed,
+    #[error("Invalid specify public key")]
+    PublicKeyIsEmpty
 }

@@ -335,7 +335,6 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                         .inner_ledger
                         .get_next_gov(who_asked, subject_id, sn)
                         .await;
-                    log::info!("RESPUESTA DE GET NEXT GOV {:?}", response);
                     let response = match response {
                         Err(error) => match error.clone() {
                             LedgerError::ChannelClosed => {

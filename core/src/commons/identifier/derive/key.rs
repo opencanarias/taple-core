@@ -69,6 +69,9 @@ impl FromStr for KeyDerivator {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.len() == 0 {
+            return Err(Error::DeserializationError);
+        }
         match &s[..1] {
             "E" => Ok(Self::Ed25519),
             "S" => Ok(Self::Secp256k1),
