@@ -1445,6 +1445,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 .collect();
             // Si se llega a Quorum lo mandamos al ledger
             if event.content.sn == 0 {
+                // TODO: Pasar de tell a ask para comprobar que va bien y que no haya fallos raros?
                 self.ledger_sender
                     .tell(LedgerCommand::Genesis {
                         event: event.clone(),
@@ -1453,6 +1454,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     })
                     .await?;
             } else {
+                // TODO: Pasar de tell a ask para comprobar que va bien y que no haya fallos raros?
                 self.ledger_sender
                     .tell(LedgerCommand::OwnEvent {
                         event: event.clone(),
@@ -1478,6 +1480,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 .map_err(EventError::ChannelError)?;
             // Limpiar HashMaps
             self.events_to_validate.remove(&event_hash);
+            self.event_notary_events.remove(&event_hash);
             self.event_validations.remove(&event_hash);
             self.subjects_completing_event.remove(&subject_id);
             self.subjects_by_governance.remove(&subject_id);
