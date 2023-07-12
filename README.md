@@ -1,10 +1,4 @@
-<div align="center">
-<p>⚠️ <b>TAPLE is in early development and <a href="https://www.taple.es/community/DISCLAIMER">should not be used in production</a></b> ⚠️</p>
-<br/>
-<p><img src="https://raw.githubusercontent.com/opencanarias/public-resources/master/images/taple-logo-readme.png"></p>
-</div>
-
-## The main branch is the pre-release, development version of `TAPLE`. Please see the [0.1](https://github.com/opencanarias/taple-core/tree/release-0.1) branch for the latest versions released.
+## This is TAPLE's main branch of work and is not guaranteed to be stable. Released versions are in the "release*" branches
 
 # TAPLE Core
 TAPLE (pronounced T+🍎 ['tapəl]) stands for Tracking (Autonomous) of Provenance and Lifecycle Events. TAPLE is a permissioned DLT solution for traceability of assets and processes. It is:
@@ -21,10 +15,11 @@ TAPLE Core is the reference library that implements all the necessary functional
 [agpl-badge]: https://img.shields.io/badge/license-AGPL-blue.svg
 [agpl-url]: https://github.com/opencanarias/taple-core/blob/master/LICENSE
 
-[Technology](https://www.taple.es) | [Develop](https://www.taple.es/docs/develop) | [Core](https://github.com/opencanarias/taple-core) | [Client](https://github.com/opencanarias/taple-client) | [Tools](https://github.com/opencanarias/taple-tools)
+[Discover](https://www.taple.es) | [Learn](https://www.taple.es/learn) | [Build](https://www.taple.es/build) | 
+[Code](https://github.com/search?q=topic%3Ataple+org%3Aopencanarias++fork%3Afalse+archived%3Afalse++is%3Apublic&type=repositories)
 
 ## Usage
 A basic usage example can be found at [examples](./examples) directory. You can find more information about TAPLE technology and how to develop for TAPLE on [TAPLE Website](https://www.taple.es). 
 
 ## License
-This project is licensed under the [AGPL license](https://github.com/opencanarias/taple-core/blob/master/LICENSE).
+This project is licensed under the [AGPL license](./LICENSE).
