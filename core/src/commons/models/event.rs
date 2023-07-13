@@ -7,7 +7,7 @@ use crate::{
         errors::SubjectError,
     },
     identifier::{DigestIdentifier, KeyIdentifier},
-    request::{EventRequest},
+    request::EventRequest,
     signature::{Signature, Signed},
     ApprovalResponse, Derivable, EvaluationRequest, EvaluationResponse,
 };
@@ -17,11 +17,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use super::{
-    approval::ApprovalRequest,
-    evaluation::SubjectContext,
-    state::{generate_subject_id},
-    value_wrapper::ValueWrapper,
-    HashId,
+    approval::ApprovalRequest, evaluation::SubjectContext, state::generate_subject_id,
+    value_wrapper::ValueWrapper, HashId,
 };
 
 /// A struct representing an event.
@@ -53,19 +50,21 @@ pub struct Event {
     pub approvers: HashSet<Signature>,
 }
 
-// impl Event {
-//     pub fn new(
-//         event_proposal: Signed<Proposal>,
-//         approvals: HashSet<Signed<ApprovalContent>>,
-//         execution: bool,
-//     ) -> Self {
-//         Self {
-//             event_proposal,
-//             approvals,
-//             execution,
-//         }
-//     }
-// }
+impl Event {
+    pub fn get_approval_hash(&self) -> Result<DigestIdentifier, SubjectError> {
+        ApprovalRequest {
+            event_request: self.event_request.clone(),
+            sn: self.sn,
+            gov_version: self.gov_version,
+            patch: self.patch.clone(),
+            state_hash: self.state_hash.clone(),
+            hash_prev_event: self.hash_prev_event.clone(),
+            gov_id: self.subject_id.clone(),
+        }
+        .hash_id()
+    }
+}
+
 impl HashId for Event {
     fn hash_id(&self) -> Result<DigestIdentifier, SubjectError> {
         DigestIdentifier::from_serializable_borsh(&self)

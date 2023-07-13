@@ -961,8 +961,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     hash_prev_event,
                     gov_id: subject.governance_id.clone(),
                 };
-                let approval_request_hash =
-                    DigestIdentifier::from_serializable_borsh(&approval_request).map_err(|_| {
+                let approval_request_hash = approval_request.hash_id().map_err(|_| {
                         EventError::CryptoError(String::from(
                             "Error calculating the hash of the proposal",
                         ))
