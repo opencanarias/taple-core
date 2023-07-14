@@ -134,7 +134,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
             }
         };
         let previous_state = &execute_contract.context.state.clone();
-        let mut contract_result = self
+        let mut contract_result = match self
             .executor
             .execute_contract(
                 &execute_contract.context.state,
@@ -142,7 +142,51 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
                 contract,
                 execute_contract.context.is_owner,
             )
-            .await?;
+            .await
+        {
+            Ok(contract_result) => contract_result,
+            Err(error) => {
+                match error {
+                    ExecutorErrorResponses::ContractExecutionFailed
+                    | ExecutorErrorResponses::ContractNotInstantiated
+                    | ExecutorErrorResponses::ContractNotFound(_, _)
+                    | ExecutorErrorResponses::ContractEntryPointNotFound
+                    | ExecutorErrorResponses::FunctionLinkingFailed(_)
+                    | ExecutorErrorResponses::SubjectError(_)
+                    | ExecutorErrorResponses::CantGenerateContractResult 
+                    | ExecutorErrorResponses::StateHashGenerationFailed
+                    | ExecutorErrorResponses::ContextHashGenerationFailed
+                    | ExecutorErrorResponses::RolesObtentionFailed
+                    | ExecutorErrorResponses::OurGovIsLower
+                    | ExecutorErrorResponses::OurGovIsHigher
+                    | ExecutorErrorResponses::CreateRequestNotAllowed
+                    | ExecutorErrorResponses::GovernanceError(_)
+                    | ExecutorErrorResponses::SchemaCompilationFailed
+                    | ExecutorErrorResponses::InvalidPointerPovided
+                    => {
+                        return Ok(EvaluationResponse {
+                            patch: ValueWrapper(serde_json::from_str("[]").map_err(|_| {
+                                ExecutorErrorResponses::JSONPATCHDeserializationFailed
+                            })?),
+                            state_hash: DigestIdentifier::from_serializable_borsh(
+                                &execute_contract.context.state,
+                            )
+                            .map_err(|_| ExecutorErrorResponses::StateHashGenerationFailed)?,
+                            eval_req_hash: context_hash,
+                            eval_success: false,
+                            appr_required: false,
+                        })
+                    }
+                    _ => return Err(error),
+                    // ExecutorErrorResponses::ValueToStringConversionFailed => todo!(),
+                    //  ExecutorErrorResponses::StateJSONDeserializationFailed => todo!(),
+                    //  ExecutorErrorResponses::JSONPATCHDeserializationFailed => todo!(),
+                    // ExecutorErrorResponses::BorshSerializationError => todo!(),
+                    // ExecutorErrorResponses::BorshDeserializationError => todo!(),
+                    // ExecutorErrorResponses::DatabaseError(_) => return Err(error),
+                }
+            }
+        };
         let (patch, hash) = match contract_result.success {
             true => {
                 match self

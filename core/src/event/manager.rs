@@ -1,15 +1,15 @@
 use async_trait::async_trait;
 
 use super::{errors::EventError, event_completer::EventCompleter, EventCommand, EventResponse};
-use crate::EventRequest;
 use crate::commons::self_signature_manager::SelfSignatureManager;
-use crate::database::{DB, DatabaseCollection};
+use crate::database::{DatabaseCollection, DB};
 use crate::governance::error::RequestError;
 use crate::governance::GovernanceUpdatedMessage;
 use crate::identifier::KeyIdentifier;
 use crate::ledger::{LedgerCommand, LedgerResponse};
 use crate::protocol::protocol_message_manager::TapleMessages;
 use crate::signature::Signed;
+use crate::EventRequest;
 use crate::{
     commons::channel::{ChannelData, MpscChannel, SenderEnd},
     governance::GovernanceAPI,
@@ -176,14 +176,13 @@ impl<C: DatabaseCollection> EventManager<C> {
                     }
                     EventResponse::Event(response)
                 }
-                EventCommand::EvaluatorResponse {
-                    evaluator_response,
-                } => {
-                    match self
+                EventCommand::EvaluatorResponse { evaluator_response } => {
+                    let response = self
                         .event_completer
                         .evaluator_signatures(evaluator_response)
-                        .await
-                    {
+                        .await;
+                    log::info!("EVALUATOR RESPONSE IN EVENT MANAGER: {:?}", response);
+                    match response {
                         Err(error) => match error {
                             EventError::ChannelClosed => {
                                 log::error!("Channel Closed");
