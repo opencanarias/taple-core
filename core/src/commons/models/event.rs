@@ -51,7 +51,7 @@ pub struct Event {
 }
 
 impl Event {
-    pub fn get_approval_hash(&self) -> Result<DigestIdentifier, SubjectError> {
+    pub fn get_approval_hash(&self, gov_id: DigestIdentifier) -> Result<DigestIdentifier, SubjectError> {
         ApprovalRequest {
             event_request: self.event_request.clone(),
             sn: self.sn,
@@ -59,7 +59,7 @@ impl Event {
             patch: self.patch.clone(),
             state_hash: self.state_hash.clone(),
             hash_prev_event: self.hash_prev_event.clone(),
-            gov_id: self.subject_id.clone(),
+            gov_id,
         }
         .hash_id()
     }

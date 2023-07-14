@@ -187,6 +187,12 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         // Fill actual_sn with the last sn of last event created (not necessarily validated) of each subject
         let subjects = self.database.get_all_subjects();
         for subject in subjects.iter() {
+            if subject.schema_id != "governance" {
+                self.subjects_by_governance
+                    .entry(subject.governance_id.clone())
+                    .or_insert_with(HashSet::new)
+                    .insert(subject.subject_id.clone());
+            }
             // Comprobar si hay eventos más allá del sn del sujeto que indica que debemos pedir las validaciones porque aún está pendiente de validar
             match self.database.get_prevalidated_event(&subject.subject_id) {
                 Ok(last_event) => {
@@ -280,21 +286,29 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         governance_id: DigestIdentifier,
         new_version: u64,
     ) -> Result<(), EventError> {
-        log::info!("NEW GOVERNANCE VERSION");
+        log::info!("NEW GOVERNANCE VERSION: {}", governance_id.to_str());
+        for a in self.subjects_by_governance.iter() {
+            log::info!("NGV: GOV: {}", a.0.to_str());
+            for b in a.1.iter() {
+                log::info!("NGV: SUBJECTS BY GOV: {}", b.to_str());
+            }
+        }
         // Pedir event requests para cada subject_id del set y lanza new_event con ellas
         match self.subjects_by_governance.get(&governance_id).cloned() {
             Some(subjects_affected) => {
+                log::info!("SUBJECTS AFFECTED:");
+                for sa in subjects_affected.iter() {
+                    log::info!("Subject: {}", sa.to_str());
+                }
                 for subject_id in subjects_affected.iter() {
                     log::error!("EVENT COMPLETER DEBAJO DEL FOR");
                     match self.database.get_request(subject_id) {
                         Ok(event_request) => {
-                            let EventRequest::Fact(state_request) = &event_request.content else {
+                            let EventRequest::Fact(_) = &event_request.content else {
                                 return Err(EventError::GenesisInGovUpdate)
                             };
-                            let subject_id = state_request.subject_id.clone();
-                            self.subjects_completing_event.remove(&subject_id);
                             self.new_event(event_request).await?;
-                            log::info!("NEW GOVERNANCE VERSION NEW EVENT CALLED REQUEST");
+                            log::info!("NEW GOVERNANCE VERSION NEW EVENT CALLED FACT REQUEST");
                         }
                         Err(error) => match error {
                             crate::DbError::EntryNotFound => {}
@@ -305,7 +319,31 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     }
                     match self.database.get_prevalidated_event(subject_id) {
                         Ok(event_prevalidated) => {
-                            // TODO: Cambiar si se tuviesen que validar los genesis
+                            log::info!(
+                                "QQQ_ EVENT PREVALIDATED TYPE: {:?}",
+                                event_prevalidated.content.event_request.content
+                            );
+                            if let EventRequest::Create(_) =
+                                &event_prevalidated.content.event_request.content
+                            {
+                                // Cancelar pedir firmas
+                                self.message_channel
+                                    .tell(MessageTaskCommand::Cancel(String::from(format!(
+                                        "{}",
+                                        event_prevalidated.content.subject_id.to_str()
+                                    ))))
+                                    .await
+                                    .map_err(EventError::ChannelError)?;
+                                log::warn!("CREATE REPEATED BY GOV");
+                                self.subjects_completing_event.remove(&subject_id);
+                                self.subjects_by_governance.remove(&subject_id);
+                                self.database.del_prevalidated_event(&subject_id).map_err(
+                                    |error| EventError::DatabaseError(error.to_string()),
+                                )?;
+                                self.new_event(event_prevalidated.content.event_request)
+                                    .await?;
+                                continue;
+                            }
                             let subject = self
                                 .database
                                 .get_subject(subject_id)
@@ -485,6 +523,16 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             Err(crate::DbError::EntryNotFound) => {}
             Err(error) => return Err(EventError::DatabaseError(error.to_string())),
         }
+        let subject_id: &DigestIdentifier = match &event_request.content {
+            EventRequest::Create(_) => return self.new_event(event_request).await,
+            EventRequest::Fact(fact_req) => &fact_req.subject_id,
+            EventRequest::Transfer(trans_req) => &trans_req.subject_id,
+            EventRequest::EOL(eol_req) => &eol_req.subject_id,
+        };
+        // Check if we already have an event for that subject
+        let None = self.subjects_completing_event.get(subject_id) else {
+            return Err(EventError::EventAlreadyInProgress);
+        };
         self.new_event(event_request).await
     }
 
@@ -565,6 +613,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     .await?;
                 (0, initial_state)
             };
+            log::info!("GOV VERSION NEW CREATE EVENT: {}", governance_version);
             let subject_id = generate_subject_id(
                 &create_request.namespace,
                 &create_request.schema_id,
@@ -572,6 +621,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 create_request.governance_id.to_str(),
                 governance_version,
             )?;
+            log::info!("SUBJECT ID: {}", subject_id.to_str());
             // Una vez que todo va bien creamos el evento prevalidado y lo mandamos a validación
             let event = Signed::<Event>::from_genesis_request(
                 event_request.clone(),
@@ -609,8 +659,20 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 .set_taple_request(&request_id, &event_request.clone().try_into()?)
                 .map_err(|error| EventError::DatabaseError(error.to_string()))?;
             self.database
-                .set_request(&subject_id, event_request)
+                .set_prevalidated_event(&subject_id, event.clone())
                 .map_err(|error| EventError::DatabaseError(error.to_string()))?;
+            if create_request.schema_id != "governance" {
+                self.subjects_by_governance
+                    .entry(create_request.governance_id.clone())
+                    .or_insert_with(HashSet::new)
+                    .insert(subject_id.clone());
+            }
+            for a in self.subjects_by_governance.iter() {
+                log::info!("NGV: GOV: {}", a.0.to_str());
+                for b in a.1.iter() {
+                    log::info!("NGV: SUBJECTS BY GOV: {}", b.to_str());
+                }
+            }
             self.subjects_completing_event
                 .insert(subject_id, (stage, signers, (quorum_size, 0)));
             return Ok(request_id);
@@ -639,10 +701,6 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 }
                 _ => return Err(EventError::DatabaseError(error.to_string())),
             },
-        };
-        // Check if we already have an event for that subject
-        let None = self.subjects_completing_event.get(&subject.subject_id) else {
-            return Err(EventError::EventAlreadyInProgress);
         };
         // Check is subject life has not come to an end
         if !subject.active {
@@ -764,9 +822,9 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             EventRequest::Create(_) => unreachable!(),
         }
         self.subjects_by_governance
-            .entry(subject.governance_id)
+            .entry(subject.governance_id.clone())
             .or_insert_with(HashSet::new)
-            .insert(subject_id.clone());
+            .insert(subject.governance_id);
         let mut request_data: TapleRequest = event_request.clone().try_into()?;
         request_data.sn = Some(subject.sn + 1);
         request_data.subject_id = Some(subject.subject_id.clone());
@@ -962,10 +1020,10 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     gov_id: subject.governance_id.clone(),
                 };
                 let approval_request_hash = approval_request.hash_id().map_err(|_| {
-                        EventError::CryptoError(String::from(
-                            "Error calculating the hash of the proposal",
-                        ))
-                    })?;
+                    EventError::CryptoError(String::from(
+                        "Error calculating the hash of the proposal",
+                    ))
+                })?;
                 let subject_keys = subject
                     .keys
                     .as_ref()
@@ -1030,7 +1088,14 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 let event_message = create_validator_request(notary_event.clone());
                 self.event_notary_events
                     .insert(event_hash.clone(), notary_event);
-                self.events_to_validate.insert(event_hash, signed_event);
+                self.events_to_validate
+                    .insert(event_hash, signed_event.clone());
+                self.database
+                    .set_prevalidated_event(&subject.subject_id, signed_event)
+                    .map_err(|error| EventError::DatabaseError(error.to_string()))?;
+                self.database
+                    .del_request(&subject.subject_id)
+                    .map_err(|error| EventError::DatabaseError(error.to_string()))?;
                 (ValidationStage::Validate, event_message)
             };
             // Limpiar HashMaps
@@ -1254,7 +1319,14 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 .await?;
             self.event_notary_events
                 .insert(event_hash.clone(), notary_event);
-            self.events_to_validate.insert(event_hash, signed_event);
+            self.events_to_validate
+                .insert(event_hash, signed_event.clone());
+            self.database
+                .set_prevalidated_event(&subject.subject_id, signed_event)
+                .map_err(|error| EventError::DatabaseError(error.to_string()))?;
+            self.database
+                .del_request(&subject.subject_id)
+                .map_err(|error| EventError::DatabaseError(error.to_string()))?;
             // Hacer update de fase por la que va el evento
             self.subjects_completing_event
                 .insert(subject_id, (stage, signers, (quorum_size, 0)));
@@ -1305,8 +1377,14 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             },
         };
         log::warn!("PASO 1");
+        log::warn!(
+            "SUBJECT_IS_NONE: {}, EVENT_SN: {}",
+            subject.is_none(),
+            event.content.sn,
+        );
         let (our_governance_version, governance_id) = if event.content.sn == 0 && subject.is_none()
         {
+            log::error!("IF VALIDATION 1");
             if let EventRequest::Create(create_request) = &event.content.event_request.content {
                 if create_request.schema_id == "governance" {
                     (0, create_request.governance_id.clone())
@@ -1326,6 +1404,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 return Err(EventError::Event0NotCreate);
             }
         } else if subject.is_some() && event.content.sn != 0 {
+            log::error!("IF VALIDATION 2");
             let subject = subject.unwrap();
             if subject.schema_id == "governance" {
                 (subject.sn, subject.subject_id.clone())
@@ -1342,6 +1421,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 )
             }
         } else {
+            log::error!("IF VALIDATION 1");
             return Err(EventError::SubjectNotFound(subject_id.to_str()));
         };
         if our_governance_version < governance_version {
@@ -1482,7 +1562,6 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             self.event_notary_events.remove(&event_hash);
             self.event_validations.remove(&event_hash);
             self.subjects_completing_event.remove(&subject_id);
-            self.subjects_by_governance.remove(&subject_id);
             Ok(())
         }
     }

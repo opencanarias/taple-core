@@ -1132,6 +1132,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                 // Comprobaciones criptográficas
                 let ledger_state = self.ledger_state.get(&state_request.subject_id);
                 let metadata = validation_proof.get_metadata();
+                let sn = event.content.sn;
                 match ledger_state {
                     Some(ledger_state) => {
                         log::warn!("Pasa por SOME");
@@ -1171,6 +1172,15 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 return Err(LedgerError::DatabaseError(error));
                             }
                         };
+                        let gov_id = subject.governance_id.clone();
+                        let approval_request_hash = &event
+                            .content
+                            .get_approval_hash(gov_id)
+                            .map_err(|_| {
+                                LedgerError::CryptoError(
+                                    "Error generating approval request hash".to_owned(),
+                                )
+                            })?;
                         if !subject.active {
                             return Err(LedgerError::SubjectLifeEnd(subject.subject_id.to_str()));
                         }
@@ -1480,6 +1490,29 @@ impl<C: DatabaseCollection> Ledger<C> {
                             // Caso evento repetido
                             return Err(LedgerError::EventAlreadyExists);
                         }
+                            // PONER Aprobaciones como finalizadas y borrar de índice de pendientes
+                        match self.database.get_approval(&approval_request_hash) {
+                            Ok(mut data) => {
+                                if let ApprovalState::Pending = data.state {
+                                    data.state = ApprovalState::Obsolete;
+                                    self.database.set_approval(&approval_request_hash, data)?;
+                                    let _ = self
+                                        .notification_sender
+                                        .send(Notification::ObsoletedApproval {
+                                            id: approval_request_hash.to_str(),
+                                            subject_id: subject_id.to_str(),
+                                            sn,
+                                        })
+                                        .map_err(|_| LedgerError::NotificationChannelError);
+                                }
+                            }
+                            Err(error) => match error {
+                                DbError::EntryNotFound => {}
+                                _ => {
+                                    return Err(LedgerError::DatabaseError(error));
+                                }
+                            },
+                        };
                     }
                     None => {
                         // Hacer comprobaciones con la ValidationProof
@@ -1999,12 +2032,6 @@ impl<C: DatabaseCollection> Ledger<C> {
                         self.database
                             .set_lce_validation_proof(&eol_request.subject_id, validation_proof)?;
                         let sn = event.content.sn;
-                        let approval_request_hash =
-                            &event.content.get_approval_hash().map_err(|_| {
-                                LedgerError::CryptoError(
-                                    "Error generating approval request hash".to_owned(),
-                                )
-                            })?;
                         let success = event.content.eval_success && event.content.approved;
                         self.database.set_event(&eol_request.subject_id, event)?;
                         let _ = self
@@ -2021,29 +2048,6 @@ impl<C: DatabaseCollection> Ledger<C> {
                             subject_id.clone(),
                             success,
                         )?;
-                        // PONER Aprobaciones como finalizadas y borrar de índice de pendientes
-                        match self.database.get_approval(&approval_request_hash) {
-                            Ok(mut data) => {
-                                if let ApprovalState::Pending = data.state {
-                                    data.state = ApprovalState::Obsolete;
-                                    self.database.set_approval(&approval_request_hash, data)?;
-                                    let _ = self
-                                        .notification_sender
-                                        .send(Notification::ObsoletedApproval {
-                                            id: approval_request_hash.to_str(),
-                                            subject_id: subject_id.to_str(),
-                                            sn,
-                                        })
-                                        .map_err(|_| LedgerError::NotificationChannelError);
-                                }
-                            }
-                            Err(error) => match error {
-                                DbError::EntryNotFound => {}
-                                _ => {
-                                    return Err(LedgerError::DatabaseError(error));
-                                }
-                            },
-                        };
                         self.ledger_state.insert(
                             eol_request.subject_id.clone(),
                             LedgerState {
@@ -2179,9 +2183,10 @@ impl<C: DatabaseCollection> Ledger<C> {
                                         event.content.eval_success && event.content.approved,
                                     )?;
                                     // PONER Aprobaciones como finalizadas y borrar de índice de pendientes
-                                    let approval_request_hash =
-                                    &event.content.get_approval_hash()
-                                            .map_err(|_| {
+                                    let approval_request_hash = &event
+                                        .content
+                                        .get_approval_hash(subject.governance_id.clone())
+                                        .map_err(|_| {
                                             LedgerError::CryptoError(
                                                 "Error generating approval request hash".to_owned(),
                                             )
@@ -2190,7 +2195,8 @@ impl<C: DatabaseCollection> Ledger<C> {
                                         Ok(mut data) => {
                                             if let ApprovalState::Pending = data.state {
                                                 data.state = ApprovalState::Obsolete;
-                                                self.database.set_approval(&approval_request_hash, data)?;
+                                                self.database
+                                                    .set_approval(&approval_request_hash, data)?;
                                                 let _ = self
                                                     .notification_sender
                                                     .send(Notification::ObsoletedApproval {
