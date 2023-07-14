@@ -203,7 +203,9 @@ impl Subject {
     }
 
     pub fn eol_event(&mut self) {
+        log::error!("entro");
         self.active = false;
+        log::error!("salgo {}", self.sn);
     }
 
     pub fn state_hash_after_apply(
