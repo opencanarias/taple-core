@@ -211,7 +211,7 @@ pub struct Role {
 pub enum RoleEnum {
     VALIDATOR,
     CREATOR,
-    ISSUER,
+    INVOKER,
     WITNESS,
     APPROVER,
     EVALUATOR,
@@ -233,7 +233,7 @@ pub struct Contract {
 #[allow(non_camel_case_types)]
 pub enum Quorum {
     MAJORITY,
-    FIXED(u64), // TODO: Es posible que tenga que ser estructura vacía
+    FIXED(u64),
     PORCENTAJE(f64),
     BFT(f64),
 }
@@ -254,7 +254,7 @@ pub struct Policy {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Schema {
     id: String,
-    schema: serde_json::Value, // TODO: QUIZÁS STRING
+    schema: serde_json::Value,
     // #[serde(rename = "Initial-Value")]
     initial_value: serde_json::Value,
     contract: Contract,
@@ -322,33 +322,70 @@ enum StateError {
     NoCorrelationSchemaPolicy,
     #[error("There are policies not correlated to any schema")]
     PoliciesWithoutSchema,
+    #[error("Role assigned to not defined schema")]
+    InvalidRoleSchema,
+    #[error("ID specified for Role::Who does not exist")]
+    IdWhoRoleNoExist,
+    #[error("Name specified for Role::Who does not exist")]
+    NameWhoRoleNoExist
 }
 
 fn check_governance_state(state: &Governance) -> Result<(), StateError> {
     // Debemos comprobar varios aspectos del estado.
     // No pueden haber miembros duplicados, ya sean en name o en ID
-    check_members(&state.members)?;
+    let (id_set, name_set) = check_members(&state.members)?;
     // No pueden haber policies duplicadas y la asociada a la propia gobernanza debe estar presente
     let policies_names = check_policies(&state.policies)?;
     // No se pueden indicar policies de schema que no existen. Así mismo, no pueden haber
     // schemas sin policies. La correlación debe ser uno-uno
-    check_schemas(&state.schemas, policies_names)
+    check_schemas(&state.schemas, policies_names.clone())?;
+    check_roles(&state.roles, policies_names, id_set, name_set)
 }
 
-fn check_members(members: &Vec<Member>) -> Result<(), StateError> {
+fn check_roles(
+    roles: &Vec<Role>,
+    mut schemas_names: HashSet<String>,
+    id_set: HashSet<String>,
+    name_set: HashSet<String>,
+) -> Result<(), StateError> {
+    schemas_names.insert("governance".into());
+    for role in roles {
+        if let SchemaEnum::ID { ID } = &role.schema {
+            if !schemas_names.contains(ID) {
+                return Err(StateError::InvalidRoleSchema);
+            }
+        }
+        match &role.who {
+            Who::ID { ID } => {
+              if !id_set.contains(ID) {
+                return Err(StateError::IdWhoRoleNoExist);
+              }
+            }
+            Who::NAME { NAME } => {
+              if !name_set.contains(NAME) {
+                return Err(StateError::NameWhoRoleNoExist);
+              }
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+fn check_members(members: &Vec<Member>) -> Result<(HashSet<String>, HashSet<String>), StateError> {
     let mut name_set = HashSet::new();
     let mut id_set = HashSet::new();
     for member in members {
         if name_set.contains(&member.name) {
             return Err(StateError::DuplicatedMemberName);
         }
-        name_set.insert(&member.name);
+        name_set.insert(member.name.clone());
         if id_set.contains(&member.id) {
             return Err(StateError::DuplicatedMemberID);
         }
-        id_set.insert(&member.id);
+        id_set.insert(member.id.clone());
     }
-    Ok(())
+    Ok((id_set, name_set))
 }
 
 fn check_policies(policies: &Vec<Policy>) -> Result<HashSet<String>, StateError> {
