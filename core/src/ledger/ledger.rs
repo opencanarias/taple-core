@@ -1783,6 +1783,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 &subject.public_key,
                             )?;
                             let sn: u64 = event.content.sn;
+                            subject.sn = sn;
                             subject.eol_event();
                             self.database.set_signatures(
                                 &eol_request.subject_id,
