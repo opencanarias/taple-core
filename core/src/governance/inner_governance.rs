@@ -170,9 +170,6 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                 Who::NOT_MEMBERS => continue,
             }
         }
-        for signer in signers.iter() {
-            log::warn!("FINAL SIGNERS: {}", signer.to_str());
-        }
         Ok(signers)
     }
 
@@ -247,7 +244,6 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
             )));
         }
         let mut governance_id = metadata.governance_id.clone();
-        log::info!("Quorum de: {}", metadata.subject_id.to_str());
         if governance_id.digest.is_empty() {
             governance_id = metadata.subject_id.clone();
         }
@@ -274,12 +270,9 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         };
         match quorum {
             Quorum::MAJORITY => {
-                log::info!("Quorum Majority");
-
                 Ok(Ok((signers.len() as u32 / 2) + 1))
             }
             Quorum::FIXED { fixed } => {
-                log::info!("Quorum fijo: {}", fixed);
                 Ok(Ok(fixed))
             }
             Quorum::PORCENTAJE { porcentaje } => {
@@ -351,10 +344,8 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
             if &role.role != stage.to_role() {
                 continue;
             }
-            log::warn!("ROLE SCHEMA: {:?}", role.schema);
             match role.schema {
                 Schema::ID { ID } => {
-                    log::warn!("ID, id: {}, schema_id: {}", ID, schema_id);
                     if &ID != schema_id {
                         continue;
                     }
@@ -366,7 +357,6 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                 }
                 Schema::ALL => {}
             }
-            log::warn!("PASAMOS SCHEMA");
             if !namespace_contiene(&role.namespace, namespace) {
                 continue;
             }
@@ -554,9 +544,7 @@ fn get_quorum<'a>(data: &'a Value, key: &str) -> Result<Quorum, InternalError> {
         .ok_or(InternalError::InvalidGovernancePayload("10".into()))?
         .get("quorum")
         .ok_or(InternalError::InvalidGovernancePayload("11".into()))?;
-    log::warn!("QUORUM: {:?}", json_data);
     let quorum: Quorum = serde_json::from_value(json_data.clone()).unwrap();
-    log::warn!("QUORUM: {:?}", quorum);
     Ok(quorum)
 }
 

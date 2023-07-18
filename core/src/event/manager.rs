@@ -155,7 +155,7 @@ impl<C: DatabaseCollection> EventManager<C> {
             match data {
                 EventCommand::Event { event_request } => {
                     let response = self.event_completer.pre_new_event(event_request).await;
-                    log::warn!("EVENT REPSONE: {:?}", response);
+                    log::info!("EVENT REPSONE: {:?}", response);
                     match response.clone() {
                         Err(error) => match error {
                             EventError::ChannelClosed => {
@@ -253,7 +253,6 @@ impl<C: DatabaseCollection> EventManager<C> {
                             }
                         },
                         _ => {
-                            log::error!("VALIDATION ACCEPTED");
                         }
                     }
                     EventResponse::NoResponse

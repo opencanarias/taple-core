@@ -85,7 +85,6 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
             .get_contracts(governance_id.clone(), governance_version)
             .await
             .map_err(CompilerErrorResponses::GovernanceError)?;
-        log::error!("COMPILER AFTER GET CONTRACTS");
         for (contract_info, schema_id) in contracts {
             let contract_data = match self.database.get_contract(&governance_id, &schema_id) {
                 Ok((contract, hash, contract_gov_version)) => {
@@ -122,7 +121,6 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
             }
             self.compile(contract_info.raw, &governance_id.to_str(), &schema_id)
                 .await?;
-            log::error!("COMPILER AFTER COMPILER");
             let compiled_contract = self
                 .add_contract()
                 .await?;

@@ -195,7 +195,7 @@ impl<
                             | ExecutorErrorResponses::JSONPATCHDeserializationFailed,
                         ) => return Err(EvaluatorError::JSONDeserializationFailed),
                         Err(error) => {
-                            log::info!("ERROR EVALUATOR: {:?}", error);
+                            log::error!("ERROR EVALUATOR: {:?}", error);
                             break 'response EvaluatorResponse::AskForEvaluation(Err(
                                 super::errors::EvaluatorErrorResponses::ContractExecutionError(
                                     error,

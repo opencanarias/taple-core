@@ -129,11 +129,6 @@ impl<C: DatabaseCollection> Notary<C> {
             .signature_manager
             .sign(&notary_event.proof)
             .map_err(NotaryError::ProtocolErrors)?;
-        log::warn!(
-            "SE ENVÍA LA VALIDACIÓN A {}: sn: {}",
-            sender.to_str(),
-            notary_event.proof.sn
-        );
         self.message_channel
             .tell(MessageTaskCommand::Request(
                 None,
@@ -161,7 +156,6 @@ impl<C: DatabaseCollection> Notary<C> {
     ) -> Result<KeyIdentifier, NotaryError> {
         match last_proof {
             Some(last_proof) => {
-                log::warn!("TENGO LAST PROOF: {:?}", last_proof);
                 // Comprobar que tenemos la prueba del evento anterior, si no tenemos que hacer la comprobación de la que nos llega en el mensaje como cuando no tenemos el registro
                 if last_proof.sn > new_proof.sn {
                     Err(NotaryError::EventSnLowerThanLastSigned)

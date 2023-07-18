@@ -127,7 +127,6 @@ impl ProtocolManager {
                 .await
                 .map_err(|_| ProtocolErrors::ChannelClosed)?,
             TapleMessages::EvaluationMessage(data) => {
-                log::warn!("Evaluation Message Received");
                 #[cfg(feature = "evaluation")]
                 {
                     let evaluation_command = match data {

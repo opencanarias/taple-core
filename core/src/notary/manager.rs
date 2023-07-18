@@ -94,9 +94,8 @@ impl<C: DatabaseCollection> NotaryManager<C> {
                     notary_event,
                     sender,
                 } => {
-                    log::warn!("LLEGA EVENTO A VALIDAR");
                     let result = self.inner_notary.notary_event(notary_event, sender).await;
-                    log::warn!("{:?}", result);
+                    log::info!("Notary Event Result: {:?}", result);
                     match result {
                         Err(NotaryError::ChannelError(_)) => return result.map(|_| ()),
                         _ => NotaryResponse::NotaryEventResponse(result),

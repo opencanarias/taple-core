@@ -86,7 +86,6 @@ impl<C: DatabaseCollection> SignatureDb<C> {
         let key = get_key(key_elements)?;
         let mut iter = self.collection.iter(false, format!("{}{}", key, char::MAX));
         if let Some(vproof) = iter.next() {
-            log::info!("{:#?}", vproof);
             let vproof = deserialize::<(HashSet<Signature>, ValidationProof)>(&vproof.1).map_err(|_| {
                 DbError::DeserializeError
             })?;

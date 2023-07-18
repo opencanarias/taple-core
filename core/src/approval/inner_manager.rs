@@ -133,7 +133,6 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         // Comprobamos todas las peticiones guardadas y borramos las afectadas
         let affected_requests = self.database.get_approvals_by_governance(governance_id)
             .map_err(|_| ApprovalManagerError::DatabaseError)?;
-        log::error!("FAILED AFFTED REQUESTS");
         for request in affected_requests {
             // Borrarlas de la colección principal y del índice
             let approval_entity = self.database.get_approval(&request).map_err(|_| ApprovalManagerError::DatabaseError)?;
@@ -176,13 +175,11 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             intervención. En ese caso es precisar eliminar la petición y actualizar a la nueva.
             Debemos comprobar siempre si ya tenemos la petición que nos envían.
         */
-        log::error!("PARTE 1");
         let id: DigestIdentifier = match DigestIdentifier::from_serializable_borsh(&approval_request.content).map_err(|_| ApprovalErrorResponse::ErrorHashing) {
             Ok(id) => id,
             Err(error) => return Ok(Err(error)),
         };
 
-        log::error!("PARTE 2");
         if let Ok(data) = self.get_single_request(&id) {
             match data.state {
                 ApprovalState::Pending | ApprovalState::Obsolete => return Ok(Err(ApprovalErrorResponse::RequestAlreadyKnown)),
@@ -190,16 +187,12 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
                     let result = self
                     .generate_vote(&id, data.response.expect("Should be").content.approved)
                     .await?;
-                log::info!("RESULT AAAAAAAAAAAAAAAAAa: {:?}", result);
                 let (vote, sender) = result
                 .expect("Request should be in data structure");
                 return Ok(Ok(Some((vote.response.unwrap(), sender))))
                 },
             }
         };
-
-        log::error!("PARTE 3");
-
         // Comprobamos si tenemos el sujeto y si estamos sincronizados
         // let mut subject_data = match self.database.get_subject(&state_request.subject_id) {
         //     Ok(subject) => subject,
@@ -225,7 +218,6 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             return Err(ApprovalManagerError::MoreRequestThanMaxAllowed);
         }
 
-        log::error!("PARTE 5");
         // Comprobamos si la versión de la gobernanza es correcta
         let version = match self
             .get_governance_version(&approval_request.content.gov_id, &subject_id)
@@ -303,7 +295,6 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             state: ApprovalState::Pending,
             sender,
         };
-        log::error!("PARTE 8");
         self.database.set_subject_aproval_index(
             &subject_id,
             &id)
@@ -314,11 +305,9 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
                 &id)
             .map_err(|_| ApprovalManagerError::DatabaseError)?;   
         }
-        log::error!("PARTE 9");
         let Ok(_result) = self.database.set_approval(&id, approval_entity) else { 
             return Err(ApprovalManagerError::DatabaseError);
         };
-        log::error!("PARTE 10");
         self.notifier
             .request_reached(&id.to_str(), &subject_id.to_str(), sn);
 
@@ -369,7 +358,6 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         };
         self.database.del_subject_aproval_index(&subject_id, request_id).map_err(|_| ApprovalManagerError::DatabaseError)?;
         self.database.del_governance_aproval_index(&data.request.content.gov_id, request_id).map_err(|_| ApprovalManagerError::DatabaseError)?;
-        log::error!("PARTE 11");
         let sender = data.sender.clone();
         Ok(Ok((data, sender)))
     }
