@@ -1,15 +1,21 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 
+use crate::approval::ApprovalMessages;
+#[cfg(feature = "aproval")]
+use crate::approval::ApprovalResponses;
+use crate::evaluator::EvaluatorMessage;
+#[cfg(feature = "evaluation")]
+use crate::evaluator::EvaluatorResponse;
+use crate::validation::ValidationCommand;
+#[cfg(feature = "validation")]
+use crate::validation::ValidationResponse;
 use crate::{
-    approval::{ApprovalMessages, ApprovalResponses},
     commons::channel::{ChannelData, MpscChannel, SenderEnd},
     distribution::{error::DistributionErrorResponses, DistributionMessagesNew},
-    evaluator::{EvaluatorMessage, EvaluatorResponse},
     event::{EventCommand, EventResponse},
     ledger::{LedgerCommand, LedgerResponse},
     message::{MessageContent, TaskCommandContent},
-    validation::{ValidationCommand, ValidationResponse},
     signature::Signed,
 };
 
@@ -51,7 +57,10 @@ impl ProtocolManager {
             EvaluatorMessage,
             EvaluatorResponse,
         >,
-        #[cfg(feature = "validation")] validation_sx: SenderEnd<ValidationCommand, ValidationResponse>,
+        #[cfg(feature = "evaluation")] validation_sx: SenderEnd<
+            ValidationCommand,
+            ValidationResponse,
+        >,
         event_sx: SenderEnd<EventCommand, EventResponse>,
         #[cfg(feature = "aproval")] approval_sx: SenderEnd<ApprovalMessages, ApprovalResponses>,
         ledger_sx: SenderEnd<LedgerCommand, LedgerResponse>,
@@ -99,6 +108,7 @@ impl ProtocolManager {
         }
     }
 
+    #[allow(unused_variables)]
     async fn process_command(
         &self,
         command: ChannelData<Signed<MessageContent<TapleMessages>>, ()>,
@@ -130,9 +140,7 @@ impl ProtocolManager {
                 #[cfg(feature = "evaluation")]
                 {
                     let evaluation_command = match data {
-                        EvaluatorMessage::EvaluationEvent {
-                            ..
-                        } => {
+                        EvaluatorMessage::EvaluationEvent { .. } => {
                             log::error!("Evaluation Event Received in protocol manager");
                             return Ok(());
                         }
@@ -156,16 +164,16 @@ impl ProtocolManager {
                 #[cfg(feature = "validation")]
                 {
                     let validation_command = match data {
-                        ValidationCommand::ValidationEvent {
-                            ..
-                        } => {
+                        ValidationCommand::ValidationEvent { .. } => {
                             log::error!("Validation Event Received in protocol manager");
                             return Ok(());
                         }
-                        ValidationCommand::AskForValidation(validation_event) => ValidationCommand::ValidationEvent {
-                            validation_event,
-                            sender,
-                        },
+                        ValidationCommand::AskForValidation(validation_event) => {
+                            ValidationCommand::ValidationEvent {
+                                validation_event,
+                                sender,
+                            }
+                        }
                     };
                     return Ok(self
                         .validation_sx

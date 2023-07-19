@@ -1,4 +1,4 @@
-use std::{collections::HashMap, result};
+use std::collections::HashMap;
 
 use super::{
     errors::ListenAddrErrors,

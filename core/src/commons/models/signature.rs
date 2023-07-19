@@ -7,9 +7,7 @@ use crate::{
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
-use std::{
-    hash::{Hash, Hasher},
-};
+use std::hash::{Hash, Hasher};
 
 use super::{timestamp::TimeStamp, HashId};
 

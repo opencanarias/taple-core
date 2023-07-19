@@ -1116,7 +1116,6 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             } // Que hago aquí?? devuelvo error?
             EventRequest::Fact(state_request) => state_request.subject_id.clone(),
         };
-        let tmp = self.subjects_completing_event.get(&subject_id);
         let Some((ValidationStage::Approve, signers, quorum_size)) = self.subjects_completing_event.get(&subject_id) else {
             return Err(EventError::WrongEventPhase);
         };
@@ -1396,7 +1395,6 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             // Ignoramos la firma de validación porque no nos vale
             return Ok(());
         }
-        let a = self.subjects_completing_event.get(&subject_id);
         // CHeck phase
         let Some((ValidationStage::Validate, signers, quorum_size)) = self.subjects_completing_event.get(&subject_id) else {
             return Err(EventError::WrongEventPhase);

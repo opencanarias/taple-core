@@ -1,7 +1,7 @@
-use crate::utils::{deserialize, serialize};
 use super::utils::{get_key, Element};
+use crate::utils::{deserialize, serialize};
+use crate::DbError;
 use crate::{DatabaseCollection, DatabaseManager, Derivable, DigestIdentifier};
-use crate::{DbError};
 use std::sync::Arc;
 
 pub(crate) struct ContractDb<C: DatabaseCollection> {
@@ -29,9 +29,8 @@ impl<C: DatabaseCollection> ContractDb<C> {
         ];
         let key = get_key(key_elements)?;
         let contract = self.collection.get(&key)?;
-        Ok(deserialize::<(Vec<u8>, DigestIdentifier, u64)>(&contract).map_err(|_| {
-            DbError::DeserializeError
-        })?)
+        Ok(deserialize::<(Vec<u8>, DigestIdentifier, u64)>(&contract)
+            .map_err(|_| DbError::DeserializeError)?)
     }
 
     pub fn put_contract(
@@ -61,9 +60,8 @@ impl<C: DatabaseCollection> ContractDb<C> {
         ];
         let key = get_key(key_elements)?;
         let contract = self.collection.get(&key)?;
-        let contract = deserialize::<(Vec<u8>, DigestIdentifier, u64)>(&contract).map_err(|_| {
-            DbError::DeserializeError
-        })?;
+        let contract = deserialize::<(Vec<u8>, DigestIdentifier, u64)>(&contract)
+            .map_err(|_| DbError::DeserializeError)?;
         Ok(contract.0)
     }
 

@@ -1,4 +1,3 @@
-use crate::ListenAddr;
 #[cfg(feature = "aproval")]
 use crate::approval::manager::{ApprovalAPI, ApprovalManager};
 #[cfg(feature = "aproval")]
@@ -32,12 +31,13 @@ use crate::message::{
     NetworkEvent,
 };
 use crate::network::network::{NetworkProcessor, SendMode};
-#[cfg(feature = "validation")]
-use crate::validation::manager::ValidationManager;
-use crate::validation::ValidationCommand;
-use crate::validation::ValidationResponse;
 use crate::protocol::protocol_message_manager::{ProtocolManager, TapleMessages};
 use crate::signature::Signed;
+#[cfg(feature = "validation")]
+use crate::validation::manager::ValidationManager;
+#[cfg(feature = "validation")]
+use crate::validation::{ValidationCommand, ValidationResponse};
+use crate::ListenAddr;
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use libp2p::{Multiaddr, PeerId};

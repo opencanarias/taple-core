@@ -8,7 +8,6 @@ use std::collections::HashSet;
 use std::fs::create_dir;
 use std::path::Path;
 use std::process::Command;
-use wasm_gc::garbage_collect_file;
 use wasmtime::{Engine, ExternType};
 
 use super::manifest::get_toml;
