@@ -1,5 +1,6 @@
 use super::error::APIInternalError;
 use super::{ApiResponses, GetAllowedSubjects};
+#[cfg(feature = "aproval")]
 use crate::approval::error::ApprovalErrorResponse;
 #[cfg(feature = "aproval")]
 use crate::approval::manager::{ApprovalAPI, ApprovalAPIInterface};
@@ -10,6 +11,7 @@ use crate::event::EventResponse;
 use crate::identifier::Derivable;
 use crate::ledger::manager::{EventManagerAPI, EventManagerInterface};
 use crate::signature::Signed;
+#[cfg(feature = "aproval")]
 use crate::ApprovalState;
 use crate::{KeyDerivator, KeyIdentifier};
 // use crate::ledger::errors::LedgerManagerError;
@@ -67,8 +69,12 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         };
         match response {
             Ok(data) => Ok(ApiResponses::HandleExternalRequest(Ok(data))),
-            Err(EventError::PublicKeyIsEmpty) => Ok(ApiResponses::HandleExternalRequest(Err(ApiError::InvalidParameters(format!("{}", response.unwrap_err()))))),
-            Err(error) => Ok(ApiResponses::HandleExternalRequest(Err(ApiError::EventCreationError { source: error })))
+            Err(EventError::PublicKeyIsEmpty) => Ok(ApiResponses::HandleExternalRequest(Err(
+                ApiError::InvalidParameters(format!("{}", response.unwrap_err())),
+            ))),
+            Err(error) => Ok(ApiResponses::HandleExternalRequest(Err(
+                ApiError::EventCreationError { source: error },
+            ))),
         }
     }
 

@@ -51,7 +51,10 @@ pub struct Event {
 }
 
 impl Event {
-    pub fn get_approval_hash(&self, gov_id: DigestIdentifier) -> Result<DigestIdentifier, SubjectError> {
+    pub fn get_approval_hash(
+        &self,
+        gov_id: DigestIdentifier,
+    ) -> Result<DigestIdentifier, SubjectError> {
         ApprovalRequest {
             event_request: self.event_request.clone(),
             sn: self.sn,

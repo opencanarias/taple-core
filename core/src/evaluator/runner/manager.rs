@@ -70,23 +70,13 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
             return Err(ExecutorErrorResponses::OurGovIsLower);
         }
         let context_hash = Self::generate_context_hash(execute_contract)?;
-        let (contract, governance_version) = if execute_contract.context.schema_id == "governance"
+        let contract: Vec<u8> = if execute_contract.context.schema_id == "governance"
             && execute_contract.context.governance_id.digest.is_empty()
         {
             match self.database.get_governance_contract() {
                 // TODO: Gestionar versión gobernanza
-                Ok(contract) => (contract, execute_contract.gov_version),
+                Ok(contract) => contract,
                 Err(DbError::EntryNotFound) => {
-                    let governance_version = match self
-                        .database
-                        .get_subject(&execute_contract.context.governance_id)
-                    {
-                        Ok(governance) => governance.sn,
-                        Err(DbError::EntryNotFound) => 0,
-                        Err(error) => {
-                            return Err(ExecutorErrorResponses::DatabaseError(error.to_string()))
-                        }
-                    };
                     return Ok(EvaluationResponse {
                         patch: ValueWrapper(
                             serde_json::from_str("[]").map_err(|_| {
@@ -106,18 +96,8 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
                 &execute_contract.context.governance_id,
                 &execute_contract.context.schema_id,
             ) {
-                Ok((contract, _, governance_version)) => (contract, governance_version),
+                Ok((contract, _, _)) => contract,
                 Err(DbError::EntryNotFound) => {
-                    let governance_version = match self
-                        .database
-                        .get_subject(&execute_contract.context.governance_id)
-                    {
-                        Ok(governance) => governance.sn,
-                        Err(DbError::EntryNotFound) => 0,
-                        Err(error) => {
-                            return Err(ExecutorErrorResponses::DatabaseError(error.to_string()))
-                        }
-                    };
                     return Ok(EvaluationResponse {
                         patch: ValueWrapper(
                             serde_json::from_str("[]").map_err(|_| {
@@ -153,7 +133,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
                     | ExecutorErrorResponses::ContractEntryPointNotFound
                     | ExecutorErrorResponses::FunctionLinkingFailed(_)
                     | ExecutorErrorResponses::SubjectError(_)
-                    | ExecutorErrorResponses::CantGenerateContractResult 
+                    | ExecutorErrorResponses::CantGenerateContractResult
                     | ExecutorErrorResponses::StateHashGenerationFailed
                     | ExecutorErrorResponses::ContextHashGenerationFailed
                     | ExecutorErrorResponses::RolesObtentionFailed
@@ -162,8 +142,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
                     | ExecutorErrorResponses::CreateRequestNotAllowed
                     | ExecutorErrorResponses::GovernanceError(_)
                     | ExecutorErrorResponses::SchemaCompilationFailed
-                    | ExecutorErrorResponses::InvalidPointerPovided
-                    => {
+                    | ExecutorErrorResponses::InvalidPointerPovided => {
                         return Ok(EvaluationResponse {
                             patch: ValueWrapper(serde_json::from_str("[]").map_err(|_| {
                                 ExecutorErrorResponses::JSONPATCHDeserializationFailed

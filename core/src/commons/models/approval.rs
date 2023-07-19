@@ -5,7 +5,7 @@ use crate::{
     commons::errors::SubjectError,
     identifier::DigestIdentifier,
     signature::{Signature, Signed},
-    EventRequest, ValueWrapper, KeyIdentifier,
+    EventRequest, KeyIdentifier, ValueWrapper,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};

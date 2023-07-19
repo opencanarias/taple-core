@@ -174,7 +174,7 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
                             match data {
                                 GovernanceUpdatedMessage::GovernanceUpdated { governance_id, governance_version: _ } => {
                                     if let Err(error) = self.inner_manager.new_governance_version(&governance_id) {
-                                        log::error!("NEW GOV VERSION APPROVAL: {}", error);
+                                        log::error!("NEW GOV VERSION APPROVAL ERROR: {}", error);
                                         self.shutdown_sender.send(()).expect("Channel Closed");
                                         break;
                                     }
@@ -219,7 +219,7 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
                     .inner_manager
                     .process_approval_request(approval, sender)
                     .await?;
-                log::error!("RESULT APPROVAL REQUEST: {:?}", result);
+                log::info!("RESULT APPROVAL REQUEST: {:?}", result);
                 match result {
                     Ok(Some((approval, sender))) => {
                         let msg = create_approver_response(approval);

@@ -153,7 +153,6 @@ impl<C: DatabaseCollection> Ledger<C> {
                 );
             }
         }
-        log::warn!("TENGO {} sujetos pendietes", self.ledger_state.len());
         Ok(())
     }
 
@@ -354,11 +353,9 @@ impl<C: DatabaseCollection> Ledger<C> {
                 match is_gov {
                     Some(true) => {
                         // Enviar mensaje a gov de governance updated con el id y el sn
-                        log::error!("BEFORE GOVERNANCE UPDATED");
                         self.gov_api
                             .governance_updated(subject_id.clone(), sn)
                             .await?;
-                        log::error!("AFTER GOVERNANCE UPDATED");
                     }
                     Some(false) => {
                         self.database.del_signatures(&subject_id, sn - 1)?;
@@ -535,7 +532,6 @@ impl<C: DatabaseCollection> Ledger<C> {
         sender: KeyIdentifier,
         validation_proof: ValidationProof,
     ) -> Result<(), LedgerError> {
-        log::warn!("LLEGA EVENTO CON SN {}", event.content.sn);
         // log::error!("External event: Event: {:?}", event);
         // Comprobar que no existe una request con el mismo hash
         let event_request = event.content.event_request.clone();
@@ -551,7 +547,6 @@ impl<C: DatabaseCollection> Ledger<C> {
             },
         }
         // Comprobaciones criptográficas
-        log::warn!("ANTES DE CHECK SIGNATURES");
         event.verify_signatures()?;
         // Comprobar si es genesis o state
         match event.content.event_request.content.clone() {
@@ -930,7 +925,6 @@ impl<C: DatabaseCollection> Ledger<C> {
                         }
                     }
                     None => {
-                        log::warn!("Pasa por NONE");
                         // Hacer comprobaciones con la ValidationProof
                         // Comprobar que las firmas son válidas y suficientes
                         let subject_id = transfer_request.subject_id.clone();
@@ -1148,14 +1142,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                     .subject_is_gov
                     .get(&state_request.subject_id)
                     .unwrap_or(&false);
-                log::warn!("EL SUJETO ES  IS GOV: {}", is_gov);
                 // Comprobaciones criptográficas
                 let ledger_state = self.ledger_state.get(&state_request.subject_id);
                 let metadata = validation_proof.get_metadata();
                 let sn = event.content.sn;
                 match ledger_state {
                     Some(ledger_state) => {
-                        log::warn!("Pasa por SOME");
                         match ledger_state.current_sn {
                             Some(current_sn) => {
                                 if event.content.sn <= current_sn {
@@ -1203,7 +1195,6 @@ impl<C: DatabaseCollection> Ledger<C> {
                             return Err(LedgerError::SubjectLifeEnd(subject.subject_id.to_str()));
                         }
                         if *is_gov {
-                            log::error!("State NO DEBERÍA");
                             // Al ser gov no tiene HEAD. Debemos comprobar si se trata del sn + 1
                             if event.content.sn > subject.sn + 1 {
                                 // Pedimos el siguiente evento al que nosotros tenemos
@@ -1247,9 +1238,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                         }
                         // Comprobar que las firmas son válidas y suficientes
                         // Si es el evento siguiente puedo obtener metadata de mi sistema, si es LCE lo tengo que obtener de la prueba de validación por si ha habido cambios de propietario u otros cambios
-                        log::warn!("ME LLEGA EL EVENTO CON SN {}", event.content.sn);
                         let mut witnesses = self.get_witnesses(metadata.clone()).await?;
-                        log::warn!("GET TESTIGOS");
                         if !witnesses.contains(&self.our_id) {
                             match self
                                 .database
@@ -1296,24 +1285,9 @@ impl<C: DatabaseCollection> Ledger<C> {
                         //         ))
                         //     })?
                         // };
-                        let notary_hash = DigestIdentifier::from_serializable_borsh(
-                            &validation_proof,
-                        )
-                        .map_err(|_| {
-                            LedgerError::CryptoError(String::from(
-                                "Error calculating the hash of the serializable",
-                            ))
-                        })?;
-                        log::warn!("NOTARY HASH QUE ME LLEGA {}", notary_hash.to_str());
-                        log::warn!("VALIDATION PROOF {:?}", validation_proof);
-                        log::warn!("SIGNATURES SIZE: {}", signatures.len());
-                        log::warn!("SIGNERS SIZE {}", signers.len());
                         verify_signatures(&signatures, &signers, quorum, &validation_proof)?;
-                        log::warn!("PASA POR VERIFY");
                         // Comprobar si es evento siguiente o LCE
-                        log::warn!("EL LEDGER STATE ACTUAL ES {:?}", ledger_state);
                         if event.content.sn == subject.sn + 1 && ledger_state.head.is_none() {
-                            log::error!("EN EXTERNAL EVENT SE HACE E.SN == S.SN + 1");
                             // Caso Evento Siguiente
                             // Comprobar ValidationProof
                             self.check_validation_proof(
@@ -1402,15 +1376,10 @@ impl<C: DatabaseCollection> Ledger<C> {
                         // Caso en el que el LCE es S + 1
                         // TODO:
                         } else if event.content.sn > subject.sn {
-                            log::error!("EN EXTERNAL EVENT SE HACE CASO LCE");
-                            log::error!("SN EVENTO {}", event.content.sn);
-                            log::error!("SN SUBJECT {}", subject.sn);
                             // Caso LCE
-                            log::warn!("DEBERÍA EJECUTARSE ESTO");
                             let is_gov = self.subject_is_gov.get(&subject_id).unwrap().to_owned();
                             if is_gov {
                                 // No me valen los LCE de Gov
-                                log::warn!("NO ME VALEN LOS LCE DE GOV");
                                 let msg = request_gov_event(
                                     self.our_id.clone(),
                                     subject_id,
@@ -1538,7 +1507,6 @@ impl<C: DatabaseCollection> Ledger<C> {
                         let subject_id = state_request.subject_id.clone();
                         let metadata = validation_proof.get_metadata();
                         if &metadata.schema_id == "governance" {
-                            log::error!("State 3");
                             self.subject_is_gov.insert(subject_id.clone(), true);
                             // PEDIR GÉNESIS
                             let msg = request_gov_event(self.our_id.clone(), subject_id, 0);
@@ -1701,7 +1669,6 @@ impl<C: DatabaseCollection> Ledger<C> {
                             )));
                         }
                         let is_gov = self.subject_is_gov.get(&eol_request.subject_id).unwrap();
-                        log::warn!("EL SUJETO ES  IS GOV: {}", is_gov);
                         if *is_gov {
                             // Al ser gov no tiene HEAD. Debemos comprobar si se trata del sn + 1
                             if event.content.sn > subject.sn + 1 {
@@ -1729,9 +1696,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                         }
                         // Comprobar que las firmas son válidas y suficientes
                         // Si es el evento siguiente puedo obtener metadata de mi sistema, si es LCE lo tengo que obtener de la prueba de validación por si ha habido cambios de propietario u otros cambios
-                        log::warn!("ME LLEGA EL EVENTO CON SN {}", event.content.sn);
                         let mut witnesses = self.get_witnesses(metadata.clone()).await?;
-                        log::warn!("GET TESTIGOS");
                         if !witnesses.contains(&self.our_id) {
                             match self
                                 .database
@@ -1758,26 +1723,13 @@ impl<C: DatabaseCollection> Ledger<C> {
                             ),
                         )
                         .await?;
-                        log::warn!("CHECK EVENT");
                         // Si no está en el mapa, añadirlo y enviar mensaje a gov de subject updated con el id y el sn
                         let subject_id = eol_request.subject_id.clone();
                         let (signers, quorum) = self
                             .get_signers_and_quorum(metadata.clone(), ValidationStage::Validate)
                             .await?;
-                        log::warn!("GET SIGNERS AND QUORUM");
                         // let state_hash =
                         //     subject.state_hash_after_apply(event.content.patch.clone())?;
-                        let notary_hash = DigestIdentifier::from_serializable_borsh(
-                            &validation_proof,
-                        )
-                        .map_err(|_| {
-                            LedgerError::CryptoError(String::from(
-                                "Error calculating the hash of the serializable",
-                            ))
-                        })?;
-
-                        log::warn!("NOTARY HASH QUE ME LLEGA {}", notary_hash.to_str());
-                        log::warn!("VALIDATION PROOF {:?}", validation_proof);
                         // let notary_hash = DigestIdentifier::from_serializable_borsh(
                         //     &validation_proof,
                         // )
@@ -1786,10 +1738,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                         //         "Error calculating the hash of the serializable",
                         //     ))
                         // })?;
-                        log::warn!("SIGNATURES SIZE: {}", signatures.len());
-                        log::warn!("SIGNERS SIZE {}", signers.len());
                         verify_signatures(&signatures, &signers, quorum, &validation_proof)?;
-                        log::warn!("PASA POR VERIFY");
                         // Comprobar si es evento siguiente o LCE
                         if event.content.sn == subject.sn + 1 && ledger_state.head.is_none() {
                             // Caso Evento Siguiente
@@ -2477,9 +2426,6 @@ impl<C: DatabaseCollection> Ledger<C> {
         subject_id: DigestIdentifier,
         sn: u64,
     ) -> Result<(Signed<Event>, HashSet<Signature>), LedgerError> {
-        log::warn!("GET NEXT GOV");
-        log::info!("Getting NG: {}..............{}", subject_id.to_str(), sn);
-        log::info!("Who Asked: {}", who_asked.to_str());
         let event = self.database.get_event(&subject_id, sn)?;
         let (signatures, validation_proof) = match self.database.get_signatures(&subject_id, sn) {
             Ok((s, validation_proof)) => (s, validation_proof),
@@ -2506,8 +2452,6 @@ impl<C: DatabaseCollection> Ledger<C> {
         who_asked: KeyIdentifier,
         subject_id: DigestIdentifier,
     ) -> Result<(Signed<Event>, HashSet<Signature>), LedgerError> {
-        log::info!("Getting LCE: {}", subject_id.to_str());
-        log::info!("Who Asked: {}", who_asked.to_str());
         let subject = self.database.get_subject(&subject_id)?;
         let event = self.database.get_event(&subject_id, subject.sn)?;
         let (signatures, validation_proof) =
@@ -2974,7 +2918,6 @@ fn verify_signatures(
     quorum_size: u32,
     validation_proof: &ValidationProof,
 ) -> Result<(), LedgerError> {
-    log::warn!("EL EVENT HASH ES {}", "??".to_string());
     let mut actual_signers = HashSet::new();
     for signature in signatures.iter() {
         let signer = signature.signer.clone();

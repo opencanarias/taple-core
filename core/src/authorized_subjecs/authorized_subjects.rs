@@ -53,11 +53,9 @@ impl<C: DatabaseCollection> AuthorizedSubjects<C> {
             .get_allowed_subjects_and_providers(None, 10000)
         {
             Ok(psp) => psp,
-            Err(error) => {
-                match error {
-                    _ => return Err(AuthorizedSubjectsError::DatabaseError(error)),
-                }
-            }
+            Err(error) => match error {
+                _ => return Err(AuthorizedSubjectsError::DatabaseError(error)),
+            },
         };
 
         // Para cada sujeto preautorizado, enviamos un mensaje a los proveedores asociados a través del canal de mensajes.

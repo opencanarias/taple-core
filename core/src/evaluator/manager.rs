@@ -195,12 +195,12 @@ impl<
                             | ExecutorErrorResponses::JSONPATCHDeserializationFailed,
                         ) => return Err(EvaluatorError::JSONDeserializationFailed),
                         Err(error) => {
-                            log::info!("ERROR EVALUATOR: {:?}", error);
+                            log::error!("ERROR EVALUATOR: {:?}", error);
                             break 'response EvaluatorResponse::AskForEvaluation(Err(
                                 super::errors::EvaluatorErrorResponses::ContractExecutionError(
                                     error,
                                 ),
-                            ))
+                            ));
                         }
                     }
                 }
@@ -255,7 +255,7 @@ mod test {
         protocol::protocol_message_manager::TapleMessages,
         request::{EventRequest, FactRequest},
         signature::Signed,
-        MemoryManager, ValueWrapper, Metadata,
+        MemoryManager, Metadata, ValueWrapper,
     };
 
     use crate::evaluator::manager::EvaluatorManager;
@@ -461,7 +461,7 @@ mod test {
             {
                 Ok(vec![(
                     Contract {
-                        raw: String::from("test")
+                        raw: String::from("test"),
                     },
                     "test".to_owned(),
                 )])
@@ -471,7 +471,7 @@ mod test {
             {
                 Ok(vec![(
                     Contract {
-                        raw: get_file_wrong().to_string()
+                        raw: get_file_wrong().to_string(),
                     },
                     "test".to_owned(),
                 )])
@@ -481,14 +481,14 @@ mod test {
             {
                 Ok(vec![(
                     Contract {
-                        raw: get_file_wrong2().to_string()
+                        raw: get_file_wrong2().to_string(),
                     },
                     "test".to_owned(),
                 )])
             } else {
                 Ok(vec![(
                     Contract {
-                        raw: get_file().to_string()
+                        raw: get_file().to_string(),
                     },
                     "test".to_owned(),
                 )])
@@ -611,7 +611,8 @@ mod test {
     fn contract_execution() {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async move {
-            let (evaluator, sx_evaluator, sx_compiler, signature_manager, mut msg_rx) = build_module();
+            let (evaluator, sx_evaluator, sx_compiler, signature_manager, mut msg_rx) =
+                build_module();
             let initial_state = Data {
                 one: 10,
                 two: 11,

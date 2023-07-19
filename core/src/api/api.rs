@@ -17,6 +17,7 @@ use crate::commons::{
 use crate::event::manager::EventAPI;
 use crate::ledger::manager::EventManagerAPI;
 use crate::signature::Signature;
+#[cfg(feature = "aproval")]
 use crate::ApprovalEntity;
 use crate::ValidationProof;
 use crate::{

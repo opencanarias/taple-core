@@ -1,9 +1,9 @@
 mod db;
 mod error;
-mod memory;
 mod layers;
+mod memory;
 
-pub use self::memory::{MemoryManager, MemoryCollection};
+pub use self::memory::{MemoryCollection, MemoryManager};
 pub use db::DB;
 pub use error::Error;
 
@@ -60,14 +60,14 @@ macro_rules! test_database_manager_trait {
                     value: "C".into(),
                 };
                 let Ok(data1) = bincode::serialize::<Data>(&data1) else {
-                    return Err(Error::SerializeError);
-                };
+                                    return Err(Error::SerializeError);
+                                };
                 let Ok(data2) = bincode::serialize::<Data>(&data2) else {
-                    return Err(Error::SerializeError);
-                };
+                                    return Err(Error::SerializeError);
+                                };
                 let Ok(data3) = bincode::serialize::<Data>(&data3) else {
-                    return Err(Error::SerializeError);
-                };
+                                    return Err(Error::SerializeError);
+                                };
                 Ok(vec![data1, data2, data3])
             }
 

@@ -1,10 +1,13 @@
 use std::collections::HashSet;
 
-use crate::{commons::{
-    identifier::{DigestIdentifier, KeyIdentifier},
-    models::event::Metadata,
-    schema_handler::gov_models::{Contract},
-}, ValueWrapper};
+use crate::{
+    commons::{
+        identifier::{DigestIdentifier, KeyIdentifier},
+        models::event::Metadata,
+        schema_handler::gov_models::Contract,
+    },
+    ValueWrapper,
+};
 pub mod error;
 pub mod governance;
 pub mod inner_governance;
@@ -15,13 +18,6 @@ pub use governance::{GovernanceAPI, GovernanceInterface};
 use error::RequestError;
 
 use self::stage::ValidationStage;
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum RequestQuorum {
-    Accepted,
-    Rejected,
-    Processing,
-}
 
 #[derive(Debug, Clone)]
 pub struct GovernanceMember {
@@ -69,7 +65,7 @@ pub enum GovernanceMessage {
     },
     GetGovernanceVersion {
         governance_id: DigestIdentifier,
-        subject_id: DigestIdentifier
+        subject_id: DigestIdentifier,
     },
     IsGovernance {
         subject_id: DigestIdentifier,
@@ -77,7 +73,8 @@ pub enum GovernanceMessage {
     GovernanceUpdated {
         governance_id: DigestIdentifier,
         governance_version: u64,
-    }}
+    },
+}
 
 #[derive(Debug, Clone)]
 pub enum GovernanceResponse {

@@ -118,7 +118,7 @@ impl<I: Send, R: Send> SenderEnd<I, R> {
             Err(errors::ChannelErrors::FullQueue)
         }
     }
-    
+
     /// Sends a notification or update over the channel.
     ///
     /// # Arguments

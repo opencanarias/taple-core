@@ -2,7 +2,8 @@ use std::collections::HashSet;
 
 use crate::{
     distribution::{AskForSignatures, DistributionMessagesNew, SignaturesReceived},
-    identifier::{DigestIdentifier, KeyIdentifier}, signature::Signature,
+    identifier::{DigestIdentifier, KeyIdentifier},
+    signature::Signature,
 };
 
 use super::approval::TapleMessages;
@@ -11,7 +12,7 @@ pub fn create_distribution_request(
     subject_id: DigestIdentifier,
     sn: u64,
     signatures_requested: HashSet<KeyIdentifier>,
-    sender_id: KeyIdentifier
+    sender_id: KeyIdentifier,
 ) -> TapleMessages {
     TapleMessages::DistributionMessage(DistributionMessagesNew::ProvideSignatures(
         AskForSignatures {

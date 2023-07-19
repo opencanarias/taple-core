@@ -18,10 +18,7 @@ pub use ed25519::Ed25519KeyPair;
 pub use secp256k1::Secp256k1KeyPair;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    identifier::{self, derive::KeyDerivator},
-};
-
+use crate::identifier::{self, derive::KeyDerivator};
 
 /// Asymmetric key pair
 #[derive(Serialize, Deserialize, Debug)]
@@ -199,12 +196,12 @@ impl BorshSerialize for KeyPair {
         match &self {
             KeyPair::Ed25519(x) => {
                 BorshSerialize::serialize(&0u8, writer)?;
-                let a: [u8;32] = x.secret_key_bytes().try_into().unwrap();
+                let a: [u8; 32] = x.secret_key_bytes().try_into().unwrap();
                 BorshSerialize::serialize(&a, writer)
             }
             KeyPair::Secp256k1(x) => {
                 BorshSerialize::serialize(&1u8, writer)?;
-                let a: [u8;32] = x.secret_key_bytes().try_into().unwrap();
+                let a: [u8; 32] = x.secret_key_bytes().try_into().unwrap();
                 BorshSerialize::serialize(&a, writer)
             }
         }
@@ -218,15 +215,11 @@ impl BorshDeserialize for KeyPair {
         match order {
             0 => {
                 let data: [u8; 32] = BorshDeserialize::deserialize_reader(reader)?;
-                Ok(KeyPair::Ed25519(Ed25519KeyPair::from_secret_key(
-                    &data,
-                )))
+                Ok(KeyPair::Ed25519(Ed25519KeyPair::from_secret_key(&data)))
             }
             1 => {
                 let data: [u8; 32] = BorshDeserialize::deserialize_reader(reader)?;
-                Ok(KeyPair::Secp256k1(Secp256k1KeyPair::from_secret_key(
-                    &data,
-                )))
+                Ok(KeyPair::Secp256k1(Secp256k1KeyPair::from_secret_key(&data)))
             }
             _ => Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,

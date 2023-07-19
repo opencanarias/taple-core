@@ -1,14 +1,14 @@
 mod common;
-use std::sync::{Arc};
+use std::sync::Arc;
 use std::time::Duration;
 
 use common::*;
-use taple_core::{
-    {ApiModuleInterface, CreateType, StateType, Acceptance},
-    event_request::RequestPayload, 
-};
 use futures::FutureExt;
 use serial_test::serial;
+use taple_core::{
+    event_request::RequestPayload,
+    {Acceptance, ApiModuleInterface, CreateType, StateType},
+};
 
 #[test]
 #[serial]
@@ -125,7 +125,6 @@ fn not_database_conflict() {
     });
 }
 
-
 #[test]
 #[serial]
 fn event_creation_json_patch() {
@@ -164,7 +163,9 @@ fn event_creation_json_patch() {
         let result = node
             .create_event(
                 subject_id.clone(),
-                RequestPayload::JsonPatch(String::from("[{\"op\":\"replace\",\"path\":\"/a\",\"value\":\"test\"}]")),
+                RequestPayload::JsonPatch(String::from(
+                    "[{\"op\":\"replace\",\"path\":\"/a\",\"value\":\"test\"}]",
+                )),
             )
             .await;
         assert!(result.is_ok());
@@ -224,11 +225,11 @@ fn governance_transmission() {
         assert!(result.is_ok());
 
         let result =
-        get_signatures_with_timeout(node.clone(), governance_id.clone(), 0, 2, 5000).await;
+            get_signatures_with_timeout(node.clone(), governance_id.clone(), 0, 2, 5000).await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap().len(), 2);
         let result =
-        get_signatures_with_timeout(node_two.clone(), governance_id.clone(), 0, 2, 5000).await;
+            get_signatures_with_timeout(node_two.clone(), governance_id.clone(), 0, 2, 5000).await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap().len(), 2);
         let result = Arc::try_unwrap(node).unwrap().shutdown().await;
@@ -697,7 +698,6 @@ fn event_creation_case_100_quorum_and_not_self_validation() {
     });
 }
 
-
 #[test]
 #[serial]
 fn event_creation_not_allowed() {
@@ -933,7 +933,9 @@ fn add_new_member_to_governance_all_acceptance_true() {
         let result = node
             .create_event(
                 governance_id.clone(),
-                RequestPayload::Json(serde_json::to_string(&governance_two_allowance_all_false()).unwrap()),
+                RequestPayload::Json(
+                    serde_json::to_string(&governance_two_allowance_all_false()).unwrap(),
+                ),
             )
             .await;
         assert!(result.is_ok());

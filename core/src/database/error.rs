@@ -18,5 +18,5 @@ pub enum Error {
     #[error("An error withing the database custom implementation {0}")]
     CustomError(String),
     #[error("State non existent, possibilities are: Pending or Voted.")]
-    NonExistentStatus
+    NonExistentStatus,
 }

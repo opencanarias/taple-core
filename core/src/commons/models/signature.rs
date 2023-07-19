@@ -7,9 +7,7 @@ use crate::{
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
-use std::{
-    hash::{Hash, Hasher},
-};
+use std::hash::{Hash, Hasher};
 
 use super::{timestamp::TimeStamp, HashId};
 
@@ -115,7 +113,7 @@ impl Hash for UniqueSignature {
     PartialOrd,
     Hash,
 )]
-pub struct Signed<T: BorshSerialize + BorshDeserialize> {
+pub struct Signed<T: BorshSerialize + BorshDeserialize + Clone> {
     #[serde(flatten)]
     pub content: T,
     pub signature: Signature,

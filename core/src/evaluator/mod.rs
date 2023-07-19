@@ -1,9 +1,9 @@
-use borsh::{BorshSerialize, BorshDeserialize};
+use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 
 use crate::{
     commons::models::evaluation::EvaluationRequest, identifier::DigestIdentifier,
-    signature::Signature, ValueWrapper, KeyIdentifier,
+    signature::Signature, KeyIdentifier, ValueWrapper,
 };
 
 use self::errors::EvaluatorErrorResponses;
@@ -14,7 +14,7 @@ mod errors;
 #[cfg(feature = "evaluation")]
 mod manager;
 #[cfg(feature = "evaluation")]
-pub use manager::{EvaluatorManager};
+pub use manager::EvaluatorManager;
 #[cfg(feature = "evaluation")]
 mod runner;
 

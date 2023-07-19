@@ -1,6 +1,6 @@
-use crate::utils::{deserialize, serialize};
 use super::utils::{get_key, Element};
 use crate::crypto::KeyPair;
+use crate::utils::{deserialize, serialize};
 use crate::DbError;
 use crate::{DatabaseCollection, DatabaseManager, Derivable, KeyIdentifier};
 use std::sync::Arc;
@@ -25,8 +25,7 @@ impl<C: DatabaseCollection> KeysDb<C> {
         ];
         let key = get_key(key_elements)?;
         let value = self.collection.get(&key)?;
-        let result =
-            deserialize::<KeyPair>(&value).map_err(|_| DbError::DeserializeError)?;
+        let result = deserialize::<KeyPair>(&value).map_err(|_| DbError::DeserializeError)?;
         Ok(result)
     }
 
@@ -57,9 +56,7 @@ impl<C: DatabaseCollection> KeysDb<C> {
         let iter = self.collection.iter(false, key);
         let mut result = Vec::new();
         for (_, bytes) in iter {
-            let subject =
-                deserialize::<KeyPair>(&bytes)
-                    .map_err(|_| DbError::DeserializeError)?;
+            let subject = deserialize::<KeyPair>(&bytes).map_err(|_| DbError::DeserializeError)?;
             result.push(subject);
         }
         Ok(result)

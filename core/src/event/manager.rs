@@ -47,7 +47,6 @@ pub struct EventManager<C: DatabaseCollection> {
     /// Communication channel for incoming petitions
     input_channel: MpscChannel<EventCommand, EventResponse>,
     input_channel_updated_gov: tokio::sync::broadcast::Receiver<GovernanceUpdatedMessage>,
-    /// Notarization functions
     event_completer: EventCompleter<C>,
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
@@ -155,7 +154,7 @@ impl<C: DatabaseCollection> EventManager<C> {
             match data {
                 EventCommand::Event { event_request } => {
                     let response = self.event_completer.pre_new_event(event_request).await;
-                    log::warn!("EVENT REPSONE: {:?}", response);
+                    log::info!("EVENT REPSONE: {:?}", response);
                     match response.clone() {
                         Err(error) => match error {
                             EventError::ChannelClosed => {
@@ -252,9 +251,7 @@ impl<C: DatabaseCollection> EventManager<C> {
                                 log::error!("VALIDATION ERROR: {:?}", error);
                             }
                         },
-                        _ => {
-                            log::error!("VALIDATION ACCEPTED");
-                        }
+                        _ => {}
                     }
                     EventResponse::NoResponse
                 }

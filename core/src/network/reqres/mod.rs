@@ -93,6 +93,7 @@ mod test {
             });
             swarm1.dial(addr2).unwrap();
             let mut response_received = false;
+            #[allow(unused_assignments)]
             loop {
                 match swarm1.select_next_some().await {
                     SwarmEvent::Behaviour(RequestResponseEvent::Message { peer, message }) => {

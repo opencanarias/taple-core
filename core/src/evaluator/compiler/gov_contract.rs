@@ -1,5 +1,5 @@
 pub fn get_gov_contract() -> String {
-r#"
+    r#"
 use taple_sc_rust as sdk;
 use std::collections::HashSet;
 use thiserror::Error;

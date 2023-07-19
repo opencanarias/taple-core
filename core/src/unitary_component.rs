@@ -1,4 +1,3 @@
-use crate::ListenAddr;
 #[cfg(feature = "aproval")]
 use crate::approval::manager::{ApprovalAPI, ApprovalManager};
 #[cfg(feature = "aproval")]
@@ -32,12 +31,13 @@ use crate::message::{
     NetworkEvent,
 };
 use crate::network::network::{NetworkProcessor, SendMode};
-#[cfg(feature = "validation")]
-use crate::notary::manager::NotaryManager;
-use crate::notary::NotaryCommand;
-use crate::notary::NotaryResponse;
 use crate::protocol::protocol_message_manager::{ProtocolManager, TapleMessages};
 use crate::signature::Signed;
+#[cfg(feature = "validation")]
+use crate::validation::manager::ValidationManager;
+#[cfg(feature = "validation")]
+use crate::validation::{ValidationCommand, ValidationResponse};
+use crate::ListenAddr;
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use libp2p::{Multiaddr, PeerId};
@@ -331,7 +331,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
         // Receiver and sender of validation messages
         #[cfg(feature = "validation")]
         let (validation_receiver, validation_sender) =
-            MpscChannel::<NotaryCommand, NotaryResponse>::new(BUFFER_SIZE);
+            MpscChannel::<ValidationCommand, ValidationResponse>::new(BUFFER_SIZE);
         // Creation Watch Channel
         let (wath_sender, _watch_receiver): (
             tokio::sync::watch::Sender<TapleSettings>,
@@ -495,7 +495,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
             DB::new(db.clone()),
         );
         #[cfg(feature = "validation")]
-        let validation_manager = NotaryManager::new(
+        let validation_manager = ValidationManager::new(
             validation_receiver,
             GovernanceAPI::new(governance_sender),
             DB::new(db.clone()),

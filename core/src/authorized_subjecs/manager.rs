@@ -46,7 +46,6 @@ pub struct AuthorizedSubjectsManager<C: DatabaseCollection> {
     /// Communication channel for incoming petitions
     input_channel: MpscChannel<AuthorizedSubjectsCommand, AuthorizedSubjectsResponse>,
     inner_authorized_subjects: AuthorizedSubjects<C>,
-    /// Notarization functions
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
 }

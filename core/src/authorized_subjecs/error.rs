@@ -1,5 +1,5 @@
-use thiserror::Error;
 use crate::database::Error as DbError;
+use thiserror::Error;
 
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum AuthorizedSubjectsError {

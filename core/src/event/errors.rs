@@ -69,5 +69,5 @@ pub enum EventError {
     #[error("Approval Required When Eval Failed")]
     ApprovalRequiredWhenEvalFailed,
     #[error("Invalid specify public key")]
-    PublicKeyIsEmpty
+    PublicKeyIsEmpty,
 }

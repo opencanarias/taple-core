@@ -1,7 +1,7 @@
-use crate::utils::{deserialize, serialize};
 use super::utils::{get_key, Element};
+use crate::utils::{deserialize, serialize};
+use crate::DbError;
 use crate::{DatabaseCollection, DatabaseManager};
-use crate::{DbError};
 use std::sync::Arc;
 
 pub(crate) struct ControllerIdDb<C: DatabaseCollection> {
@@ -21,9 +21,7 @@ impl<C: DatabaseCollection> ControllerIdDb<C> {
         let key_elements: Vec<Element> = vec![Element::S(self.prefix.clone())];
         let key = get_key(key_elements)?;
         let controller_id = self.collection.get(&key)?;
-        Ok(deserialize::<String>(&controller_id).map_err(|_| {
-            DbError::DeserializeError
-        })?)
+        Ok(deserialize::<String>(&controller_id).map_err(|_| DbError::DeserializeError)?)
     }
 
     pub fn set_controller_id(&self, controller_id: String) -> Result<(), DbError> {

@@ -1,13 +1,12 @@
 use std::collections::HashSet;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use crate::{DigestIdentifier, KeyIdentifier};
 
-pub mod error;
 pub mod authorized_subjects;
+pub mod error;
 pub mod manager;
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AuthorizedSubjectsCommand {

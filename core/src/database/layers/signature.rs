@@ -1,8 +1,8 @@
-use crate::utils::{deserialize, serialize};
 use super::utils::{get_key, Element};
 use crate::commons::models::validation::ValidationProof;
 use crate::signature::Signature;
-use crate::{DbError};
+use crate::utils::{deserialize, serialize};
+use crate::DbError;
 use crate::{DatabaseCollection, DatabaseManager, Derivable, DigestIdentifier};
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -32,9 +32,10 @@ impl<C: DatabaseCollection> SignatureDb<C> {
         ];
         let key = get_key(key_elements)?;
         let signatures = self.collection.get(&key)?;
-        Ok(deserialize::<(HashSet<Signature>, ValidationProof)>(&signatures).map_err(|_| {
-            DbError::DeserializeError
-        })?)
+        Ok(
+            deserialize::<(HashSet<Signature>, ValidationProof)>(&signatures)
+                .map_err(|_| DbError::DeserializeError)?,
+        )
     }
 
     pub fn set_signatures(
@@ -42,7 +43,7 @@ impl<C: DatabaseCollection> SignatureDb<C> {
         subject_id: &DigestIdentifier,
         sn: u64,
         signatures: HashSet<Signature>,
-        validation_proof: ValidationProof
+        validation_proof: ValidationProof,
     ) -> Result<(), DbError> {
         let key_elements: Vec<Element> = vec![
             Element::S(self.prefix.clone()),
@@ -52,19 +53,17 @@ impl<C: DatabaseCollection> SignatureDb<C> {
         let key = get_key(key_elements)?;
         let total_signatures = match self.collection.get(&key) {
             Ok(other) => {
-                let (other, _) = deserialize::<(HashSet<Signature>, ValidationProof)>(&other).map_err(|_| {
-                    DbError::SerializeError
-                })?;
+                let (other, _) = deserialize::<(HashSet<Signature>, ValidationProof)>(&other)
+                    .map_err(|_| DbError::SerializeError)?;
                 signatures.union(&other).cloned().collect()
-            },
+            }
             Err(DbError::EntryNotFound) => signatures,
             Err(error) => {
                 return Err(error);
             }
         };
-        let total_signatures = serialize(&(total_signatures, validation_proof)).map_err(|_| {
-            DbError::SerializeError
-        })?;
+        let total_signatures = serialize(&(total_signatures, validation_proof))
+            .map_err(|_| DbError::SerializeError)?;
         self.collection.put(&key, total_signatures)
     }
 
@@ -78,7 +77,10 @@ impl<C: DatabaseCollection> SignatureDb<C> {
         self.collection.del(&key)
     }
 
-    pub fn get_validation_proof(&self, subject_id: &DigestIdentifier) -> Result<(HashSet<Signature>, ValidationProof), DbError> {
+    pub fn get_validation_proof(
+        &self,
+        subject_id: &DigestIdentifier,
+    ) -> Result<(HashSet<Signature>, ValidationProof), DbError> {
         let key_elements: Vec<Element> = vec![
             Element::S(self.prefix.clone()),
             Element::S(subject_id.to_str()),
@@ -86,13 +88,11 @@ impl<C: DatabaseCollection> SignatureDb<C> {
         let key = get_key(key_elements)?;
         let mut iter = self.collection.iter(false, format!("{}{}", key, char::MAX));
         if let Some(vproof) = iter.next() {
-            log::info!("{:#?}", vproof);
-            let vproof = deserialize::<(HashSet<Signature>, ValidationProof)>(&vproof.1).map_err(|_| {
-                DbError::DeserializeError
-            })?;
+            let vproof = deserialize::<(HashSet<Signature>, ValidationProof)>(&vproof.1)
+                .map_err(|_| DbError::DeserializeError)?;
             return Ok(vproof);
         } else {
-            return Err(DbError::EntryNotFound)
+            return Err(DbError::EntryNotFound);
         }
     }
 }

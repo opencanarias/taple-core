@@ -170,9 +170,6 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                 Who::NOT_MEMBERS => continue,
             }
         }
-        for signer in signers.iter() {
-            log::warn!("FINAL SIGNERS: {}", signer.to_str());
-        }
         Ok(signers)
     }
 
@@ -195,23 +192,22 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
             let result = match self.repo_access.get_subject(&governance_id) {
                 Ok(data) => data,
                 Err(DbError::EntryNotFound) => return Ok(Err(RequestError::SubjectNotFound)),
-                Err(data) => return Err(InternalError::DatabaseError { source: data })
+                Err(data) => return Err(InternalError::DatabaseError { source: data }),
             };
             result.sn
         } else {
             metadata.governance_version
         };
         let schema_id = metadata.schema_id.clone();
-        let governance =
-            match self.governance_event_sourcing(&governance_id, governance_version) {
-                Ok(subject) => subject,
-                Err(error) => match error {
-                    RequestError::DatabaseError(err) => {
-                        return Err(InternalError::DatabaseError { source: err })
-                    }
-                    err => return Ok(Err(err)),
-                },
-            };
+        let governance = match self.governance_event_sourcing(&governance_id, governance_version) {
+            Ok(subject) => subject,
+            Err(error) => match error {
+                RequestError::DatabaseError(err) => {
+                    return Err(InternalError::DatabaseError { source: err })
+                }
+                err => return Ok(Err(err)),
+            },
+        };
         let roles: Vec<Role> =
             serde_json::from_value(governance.properties.get("roles").unwrap().to_owned())
                 .map_err(|_| InternalError::DeserializationError)?;
@@ -247,7 +243,6 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
             )));
         }
         let mut governance_id = metadata.governance_id.clone();
-        log::info!("Quorum de: {}", metadata.subject_id.to_str());
         if governance_id.digest.is_empty() {
             governance_id = metadata.subject_id.clone();
         }
@@ -273,15 +268,8 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
             return Ok(Err(signers.unwrap_err()));
         };
         match quorum {
-            Quorum::MAJORITY => {
-                log::info!("Quorum Majority");
-
-                Ok(Ok((signers.len() as u32 / 2) + 1))
-            }
-            Quorum::FIXED { fixed } => {
-                log::info!("Quorum fijo: {}", fixed);
-                Ok(Ok(fixed))
-            }
+            Quorum::MAJORITY => Ok(Ok((signers.len() as u32 / 2) + 1)),
+            Quorum::FIXED { fixed } => Ok(Ok(fixed)),
             Quorum::PORCENTAJE { porcentaje } => {
                 let result = (signers.len() as f64 * porcentaje).ceil() as u32;
                 Ok(Ok(result))
@@ -351,10 +339,8 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
             if &role.role != stage.to_role() {
                 continue;
             }
-            log::warn!("ROLE SCHEMA: {:?}", role.schema);
             match role.schema {
                 Schema::ID { ID } => {
-                    log::warn!("ID, id: {}, schema_id: {}", ID, schema_id);
                     if &ID != schema_id {
                         continue;
                     }
@@ -366,7 +352,6 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                 }
                 Schema::ALL => {}
             }
-            log::warn!("PASAMOS SCHEMA");
             if !namespace_contiene(&role.namespace, namespace) {
                 continue;
             }
@@ -554,9 +539,7 @@ fn get_quorum<'a>(data: &'a Value, key: &str) -> Result<Quorum, InternalError> {
         .ok_or(InternalError::InvalidGovernancePayload("10".into()))?
         .get("quorum")
         .ok_or(InternalError::InvalidGovernancePayload("11".into()))?;
-    log::warn!("QUORUM: {:?}", json_data);
     let quorum: Quorum = serde_json::from_value(json_data.clone()).unwrap();
-    log::warn!("QUORUM: {:?}", quorum);
     Ok(quorum)
 }
 

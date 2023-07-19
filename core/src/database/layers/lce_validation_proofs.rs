@@ -1,8 +1,8 @@
-use crate::utils::{deserialize, serialize};
 use super::utils::{get_key, Element};
 use crate::commons::models::validation::ValidationProof;
+use crate::utils::{deserialize, serialize};
+use crate::DbError;
 use crate::{DatabaseCollection, DatabaseManager, Derivable, DigestIdentifier};
-use crate::{DbError};
 use std::sync::Arc;
 
 pub(crate) struct LceValidationProofs<C: DatabaseCollection> {
@@ -28,10 +28,8 @@ impl<C: DatabaseCollection> LceValidationProofs<C> {
         ];
         let key = get_key(key_elements)?;
         let lce_validation_proof = self.collection.get(&key)?;
-        Ok(
-            deserialize::<ValidationProof>(&lce_validation_proof)
-                .map_err(|_| DbError::DeserializeError)?,
-        )
+        Ok(deserialize::<ValidationProof>(&lce_validation_proof)
+            .map_err(|_| DbError::DeserializeError)?)
     }
 
     pub fn set_lce_validation_proof(

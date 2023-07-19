@@ -1,12 +1,12 @@
 mod common;
 use common::*;
-use taple_core::{
-    {ApiModuleInterface, CreateType},
-    event_request::RequestPayload,
-};
 use futures::FutureExt;
-use std::time::Duration;
 use serial_test::serial;
+use std::time::Duration;
+use taple_core::{
+    event_request::RequestPayload,
+    {ApiModuleInterface, CreateType},
+};
 
 #[test]
 #[serial]

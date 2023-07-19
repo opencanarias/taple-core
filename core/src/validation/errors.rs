@@ -7,7 +7,7 @@ use crate::{
 
 #[derive(Error, Debug, Clone, PartialEq)]
 #[allow(dead_code)]
-pub enum NotaryError {
+pub enum ValidationError {
     #[error("ProtocolErrors Error")]
     ProtocolErrors(#[from] ProtocolErrors),
     #[error("Channel Error")]
@@ -46,5 +46,4 @@ pub enum NotaryError {
     SubjectSignatureNotValid,
     #[error("Diferent genesis_gov_version and gov_version for subject: {0}")]
     GenesisGovVersionsDoesNotMatch(String),
-
 }

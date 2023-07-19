@@ -16,10 +16,11 @@ use super::layers::request::RequestDb;
 use super::{
     layers::{
         approvals::ApprovalsDb, contract::ContractDb, controller_id::ControllerIdDb,
-        event::EventDb, event_request::EventRequestDb, keys::KeysDb, notary::NotaryDb,
+        event::EventDb, event_request::EventRequestDb, keys::KeysDb,
         preauthorized_subjects_and_providers::PreauthorizedSbujectsAndProovidersDb,
         prevalidated_event::PrevalidatedEventDb, signature::SignatureDb, subject::SubjectDb,
-        subject_by_governance::SubjectByGovernanceDb, witness_signatures::WitnessSignaturesDb,
+        subject_by_governance::SubjectByGovernanceDb, validation::ValidationDb,
+        witness_signatures::WitnessSignaturesDb,
     },
     DatabaseCollection, DatabaseManager,
 };
@@ -40,8 +41,8 @@ pub struct DB<C: DatabaseCollection> {
     request_db: RequestDb<C>,
     /// The controller ID database.
     controller_id_db: ControllerIdDb<C>,
-    /// The notary database.
-    notary_db: NotaryDb<C>,
+    /// The validation database.
+    validation_db: ValidationDb<C>,
     /// The contract database.
     contract_db: ContractDb<C>,
     /// The witness signatures database.
@@ -67,7 +68,7 @@ impl<C: DatabaseCollection> DB<C> {
         let event_request_db = EventRequestDb::new(&manager);
         let request_db = RequestDb::new(&manager);
         let controller_id_db = ControllerIdDb::new(&manager);
-        let notary_db = NotaryDb::new(&manager);
+        let validation_db = ValidationDb::new(&manager);
         let contract_db = ContractDb::new(&manager);
         let witness_signatures_db = WitnessSignaturesDb::new(&manager);
         let subject_by_governance_db = SubjectByGovernanceDb::new(&manager);
@@ -84,7 +85,7 @@ impl<C: DatabaseCollection> DB<C> {
             event_request_db: event_request_db,
             request_db,
             controller_id_db,
-            notary_db,
+            validation_db,
             contract_db,
             witness_signatures_db,
             subject_by_governance_db,
@@ -256,20 +257,20 @@ impl<C: DatabaseCollection> DB<C> {
         self.controller_id_db.set_controller_id(controller_id)
     }
 
-    pub fn get_notary_register(
+    pub fn get_validation_register(
         &self,
         subject_id: &DigestIdentifier,
     ) -> Result<ValidationProof, Error> {
-        self.notary_db.get_notary_register(subject_id)
+        self.validation_db.get_validation_register(subject_id)
     }
 
-    pub fn set_notary_register(
+    pub fn set_validation_register(
         &self,
         subject_id: &DigestIdentifier,
         validation_proof: &ValidationProof,
     ) -> Result<(), Error> {
-        self.notary_db
-            .set_notary_register(subject_id, validation_proof)
+        self.validation_db
+            .set_validation_register(subject_id, validation_proof)
     }
 
     pub fn get_contract(

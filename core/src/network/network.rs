@@ -55,6 +55,7 @@ type TapleSwarmEvent = SwarmEvent<
     >,
 >;
 
+#[allow(dead_code)]
 pub enum SendMode {
     RequestResponse,
     Tell,
@@ -266,7 +267,7 @@ impl NetworkProcessor {
                 .add_external_address(external_address, AddressScore::Infinite);
         }
         for addr in self.addr.iter() {
-            if let Some(port) = addr.get_port() {
+            if let Some(_) = addr.get_port() {
                 let multiadd: Multiaddr = addr
                     .to_string()
                     .unwrap()

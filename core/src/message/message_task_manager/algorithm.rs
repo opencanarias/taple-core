@@ -54,7 +54,6 @@ impl Algorithm {
             let targets_selected = Algorithm::get_targets(targets, config.replication_factor());
             for target in targets_selected {
                 let result_sending = sender.send_message(target, request.clone()).await;
-                log::warn!("RESULT SENDING: {:?}", result_sending);
                 result_sending.map_err(|_| Error::SenderChannelError)?;
             }
             Ok(())

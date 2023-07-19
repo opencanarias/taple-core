@@ -1,5 +1,5 @@
 pub fn get_toml() -> String {
-  r#"
+    r#"
 [package]
 name = "contract"
 version = "0.1.0"
@@ -18,5 +18,6 @@ lto = true
 
 [lib]
 crate-type = ["cdylib"]
-  "#.into()
+  "#
+    .into()
 }

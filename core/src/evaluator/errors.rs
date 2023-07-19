@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::{governance::error::RequestError, commons::errors::SubjectError};
+use crate::{commons::errors::SubjectError, governance::error::RequestError};
 
 #[derive(Error, Debug)]
 #[allow(dead_code)]
@@ -14,7 +14,7 @@ pub enum EvaluatorError {
     #[error("JSON Deserialization failed")]
     JSONDeserializationFailed,
     #[error("Signature generation failed")]
-    SignatureGenerationFailed,    
+    SignatureGenerationFailed,
 }
 
 #[derive(Error, Debug, Clone)]
@@ -23,7 +23,7 @@ pub enum EvaluatorErrorResponses {
     #[error("Create Request not allowed")]
     CreateRequestNotAllowed,
     #[error("Contract execution error: \"{0}\"")]
-    ContractExecutionError(ExecutorErrorResponses)
+    ContractExecutionError(ExecutorErrorResponses),
 }
 
 #[derive(Error, Debug, Clone)]
@@ -85,7 +85,7 @@ pub enum CompilerError {
     #[error("Initialization process error: {0}")]
     InitError(String),
     #[error("Internal Error")]
-    InternalError(#[from] CompilerErrorResponses)
+    InternalError(#[from] CompilerErrorResponses),
 }
 
 #[derive(Error, Debug, Clone)]
@@ -110,5 +110,5 @@ pub enum CompilerErrorResponses {
     #[error("Invalid function import found in WAS module")]
     InvalidImportFound,
     #[error("No SDK found")]
-    NoSDKFound
+    NoSDKFound,
 }

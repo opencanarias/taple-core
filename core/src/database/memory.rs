@@ -1,5 +1,5 @@
 use super::Error;
-use crate::{DatabaseManager, DatabaseCollection, test_database_manager_trait};
+use crate::{test_database_manager_trait, DatabaseCollection, DatabaseManager};
 use std::{
     collections::{btree_map::Iter, BTreeMap, HashMap},
     iter::Rev,
@@ -117,7 +117,11 @@ pub struct MemoryIterator<'a> {
 
 impl<'a> MemoryIterator<'a> {
     fn new(map: &'a DataStore, table_name: String) -> Self {
-        Self { map, current: None, table_name }
+        Self {
+            map,
+            current: None,
+            table_name,
+        }
     }
 }
 
@@ -162,7 +166,11 @@ pub struct RevMemoryIterator<'a> {
 
 impl<'a> RevMemoryIterator<'a> {
     fn new(map: &'a DataStore, table_name: String) -> Self {
-        Self { map, current: None, table_name }
+        Self {
+            map,
+            current: None,
+            table_name,
+        }
     }
 }
 

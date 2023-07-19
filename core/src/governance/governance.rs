@@ -80,7 +80,6 @@ impl<M: DatabaseManager<C>, C: DatabaseCollection> Governance<M, C> {
                     (None, data)
                 }
             };
-            log::error!("governance DATA {:?}", data);
             if let Some(sender) = sender {
                 match data {
                     GovernanceMessage::GetSchema {

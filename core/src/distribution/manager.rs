@@ -7,7 +7,7 @@ use crate::{
     governance::{GovernanceAPI, GovernanceUpdatedMessage},
     message::MessageTaskCommand,
     protocol::protocol_message_manager::TapleMessages,
-    TapleSettings, DatabaseCollection
+    DatabaseCollection, TapleSettings,
 };
 
 use super::{
@@ -15,7 +15,6 @@ use super::{
     inner_manager::InnerDistributionManager,
     DistributionMessagesNew,
 };
-
 
 pub struct DistributionManager<C: DatabaseCollection> {
     governance_update_input: tokio::sync::broadcast::Receiver<GovernanceUpdatedMessage>,

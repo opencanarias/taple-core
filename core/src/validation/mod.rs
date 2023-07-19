@@ -4,36 +4,36 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    commons::models::{notary::NotaryEventResponse, validation::ValidationProof},
+    commons::models::{validation::ValidationEventResponse, validation::ValidationProof},
     signature::Signature,
     KeyIdentifier,
 };
 
-use self::errors::NotaryError;
+use self::errors::ValidationError;
 
 pub mod errors;
 #[cfg(feature = "validation")]
 pub mod manager;
 #[cfg(feature = "validation")]
-pub mod notary;
+pub mod validation;
 
 #[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
-pub enum NotaryCommand {
-    NotaryEvent {
-        notary_event: NotaryEvent,
+pub enum ValidationCommand {
+    ValidationEvent {
+        validation_event: ValidationEvent,
         sender: KeyIdentifier,
     },
-    AskForNotary(NotaryEvent),
+    AskForValidation(ValidationEvent),
 }
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
-pub enum NotaryResponse {
-    NotaryEventResponse(Result<NotaryEventResponse, NotaryError>),
+pub enum ValidationResponse {
+    ValidationEventResponse(Result<ValidationEventResponse, ValidationError>),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
-pub struct NotaryEvent {
+pub struct ValidationEvent {
     pub proof: ValidationProof,
     pub subject_signature: Signature,
     pub previous_proof: Option<ValidationProof>,

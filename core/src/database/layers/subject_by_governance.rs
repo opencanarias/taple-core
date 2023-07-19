@@ -1,6 +1,6 @@
-use crate::utils::{deserialize, serialize};
-use super::utils::{get_key, Element, get_by_range_governances};
+use super::utils::{get_by_range_governances, get_key, Element};
 use crate::commons::models::state::Subject;
+use crate::utils::{deserialize, serialize};
 use crate::DbError;
 use crate::{DatabaseCollection, DatabaseManager, Derivable, DigestIdentifier};
 use std::sync::Arc;
@@ -46,8 +46,8 @@ impl<C: DatabaseCollection> SubjectByGovernanceDb<C> {
         let key = get_key(key_elements)?;
         let mut result = Vec::new();
         for (_, data) in self.collection.iter(false, format!("{}{}", key, char::MAX)) {
-            let request = deserialize::<DigestIdentifier>(&data)
-                .map_err(|_| DbError::DeserializeError)?;
+            let request =
+                deserialize::<DigestIdentifier>(&data).map_err(|_| DbError::DeserializeError)?;
             result.push(request);
         }
         Ok(result)
@@ -59,23 +59,19 @@ impl<C: DatabaseCollection> SubjectByGovernanceDb<C> {
         quantity: isize,
     ) -> Result<Vec<Subject>, DbError> {
         let governances = match from {
-            Some(_) => {
-                get_by_range_governances(
-                    from,
-                    quantity,
-                    &self.collection,
-                    &format!("{}{}", &self.prefix.clone(), char::MAX),
-                )?
-            }
-            None => {
-                get_by_range_governances(
-                    from,
-                    quantity,
-                    &self.collection,
-                    &format!("{}{}{}", &self.prefix.clone(), char::MAX, char::MAX),
-                )?
-            }
-        };  
+            Some(_) => get_by_range_governances(
+                from,
+                quantity,
+                &self.collection,
+                &format!("{}{}", &self.prefix.clone(), char::MAX),
+            )?,
+            None => get_by_range_governances(
+                from,
+                quantity,
+                &self.collection,
+                &format!("{}{}{}", &self.prefix.clone(), char::MAX, char::MAX),
+            )?,
+        };
         Ok(self.return_subjects(governances)?)
     }
 
@@ -103,8 +99,8 @@ impl<C: DatabaseCollection> SubjectByGovernanceDb<C> {
         let mut subjects = vec![];
         let subject_prefix = "subject".to_string();
         for value in values {
-            let subject_id = deserialize::<DigestIdentifier>(&value)
-                .map_err(|_| DbError::DeserializeError)?;
+            let subject_id =
+                deserialize::<DigestIdentifier>(&value).map_err(|_| DbError::DeserializeError)?;
             let key = format!("{}{}{}", subject_prefix, char::MAX, subject_id.to_str());
             let subject = deserialize::<Subject>(&self.collection.get(&key)?)
                 .map_err(|_| DbError::DeserializeError)?;

@@ -61,8 +61,8 @@ impl MemoryManager {
         let bytes = bincode::serialize(&data).unwrap();
         let ptr = self.alloc(bytes.len());
         for (index, byte) in bytes.iter().enumerate() {
-          self.memory[ptr + index] = *byte;
+            self.memory[ptr + index] = *byte;
         }
         ptr
-      }
+    }
 }

@@ -8,7 +8,6 @@ use std::collections::HashSet;
 use std::fs::create_dir;
 use std::path::Path;
 use std::process::Command;
-use wasm_gc::garbage_collect_file;
 use wasmtime::{Engine, ExternType};
 
 use super::manifest::get_toml;
@@ -85,7 +84,6 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
             .get_contracts(governance_id.clone(), governance_version)
             .await
             .map_err(CompilerErrorResponses::GovernanceError)?;
-        log::error!("COMPILER AFTER GET CONTRACTS");
         for (contract_info, schema_id) in contracts {
             let contract_data = match self.database.get_contract(&governance_id, &schema_id) {
                 Ok((contract, hash, contract_gov_version)) => {
@@ -122,10 +120,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
             }
             self.compile(contract_info.raw, &governance_id.to_str(), &schema_id)
                 .await?;
-            log::error!("COMPILER AFTER COMPILER");
-            let compiled_contract = self
-                .add_contract()
-                .await?;
+            let compiled_contract = self.add_contract().await?;
             self.database
                 .put_contract(
                     &governance_id,
@@ -176,9 +171,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
         Ok(())
     }
 
-    async fn add_contract(
-        &self,
-    ) -> Result<Vec<u8>, CompilerErrorResponses> {
+    async fn add_contract(&self) -> Result<Vec<u8>, CompilerErrorResponses> {
         // AOT COMPILATION
         let file = fs::read(format!(
             "{}/target/wasm32-unknown-unknown/release/contract.wasm",

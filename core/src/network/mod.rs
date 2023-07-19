@@ -1,17 +1,17 @@
+mod error;
 pub mod network;
 pub mod reqres;
 pub mod routing;
 pub mod tell;
-mod error;
 
 #[cfg(test)]
 mod tests {
-    use crate::{message::Command, network::routing::RoutingComposedEvent, ListenAddr};
     pub use crate::message::{MessageReceiver, MessageSender, NetworkEvent};
     use crate::network::{
         network::{NetworkComposedEvent, NetworkProcessor, TapleNetworkBehavior},
         tell::TellBehaviourEvent,
     };
+    use crate::{message::Command, network::routing::RoutingComposedEvent, ListenAddr};
     use log::debug;
 
     use super::{network::SendMode, *};
@@ -26,10 +26,12 @@ mod tests {
             upgrade,
         },
         identity::Keypair,
-        kad::{KademliaEvent, Record, Quorum, QueryResult, PeerRecord, record::Key},
+        kad::{record::Key, KademliaEvent, PeerRecord, QueryResult, Quorum, Record},
+        multiaddr::Protocol,
+        multihash::Multihash,
         noise,
         swarm::{Swarm, SwarmEvent},
-        yamux, Multiaddr, PeerId, multiaddr::Protocol, multihash::Multihash,
+        yamux, Multiaddr, PeerId,
     };
     use tokio_stream::wrappers::ReceiverStream;
 
