@@ -1,6 +1,6 @@
-use crate::utils::{deserialize, serialize};
 use super::utils::{get_key, Element};
 use crate::signature::Signature;
+use crate::utils::{deserialize, serialize};
 use crate::DbError;
 use crate::{DatabaseCollection, DatabaseManager, Derivable, DigestIdentifier};
 use std::collections::HashSet;
@@ -39,7 +39,9 @@ impl<C: DatabaseCollection> WitnessSignaturesDb<C> {
     pub fn get_all_witness_signatures(
         &self,
     ) -> Result<Vec<(DigestIdentifier, u64, HashSet<Signature>)>, DbError> {
-        let iter = self.collection.iter(false, format!("{}{}", self.prefix, char::MAX));
+        let iter = self
+            .collection
+            .iter(false, format!("{}{}", self.prefix, char::MAX));
         Ok(iter
             .map(|ws| {
                 let ws_1 = deserialize::<(u64, HashSet<Signature>)>(&ws.1).unwrap();

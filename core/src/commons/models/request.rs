@@ -134,7 +134,7 @@ impl TryFrom<Signed<EventRequest>> for TapleRequest {
             sn: None,
             event_request,
             state: RequestState::Processing,
-            success: None
+            success: None,
         })
     }
 }

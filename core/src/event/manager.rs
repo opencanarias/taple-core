@@ -251,8 +251,7 @@ impl<C: DatabaseCollection> EventManager<C> {
                                 log::error!("VALIDATION ERROR: {:?}", error);
                             }
                         },
-                        _ => {
-                        }
+                        _ => {}
                     }
                     EventResponse::NoResponse
                 }

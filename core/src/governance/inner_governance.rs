@@ -192,23 +192,22 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
             let result = match self.repo_access.get_subject(&governance_id) {
                 Ok(data) => data,
                 Err(DbError::EntryNotFound) => return Ok(Err(RequestError::SubjectNotFound)),
-                Err(data) => return Err(InternalError::DatabaseError { source: data })
+                Err(data) => return Err(InternalError::DatabaseError { source: data }),
             };
             result.sn
         } else {
             metadata.governance_version
         };
         let schema_id = metadata.schema_id.clone();
-        let governance =
-            match self.governance_event_sourcing(&governance_id, governance_version) {
-                Ok(subject) => subject,
-                Err(error) => match error {
-                    RequestError::DatabaseError(err) => {
-                        return Err(InternalError::DatabaseError { source: err })
-                    }
-                    err => return Ok(Err(err)),
-                },
-            };
+        let governance = match self.governance_event_sourcing(&governance_id, governance_version) {
+            Ok(subject) => subject,
+            Err(error) => match error {
+                RequestError::DatabaseError(err) => {
+                    return Err(InternalError::DatabaseError { source: err })
+                }
+                err => return Ok(Err(err)),
+            },
+        };
         let roles: Vec<Role> =
             serde_json::from_value(governance.properties.get("roles").unwrap().to_owned())
                 .map_err(|_| InternalError::DeserializationError)?;
@@ -269,12 +268,8 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
             return Ok(Err(signers.unwrap_err()));
         };
         match quorum {
-            Quorum::MAJORITY => {
-                Ok(Ok((signers.len() as u32 / 2) + 1))
-            }
-            Quorum::FIXED { fixed } => {
-                Ok(Ok(fixed))
-            }
+            Quorum::MAJORITY => Ok(Ok((signers.len() as u32 / 2) + 1)),
+            Quorum::FIXED { fixed } => Ok(Ok(fixed)),
             Quorum::PORCENTAJE { porcentaje } => {
                 let result = (signers.len() as f64 * porcentaje).ceil() as u32;
                 Ok(Ok(result))

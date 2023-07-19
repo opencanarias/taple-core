@@ -120,9 +120,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
             }
             self.compile(contract_info.raw, &governance_id.to_str(), &schema_id)
                 .await?;
-            let compiled_contract = self
-                .add_contract()
-                .await?;
+            let compiled_contract = self.add_contract().await?;
             self.database
                 .put_contract(
                     &governance_id,
@@ -173,9 +171,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
         Ok(())
     }
 
-    async fn add_contract(
-        &self,
-    ) -> Result<Vec<u8>, CompilerErrorResponses> {
+    async fn add_contract(&self) -> Result<Vec<u8>, CompilerErrorResponses> {
         // AOT COMPILATION
         let file = fs::read(format!(
             "{}/target/wasm32-unknown-unknown/release/contract.wasm",

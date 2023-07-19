@@ -702,7 +702,7 @@ pub fn get_governance_schema() -> Value {
               }
             }
           }
-        }        
+        }
       }
     })
 }

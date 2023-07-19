@@ -21,7 +21,7 @@ pub enum ProtocolErrors {
     GovernanceError {
         #[from]
         source: RequestError,
-    }
+    },
 }
 
 #[derive(Error, Debug, Clone)]
@@ -91,7 +91,7 @@ pub enum ResponseError {
     #[error("Schema {0} not found")]
     SchemaNotFound(String),
     #[error("Governance subjects cannot refer to other governance and their schema_id must be \"governance\".")]
-    CantCreateGovernance
+    CantCreateGovernance,
 }
 
 // #[derive(Error, Debug, Clone)]

@@ -1,4 +1,6 @@
-use super::{errors::ValidationError, validation::Validation, ValidationCommand, ValidationResponse};
+use super::{
+    errors::ValidationError, validation::Validation, ValidationCommand, ValidationResponse,
+};
 use crate::database::{DatabaseCollection, DB};
 use crate::message::MessageTaskCommand;
 use crate::protocol::protocol_message_manager::TapleMessages;
@@ -44,7 +46,12 @@ impl<C: DatabaseCollection> ValidationManager<C> {
     ) -> Self {
         Self {
             input_channel,
-            inner_validation: Validation::new(gov_api, database, signature_manager, message_channel),
+            inner_validation: Validation::new(
+                gov_api,
+                database,
+                signature_manager,
+                message_channel,
+            ),
             shutdown_receiver,
             shutdown_sender,
         }
@@ -94,7 +101,10 @@ impl<C: DatabaseCollection> ValidationManager<C> {
                     validation_event,
                     sender,
                 } => {
-                    let result = self.inner_validation.validation_event(validation_event, sender).await;
+                    let result = self
+                        .inner_validation
+                        .validation_event(validation_event, sender)
+                        .await;
                     log::info!("Validation Event Result: {:?}", result);
                     match result {
                         Err(ValidationError::ChannelError(_)) => return result.map(|_| ()),

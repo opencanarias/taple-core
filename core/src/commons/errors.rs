@@ -231,5 +231,5 @@ pub enum ListenAddrErrors {
     #[error("Port must be a 32 bits unsigned")]
     NoU32Port,
     #[error("An IP must be combined with a tcp port")]
-    InvalidCombination
+    InvalidCombination,
 }

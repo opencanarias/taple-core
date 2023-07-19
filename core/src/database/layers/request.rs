@@ -1,6 +1,6 @@
-use crate::utils::{deserialize, serialize};
 use super::utils::{get_key, Element};
 use crate::commons::models::request::TapleRequest;
+use crate::utils::{deserialize, serialize};
 use crate::DbError;
 use crate::{DatabaseCollection, DatabaseManager, Derivable, DigestIdentifier};
 use std::sync::Arc;
@@ -25,10 +25,7 @@ impl<C: DatabaseCollection> RequestDb<C> {
         ];
         let key = get_key(key_elements)?;
         let request = self.collection.get(&key)?;
-        Ok(
-            deserialize::<TapleRequest>(&request)
-                .map_err(|_| DbError::DeserializeError)?,
-        )
+        Ok(deserialize::<TapleRequest>(&request).map_err(|_| DbError::DeserializeError)?)
     }
 
     pub fn get_all_request(&self) -> Vec<TapleRequest> {

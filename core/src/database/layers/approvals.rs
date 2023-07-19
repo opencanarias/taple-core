@@ -235,12 +235,7 @@ impl<C: DatabaseCollection> ApprovalsDb<C> {
                 }
             }
         } else {
-            let approvals = get_by_range(
-                from,
-                quantity,
-                &self.collection,
-                &self.prefix,
-            )?;
+            let approvals = get_by_range(from, quantity, &self.collection, &self.prefix)?;
             for approval in approvals.iter() {
                 let approval = deserialize::<ApprovalEntity>(&approval).unwrap();
                 if status.is_some() {

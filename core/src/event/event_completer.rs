@@ -21,7 +21,6 @@ use crate::{
     identifier::{Derivable, DigestIdentifier, KeyIdentifier},
     ledger::{LedgerCommand, LedgerResponse},
     message::{MessageConfig, MessageTaskCommand},
-    validation::ValidationEvent,
     protocol::protocol_message_manager::TapleMessages,
     request::StartRequest,
     request::TapleRequest,
@@ -30,6 +29,7 @@ use crate::{
         approval::create_approval_request, evaluator::create_evaluator_request,
         ledger::request_gov_event, validation::create_validator_request,
     },
+    validation::ValidationEvent,
     ApprovalRequest, ApprovalResponse, DatabaseCollection, EvaluationResponse, EventRequest,
     Notification, ValueWrapper,
 };
@@ -435,7 +435,8 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             .map_err(|_| EventError::CryptoError("Error generating event hash".to_owned()))?;
         let validation_event = self.create_validation_event(&subject, &event, gov_version)?;
         let event_message = create_validator_request(validation_event.clone());
-        self.event_validation_events.insert(event_hash, validation_event);
+        self.event_validation_events
+            .insert(event_hash, validation_event);
         //(ValidationStage::Validate, event_message)
         let stage = ValidationStage::Validate;
         let (signers, quorum_size) = self.get_signers_and_quorum(metadata, stage.clone()).await?;
@@ -1263,7 +1264,8 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 content: event,
                 signature: subject_signature,
             };
-            let validation_event = self.create_validation_event(&subject, &signed_event, gov_version)?;
+            let validation_event =
+                self.create_validation_event(&subject, &signed_event, gov_version)?;
             let event_message = create_validator_request(validation_event.clone());
             // Limpiar HashMaps
             self.approval_eval_signatures

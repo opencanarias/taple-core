@@ -45,32 +45,33 @@ impl<C: DatabaseCollection> Validation<C> {
         validation_event: ValidationEvent,
         sender: KeyIdentifier,
     ) -> Result<ValidationEventResponse, ValidationError> {
-        let actual_gov_version =
-            if &validation_event.proof.schema_id == "governance" && validation_event.proof.sn == 0 {
-                0
-            } else {
-                match self
-                    .gov_api
-                    .get_governance_version(
-                        validation_event.proof.governance_id.clone(),
-                        validation_event.proof.subject_id.clone(),
-                    )
-                    .await
-                {
-                    Ok(gov_version) => gov_version,
-                    Err(error) => match error {
-                        crate::governance::error::RequestError::GovernanceNotFound(_)
-                        | crate::governance::error::RequestError::SubjectNotFound
-                        | crate::governance::error::RequestError::InvalidGovernanceID => {
-                            return Err(ValidationError::GovernanceNotFound);
-                        }
-                        crate::governance::error::RequestError::ChannelClosed => {
-                            return Err(ValidationError::ChannelError(ChannelErrors::ChannelClosed));
-                        }
-                        _ => return Err(ValidationError::GovApiUnexpectedResponse),
-                    },
-                }
-            };
+        let actual_gov_version = if &validation_event.proof.schema_id == "governance"
+            && validation_event.proof.sn == 0
+        {
+            0
+        } else {
+            match self
+                .gov_api
+                .get_governance_version(
+                    validation_event.proof.governance_id.clone(),
+                    validation_event.proof.subject_id.clone(),
+                )
+                .await
+            {
+                Ok(gov_version) => gov_version,
+                Err(error) => match error {
+                    crate::governance::error::RequestError::GovernanceNotFound(_)
+                    | crate::governance::error::RequestError::SubjectNotFound
+                    | crate::governance::error::RequestError::InvalidGovernanceID => {
+                        return Err(ValidationError::GovernanceNotFound);
+                    }
+                    crate::governance::error::RequestError::ChannelClosed => {
+                        return Err(ValidationError::ChannelError(ChannelErrors::ChannelClosed));
+                    }
+                    _ => return Err(ValidationError::GovApiUnexpectedResponse),
+                },
+            }
+        };
         if actual_gov_version < validation_event.proof.governance_version {
             return Err(ValidationError::GovernanceVersionTooHigh);
         } else if actual_gov_version > validation_event.proof.governance_version {

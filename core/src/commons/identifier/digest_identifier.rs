@@ -8,9 +8,7 @@ use super::error::Error;
 use super::Derivable;
 
 /// Digest based identifier
-#[derive(
-    Debug, PartialEq, Clone, Eq, Hash, BorshSerialize, BorshDeserialize, PartialOrd,
-)]
+#[derive(Debug, PartialEq, Clone, Eq, Hash, BorshSerialize, BorshDeserialize, PartialOrd)]
 pub struct DigestIdentifier {
     pub derivator: DigestDerivator,
     pub digest: Vec<u8>,

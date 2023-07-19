@@ -28,7 +28,7 @@ pub enum ApprovalManagerError {
     #[error("More than one pending approval request detected")]
     MoreRequestThanMaxAllowed,
     #[error("Event Apply failed")]
-    EventApplyFailed
+    EventApplyFailed,
 }
 
 #[derive(Error, Debug, Clone)]
@@ -96,5 +96,5 @@ pub enum ApprovalErrorResponse {
     #[error("Request not found")]
     RequestNotFound,
     #[error("Request is not pending")]
-    NotPendingRequest
+    NotPendingRequest,
 }

@@ -46,5 +46,4 @@ pub enum ValidationError {
     SubjectSignatureNotValid,
     #[error("Diferent genesis_gov_version and gov_version for subject: {0}")]
     GenesisGovVersionsDoesNotMatch(String),
-
 }

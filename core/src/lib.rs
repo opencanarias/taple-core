@@ -118,8 +118,8 @@ pub(crate) mod governance;
 pub(crate) mod ledger;
 pub(crate) mod message;
 pub(crate) mod network;
-pub(crate) mod validation;
 pub(crate) mod utils;
+pub(crate) mod validation;
 
 pub mod event;
 pub mod protocol;
@@ -144,8 +144,8 @@ pub use commons::models::request::EventRequest;
 pub use commons::models::signature;
 pub use commons::models::state::SubjectData;
 pub use commons::{
+    config::{ListenAddr, NetworkSettings, NodeSettings, TapleSettings},
     errors::ListenAddrErrors,
-    config::{NetworkSettings, NodeSettings, TapleSettings, ListenAddr},
     identifier::derive::{digest::DigestDerivator, KeyDerivator},
     models::notification::Notification,
     models::timestamp::TimeStamp,

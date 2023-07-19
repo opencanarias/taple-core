@@ -1,7 +1,7 @@
 //! Errors that may occur when interacting with a TAPLE node through its API
 
-use crate::{event::errors::EventError, approval::error::ApprovalErrorResponse};
 pub use crate::protocol::errors::EventCreationError;
+use crate::{approval::error::ApprovalErrorResponse, event::errors::EventError};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -16,7 +16,7 @@ pub(crate) enum APIInternalError {
     #[error("Unexpect response received after manager request")]
     UnexpectedManagerResponse,
     #[error("Database error {0}")]
-    DatabaseError(String)
+    DatabaseError(String),
 }
 
 /// Errors that may occur when using the TAPLE API

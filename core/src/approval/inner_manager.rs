@@ -2,21 +2,21 @@ use crate::{
     commons::{
         config::VotationType,
         models::{
-            approval::{ ApprovalResponse, ApprovalState, ApprovalEntity},
-            state::{Subject, generate_subject_id}, event::Metadata,
+            approval::{ApprovalEntity, ApprovalResponse, ApprovalState},
+            event::Metadata,
+            state::{generate_subject_id, Subject},
         },
         self_signature_manager::{SelfSignatureInterface, SelfSignatureManager},
     },
     database::DB,
-    request::{ EventRequest},
     governance::{error::RequestError, GovernanceInterface},
     identifier::{Derivable, DigestIdentifier, KeyIdentifier},
-    DatabaseCollection, Notification, signature::Signed, ApprovalRequest,
+    request::EventRequest,
+    signature::Signed,
+    ApprovalRequest, DatabaseCollection, Notification,
 };
 
-use super::{
-    error::{ApprovalErrorResponse, ApprovalManagerError},
-};
+use super::error::{ApprovalErrorResponse, ApprovalManagerError};
 
 pub trait NotifierInterface {
     fn request_reached(&self, id: &str, subject_id: &str, sn: u64);
@@ -38,7 +38,7 @@ impl NotifierInterface for RequestNotifier {
         let _ = self.sender.send(Notification::ApprovalReceived {
             id: id.to_owned(),
             subject_id: subject_id.to_owned(),
-            sn
+            sn,
         });
     }
 
@@ -46,7 +46,7 @@ impl NotifierInterface for RequestNotifier {
         let _ = self.sender.send(Notification::ObsoletedApproval {
             id: id,
             subject_id: subject_id,
-            sn
+            sn,
         });
     }
 }
@@ -131,22 +131,44 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         governance_id: &DigestIdentifier,
     ) -> Result<(), ApprovalManagerError> {
         // Comprobamos todas las peticiones guardadas y borramos las afectadas
-        let affected_requests = self.database.get_approvals_by_governance(governance_id)
+        let affected_requests = self
+            .database
+            .get_approvals_by_governance(governance_id)
             .map_err(|_| ApprovalManagerError::DatabaseError)?;
         for request in affected_requests {
             // Borrarlas de la colección principal y del índice
-            let approval_entity = self.database.get_approval(&request).map_err(|_| ApprovalManagerError::DatabaseError)?;
+            let approval_entity = self
+                .database
+                .get_approval(&request)
+                .map_err(|_| ApprovalManagerError::DatabaseError)?;
             let subject_id = {
                 match approval_entity.request.content.event_request.content {
                     EventRequest::Fact(ref fact_request) => fact_request.subject_id.clone(),
-                    EventRequest::Create(ref create_request) => generate_subject_id(&create_request.namespace, &create_request.schema_id, create_request.public_key.to_str(), create_request.governance_id.to_str(), approval_entity.request.content.gov_version).map_err(|_| ApprovalManagerError::UnexpectedError)?,
+                    EventRequest::Create(ref create_request) => generate_subject_id(
+                        &create_request.namespace,
+                        &create_request.schema_id,
+                        create_request.public_key.to_str(),
+                        create_request.governance_id.to_str(),
+                        approval_entity.request.content.gov_version,
+                    )
+                    .map_err(|_| ApprovalManagerError::UnexpectedError)?,
                     _ => return Err(ApprovalManagerError::UnexpectedRequestType),
                 }
             };
-            self.notifier.request_obsolete(approval_entity.id.to_str(), subject_id.to_str(), approval_entity.request.content.sn);
-            self.database.del_approval(&request).map_err(|_| ApprovalManagerError::DatabaseError)?;
-            self.database.del_governance_aproval_index(&governance_id, &request).map_err(|_| ApprovalManagerError::DatabaseError)?;
-            self.database.del_subject_aproval_index(&subject_id, &request).map_err(|_| ApprovalManagerError::DatabaseError)?;
+            self.notifier.request_obsolete(
+                approval_entity.id.to_str(),
+                subject_id.to_str(),
+                approval_entity.request.content.sn,
+            );
+            self.database
+                .del_approval(&request)
+                .map_err(|_| ApprovalManagerError::DatabaseError)?;
+            self.database
+                .del_governance_aproval_index(&governance_id, &request)
+                .map_err(|_| ApprovalManagerError::DatabaseError)?;
+            self.database
+                .del_subject_aproval_index(&subject_id, &request)
+                .map_err(|_| ApprovalManagerError::DatabaseError)?;
         }
         Ok(())
     }
@@ -175,22 +197,26 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             intervención. En ese caso es precisar eliminar la petición y actualizar a la nueva.
             Debemos comprobar siempre si ya tenemos la petición que nos envían.
         */
-        let id: DigestIdentifier = match DigestIdentifier::from_serializable_borsh(&approval_request.content).map_err(|_| ApprovalErrorResponse::ErrorHashing) {
-            Ok(id) => id,
-            Err(error) => return Ok(Err(error)),
-        };
+        let id: DigestIdentifier =
+            match DigestIdentifier::from_serializable_borsh(&approval_request.content)
+                .map_err(|_| ApprovalErrorResponse::ErrorHashing)
+            {
+                Ok(id) => id,
+                Err(error) => return Ok(Err(error)),
+            };
 
         if let Ok(data) = self.get_single_request(&id) {
             match data.state {
-                ApprovalState::Pending | ApprovalState::Obsolete => return Ok(Err(ApprovalErrorResponse::RequestAlreadyKnown)),
+                ApprovalState::Pending | ApprovalState::Obsolete => {
+                    return Ok(Err(ApprovalErrorResponse::RequestAlreadyKnown))
+                }
                 ApprovalState::Responded => {
                     let result = self
-                    .generate_vote(&id, data.response.expect("Should be").content.approved)
-                    .await?;
-                let (vote, sender) = result
-                .expect("Request should be in data structure");
-                return Ok(Ok(Some((vote.response.unwrap(), sender))))
-                },
+                        .generate_vote(&id, data.response.expect("Should be").content.approved)
+                        .await?;
+                    let (vote, sender) = result.expect("Request should be in data structure");
+                    return Ok(Ok(Some((vote.response.unwrap(), sender))));
+                }
             }
         };
         // Comprobamos si tenemos el sujeto y si estamos sincronizados
@@ -207,8 +233,14 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
 
         // Comprobamos si ya estamos aprobando el sujeto para un evento igual o mayor.
         // En caso de no haber request previa, continuamos.
-        let subject_id = subject_id_by_request(&approval_request.content.event_request.content, approval_request.content.gov_version)?;
-        let request_queue = self.database.get_approvals_by_subject(&subject_id).map_err(|_| ApprovalManagerError::DatabaseError)?;
+        let subject_id = subject_id_by_request(
+            &approval_request.content.event_request.content,
+            approval_request.content.gov_version,
+        )?;
+        let request_queue = self
+            .database
+            .get_approvals_by_subject(&subject_id)
+            .map_err(|_| ApprovalManagerError::DatabaseError)?;
         if request_queue.len() == 1 {
             let data = self.get_single_request(&request_queue[0]).unwrap();
             if approval_request.content.sn <= data.request.content.sn {
@@ -271,7 +303,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
 
         // Tenemos que realizar un falso apply para comprobar si el state_hash es correcto
         // subject_data.update_subject(approval_request.content.patch.clone(), subject_data.sn + 1).map_err(|_| ApprovalManagerError::EventApplyFailed)?;
-        
+
         // let hash_state = match DigestIdentifier::from_serializable_borsh(&subject_data.properties).map_err(|_| ApprovalErrorResponse::ErrorHashing) {
         //     Ok(id) => id,
         //     Err(error) => return Ok(Err(error)),
@@ -280,7 +312,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         // if approval_request.content.state_hash != hash_state {
         //     return Ok(Err(ApprovalErrorResponse::InvalidStateHashAfterApply))
         // }
-        
+
         // La EventRequest es correcta. Podemos pasar a guardarla en el sistema si corresponde
         // Esto dependerá del Flag PassVotation
         // - VotationType::Normal => Se guarda en el sistema a espera del usuario
@@ -295,17 +327,15 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             state: ApprovalState::Pending,
             sender,
         };
-        self.database.set_subject_aproval_index(
-            &subject_id,
-            &id)
-        .map_err(|_| ApprovalManagerError::DatabaseError)?;
+        self.database
+            .set_subject_aproval_index(&subject_id, &id)
+            .map_err(|_| ApprovalManagerError::DatabaseError)?;
         if !gov_id.digest.is_empty() {
-            self.database.set_governance_aproval_index(
-                &gov_id,
-                &id)
-            .map_err(|_| ApprovalManagerError::DatabaseError)?;   
+            self.database
+                .set_governance_aproval_index(&gov_id, &id)
+                .map_err(|_| ApprovalManagerError::DatabaseError)?;
         }
-        let Ok(_result) = self.database.set_approval(&id, approval_entity) else { 
+        let Ok(_result) = self.database.set_approval(&id, approval_entity) else {
             return Err(ApprovalManagerError::DatabaseError);
         };
         self.notifier
@@ -334,7 +364,8 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         &mut self,
         request_id: &DigestIdentifier,
         acceptance: bool,
-    ) -> Result<Result<(ApprovalEntity, KeyIdentifier), ApprovalErrorResponse>, ApprovalManagerError> {
+    ) -> Result<Result<(ApprovalEntity, KeyIdentifier), ApprovalErrorResponse>, ApprovalManagerError>
+    {
         // Obtenemos la petición
         let Ok(mut data) = self.get_single_request(&request_id) else {
             return Ok(Err(ApprovalErrorResponse::RequestNotFound));
@@ -343,7 +374,10 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             appr_req_hash: request_id.clone(),
             approved: acceptance,
         };
-        let subject_id = subject_id_by_request(&data.request.content.event_request.content, data.request.content.gov_version)?;
+        let subject_id = subject_id_by_request(
+            &data.request.content.event_request.content,
+            data.request.content.gov_version,
+        )?;
         let signature = self
             .signature_manager
             .sign(&response)
@@ -356,8 +390,12 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         let Ok(_result) = self.database.set_approval(&request_id, data.clone()) else {
             return Err(ApprovalManagerError::DatabaseError)
         };
-        self.database.del_subject_aproval_index(&subject_id, request_id).map_err(|_| ApprovalManagerError::DatabaseError)?;
-        self.database.del_governance_aproval_index(&data.request.content.gov_id, request_id).map_err(|_| ApprovalManagerError::DatabaseError)?;
+        self.database
+            .del_subject_aproval_index(&subject_id, request_id)
+            .map_err(|_| ApprovalManagerError::DatabaseError)?;
+        self.database
+            .del_governance_aproval_index(&data.request.content.gov_id, request_id)
+            .map_err(|_| ApprovalManagerError::DatabaseError)?;
         let sender = data.sender.clone();
         Ok(Ok((data, sender)))
     }
@@ -382,13 +420,23 @@ fn create_metadata(subject_data: &Subject, governance_version: u64) -> Metadata 
     }
 }
 
-fn subject_id_by_request(request: &EventRequest, gov_version: u64) -> Result<DigestIdentifier, ApprovalManagerError> {
-        let subject_id = match request {
-            EventRequest::Fact(ref fact_request) => fact_request.subject_id.clone(),
-            EventRequest::Create(ref create_request) => generate_subject_id(&create_request.namespace, &create_request.schema_id, create_request.public_key.to_str(), create_request.governance_id.to_str(), gov_version).map_err(|_| ApprovalManagerError::UnexpectedError)?,
-            _ => return Err(ApprovalManagerError::UnexpectedRequestType),
-        };
-        Ok(subject_id)
+fn subject_id_by_request(
+    request: &EventRequest,
+    gov_version: u64,
+) -> Result<DigestIdentifier, ApprovalManagerError> {
+    let subject_id = match request {
+        EventRequest::Fact(ref fact_request) => fact_request.subject_id.clone(),
+        EventRequest::Create(ref create_request) => generate_subject_id(
+            &create_request.namespace,
+            &create_request.schema_id,
+            create_request.public_key.to_str(),
+            create_request.governance_id.to_str(),
+            gov_version,
+        )
+        .map_err(|_| ApprovalManagerError::UnexpectedError)?,
+        _ => return Err(ApprovalManagerError::UnexpectedRequestType),
+    };
+    Ok(subject_id)
 }
 
 /*

@@ -133,7 +133,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
                     | ExecutorErrorResponses::ContractEntryPointNotFound
                     | ExecutorErrorResponses::FunctionLinkingFailed(_)
                     | ExecutorErrorResponses::SubjectError(_)
-                    | ExecutorErrorResponses::CantGenerateContractResult 
+                    | ExecutorErrorResponses::CantGenerateContractResult
                     | ExecutorErrorResponses::StateHashGenerationFailed
                     | ExecutorErrorResponses::ContextHashGenerationFailed
                     | ExecutorErrorResponses::RolesObtentionFailed
@@ -142,8 +142,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
                     | ExecutorErrorResponses::CreateRequestNotAllowed
                     | ExecutorErrorResponses::GovernanceError(_)
                     | ExecutorErrorResponses::SchemaCompilationFailed
-                    | ExecutorErrorResponses::InvalidPointerPovided
-                    => {
+                    | ExecutorErrorResponses::InvalidPointerPovided => {
                         return Ok(EvaluationResponse {
                             patch: ValueWrapper(serde_json::from_str("[]").map_err(|_| {
                                 ExecutorErrorResponses::JSONPATCHDeserializationFailed

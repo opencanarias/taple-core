@@ -1165,10 +1165,8 @@ impl<C: DatabaseCollection> Ledger<C> {
                             }
                         };
                         let gov_id = subject.governance_id.clone();
-                        let approval_request_hash = &event
-                            .content
-                            .get_approval_hash(gov_id)
-                            .map_err(|_| {
+                        let approval_request_hash =
+                            &event.content.get_approval_hash(gov_id).map_err(|_| {
                                 LedgerError::CryptoError(
                                     "Error generating approval request hash".to_owned(),
                                 )
@@ -1459,7 +1457,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                             // Caso evento repetido
                             return Err(LedgerError::EventAlreadyExists);
                         }
-                            // PONER Aprobaciones como finalizadas y borrar de índice de pendientes
+                        // PONER Aprobaciones como finalizadas y borrar de índice de pendientes
                         match self.database.get_approval(&approval_request_hash) {
                             Ok(mut data) => {
                                 if let ApprovalState::Pending = data.state {

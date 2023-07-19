@@ -5,19 +5,11 @@
 #[derive(Clone, Debug)]
 pub enum Notification {
     /// A new subject has been generated
-    NewSubject {
-        subject_id: String,
-    },
+    NewSubject { subject_id: String },
     /// A new event has been generated
-    NewEvent {
-        sn: u64,
-        subject_id: String,
-    },
+    NewEvent { sn: u64, subject_id: String },
     /// A subject has been synchronized
-    StateUpdated {
-        sn: u64,
-        subject_id: String,
-    },
+    StateUpdated { sn: u64, subject_id: String },
     // Approval Received
     ApprovalReceived {
         id: String,
@@ -29,5 +21,5 @@ pub enum Notification {
         id: String,
         subject_id: String,
         sn: u64,
-    }
+    },
 }

@@ -2,8 +2,8 @@ mod common;
 use std::time::Duration;
 
 use common::*;
-use taple_core::{ApiModuleInterface};
 use serial_test::serial;
+use taple_core::ApiModuleInterface;
 
 #[test]
 #[serial]

@@ -4,8 +4,10 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    commons::models::validation::ValidationProof, identifier::DigestIdentifier, signature::{Signature, Signed},
-    KeyDerivator, KeyIdentifier, Event,
+    commons::models::validation::ValidationProof,
+    identifier::DigestIdentifier,
+    signature::{Signature, Signed},
+    Event, KeyDerivator, KeyIdentifier,
 };
 
 pub mod errors;

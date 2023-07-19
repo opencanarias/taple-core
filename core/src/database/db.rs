@@ -16,10 +16,11 @@ use super::layers::request::RequestDb;
 use super::{
     layers::{
         approvals::ApprovalsDb, contract::ContractDb, controller_id::ControllerIdDb,
-        event::EventDb, event_request::EventRequestDb, keys::KeysDb, validation::ValidationDb,
+        event::EventDb, event_request::EventRequestDb, keys::KeysDb,
         preauthorized_subjects_and_providers::PreauthorizedSbujectsAndProovidersDb,
         prevalidated_event::PrevalidatedEventDb, signature::SignatureDb, subject::SubjectDb,
-        subject_by_governance::SubjectByGovernanceDb, witness_signatures::WitnessSignaturesDb,
+        subject_by_governance::SubjectByGovernanceDb, validation::ValidationDb,
+        witness_signatures::WitnessSignaturesDb,
     },
     DatabaseCollection, DatabaseManager,
 };

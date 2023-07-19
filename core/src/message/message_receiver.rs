@@ -5,9 +5,9 @@ use std::io::Cursor;
 use tokio::sync::mpsc::{self};
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::{commons::channel::SenderEnd, KeyIdentifier, signature::Signed};
+use crate::{commons::channel::SenderEnd, signature::Signed, KeyIdentifier};
 
-use super::{ TaskCommandContent, MessageContent};
+use super::{MessageContent, TaskCommandContent};
 
 #[derive(Debug)]
 pub enum NetworkEvent {

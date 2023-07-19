@@ -2,7 +2,8 @@
 use crate::{
     commons::{errors::SubjectError, models::event::Metadata},
     identifier::{DigestIdentifier, KeyIdentifier},
-    request::StartRequest, signature::Signature,
+    request::StartRequest,
+    signature::Signature,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
