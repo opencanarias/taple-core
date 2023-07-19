@@ -113,7 +113,7 @@ impl Hash for UniqueSignature {
     PartialOrd,
     Hash,
 )]
-pub struct Signed<T: BorshSerialize + BorshDeserialize> {
+pub struct Signed<T: BorshSerialize + BorshDeserialize + Clone> {
     #[serde(flatten)]
     pub content: T,
     pub signature: Signature,
