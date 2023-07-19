@@ -118,7 +118,7 @@ pub(crate) mod governance;
 pub(crate) mod ledger;
 pub(crate) mod message;
 pub(crate) mod network;
-pub(crate) mod notary;
+pub(crate) mod validation;
 pub(crate) mod utils;
 
 pub mod event;

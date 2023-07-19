@@ -2,7 +2,7 @@
 use crate::{
     commons::{errors::SubjectError, models::event::Metadata},
     identifier::{DigestIdentifier, KeyIdentifier},
-    request::StartRequest,
+    request::StartRequest, signature::Signature,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
@@ -131,4 +131,21 @@ impl ValidationProof {
             && self.genesis_governance_version == other.genesis_governance_version
             && self.name == other.name
     }
+}
+
+#[derive(
+    Debug,
+    Clone,
+    Serialize,
+    Deserialize,
+    PartialEq,
+    Eq,
+    Hash,
+    BorshSerialize,
+    BorshDeserialize,
+    PartialOrd,
+)]
+pub struct ValidationEventResponse {
+    pub validation_signature: Signature,
+    pub gov_version_validation: u64,
 }

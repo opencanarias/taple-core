@@ -47,7 +47,6 @@ pub struct EventManager<C: DatabaseCollection> {
     /// Communication channel for incoming petitions
     input_channel: MpscChannel<EventCommand, EventResponse>,
     input_channel_updated_gov: tokio::sync::broadcast::Receiver<GovernanceUpdatedMessage>,
-    /// Notarization functions
     event_completer: EventCompleter<C>,
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,

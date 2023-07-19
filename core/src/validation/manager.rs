@@ -1,4 +1,4 @@
-use super::{errors::NotaryError, notary::Notary, NotaryCommand, NotaryResponse};
+use super::{errors::ValidationError, validation::Validation, ValidationCommand, ValidationResponse};
 use crate::database::{DatabaseCollection, DB};
 use crate::message::MessageTaskCommand;
 use crate::protocol::protocol_message_manager::TapleMessages;
@@ -12,29 +12,29 @@ use crate::{
 
 #[derive(Clone, Debug)]
 #[allow(dead_code)]
-pub struct NotaryAPI {
-    sender: SenderEnd<NotaryCommand, NotaryResponse>,
+pub struct ValidationAPI {
+    sender: SenderEnd<ValidationCommand, ValidationResponse>,
 }
 
 #[allow(dead_code)]
-impl NotaryAPI {
-    pub fn new(sender: SenderEnd<NotaryCommand, NotaryResponse>) -> Self {
+impl ValidationAPI {
+    pub fn new(sender: SenderEnd<ValidationCommand, ValidationResponse>) -> Self {
         Self { sender }
     }
 }
 
-pub struct NotaryManager<C: DatabaseCollection> {
+pub struct ValidationManager<C: DatabaseCollection> {
     /// Communication channel for incoming petitions
-    input_channel: MpscChannel<NotaryCommand, NotaryResponse>,
-    /// Notarization functions
-    inner_notary: Notary<C>,
+    input_channel: MpscChannel<ValidationCommand, ValidationResponse>,
+    /// Validation functions
+    inner_validation: Validation<C>,
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
 }
 
-impl<C: DatabaseCollection> NotaryManager<C> {
+impl<C: DatabaseCollection> ValidationManager<C> {
     pub fn new(
-        input_channel: MpscChannel<NotaryCommand, NotaryResponse>,
+        input_channel: MpscChannel<ValidationCommand, ValidationResponse>,
         gov_api: GovernanceAPI,
         database: DB<C>,
         signature_manager: SelfSignatureManager,
@@ -44,7 +44,7 @@ impl<C: DatabaseCollection> NotaryManager<C> {
     ) -> Self {
         Self {
             input_channel,
-            inner_notary: Notary::new(gov_api, database, signature_manager, message_channel),
+            inner_validation: Validation::new(gov_api, database, signature_manager, message_channel),
             shutdown_receiver,
             shutdown_sender,
         }
@@ -76,8 +76,8 @@ impl<C: DatabaseCollection> NotaryManager<C> {
 
     async fn process_command(
         &mut self,
-        command: ChannelData<NotaryCommand, NotaryResponse>,
-    ) -> Result<(), NotaryError> {
+        command: ChannelData<ValidationCommand, ValidationResponse>,
+    ) -> Result<(), ValidationError> {
         let (sender, data) = match command {
             ChannelData::AskData(data) => {
                 let (sender, data) = data.get();
@@ -90,19 +90,19 @@ impl<C: DatabaseCollection> NotaryManager<C> {
         };
         let response = {
             match data {
-                NotaryCommand::NotaryEvent {
-                    notary_event,
+                ValidationCommand::ValidationEvent {
+                    validation_event,
                     sender,
                 } => {
-                    let result = self.inner_notary.notary_event(notary_event, sender).await;
-                    log::info!("Notary Event Result: {:?}", result);
+                    let result = self.inner_validation.validation_event(validation_event, sender).await;
+                    log::info!("Validation Event Result: {:?}", result);
                     match result {
-                        Err(NotaryError::ChannelError(_)) => return result.map(|_| ()),
-                        _ => NotaryResponse::NotaryEventResponse(result),
+                        Err(ValidationError::ChannelError(_)) => return result.map(|_| ()),
+                        _ => ValidationResponse::ValidationEventResponse(result),
                     }
                 }
-                NotaryCommand::AskForNotary(_) => {
-                    log::error!("Ask for Notary in Notary Manager");
+                ValidationCommand::AskForValidation(_) => {
+                    log::error!("Ask for Validation in Validation Manager");
                     return Ok(());
                 }
             }

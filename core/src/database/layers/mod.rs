@@ -5,7 +5,7 @@ pub(crate) mod event;
 pub(crate) mod event_request;
 pub(crate) mod keys;
 pub(crate) mod lce_validation_proofs;
-pub(crate) mod notary;
+pub(crate) mod validation;
 pub(crate) mod preauthorized_subjects_and_providers;
 pub(crate) mod prevalidated_event;
 pub(crate) mod request;

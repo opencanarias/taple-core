@@ -9,7 +9,7 @@ use crate::{
     event::{EventCommand, EventResponse},
     ledger::{LedgerCommand, LedgerResponse},
     message::{MessageContent, TaskCommandContent},
-    notary::{NotaryCommand, NotaryResponse},
+    validation::{ValidationCommand, ValidationResponse},
     signature::Signed,
 };
 
@@ -20,7 +20,7 @@ use error::ProtocolErrors;
 pub enum TapleMessages {
     DistributionMessage(DistributionMessagesNew),
     EvaluationMessage(EvaluatorMessage),
-    ValidationMessage(NotaryCommand),
+    ValidationMessage(ValidationCommand),
     EventMessage(EventCommand),
     ApprovalMessages(ApprovalMessages),
     LedgerMessages(LedgerCommand),
@@ -34,7 +34,7 @@ pub struct ProtocolManager {
     #[cfg(feature = "evaluation")]
     evaluation_sx: SenderEnd<EvaluatorMessage, EvaluatorResponse>,
     #[cfg(feature = "validation")]
-    validation_sx: SenderEnd<NotaryCommand, NotaryResponse>,
+    validation_sx: SenderEnd<ValidationCommand, ValidationResponse>,
     event_sx: SenderEnd<EventCommand, EventResponse>,
     #[cfg(feature = "aproval")]
     approval_sx: SenderEnd<ApprovalMessages, ApprovalResponses>,
@@ -51,7 +51,7 @@ impl ProtocolManager {
             EvaluatorMessage,
             EvaluatorResponse,
         >,
-        #[cfg(feature = "validation")] validation_sx: SenderEnd<NotaryCommand, NotaryResponse>,
+        #[cfg(feature = "validation")] validation_sx: SenderEnd<ValidationCommand, ValidationResponse>,
         event_sx: SenderEnd<EventCommand, EventResponse>,
         #[cfg(feature = "aproval")] approval_sx: SenderEnd<ApprovalMessages, ApprovalResponses>,
         ledger_sx: SenderEnd<LedgerCommand, LedgerResponse>,
@@ -155,21 +155,21 @@ impl ProtocolManager {
             TapleMessages::ValidationMessage(data) => {
                 #[cfg(feature = "validation")]
                 {
-                    let notary_command = match data {
-                        NotaryCommand::NotaryEvent {
+                    let validation_command = match data {
+                        ValidationCommand::ValidationEvent {
                             ..
                         } => {
-                            log::error!("Notary Event Received in protocol manager");
+                            log::error!("Validation Event Received in protocol manager");
                             return Ok(());
                         }
-                        NotaryCommand::AskForNotary(notary_event) => NotaryCommand::NotaryEvent {
-                            notary_event,
+                        ValidationCommand::AskForValidation(validation_event) => ValidationCommand::ValidationEvent {
+                            validation_event,
                             sender,
                         },
                     };
                     return Ok(self
                         .validation_sx
-                        .tell(notary_command)
+                        .tell(validation_command)
                         .await
                         .map_err(|_| ProtocolErrors::ChannelClosed)?);
                 }

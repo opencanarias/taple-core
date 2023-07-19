@@ -7,7 +7,7 @@ use crate::{
 
 #[derive(Error, Debug, Clone, PartialEq)]
 #[allow(dead_code)]
-pub enum NotaryError {
+pub enum ValidationError {
     #[error("ProtocolErrors Error")]
     ProtocolErrors(#[from] ProtocolErrors),
     #[error("Channel Error")]

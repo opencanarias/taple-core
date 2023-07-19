@@ -6,7 +6,6 @@ use super::errors::SubjectError;
 
 pub mod approval;
 pub mod event;
-pub mod notary;
 pub mod notification;
 pub mod signature;
 pub mod state;

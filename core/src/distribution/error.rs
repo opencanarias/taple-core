@@ -49,8 +49,8 @@ pub enum DistributionErrorResponses {
   ApprovalQuorumNotReached,
   #[error("Approval quorum mismatch")]
   ApprovalQuorumMismatch,
-  #[error("Invalid notary signatures")]
-  InvalidNotarySignatures,
+  #[error("Invalid validation signatures")]
+  InvalidValidationSignatures,
   #[error("Schema {0} not found")]
   SchemaNotFound(String),
   #[error("Event {0} of subject {1} not found")]
@@ -59,13 +59,13 @@ pub enum DistributionErrorResponses {
   SubjectNotFound,
   #[error("Signatures not found")]
   SignaturesNotFound,
-  #[error("Event without notaries signatures received")]
-  NoNotariesSignature,
-  #[error("Invalid Notaries signatures hash")]
-  InvalidNotariesSignatureHash,
+  #[error("Event without validator signatures received")]
+  NoValidatorSignatures,
+  #[error("Invalid Validators signatures hash")]
+  InvalidValidatorSignatureHash,
   #[error("Event not needed")]
   EventNotNeeded,
-  #[error("Event without notary signatures")]
+  #[error("Event without validator signatures")]
   InvalidEvent,
   #[error("Signatures not needed")]
   SignatureNotNeeded,

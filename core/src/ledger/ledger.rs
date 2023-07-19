@@ -1267,14 +1267,6 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 ))
                             })?
                         };
-                        let notary_hash = DigestIdentifier::from_serializable_borsh(
-                            &validation_proof,
-                        )
-                        .map_err(|_| {
-                            LedgerError::CryptoError(String::from(
-                                "Error calculating the hash of the serializable",
-                            ))
-                        })?;
                         verify_signatures(&signatures, &signers, quorum, &validation_proof)?;
                         // Comprobar si es evento siguiente o LCE
                         if event.content.sn == subject.sn + 1 && ledger_state.head.is_none() {
@@ -1720,14 +1712,6 @@ impl<C: DatabaseCollection> Ledger<C> {
                             .await?;
                         // let state_hash =
                         //     subject.state_hash_after_apply(event.content.patch.clone())?;
-                        let notary_hash = DigestIdentifier::from_serializable_borsh(
-                            &validation_proof,
-                        )
-                        .map_err(|_| {
-                            LedgerError::CryptoError(String::from(
-                                "Error calculating the hash of the serializable",
-                            ))
-                        })?;
                         // let notary_hash = DigestIdentifier::from_serializable_borsh(
                         //     &validation_proof,
                         // )
