@@ -210,7 +210,6 @@ impl<
                 }
             }
         };
-        log::info!("Response: {:?}", response);
         if sender.is_some() {
             sender
                 .unwrap()

@@ -128,6 +128,8 @@ impl NotificationHandler {
     }
 }
 
+/// Structure that allows a signal to be emitted to stop the TAPLE node.
+/// It can also be used to detect internal shutdown signals, which occur when an internal error occurs.
 pub struct TapleShutdownManager {
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
@@ -140,14 +142,17 @@ impl TapleShutdownManager {
             shutdown_sender: sender,
         }
     }
+    /// Allows to obtain the underlying channel to receive messages
     pub fn get_raw_receiver(&self) -> tokio::sync::broadcast::Receiver<()> {
         self.shutdown_sender.subscribe()
     }
 
+    /// Allows to obtain the underlying channel to send messages
     pub fn get_raw_sender(&self) -> tokio::sync::broadcast::Sender<()> {
         self.shutdown_sender.clone()
     }
 
+    /// Wait until a shutdown signal is received from the node.
     pub async fn wait_for_shutdown(mut self) {
         loop {
             match self.shutdown_receiver.recv().await {
@@ -157,6 +162,7 @@ impl TapleShutdownManager {
         }
     }
 
+    /// It issues a shutdown signal and waits until the node has processed it correctly.
     pub async fn shutdown(mut self) {
         self.shutdown_sender.send(()).unwrap();
         drop(self.shutdown_sender);

@@ -33,12 +33,12 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
     }
 
     pub async fn init(&self) -> Result<(), CompilerError> {
-        // Comprueba si existe el contrato de gobernanza en el sistema
-        // Si no existe, lo compila y lo guarda
+        // Checks if the governance contract exists in the system
+        // If it does not exist, it compiles and saves it.
         let cargo_path = format!("{}/Cargo.toml", self.contracts_path);
         if !Path::new(&cargo_path).exists() {
             let toml: String = get_toml();
-            // Escribimos cargo.toml
+            // We write cargo.toml
             fs::write(cargo_path, toml)
                 .await
                 .map_err(|_| CompilerErrorResponses::WriteFileError)?;
@@ -77,7 +77,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
         governance_id: DigestIdentifier,
         governance_version: u64,
     ) -> Result<(), CompilerErrorResponses> {
-        // TODO: Pillar contrato de base de datos, comprobar si el hash cambia y compilar, si no cambia no compilar
+        // TODO: Pick contract from database, check if hash changes and compile, if it doesn't change don't compile
         // Read the contract from database
         let contracts = self
             .gov_api
@@ -90,7 +90,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
                     Some((contract, hash, contract_gov_version))
                 }
                 Err(DbError::EntryNotFound) => {
-                    // Añadir en la response
+                    // Add in the response
                     None
                 }
                 Err(error) => return Err(CompilerErrorResponses::DatabaseError(error.to_string())),
@@ -103,7 +103,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
                     continue;
                 }
                 if contract_data.1 == new_contract_hash {
-                    // Se actualiza la versión de la gobernanza asociada
+                    // The associated governance version is updated.
                     self.database
                         .put_contract(
                             &governance_id,
@@ -153,14 +153,12 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
             .arg("wasm32-unknown-unknown")
             .arg("--release")
             .output()
-            // No muestra stdout. Genera proceso hijo y espera
+            // Does not show stdout. Generates child process and waits
             .map_err(|_| CompilerErrorResponses::CargoExecError)?;
         println!("status {:?}", status);
         if !status.status.success() {
             return Err(CompilerErrorResponses::CargoExecError);
         }
-        // Utilidad para optimizar el Wasm resultante
-        // Es una API, así que requiere de Wasm-gc en el sistema
 
         std::fs::create_dir_all(format!(
             "/tmp/taple_contracts/{}/{}",

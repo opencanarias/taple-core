@@ -44,12 +44,20 @@ use super::{timestamp::TimeStamp, HashId};
     Hash,
 )]
 pub struct Signature {
+    /// Signer identifier
     pub signer: KeyIdentifier,
+    /// Timestamp of the signature
     pub timestamp: TimeStamp,
+    /// The signature itself
     pub value: SignatureIdentifier,
 }
 
 impl Signature {
+    /// It allows the creation of a new signature
+    /// # Arguments
+    /// - content: The content to sign
+    /// - signer: Identifier of the signer
+    /// - keys: The [KeyPair] to use to generate the signature
     pub fn new<T: HashId>(
         content: &T,
         signer: KeyIdentifier,
@@ -70,6 +78,7 @@ impl Signature {
             value: SignatureIdentifier::new(signer.to_signature_derivator(), &signature),
         })
     }
+    /// It allow verify the signature. It checks if the content and the signer are correct
     pub fn verify<T: HashId>(&self, content: &T) -> Result<(), SubjectError> {
         let content_hash = content.hash_id()?;
         let signature_hash =
@@ -85,7 +94,7 @@ impl Signature {
 #[derive(
     Debug, Clone, Serialize, Deserialize, Eq, BorshSerialize, BorshDeserialize, PartialOrd,
 )]
-pub struct UniqueSignature {
+pub(crate) struct UniqueSignature {
     pub signature: Signature,
 }
 
@@ -101,6 +110,7 @@ impl Hash for UniqueSignature {
     }
 }
 
+/// Represents any signed data entity
 #[derive(
     Debug,
     Clone,
@@ -115,6 +125,8 @@ impl Hash for UniqueSignature {
 )]
 pub struct Signed<T: BorshSerialize + BorshDeserialize + Clone> {
     #[serde(flatten)]
+    /// The data that is signed
     pub content: T,
+    /// The signature accompanying the data
     pub signature: Signature,
 }

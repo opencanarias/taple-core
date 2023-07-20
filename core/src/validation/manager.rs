@@ -105,7 +105,6 @@ impl<C: DatabaseCollection> ValidationManager<C> {
                         .inner_validation
                         .validation_event(validation_event, sender)
                         .await;
-                    log::info!("Validation Event Result: {:?}", result);
                     match result {
                         Err(ValidationError::ChannelError(_)) => return result.map(|_| ()),
                         _ => ValidationResponse::ValidationEventResponse(result),

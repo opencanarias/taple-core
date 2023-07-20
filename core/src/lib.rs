@@ -145,14 +145,15 @@ pub(crate) mod network;
 pub(crate) mod utils;
 pub(crate) mod validation;
 
-pub mod event;
-pub mod protocol;
+pub(crate) mod event;
+pub(crate) mod protocol;
 
 mod unitary_component;
 pub use api::{
-    APICommands, ApiError, ApiModuleInterface, ApiResponses, GetEvents, GetSubject, GetSubjects,
+    ApiError, ApiModuleInterface,
     NodeAPI,
 };
+// pub(crate) use api::APICommands;
 pub use commons::crypto;
 pub use commons::identifier;
 pub use commons::identifier::{Derivable, DigestIdentifier, KeyIdentifier, SignatureIdentifier};
@@ -177,7 +178,7 @@ pub use commons::{
     models::value_wrapper::ValueWrapper,
 };
 pub(crate) use database::DB;
-pub use database::{DatabaseCollection, DatabaseManager, Error as DbError, MemoryManager};
+pub use database::{DatabaseCollection, DatabaseManager, Error as DbError, MemoryManager, MemoryCollection};
 pub use error::Error;
 pub use unitary_component::{
     get_default_settings, NotificationHandler, Taple, TapleShutdownManager,

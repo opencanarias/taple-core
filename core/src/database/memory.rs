@@ -36,6 +36,7 @@ impl DataStore {
     }
 }
 
+/// In-memory database implementation for TAPLE.
 pub struct MemoryManager {
     data: RwLock<HashMap<String, Arc<DataStore>>>,
 }
@@ -69,6 +70,7 @@ impl DatabaseManager<MemoryCollection> for MemoryManager {
     }
 }
 
+/// Collection for in-memory database implementation. It must be created through [MemoryManager].
 pub struct MemoryCollection {
     data: Arc<DataStore>,
 }

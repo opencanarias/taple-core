@@ -130,7 +130,6 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                 (None, data)
             }
         };
-        // log::error!("MENSAJE RECIBIDO EN EL LEDGER: {:?}", data);
         let response = {
             match data {
                 LedgerCommand::GenerateKey(derivator) => {
@@ -164,7 +163,6 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                         .inner_ledger
                         .event_validated(event, signatures, validation_proof)
                         .await;
-                    log::info!("RESPUESTA DE OWN EVENT {:?}", response);
                     match response {
                         Err(error) => match error {
                             LedgerError::ChannelClosed => {
@@ -180,7 +178,7 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                                 return Err(LedgerError::ChannelClosed);
                             }
                             _ => {
-                                log::error!("ERROR EN LEDGER {}", error);
+                                log::error!("ERROR IN LEDGER {}", error);
                             }
                         },
                         _ => {}
@@ -196,7 +194,6 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                         .inner_ledger
                         .genesis(event, signatures, validation_proof)
                         .await;
-                    log::info!("RESPUESTA DE GENESIS {:?}", response);
                     match response {
                         Err(error) => match error {
                             LedgerError::ChannelClosed => {
@@ -227,7 +224,6 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                         .inner_ledger
                         .external_event(event, signatures, sender, validation_proof)
                         .await;
-                    log::info!("External Event Response: {:?}", response);
                     match response {
                         Err(error) => match error {
                             LedgerError::ChannelClosed => {
@@ -250,7 +246,6 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                 }
                 LedgerCommand::ExternalIntermediateEvent { event } => {
                     let response = self.inner_ledger.external_intermediate_event(event).await;
-                    log::info!("RESPUESTA DE EXTERNAL INTERMEDIATE EVENT {:?}", response);
                     match response {
                         Err(error) => match error {
                             LedgerError::ChannelClosed => {
@@ -292,7 +287,6 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                         },
                         Ok(event) => Ok(event),
                     };
-                    log::info!("RESPUESTA DE GET EVENT {:?}", response);
                     LedgerResponse::GetEvent(response)
                 }
                 LedgerCommand::GetLCE {
@@ -315,7 +309,6 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                         },
                         Ok(event) => Ok(event),
                     };
-                    log::info!("RESPUESTA DE GET LCE {:?}", response);
                     LedgerResponse::GetLCE(response)
                 }
                 LedgerCommand::GetNextGov {
@@ -330,7 +323,6 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                     let response = match response {
                         Err(error) => match error.clone() {
                             LedgerError::ChannelClosed => {
-                                log::error!("Channel Closed");
                                 self.shutdown_sender.send(()).expect("Channel Closed");
                                 return Err(LedgerError::ChannelClosed);
                             }
@@ -341,11 +333,9 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                             _ => Err(error),
                         },
                         Ok(event) => {
-                            log::warn!("LLEGA EVENTO CON SN {}", event.0.content.sn);
                             Ok(event)
                         }
                     };
-                    log::info!("RESPUESTA DE GNG {:?}", response);
                     LedgerResponse::GetNextGov(response)
                 }
             }

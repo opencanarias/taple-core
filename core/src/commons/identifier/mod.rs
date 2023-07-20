@@ -3,7 +3,7 @@
 
 pub mod derive;
 pub(crate) mod digest_identifier;
-pub mod error;
+pub(crate) mod error;
 pub(crate) mod key_identifier;
 pub(crate) mod signature_identifier;
 

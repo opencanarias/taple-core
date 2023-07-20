@@ -1,3 +1,5 @@
+//! Contains all valid event requests
+
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 
@@ -92,6 +94,7 @@ impl Signed<EventRequest> {
     }
 }
 
+/// Indicates the current status of an event request.
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, BorshSerialize, BorshDeserialize)]
 pub enum RequestState {
     Finished,

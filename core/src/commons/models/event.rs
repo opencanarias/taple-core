@@ -51,7 +51,7 @@ pub struct Event {
 }
 
 impl Event {
-    pub fn get_approval_hash(
+    pub(crate) fn get_approval_hash(
         &self,
         gov_id: DigestIdentifier,
     ) -> Result<DigestIdentifier, SubjectError> {

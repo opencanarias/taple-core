@@ -29,15 +29,19 @@ pub struct NetworkSettings {
 
 const DEFAULT_PORT: u32 = 40040;
 
+/// Represents a valid listening address for TAPLE. Internally, they are constituted as a MultiAddr.
 #[derive(Debug, Deserialize, Clone)]
 pub enum ListenAddr {
+    /// Represents in-memory addressing.
     Memory {
         port: Option<u32>,
     },
+    /// Represents an ip4 address
     IP4 {
         addr: Option<std::net::Ipv4Addr>,
         port: Option<u32>,
     },
+    /// Represents an ip6 address
     IP6 {
         addr: Option<std::net::Ipv6Addr>,
         port: Option<u32>,
@@ -54,6 +58,7 @@ impl Default for ListenAddr {
 }
 
 impl ListenAddr {
+    /// Allows to obtain the port of the listening address
     pub fn get_port(&self) -> Option<u32> {
         match self {
             Self::IP4 { port, .. } => port.clone(),
@@ -62,6 +67,7 @@ impl ListenAddr {
         }
     }
 
+    /// Allows to increment the port of the listening address by a specified value.
     pub fn increment_port(&mut self, offset: u32) {
         match self {
             Self::IP4 { port, .. } => port.as_mut().map(|p| *p += offset),
@@ -70,6 +76,7 @@ impl ListenAddr {
         };
     }
 
+    /// Allows to obtain, as a string, the listening address in MultiAddr format.
     pub fn to_string(&self) -> Result<String, ListenAddrErrors> {
         let result = match self {
             ListenAddr::Memory { port } => {

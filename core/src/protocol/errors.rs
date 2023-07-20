@@ -93,26 +93,3 @@ pub enum ResponseError {
     #[error("Governance subjects cannot refer to other governance and their schema_id must be \"governance\".")]
     CantCreateGovernance,
 }
-
-// #[derive(Error, Debug, Clone)]
-// pub enum RequestManagerError {
-//     #[error("Input Channel closed")]
-//     ChannelClosed,
-//     #[error("Channel with command Manager closed")]
-//     ComunicationWithCommandManagerClosed,
-//     #[error("Sign verification failed")]
-//     SignVerificationFailed,
-//     #[error("Event request signature was not possible")]
-//     SignError,
-//     #[error("Request Error")]
-//     RequestError(RequestError),
-//     #[error("Command Manager Error")]
-//     CommandManagerError {
-//         #[from]
-//         source: ResponseError,
-//     },
-//     #[error("Database corrupted {0}")]
-//     DatabaseCorrupted(String),
-//     #[error("A database error has ocurred at request manager")]
-//     DatabaseError(String)
-// }

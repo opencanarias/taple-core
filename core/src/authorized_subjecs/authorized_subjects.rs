@@ -11,24 +11,24 @@ use crate::{
 
 use super::error::AuthorizedSubjectsError;
 
-/// Estructura que maneja los sujetos preautorizados en un sistema y se comunica con otros componentes del sistema a través de un canal de mensajes.
+/// Structure that manages the pre-authorized subjects in a system and communicates with other components of the system through a message channel.
 pub struct AuthorizedSubjects<C: DatabaseCollection> {
-    /// Objeto que maneja la conexión a la base de datos.
+    /// Object that handles the connection to the database.
     database: DB<C>,
-    /// Canal de mensajes que se utiliza para comunicarse con otros componentes del sistema.
+    /// Message channel used to communicate with other system components.
     message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
-    /// Identificador único para el componente que utiliza esta estructura.
+    /// Unique identifier for the component using this structure.
     our_id: KeyIdentifier,
 }
 
 impl<C: DatabaseCollection> AuthorizedSubjects<C> {
-    /// Crea una nueva instancia de la estructura `AuthorizedSubjects`.
+    /// Creates a new instance of the `AuthorizedSubjects` structure.
     ///
     /// # Arguments
     ///
-    /// * `database` - Conexión a la base de datos.
-    /// * `message_channel` - Canal de mensajes.
-    /// * `our_id` - Identificador único.
+    /// * `database` - Database connection.
+    /// * `message_channel` - Message channel.
+    /// * `our_id` - Unique identifier.
     pub fn new(
         database: DB<C>,
         message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
@@ -41,13 +41,13 @@ impl<C: DatabaseCollection> AuthorizedSubjects<C> {
         }
     }
 
-    /// Obtiene todos los sujetos preautorizados y envía un mensaje a los proveedores asociados a través del canal de mensajes.
+    /// Obtains all pre-authorized subjects and sends a message to the associated providers through the message channel.
     ///
     /// # Errors
     ///
-    /// Devuelve un error si no se pueden obtener los sujetos preautorizados o si no se puede enviar un mensaje a través del canal de mensajes.
+    /// Returns an error if the preauthorized subjects cannot be obtained or if a message cannot be sent through the message channel.
     pub async fn ask_for_all(&self) -> Result<(), AuthorizedSubjectsError> {
-        // Obtenemos todos los sujetos preautorizados de la base de datos.
+        // We obtain all pre-authorized subjects from the database.
         let preauthorized_subjects = match self
             .database
             .get_allowed_subjects_and_providers(None, 10000)
@@ -58,7 +58,7 @@ impl<C: DatabaseCollection> AuthorizedSubjects<C> {
             },
         };
 
-        // Para cada sujeto preautorizado, enviamos un mensaje a los proveedores asociados a través del canal de mensajes.
+        // For each pre-authorized subject, we send a message to the associated providers through the message channel.
         for (subject_id, providers) in preauthorized_subjects.into_iter() {
             if !providers.is_empty() {
                 self.message_channel
@@ -77,16 +77,16 @@ impl<C: DatabaseCollection> AuthorizedSubjects<C> {
         Ok(())
     }
 
-    /// Agrega un nuevo sujeto preautorizado y envía un mensaje a los proveedores asociados a través del canal de mensajes.
+    /// Add a new pre-authorized subject and send a message to the associated suppliers through the message channel.
     ///
     /// # Arguments
     ///
-    /// * `subject_id` - Identificador del nuevo sujeto preautorizado.
-    /// * `providers` - Conjunto de identificadores de proveedores asociados.
+    /// * `subject_id` - Identifier of the new pre-authorized subject.
+    /// * `providers` - Set of associated provider identifiers.
     ///
     /// # Errors
     ///
-    /// Devuelve un error si no se puede enviar un mensaje a través del canal de mensajes.
+    /// Returns an error if a message cannot be sent through the message channel.
     pub async fn new_authorized_subject(
         &self,
         subject_id: DigestIdentifier,

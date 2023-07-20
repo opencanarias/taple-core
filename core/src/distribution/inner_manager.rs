@@ -61,7 +61,7 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
             .db
             .get_subject(governance_id)
             .map_err(|error| DistributionManagerError::DatabaseError(error.to_string()))?;
-        // Tenemos los IDs de los sujetos afectados. Si seguimos siendo testigos o no dependerá en gran medida del namespace y el schema_id
+        // We have the IDs of the affected subjects. Whether we are still a witness or not will depend largely on the namespace and schema_id.
         for id in all_subjects_ids {
             let subject = self
                 .db
@@ -71,13 +71,13 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
             let metadata = build_metadata(&subject, governance.sn);
             let mut witnesses = self.get_targets(metadata, &subject).await?;
             if !witnesses.contains(&self.signature_manager.get_own_identifier()) {
-                // Ya no somos testigos
+                // We are no longer witnesses
                 self.db
                     .del_witness_signatures(&id)
                     .map_err(|error| DistributionManagerError::DatabaseError(error.to_string()))?;
                 continue;
             }
-            // Seguimos siendo testigos. Comprobamos si nos falta alguna firma.
+            // We remain witnesses. We check to see if we are missing any signatures.
             let (_, current_signatures) = self
                 .db
                 .get_witness_signatures(&id)
@@ -115,21 +115,21 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
     }
 
     pub async fn init(&self) -> Result<(), DistributionManagerError> {
-        // Tenemos que comprobar todos los sujetos que conocemos y comprobar si tenemos todas las firmas de
-        // testificación para su último evento. Estos sujetos serán de diferentes gobernanzas, y para cada una de
-        // ellas las condiciones serán diferentes. Se tata pues de un proceso complejo.
-        // No obstante, en la práctica, el proceso se puede simplificar simplemente recurriendo a las firmas guardadas
-        // de testificación. Si tenemos al menos una firma, entonces es que estábamos testificando el sujeto. No
-        // obtante no hay manera de evitar el consultar la gobernanza. Como se puede suponer, es necesario implementar
-        // algún tipo de caché para evitar consultar muchas veces la misma gobernanza. Una alterntiva es agrupar los sujetos
-        // por gobernanzas en su lugar.
+        // We need to check all the subjects that we know and check if we have all the signatures of
+        // witnessing for their last event. These subjects will be from different governances, and for each one of
+        // them the conditions will be different. It is thus a complex process.
+        // However, in practice, the process can be simplified by simply resorting to the saved // witnessing signatures.
+        // witnessing. If we have at least one signature, then we were testifying the subject. No
+        // however, there is no way to avoid querying governance. As you might guess, it is necessary to implement
+        // some kind of cache to avoid querying the same governance many times. An alternative is to group the subjects
+        // by governance instead.
         let mut governances_version = HashMap::new();
         let signatures = self
             .db
             .get_all_witness_signatures()
             .map_err(|error| DistributionManagerError::DatabaseError(error.to_string()))?;
-        // Tenemos el SubjectID, pero necesitamos la gobernanza de cada uno de ellos, así como el sn
-        // Se deberá de pedir cada sujeto por separado.
+// We have the SubjectID, but we need the governance of each one of them, as well as the sn
+        // Each subject must be requested separately.
         let mut governances_still_witness_flags: HashMap<
             (DigestIdentifier, String, String),
             (bool, Option<HashSet<KeyIdentifier>>),
@@ -140,8 +140,8 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
                 .get_subject(subject_id)
                 .map_err(|error| DistributionManagerError::DatabaseError(error.to_string()))?;
             if sn != &subject.sn {
-                // Si el SN no coincide es que o no se llamó el proceso de distribución o se completó con éxito, en cualquiera de los
-                // casos, el Ledger debería volver a solicitar la operación
+                // If the SN does not match then either the distribution process was not called or it was completed successfully, in either case the Ledger should re-request the operation again.
+                // cases, the Ledger should re-request the operation.
                 continue;
             }
             let schema_id = subject.schema_id.clone();
@@ -151,7 +151,7 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
             } else {
                 subject.governance_id.clone()
             };
-            // Comprobamos si ya hemos analizado sujetos del mismo tipo previamente
+            // We check if we have already analyzed subjects of the same type previously.
             if let Some((node_is_witness, witnesses)) = governances_still_witness_flags.get(&(
                 governance_id.clone(),
                 schema_id.clone(),
@@ -166,17 +166,17 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
                         })?;
                     continue;
                 } else {
-                    // Somos testigos. Realizamos el proceso de solicitud de firmas
-                    // En principio, ya tenemos nuestra firma.
-                    // Es posible que los testigos hayan cambiado y algunas firmas ya no sean correctos. No obstante,
-                    // esto no supone ningún problema. Tener firmas de más es irrelevante a nivel de protocolo.
+                    // We are witnesses. We carry out the process of requesting signatures
+                    // In principle, we already have our signature.
+                    // It is possible that the witnesses have changed and some signatures are no longer correct. However,
+                    // this is not a problem. Having extra signatures is irrelevant for protocol purposes.
                     self.restart_distribution(&subject, &signatures, witnesses.as_ref().unwrap())
                         .await?;
                     continue;
                 }
             }
-            // No hemos analizado previamente la misma combinación de gobernanza, schema y namespace
-            // Pedimos la gobernanza ya que necesitamos saber su versión actual
+            // We have not previously analyzed the same combination of governance, schema and namespace.
+            // We ask for the governance since we need to know its current version.
             let governance_version = {
                 if &schema_id == "governance" {
                     governances_version.insert(governance_id.clone(), subject.sn);
@@ -195,12 +195,12 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
                     }
                 }
             };
-            // Comprobamos si seguimos siendo testigos para los sujetos de esta gobernanza
+            // We check whether we are still witnesses for the subjects of this governance.
             let mut witnesses = self
                 .get_targets(build_metadata(&subject, governance_version), &subject)
                 .await?;
             if witnesses.contains(&self.signature_manager.get_own_identifier()) {
-                // Seguimos siendo testigos
+                // We continue to be witnesses
                 witnesses.insert(subject.owner.clone());
                 witnesses.remove(&self.signature_manager.get_own_identifier());
                 self.restart_distribution(&subject, &signatures, &witnesses)
@@ -210,9 +210,9 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
                     (true, Some(witnesses)),
                 );
             } else {
-                // Ya no somos testigos
-                // Podemos borrar la firmas. Indicamos además que esta combinación de
-                // gobernanza + schema + namespace no es válida
+                // We are no longer witnesses
+                // We can erase the signatures. We also point out that this combination of
+                // governance + schema + namespace is invalid.
                 self.db
                     .del_witness_signatures(subject_id)
                     .map_err(|error| DistributionManagerError::DatabaseError(error.to_string()))?;
@@ -227,8 +227,8 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
         &self,
         msg: StartDistribution,
     ) -> Result<Result<(), DistributionErrorResponses>, DistributionManagerError> {
-        // El ledger nos ha pedido que empecemos el proceso de distribución
-        // Primero deberíamos empezar generando la firma del evento a distribuir
+        // The ledger has asked us to start the distribution process.
+        // First we should start by generating the signature of the event to be distributed.
         let event = match self.db.get_event(&msg.subject_id, msg.sn) {
             Ok(event) => event,
             Err(error) => return Err(DistributionManagerError::DatabaseError(error.to_string())), // No debería ocurrir
@@ -237,7 +237,7 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
             .signature_manager
             .sign(&event)
             .map_err(|_| DistributionManagerError::SignGenerarionFailed)?;
-        // Borrar las firmas anteriores antes de poner las nuevas
+        // Delete the previous signatures before adding the new ones
         self.db
             .del_witness_signatures(&msg.subject_id)
             .map_err(|_| DistributionManagerError::SignGenerarionFailed)?;
@@ -254,13 +254,9 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
             .get_governance_version(subject.governance_id.clone(), subject.subject_id.clone())
             .await
             .map_err(|_| DistributionManagerError::GovernanceChannelNotAvailable)?;
-        // Empezamos la distribución
+        // We start distribution
         let metadata = build_metadata(&subject, governance_version);
         let mut targets = self.get_targets(metadata, &subject).await?;
-        log::warn!("REMAIMING SIGNATURES: {}", targets.len());
-        for signer in targets.iter() {
-            log::warn!("REMAIMING SIGNER: {}", signer.to_str());
-        }
         targets.insert(owner);
         targets.remove(&self.signature_manager.get_own_identifier());
         if !targets.is_empty() {
@@ -334,13 +330,13 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
         &self,
         msg: &AskForSignatures,
     ) -> Result<Result<(), DistributionErrorResponses>, DistributionManagerError> {
-        // Se solicitan firmas
-        // Comprobamos si las tenemos
+        // Signatures are requested
+        // We check if we have them
         match self.db.get_witness_signatures(&msg.subject_id) {
             Ok((sn, signatures)) => {
-                // Comprobamos SN
+                // We check SN
                 if sn == msg.sn {
-                    // Damos las firmas
+                    // We give the signatures
                     let requested = &msg.signatures_requested;
                     let result = signatures
                         .iter()
@@ -358,7 +354,7 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
                         .await
                         .map_err(|_| DistributionManagerError::MessageChannelNotAvailable)?;
                 } else if msg.sn > sn {
-                    // No veo necesario un mensaje para el caso de MSG.SN = SN + 1
+                    // I don't see the need for a message for MSG.SN = SN + 1.
                     let request = if self
                         .governance
                         .is_governance(msg.subject_id.clone())
@@ -388,7 +384,7 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
                 }
             }
             Err(DbError::EntryNotFound) => {
-                // El sujeto no tiene firmas de testificación.
+                // Subject has no witnessing signatures.
                 let request = request_lce(
                     self.signature_manager.get_own_identifier(),
                     msg.subject_id.clone(),
@@ -428,16 +424,16 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
         &self,
         msg: SignaturesReceived,
     ) -> Result<Result<(), DistributionErrorResponses>, DistributionManagerError> {
-        // Se reciben firmas de testificación
-        // Comprobamos la validez de las firmas y las guardamos, actualizando además la tarea
-        // Comprobamos si tenemos el sujeto y evento al que pertenecen las firmas
-        // En pricnipio, si lo tenemos es tan sencillo como comprobar si ya tenemos firmas de testificación previas
+        // We receive witness signatures
+        // We check the validity of the signatures and save them, and update the task.
+        // We check if we have the subject and event to which the signatures belong.
+        // In principle, if we have it, it is as simple as checking if we already have previous witnessing signatures.
         match self.db.get_witness_signatures(&msg.subject_id) {
             Ok((sn, current_signatures)) => {
                 if msg.sn != sn {
                     return Ok(Err(DistributionErrorResponses::SignaturesNotFound));
                 }
-                // Comprobamos las firmas
+                // We check the signatures
                 let event = match self.db.get_event(&msg.subject_id, msg.sn) {
                     Ok(event) => event,
                     Err(error) => {
@@ -462,20 +458,20 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
                 let metadata = build_metadata(&subject, governance_version);
                 let mut targets = self.get_targets(metadata, &subject).await?;
                 for signature in msg.signatures.iter() {
-                    // Comprobamos signer
+                   // We check signer
                     if !targets.contains(&signature.signer) {
                         return Ok(Err(DistributionErrorResponses::InvalidSigner));
                     }
-                    // Comprobamos firma
+                    // We check signature
                     if let Err(_error) = signature.verify(&event) {
                         return Ok(Err(DistributionErrorResponses::InvalidSignature));
                     }
                 }
-                // Las firmas son correctas
+                // The signatures are correct
                 targets.remove(&self.signature_manager.get_own_identifier());
                 let current_signatures: HashSet<Signature> =
                     current_signatures.union(&msg.signatures).cloned().collect();
-                // Calculamos firmas que nos faltan
+                // We calculate missing signatures
                 let remaining_signatures =
                     self.get_remaining_signers(&current_signatures, &targets);
                 self.db
@@ -496,7 +492,7 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
                 Ok(Ok(()))
             }
             Err(DbError::EntryNotFound) => {
-                // No conocemos el evento del que nos llegan firmas. No vamos a pedir nada
+                // We do not know the event we are receiving signatures from. We are not going to ask for anything
                 return Ok(Ok(()));
             }
             Err(error) => return Err(DistributionManagerError::DatabaseError(error.to_string())),
