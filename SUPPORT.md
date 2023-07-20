@@ -2,7 +2,7 @@
 
 This article explains where to get help with remark. Please read through the following guidelines.
 
-> **Important**: before participating in our community, please read our [code of conduct](./CODE_OF_CONDUCT). By interacting with this repository, organization, or community you agree to abide by its terms.
+> **Important**: before participating in our community, please read our [code of conduct](./CODE_OF_CONDUCT.md). By interacting with this repository, organization, or community you agree to abide by its terms.
 
 ## Asking quality questions
 
