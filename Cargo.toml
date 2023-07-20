@@ -66,7 +66,7 @@ libp2p = { version = "~0.45", features = [
 ], default-features = false }
 
 ## Evaluator
-wasmtime = { version = "^5.0.0", features = ["cache"] }
+wasmtime = { version = "^9.0.4", features = ["cache"] }
 wasm-gc-api = { version = "~0.1.11" }
 
 [profile.release]
