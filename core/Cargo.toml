@@ -50,12 +50,10 @@ rand = { workspace = true, features = ["small_rng"] }
 # Network
 instant = { workspace = true }
 unsigned-varint = { workspace = true, features = ["futures"] }
-async-std = { workspace = true, features = ["attributes"] }
 bincode = { workspace = true }
 
 # Message
 serde_cbor = { workspace = true }
-dashmap = { workspace = true }
 
 # Ledger
 base64 = { workspace = true }
