@@ -97,4 +97,6 @@ pub enum ApprovalErrorResponse {
     RequestNotFound,
     #[error("Request is not pending")]
     NotPendingRequest,
+    #[error("Request already Responded")]
+    RequestAlreadyResponded,
 }

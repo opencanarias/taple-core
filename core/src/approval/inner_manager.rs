@@ -370,6 +370,9 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         let Ok(mut data) = self.get_single_request(&request_id) else {
             return Ok(Err(ApprovalErrorResponse::RequestNotFound));
         };
+        if let ApprovalState::Responded = data.state {
+            return Ok(Err(ApprovalErrorResponse::RequestAlreadyResponded));
+        }
         let response = ApprovalResponse {
             appr_req_hash: request_id.clone(),
             approved: acceptance,
