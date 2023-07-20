@@ -23,6 +23,8 @@ TAPLE Core is the reference library that implements all the necessary functional
 [Code](https://github.com/search?q=topic%3Ataple+org%3Aopencanarias++fork%3Afalse+archived%3Afalse++is%3Apublic&type=repositories)
 
 ## Usage
+Rust versión 1.66 or higher is required.
+
 A basic usage example can be found at [examples](./examples) directory. You can find more information about TAPLE technology and how to develop for TAPLE on [TAPLE Website](https://www.taple.es). 
 
 ## License
