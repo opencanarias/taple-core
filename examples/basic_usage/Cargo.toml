@@ -15,24 +15,10 @@ keywords = ["blockchain", "distributed-ledger", "taple", "sustainability"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tokio = { workspace = true, features = ["default", "time", "rt", "rt-multi-thread", "sync", "macros"] }
-serde_json = "1.0"
+tokio = { workspace = "1.20", features = ["default", "time", "rt", "rt-multi-thread", "sync", "macros"] }
 
 hex = "0.4.3"
 
-core = { path = "../../core" }
-commons = { path = "../../commons" }
-
-[dependencies.libp2p]
-version = "0.45.1"
-features = [
-	"identify",
-	"kad",
-	"mplex",
-	"noise",
-	"ping",
-	"serde",
-	"tcp-tokio",
-]
+taple-core = { path = "../../core", features = ["evaluation", "validation", "aproval"] }
 
 [workspace]
