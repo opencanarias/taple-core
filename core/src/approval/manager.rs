@@ -153,7 +153,6 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
                     match command {
                         Some(command) => {
                             let result = self.process_command(command).await;
-                            log::info!("Approval Manager Result: {:?}", result);
                             if result.is_err() {
                                 self.shutdown_sender.send(()).expect("Channel Closed");
                             }
@@ -218,7 +217,6 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
                     .inner_manager
                     .process_approval_request(approval, sender)
                     .await?;
-                log::info!("RESULT APPROVAL REQUEST: {:?}", result);
                 match result {
                     Ok(Some((approval, sender))) => {
                         let msg = create_approver_response(approval);
@@ -281,7 +279,6 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
                     .inner_manager
                     .generate_vote(&message.request_id, message.acceptance)
                     .await?;
-                log::info!("RESULT EMIT VOTE: {:?}", result);
                 match result {
                     Ok((vote, owner)) => {
                         let msg = create_approver_response(vote.response.clone().unwrap());

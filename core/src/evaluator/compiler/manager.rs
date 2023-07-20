@@ -76,7 +76,6 @@ impl<C: DatabaseCollection, G: GovernanceInterface + Send> TapleCompiler<C, G> {
                     .inner_compiler
                     .update_contracts(governance_id, governance_version)
                     .await;
-                log::info!("CONTRACTS UPDATED: {:?}", result);
             }
         };
         Ok(())

@@ -644,7 +644,6 @@ impl NetworkProcessor {
                 }
             }
             Command::SendMessage { receptor, message } => {
-                log::info!("Sending message in NETWORK");
                 // Check if we are the receptor
                 if receptor == self.node_public_key {
                     // It is not needed to send the message

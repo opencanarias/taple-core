@@ -154,7 +154,6 @@ impl<C: DatabaseCollection> EventManager<C> {
             match data {
                 EventCommand::Event { event_request } => {
                     let response = self.event_completer.pre_new_event(event_request).await;
-                    log::info!("EVENT REPSONE: {:?}", response);
                     match response.clone() {
                         Err(error) => match error {
                             EventError::ChannelClosed => {
@@ -180,7 +179,6 @@ impl<C: DatabaseCollection> EventManager<C> {
                         .event_completer
                         .evaluator_signatures(evaluator_response)
                         .await;
-                    log::info!("EVALUATOR RESPONSE IN EVENT MANAGER: {:?}", response);
                     match response {
                         Err(error) => match error {
                             EventError::ChannelClosed => {
