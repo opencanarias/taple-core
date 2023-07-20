@@ -210,7 +210,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
                 ApprovalState::Pending | ApprovalState::Obsolete => {
                     return Ok(Err(ApprovalErrorResponse::RequestAlreadyKnown))
                 }
-                ApprovalState::Responded => {
+                ApprovalState::RespondedAccepted | ApprovalState::RespondedRejected => {
                     let result = self
                         .generate_vote(&id, data.response.expect("Should be").content.approved)
                         .await?;
@@ -323,6 +323,11 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         let Ok(mut data) = self.get_single_request(&request_id) else {
             return Ok(Err(ApprovalErrorResponse::RequestNotFound));
         };
+        if let ApprovalState::RespondedAccepted = data.state {
+            return Ok(Err(ApprovalErrorResponse::RequestAlreadyResponded));
+        } else if ApprovalState::RespondedRejected == data.state {
+            return Ok(Err(ApprovalErrorResponse::RequestAlreadyResponded));
+        }
         let response = ApprovalResponse {
             appr_req_hash: request_id.clone(),
             approved: acceptance,
@@ -335,7 +340,11 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             .signature_manager
             .sign(&response)
             .map_err(|_| ApprovalManagerError::SignProcessFailed)?;
-        data.state = ApprovalState::Responded;
+        data.state = if acceptance {
+            ApprovalState::RespondedAccepted
+        } else {
+            ApprovalState::RespondedRejected
+        };
         data.response = Some(Signed::<ApprovalResponse> {
             content: response,
             signature,
