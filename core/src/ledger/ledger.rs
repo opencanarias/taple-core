@@ -2038,7 +2038,7 @@ impl<C: DatabaseCollection> Ledger<C> {
         }
         // Cryptographic checks
         event.verify_signatures()?;
-        let event_hash = DigestIdentifier::from_serializable_borsh(&event.content)
+        let _event_hash = DigestIdentifier::from_serializable_borsh(&event.content)
             .map_err(|_| LedgerError::CryptoError("Error generating event hash".to_owned()))?;
         // Check if it is genesis or state
         let subject_id = match &event.content.event_request.content {
@@ -2666,7 +2666,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                 }
                 _ => LedgerError::DatabaseError(error),
             })?;
-        /// Check previous event fits
+        // Check previous event fits
         if event.content.hash_prev_event != prev_event_hash {
             return Err(LedgerError::EventDoesNotFitHash);
         }
