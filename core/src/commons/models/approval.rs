@@ -116,8 +116,10 @@ impl Hash for UniqueApproval {
 pub enum ApprovalState {
     /// The approval entity is pending a response.
     Pending,
-    /// The approval entity has received a response.
-    Responded,
+    /// Request for approval which is in responded status and accepted
+    RespondedAccepted,
+    /// Request for approval which is in responded status and rejected
+    RespondedRejected,
     /// The approval entity is obsolete.
     Obsolete,
 }
