@@ -7,11 +7,16 @@ pub use self::memory::{MemoryCollection, MemoryManager};
 pub use db::DB;
 pub use error::Error;
 
+/// Trait to define a database compatible with Taple
 pub trait DatabaseManager<C>: Sync + Send
 where
     C: DatabaseCollection,
 {
+    /// Default constructor for the database manager. Is is mainly used for the battery test
     fn default() -> Self;
+    /// Creates a database collection
+    /// # Arguments
+    /// - identifier: The identifier of the collection
     fn create_collection(&self, identifier: &str) -> C;
 }
 
@@ -31,6 +36,14 @@ pub trait DatabaseCollection: Sync + Send {
     ) -> Box<dyn Iterator<Item = (String, Vec<u8>)> + 'a>;
 }
 
+/// Allows a TAPLE database implementation to be subjected to a battery of tests.
+/// The use must specify both a valid implementation of [DatabaseManager] and [DatabaseCollection]
+/// # Example
+/// ```rs
+/// test_database_manager_trait! {
+///    unit_test_memory_manager:crate::MemoryManager:MemoryCollection
+/// }
+/// ```
 #[macro_export]
 macro_rules! test_database_manager_trait {
     ($name:ident: $type:ty: $type2:ty) => {

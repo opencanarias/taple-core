@@ -214,6 +214,8 @@ pub enum ProtocolErrors {
     },
 }
 
+
+/// Errors that can occur during the generation of a [ListenAddr].
 #[derive(Error, Debug, Clone)]
 pub enum ListenAddrErrors {
     #[error("Invalid ListenAddr provided. Neither a valid IP or memory multiaddress")]

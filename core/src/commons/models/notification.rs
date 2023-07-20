@@ -10,7 +10,7 @@ pub enum Notification {
     NewEvent { sn: u64, subject_id: String },
     /// A subject has been synchronized
     StateUpdated { sn: u64, subject_id: String },
-    // Approval Received
+    /// An approval request has been received
     ApprovalReceived {
         id: String,
         subject_id: String,

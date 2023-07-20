@@ -569,8 +569,6 @@ impl<C: DatabaseCollection> Ledger<C> {
                 let metadata = validation_proof.get_metadata();
                 match ledger_state {
                     Some(ledger_state) => {
-                        log::error!("{:?}", ledger_state);
-                        log::error!("ENTRA EN SOME");
                         match ledger_state.current_sn {
                             Some(current_sn) => {
                                 if event.content.sn <= current_sn {

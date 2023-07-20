@@ -11,7 +11,7 @@ use super::{create_seed, BaseKeyPair, KeyGenerator, KeyMaterial, KeyPair, Payloa
 use libsecp256k1::{Message, PublicKey, SecretKey, Signature};
 use sha2::{Digest, Sha256};
 
-/// Defines type
+/// Secp256k1 cryptographic key pair
 pub type Secp256k1KeyPair = BaseKeyPair<PublicKey, SecretKey>;
 
 /// Defines constants

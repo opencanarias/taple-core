@@ -330,7 +330,6 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                     let response = match response {
                         Err(error) => match error.clone() {
                             LedgerError::ChannelClosed => {
-                                log::error!("Channel Closed");
                                 self.shutdown_sender.send(()).expect("Channel Closed");
                                 return Err(LedgerError::ChannelClosed);
                             }
@@ -341,11 +340,9 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                             _ => Err(error),
                         },
                         Ok(event) => {
-                            log::warn!("LLEGA EVENTO CON SN {}", event.0.content.sn);
                             Ok(event)
                         }
                     };
-                    log::info!("RESPUESTA DE GNG {:?}", response);
                     LedgerResponse::GetNextGov(response)
                 }
             }

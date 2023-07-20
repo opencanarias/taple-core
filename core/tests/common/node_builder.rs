@@ -1,145 +1,109 @@
 use taple_core::{
-    identifier::derive::{digest::DigestDerivator, KeyDerivator},
-    DatabaseSettings, MemoryManager, NetworkSettings, NodeSettings, TapleSettings,
+    get_default_settings, DigestIdentifier, ListenAddr, MemoryCollection, MemoryManager, NodeAPI,
+    TapleShutdownManager,
 };
 
 use taple_core::Taple;
 
+use super::error::{NotifierError, TapleError};
+use super::notifier::TapleNotifier;
+
 pub struct NodeBuilder {
-    timeout: Option<u32>,
-    replication_factor: Option<f64>,
-    digest_derivator: Option<DigestDerivator>,
-    key_derivator: Option<KeyDerivator>,
-    database_path: Option<String>,
     p2p_port: Option<u32>,
-    addr: Option<String>,
-    access_points: Option<Vec<String>>,
-    seed: Option<String>,
-    pass_votation: Option<u32>,
-    dev_mode: Option<bool>,
-    secret_key: Option<String>,
-    req_res: Option<bool>,
+    access_points: Vec<String>,
+    pass_votation: Option<u8>,
+    secret_key: String,
 }
 
+#[allow(dead_code)]
 impl NodeBuilder {
-    pub fn new() -> Self {
+    pub fn new(private_key: String) -> Self {
         Self {
-            timeout: None,
-            replication_factor: None,
-            digest_derivator: None,
-            key_derivator: None,
-            database_path: None,
             p2p_port: None,
-            addr: None,
-            access_points: None,
-            seed: None,
+            access_points: Vec::new(),
             pass_votation: None,
-            dev_mode: None,
-            secret_key: None,
-            req_res: None,
+            secret_key: private_key,
         }
     }
 
-    pub fn build(mut self) -> Taple<MemoryManager> {
-        let settings = TapleSettings {
-            network: NetworkSettings {
-                p2p_port: self.p2p_port.unwrap_or(40000u32),
-                addr: self.addr.unwrap_or("/ip4/127.0.0.1/tcp".into()),
-                known_nodes: self.access_points.unwrap_or(vec![]),
-            },
-            node: NodeSettings {
-                key_derivator: self.key_derivator.take().unwrap_or(KeyDerivator::Ed25519),
-                secret_key: self.secret_key,
-                seed: self.seed,
-                digest_derivator: self
-                    .digest_derivator
-                    .take()
-                    .unwrap_or(DigestDerivator::Blake3_256),
-                replication_factor: self.replication_factor.take().unwrap_or(25f64),
-                timeout: self.timeout.take().unwrap_or(3000u32),
-                passvotation: self.pass_votation.unwrap_or(0) as u8,
-                dev_mode: self.dev_mode.take().unwrap_or(false),
-                smartcontracts_directory: "../../../contracts".into(),
-                req_res: self.req_res.unwrap_or(false),
-            },
-            database: DatabaseSettings {
-                path: self.database_path.unwrap_or("".into()),
-            },
-        };
-        Taple::new(settings, MemoryManager::new())
+    pub fn build(self) -> TapleTestNode {
+        let mut settings = get_default_settings();
+        settings.node.secret_key = Some(self.secret_key);
+        settings.network.listen_addr = vec![ListenAddr::Memory {
+            port: self.p2p_port,
+        }];
+        settings.network.known_nodes = self.access_points;
+        settings.node.passvotation = self.pass_votation.unwrap_or(settings.node.passvotation);
+        let path = format!("/tmp/.taple/sc");
+        std::fs::create_dir_all(&path).expect("TMP DIR could not be created");
+        settings.node.smartcontracts_directory = path;
+        let database = MemoryManager::new();
+        TapleTestNode::new(Taple::new(settings, database))
     }
 
-    #[allow(dead_code)]
-    pub fn with_database_path(mut self, path: String) -> Self {
-        self.database_path = Some(path);
-        self
-    }
-
-    #[allow(dead_code)]
-    pub fn add_access_point(mut self, access_point: String) -> Self {
-        if self.access_points.is_none() {
-            self.access_points = Some(Vec::new());
-        }
-        let access_points = self.access_points.as_mut().unwrap();
-        access_points.push(access_point);
-        self
-    }
-
-    pub fn with_p2p_port(mut self, port: u32) -> Self {
+    pub fn with_port(mut self, port: u32) -> Self {
         self.p2p_port = Some(port);
         self
     }
 
-    pub fn with_addr(mut self, addr: String) -> Self {
-        self.addr = Some(addr);
+    pub fn add_access_point(mut self, know_node: String) -> Self {
+        self.access_points.push(know_node);
         self
     }
 
-    #[allow(dead_code)]
-    pub fn with_seed(mut self, seed: String) -> Self {
-        self.seed = Some(seed);
+    pub fn pass_votation(mut self, pass_votation: PassVotation) -> Self {
+        match pass_votation {
+            PassVotation::AlwaysAccept => self.pass_votation = Some(1),
+            PassVotation::AlwaysReject => self.pass_votation = Some(2),
+        }
         self
+    }
+}
+
+#[allow(dead_code)]
+pub enum PassVotation {
+    AlwaysAccept,
+    AlwaysReject,
+}
+
+pub struct TapleTestNode {
+    taple: Taple<MemoryManager, MemoryCollection>,
+    notifier: TapleNotifier,
+    shutdown_manager: TapleShutdownManager,
+}
+
+impl TapleTestNode {
+    pub fn new(taple: Taple<MemoryManager, MemoryCollection>) -> Self {
+        let notifier = taple.get_notification_handler();
+        let shutdown_manager = taple.get_shutdown_manager();
+        Self {
+            taple,
+            notifier: TapleNotifier::new(notifier),
+            shutdown_manager,
+        }
+    }
+
+    pub fn get_api(&self) -> NodeAPI {
+        self.taple.get_api()
+    }
+
+    pub async fn start(&mut self) -> Result<(), TapleError> {
+        self.taple
+            .start()
+            .await
+            .map_err(|e| TapleError::StartError(e))
+    }
+
+    pub async fn shutdown(self) {
+        self.shutdown_manager.shutdown().await;
+    }
+
+    pub async fn wait_for_new_subject(&mut self) -> Result<DigestIdentifier, NotifierError> {
+        self.notifier.wait_for_new_subject().await
     }
 
     #[allow(dead_code)]
-    pub fn with_secret_key(mut self, sk: String) -> Self {
-        self.secret_key = Some(sk);
-        self
-    }
-
-    #[allow(dead_code)]
-    pub fn with_timeout(mut self, timeout: u32) -> Self {
-        self.timeout = Some(timeout);
-        self
-    }
-
-    #[allow(dead_code)]
-    pub fn with_pass_votation(mut self, pass_votation: u32) -> Self {
-        self.pass_votation = Some(pass_votation);
-        self
-    }
-
-    #[allow(dead_code)]
-    pub fn with_replication_factor(mut self, replication_factor: f64) -> Self {
-        self.replication_factor = Some(replication_factor);
-        self
-    }
-
-    #[allow(dead_code)]
-    pub fn with_digest_derivator(mut self, derivator: DigestDerivator) -> Self {
-        self.digest_derivator = Some(derivator);
-        self
-    }
-
-    #[allow(dead_code)]
-    pub fn with_dev_mode(mut self, mode: bool) -> Self {
-        self.dev_mode = Some(mode);
-        self
-    }
-
-    #[allow(dead_code)]
-    pub fn with_key_derivator(mut self, derivator: KeyDerivator) -> Self {
-        self.key_derivator = Some(derivator);
-        self
+    pub async fn wait_for_new_event(&mut self) -> Result<(u64, DigestIdentifier), NotifierError> {
+        self.notifier.wait_for_new_event().await
     }
 }

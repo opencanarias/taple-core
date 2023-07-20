@@ -47,7 +47,6 @@ impl<C: DatabaseCollection, G: GovernanceInterface + Send> TapleCompiler<C, G> {
                     match command {
                         Ok(command) => {
                             let result = self.process_command(command).await;
-                            log::info!("Compiler result: {:?}", result);
                             if result.is_err() {
                                 log::error!("Evaluator error: {}", result.unwrap_err())
                             }

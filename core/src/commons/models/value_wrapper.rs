@@ -8,7 +8,7 @@ use crate::{commons::errors::SubjectError, DigestIdentifier};
 
 use super::HashId;
 
-/// A struct representing a wrapper around a JSON value.
+/// Wrapper of serde_json::Value implementing serialization and deserialization with Borsh.
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct ValueWrapper(pub Value);
 

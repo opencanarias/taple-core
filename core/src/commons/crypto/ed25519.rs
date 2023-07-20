@@ -12,6 +12,7 @@ use serde::{de::Deserializer, Deserialize, Serialize, Serializer};
 use std::convert::TryFrom;
 use std::convert::TryInto;
 
+/// Ed25519 cryptographic key pair
 pub type Ed25519KeyPair = BaseKeyPair<PublicKey, SecretKey>;
 
 impl KeyGenerator for Ed25519KeyPair {
