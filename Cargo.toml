@@ -39,6 +39,7 @@ serde_cbor = "~0.11.2"
 async-trait = "^0.1.56"                         # Rust's own suggested alternative for implementing traits with asynchronous methods
 getrandom = "~0.2"
 borsh = "^0.10.3"
+async-std = "~1.12.0"
 config = { version = "^0.13.2" }
 json-patch = "^1"
 jsonschema = "~0.17"

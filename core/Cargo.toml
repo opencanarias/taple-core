@@ -34,6 +34,7 @@ futures = { workspace = true }
 env_logger = { workspace = true }
 log = { workspace = true }
 hex = { workspace = true }
+async-std = { workspace = true }
 jsonschema = { workspace = true }
 time = { workspace = true, features = ["std"] }
 
