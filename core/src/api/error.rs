@@ -59,4 +59,6 @@ pub enum ApiError {
     NotEnoughPermissions(String),
     #[error("A database error has ocurred at API module: {0}")]
     DatabaseError(String),
+    #[error("Conflict: {0}")]
+    Conflict(String),
 }
