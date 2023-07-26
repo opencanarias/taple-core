@@ -221,6 +221,8 @@ pub enum RoleEnum {
 pub struct Member {
     id: String,
     name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    description: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

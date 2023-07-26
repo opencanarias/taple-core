@@ -117,6 +117,9 @@ pub fn get_governance_schema() -> Value {
               "id": {
                 "type": "string",
                 "format": "keyidentifier"
+              },
+              "description": {
+                "type": "string"
               }
             },
             "required": [
