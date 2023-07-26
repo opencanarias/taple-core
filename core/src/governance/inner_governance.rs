@@ -270,11 +270,11 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         match quorum {
             Quorum::MAJORITY => Ok(Ok((signers.len() as u32 / 2) + 1)),
             Quorum::FIXED { fixed } => Ok(Ok(fixed)),
-            Quorum::PORCENTAJE { porcentaje } => {
-                let result = (signers.len() as f64 * porcentaje).ceil() as u32;
+            Quorum::PERCENTAGE { percentage } => {
+                let result = (signers.len() as f64 * percentage).ceil() as u32;
                 Ok(Ok(result))
             }
-            Quorum::BFT { .. } => todo!(),
+            // Quorum::BFT { .. } => todo!(),
         }
     }
 
