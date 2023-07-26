@@ -73,27 +73,15 @@ pub fn get_governance_schema() -> Value {
             {
               "type": "object",
               "properties": {
-                "PORCENTAJE": {
+                "PERCENTAGE": {
                   "type": "number",
                   "minimum": 0,
                   "maximum": 1
                 }
               },
-              "required": ["PORCENTAJE"],
+              "required": ["PERCENTAGE"],
               "additionalProperties": false
             },
-            {
-              "type": "object",
-              "properties": {
-                "BFT": {
-                  "type": "number",
-                  "minimum": 0,
-                  "maximum": 1
-                }
-              },
-              "required": ["BFT"],
-              "additionalProperties": false
-            }
           ]
         }
       },

@@ -5,8 +5,8 @@ use serde::{de::Visitor, ser::SerializeMap, Deserialize, Serialize};
 pub enum Quorum {
     MAJORITY,
     FIXED { fixed: u32 },
-    PORCENTAJE { porcentaje: f64 },
-    BFT { BFT: f64 },
+    PERCENTAGE { percentage: f64 },
+    // BFT { BFT: f64 },
 }
 
 impl Serialize for Quorum {
@@ -21,16 +21,16 @@ impl Serialize for Quorum {
                 map.serialize_entry("FIXED", fixed)?;
                 map.end()
             }
-            Quorum::PORCENTAJE { porcentaje } => {
+            Quorum::PERCENTAGE { percentage } => {
                 let mut map = serializer.serialize_map(Some(1))?;
-                map.serialize_entry("PORCENTAJE", porcentaje)?;
+                map.serialize_entry("PERCENTAGE", percentage)?;
                 map.end()
             }
-            Quorum::BFT { BFT } => {
-                let mut map = serializer.serialize_map(Some(1))?;
-                map.serialize_entry("BFT", BFT)?;
-                map.end()
-            }
+            // Quorum::BFT { BFT } => {
+            //     let mut map = serializer.serialize_map(Some(1))?;
+            //     map.serialize_entry("BFT", BFT)?;
+            //     map.end()
+            // }
         }
     }
 }
@@ -52,25 +52,25 @@ impl<'de> Deserialize<'de> for Quorum {
             {
                 // Solo deberían tener una entrada
                 let Some(key) = map.next_key::<String>()? else {
-                    return Err(serde::de::Error::missing_field("FIXED, BFT or PORCENTAJE"))
+                    return Err(serde::de::Error::missing_field("FIXED or PERCENTAGE"))
                 };
                 let result = match key.as_str() {
                     "FIXED" => {
                         let fixed: u32 = map.next_value()?;
                         Quorum::FIXED { fixed }
                     }
-                    "BFT" => {
-                        let bft: f64 = map.next_value()?;
-                        Quorum::BFT { BFT: bft }
-                    }
-                    "PORCENTAJE" => {
-                        let porcentaje: f64 = map.next_value()?;
-                        Quorum::PORCENTAJE { porcentaje }
+                    // "BFT" => {
+                    //     let bft: f64 = map.next_value()?;
+                    //     Quorum::BFT { BFT: bft }
+                    // }
+                    "PERCENTAGE" => {
+                        let percentage: f64 = map.next_value()?;
+                        Quorum::PERCENTAGE { percentage }
                     }
                     _ => {
                         return Err(serde::de::Error::unknown_field(
                             &key,
-                            &["FIXED", "BFT", "PORCENTAJE"],
+                            &["FIXED", "PERCENTAGE"],
                         ))
                     }
                 };

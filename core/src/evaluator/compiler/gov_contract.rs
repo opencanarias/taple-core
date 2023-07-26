@@ -234,8 +234,7 @@ pub struct Contract {
 pub enum Quorum {
     MAJORITY,
     FIXED(u64),
-    PORCENTAJE(f64),
-    BFT(f64),
+    PERCENTAGE(f64),
 }
 
 #[derive(Serialize, Deserialize, Clone)]
