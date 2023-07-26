@@ -57,7 +57,7 @@ impl ProtocolManager {
             EvaluatorMessage,
             EvaluatorResponse,
         >,
-        #[cfg(feature = "evaluation")] validation_sx: SenderEnd<
+        #[cfg(feature = "validation")] validation_sx: SenderEnd<
             ValidationCommand,
             ValidationResponse,
         >,

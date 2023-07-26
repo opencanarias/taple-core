@@ -15,10 +15,10 @@ keywords = ["blockchain", "distributed-ledger", "taple", "sustainability"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tokio = { workspace = "1.20", features = ["default", "time", "rt", "rt-multi-thread", "sync", "macros"] }
+tokio = { version = "1.20", features = ["default", "time", "rt", "rt-multi-thread", "sync", "macros"] }
 
 hex = "0.4.3"
 
-taple-core = { path = "../../core", features = ["evaluation", "validation", "aproval"] }
+taple-core = { path = "../../core", features = ["validation"] }
 
 [workspace]
