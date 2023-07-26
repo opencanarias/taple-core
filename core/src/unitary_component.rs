@@ -363,7 +363,6 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
             sender_network,
             kp.clone(),
             shutdown_sender.subscribe(),
-            SendMode::Tell,
             external_addresses(&self.settings.network.external_address)?,
         )
         .await
