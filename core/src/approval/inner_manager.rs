@@ -211,11 +211,9 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
                     return Ok(Err(ApprovalErrorResponse::RequestAlreadyKnown))
                 }
                 ApprovalState::RespondedAccepted | ApprovalState::RespondedRejected => {
-                    let result = self
-                        .generate_vote(&id, data.response.expect("Should be").content.approved)
-                        .await?;
-                    let (vote, sender) = result.expect("Request should be in data structure");
-                    return Ok(Ok(Some((vote.response.unwrap(), sender))));
+                    let response = data.response.clone().expect("Has to have a response because it is Reponded already");
+                    let sender = data.sender.clone();
+                    return Ok(Ok(Some((response, sender))));
                 }
             }
         };
