@@ -19,7 +19,7 @@ TAPLE Core is the reference library that implements all the necessary functional
 [agpl-badge]: https://img.shields.io/badge/license-AGPL-blue.svg
 [agpl-url]: https://github.com/opencanarias/taple-core/blob/master/LICENSE
 
-[Discover](https://www.taple.es) | [Learn](https://www.taple.es/learn) | [Build](https://www.taple.es/build) | 
+[Discover](https://www.taple.es/docs/discover) | [Learn](https://www.taple.es/docs/learn) | [Build](https://www.taple.es/docs/build) | 
 [Code](https://github.com/search?q=topic%3Ataple+org%3Aopencanarias++fork%3Afalse+archived%3Afalse++is%3Apublic&type=repositories)
 
 ## Usage
