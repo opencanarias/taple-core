@@ -128,17 +128,23 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
             .db
             .get_all_witness_signatures()
             .map_err(|error| DistributionManagerError::DatabaseError(error.to_string()))?;
-// We have the SubjectID, but we need the governance of each one of them, as well as the sn
+        // We have the SubjectID, but we need the governance of each one of them, as well as the sn
         // Each subject must be requested separately.
         let mut governances_still_witness_flags: HashMap<
             (DigestIdentifier, String, String),
             (bool, Option<HashSet<KeyIdentifier>>),
         > = HashMap::new();
         for (subject_id, sn, signatures) in signatures.iter() {
-            let subject = self
-                .db
-                .get_subject(subject_id)
-                .map_err(|error| DistributionManagerError::DatabaseError(error.to_string()))?;
+            let subject = match self.db.get_subject(subject_id) {
+                Ok(subject) => subject,
+                Err(error) => match error {
+                    DbError::EntryNotFound => {
+                        // We do not know the subject we are receiving signatures from. We are not going to ask for anything
+                        continue;
+                    }
+                    _ => return Err(DistributionManagerError::DatabaseError(error.to_string())),
+                },
+            };
             if sn != &subject.sn {
                 // If the SN does not match then either the distribution process was not called or it was completed successfully, in either case the Ledger should re-request the operation again.
                 // cases, the Ledger should re-request the operation.
@@ -185,10 +191,20 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
                     match governances_version.get(&subject.governance_id) {
                         Some(version) => *version,
                         None => {
-                            let governance =
-                                self.db.get_subject(&governance_id).map_err(|error| {
-                                    DistributionManagerError::DatabaseError(error.to_string())
-                                })?;
+                            let governance = match self.db.get_subject(&governance_id) {
+                                Ok(subject) => subject,
+                                Err(error) => match error {
+                                    DbError::EntryNotFound => {
+                                        // We do not know the subject we are receiving signatures from. We are not going to ask for anything
+                                        continue;
+                                    }
+                                    _ => {
+                                        return Err(DistributionManagerError::DatabaseError(
+                                            error.to_string(),
+                                        ))
+                                    }
+                                },
+                            };
                             governances_version.insert(governance_id.clone(), governance.sn);
                             governance.sn
                         }
@@ -231,7 +247,16 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
         // First we should start by generating the signature of the event to be distributed.
         let event = match self.db.get_event(&msg.subject_id, msg.sn) {
             Ok(event) => event,
-            Err(error) => return Err(DistributionManagerError::DatabaseError(error.to_string())), // No debería ocurrir
+            Err(error) => match error {
+                DbError::EntryNotFound => {
+                    // We do not know the event we are receiving signatures from. We are not going to ask for anything
+                    return Ok(Err(DistributionErrorResponses::EventNotFound(
+                        msg.sn,
+                        msg.subject_id.to_str(),
+                    )));
+                }
+                _ => return Err(DistributionManagerError::DatabaseError(error.to_string())),
+            }, // No debería ocurrir
         };
         let signature = self
             .signature_manager
@@ -436,9 +461,18 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
                 // We check the signatures
                 let event = match self.db.get_event(&msg.subject_id, msg.sn) {
                     Ok(event) => event,
-                    Err(error) => {
-                        return Err(DistributionManagerError::DatabaseError(error.to_string()))
-                    }
+                    Err(error) => match error {
+                        DbError::EntryNotFound => {
+                            // We do not know the event we are receiving signatures from. We are not going to ask for anything
+                            return Ok(Err(DistributionErrorResponses::EventNotFound(
+                                msg.sn,
+                                msg.subject_id.to_str(),
+                            )));
+                        }
+                        _ => {
+                            return Err(DistributionManagerError::DatabaseError(error.to_string()))
+                        }
+                    },
                 };
                 let subject = match self.db.get_subject(&msg.subject_id) {
                     Ok(subject) => subject,
@@ -458,7 +492,7 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
                 let metadata = build_metadata(&subject, governance_version);
                 let mut targets = self.get_targets(metadata, &subject).await?;
                 for signature in msg.signatures.iter() {
-                   // We check signer
+                    // We check signer
                     if !targets.contains(&signature.signer) {
                         return Ok(Err(DistributionErrorResponses::InvalidSigner));
                     }
