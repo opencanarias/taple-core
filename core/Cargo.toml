@@ -12,7 +12,7 @@ keywords.workspace = true
 
 [features]
 default = ["secp256k1", "dep:sha2", "dep:sha3", "dep:blake2"]
-evaluation = [ "dep:wasmtime", "dep:wasm-gc-api" ]
+evaluation = [ "dep:wasmtime"]
 aproval = []
 validation = []
 secp256k1 = ["dep:libsecp256k1"]
@@ -31,7 +31,6 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
-env_logger = { workspace = true }
 log = { workspace = true }
 hex = { workspace = true }
 async-std = { workspace = true }
@@ -71,9 +70,7 @@ sha3 = { workspace = true, optional = true }
 
 ## Evaluator
 wasmtime = { workspace = true, features = ["cache"], optional = true }
-wasm-gc-api = { workspace = true, optional = true }
 
-db-key = { workspace = true }  #Usar esta versión. Necesario para implementar custom keys para leveldb::Database
 url = { workspace = true }
 
 [dependencies.libp2p]
@@ -91,7 +88,7 @@ features = [
 default-features = false
 
 [dev-dependencies]
+taple-core = { path = ".", features = ["default", "evaluation"] }
 serial_test = "1.0.0"
-leveldb = "^0.8"
 bs58 = "^0.4.0"
-rand = "^0.8.5"
+rand = "^0.8.5" 

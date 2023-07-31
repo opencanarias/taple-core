@@ -54,10 +54,8 @@ sha2 = { version = "~0.10" }
 sha3 = { version = "~0.10" }
 
 futures = "^0.3.24"
-env_logger = "^0.10"
 log = "^0.4"
 hex = "^0.4.3"
-db-key = "^0.0.5" #Usar esta versión. Necesario para implementar custom keys para leveldb::Database // Eso puso Javier
 libp2p = { version = "^0.45.1", features = [
     "request-response",
     "secp256k1",
@@ -65,7 +63,6 @@ libp2p = { version = "^0.45.1", features = [
 
 ## Evaluator
 wasmtime = { version = "^9.0.4", features = ["cache"] }
-wasm-gc-api = { version = "~0.1.11" }
 
 [profile.release]
 lto = true
