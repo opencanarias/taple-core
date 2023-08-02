@@ -150,14 +150,3 @@ impl BorshDeserialize for ValueWrapper {
     }
 }
 
-mod tests {
-    #[test]
-    fn foo() {
-        let value: serde_json::Value =
-            serde_json::from_str("{\"a\":1, \"b\": \"Buenas Tardes\"}").unwrap();
-        let wrapper = super::ValueWrapper(value.clone());
-        let bytes1 = bincode::serialize(&value).unwrap();
-        let bytes2 = bincode::serialize(&wrapper).unwrap();
-        assert_eq!(bytes1, bytes2);
-    }
-}

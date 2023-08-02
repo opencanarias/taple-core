@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use serde::Serialize;
+use borsh::BorshSerialize;
 
 use crate::evaluator::errors::ExecutorErrorResponses;
 
@@ -57,8 +57,8 @@ impl MemoryManager {
     }
 
     #[allow(dead_code)]
-    pub fn add_data<S: Serialize>(&mut self, data: S) -> usize {
-        let bytes = bincode::serialize(&data).unwrap();
+    pub fn add_data<S: BorshSerialize>(&mut self, data: S) -> usize {
+        let bytes = data.try_to_vec().unwrap();
         let ptr = self.alloc(bytes.len());
         for (index, byte) in bytes.iter().enumerate() {
             self.memory[ptr + index] = *byte;

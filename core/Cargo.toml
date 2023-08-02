@@ -3,7 +3,6 @@ name = "taple-core"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-documentation.workspace = true
 readme.workspace = true
 homepage.workspace = true
 repository.workspace = true
@@ -11,84 +10,52 @@ license.workspace = true
 keywords.workspace = true
 
 [features]
-default = ["secp256k1", "dep:sha2", "dep:sha3", "dep:blake2"]
-evaluation = [ "dep:wasmtime"]
+default = ["secp256k1"]
+all = ["default", "evaluation", "aproval", "validation"]
+evaluation = ["dep:wasmtime", "dep:async-std"]
 aproval = []
 validation = []
 secp256k1 = ["dep:libsecp256k1"]
 
 [dependencies]
-tokio = { workspace = true, features = [
-	"default",
-	"time",
-	"rt",
-	"rt-multi-thread",
-	"sync",
-	"macros",
+tokio = { workspace = true, features = ["time", "sync", "macros"] }
+libp2p = { workspace = true, default_features = false, features = [
+	"identify",
+	"kad",
+	"dns-tokio",
+	"tcp-tokio",
+	"mplex",
+	"noise",
+	"yamux",
 ] }
-config = { workspace = true, features = ["toml"] }
+config = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
 hex = { workspace = true }
-async-std = { workspace = true }
+async-std = { workspace = true, optional = true }
 jsonschema = { workspace = true }
 time = { workspace = true, features = ["std"] }
-
-# API
 thiserror = { workspace = true }
-
-# Protocol
 tokio-stream = { workspace = true }
 rmp-serde = { workspace = true }
 borsh = { workspace = true }
 blake3 = { workspace = true }
 rand = { workspace = true, features = ["small_rng"] }
-
-# Network
 instant = { workspace = true }
 unsigned-varint = { workspace = true, features = ["futures"] }
-bincode = { workspace = true }
-
-# Message
-serde_cbor = { workspace = true }
-
-# Ledger
 base64 = { workspace = true }
-
-# Commons
 getrandom = { workspace = true }
 json-patch = { workspace = true }
-rand_core = { workspace = true }
 ed25519-dalek = { workspace = true, features = ["serde"] }
 libsecp256k1 = { workspace = true, optional = true }
-blake2 = { workspace = true, optional = true }
-sha2 = { workspace = true, optional = true }
-sha3 = { workspace = true, optional = true }
-
-## Evaluator
+blake2 = { workspace = true }
+sha2 = { workspace = true }
+sha3 = { workspace = true }
 wasmtime = { workspace = true, features = ["cache"], optional = true }
 
-url = { workspace = true }
-
-[dependencies.libp2p]
-workspace = true
-features = [
-	"identify",
-	"kad",
-	"mplex",
-	"noise",
-	"serde",
-	"tcp-tokio",
-	"yamux",
-	"dns-tokio",
-]
-default-features = false
-
 [dev-dependencies]
-taple-core = { path = ".", features = ["default", "evaluation"] }
-serial_test = "1.0.0"
-bs58 = "^0.4.0"
-rand = "^0.8.5" 
+taple-core = { path = ".", features = ["all"] }
+serial_test = { workspace = true }

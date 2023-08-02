@@ -50,9 +50,9 @@ macro_rules! test_database_manager_trait {
         mod $name {
             #[allow(unused_imports)]
             use super::*;
-            use serde::{Deserialize, Serialize};
+            use borsh::{BorshDeserialize, BorshSerialize};
 
-            #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+            #[derive(BorshSerialize, BorshDeserialize, Clone, PartialEq, Eq, Debug)]
             struct Data {
                 id: usize,
                 value: String,
@@ -72,13 +72,13 @@ macro_rules! test_database_manager_trait {
                     id: 3,
                     value: "C".into(),
                 };
-                let Ok(data1) = bincode::serialize::<Data>(&data1) else {
+                let Ok(data1) = data1.try_to_vec() else {
                                     return Err(Error::SerializeError);
                                 };
-                let Ok(data2) = bincode::serialize::<Data>(&data2) else {
+                let Ok(data2) = data2.try_to_vec() else {
                                     return Err(Error::SerializeError);
                                 };
-                let Ok(data3) = bincode::serialize::<Data>(&data3) else {
+                let Ok(data3) = data3.try_to_vec() else {
                                     return Err(Error::SerializeError);
                                 };
                 Ok(vec![data1, data2, data3])

@@ -40,12 +40,6 @@ pub enum Error {
         source: serde_json::Error,
     },
 
-    #[error("Serde CBOR error")]
-    SerdeCbor {
-        #[from]
-        source: serde_cbor::Error,
-    },
-
     #[error("MessagePack serialize error")]
     MsgPackSerialize {
         #[from]
