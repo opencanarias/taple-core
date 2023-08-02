@@ -13,7 +13,7 @@ mod tests {
     use crate::{message::Command, network::routing::RoutingComposedEvent, ListenAddr};
     use log::debug;
 
-    use super::{network::SendMode, *};
+    use super::*;
 
     use futures::StreamExt;
 

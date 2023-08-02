@@ -30,7 +30,7 @@ use crate::message::{
     MessageContent, MessageReceiver, MessageSender, MessageTaskCommand, MessageTaskManager,
     NetworkEvent,
 };
-use crate::network::network::{NetworkProcessor, SendMode};
+use crate::network::network::{NetworkProcessor};
 use crate::protocol::protocol_message_manager::{ProtocolManager, TapleMessages};
 use crate::signature::Signed;
 #[cfg(feature = "validation")]
