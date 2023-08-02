@@ -110,7 +110,7 @@ allow = [
     "CC0-1.0",
     "BSD-2-Clause",
     "Unicode-DFS-2016",
-    #"Apache-2.0 WITH LLVM-exception",
+    "Apache-2.0 WITH LLVM-exception",
 ]
 # List of explicitly disallowed licenses
 # See https://spdx.org/licenses/ for list of possible licenses
