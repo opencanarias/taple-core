@@ -687,7 +687,6 @@ mod test {
             let new_state_json = serde_json::to_value(&new_state).unwrap();
             // let hash = DigestIdentifier::from_serializable_borsh(new_state_json).unwrap();
             // assert_eq!(hash, evaluation.state_hash); // arreglar
-            println!("{:#?}\n{:#?}", initial_state_json, new_state_json);
             let patch = generate_json_patch(initial_state_json, new_state_json);
             assert_eq!(patch, evaluator_response.content.patch.0); // arreglar
                                                                    // let own_identifier = signature_manager.get_own_identifier();

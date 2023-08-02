@@ -59,7 +59,6 @@ impl<'de> Deserialize<'de> for Who {
                 let Some(key) = map.next_key::<String>()? else {
                     return Err(serde::de::Error::missing_field("ID or NAME"))
                 };
-                println!("KEY {}", key);
                 let result = match key.as_str() {
                     "ID" => {
                         let id: String = map.next_value()?;
@@ -80,7 +79,6 @@ impl<'de> Deserialize<'de> for Who {
             where
                 E: serde::de::Error,
             {
-                println!("STR");
                 match v.as_str() {
                     "MEMBERS" => Ok(Who::MEMBERS),
                     "ALL" => Ok(Who::ALL),
@@ -95,7 +93,6 @@ impl<'de> Deserialize<'de> for Who {
             where
                 E: serde::de::Error,
             {
-                println!("BORR STR");
                 match v {
                     "MEMBERS" => Ok(Who::MEMBERS),
                     "ALL" => Ok(Who::ALL),

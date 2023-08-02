@@ -4,6 +4,7 @@ use crate::governance::GovernanceInterface;
 use crate::identifier::{Derivable, DigestIdentifier};
 use crate::{database::DB, evaluator::errors::CompilerErrorResponses, DatabaseCollection};
 use async_std::fs;
+use log::debug;
 use std::collections::HashSet;
 use std::fs::create_dir;
 use std::path::Path;
@@ -155,7 +156,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
             .output()
             // Does not show stdout. Generates child process and waits
             .map_err(|_| CompilerErrorResponses::CargoExecError)?;
-        println!("status {:?}", status);
+        debug!("status {:?}", status);
         if !status.status.success() {
             return Err(CompilerErrorResponses::CargoExecError);
         }

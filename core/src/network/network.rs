@@ -27,12 +27,11 @@ use libp2p::{
     mplex,
     multiaddr::Protocol,
     noise,
-    request_response::{RequestResponse, RequestResponseEvent, ResponseChannel},
     swarm::{AddressScore, ConnectionHandlerUpgrErr, NetworkBehaviour, SwarmBuilder, SwarmEvent},
     tcp::TokioTcpConfig,
     yamux, Multiaddr, NetworkBehaviour, PeerId, Swarm, Transport,
 };
-use log::{debug, info};
+use log::{debug, info, error};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::error::Error;
 use tokio::sync::mpsc;
@@ -252,7 +251,7 @@ impl NetworkProcessor {
                     .expect("String para multiaddress es válida");
                 let result = self.swarm.listen_on(multiadd);
                 if result.is_err() {
-                    println!("Error: {:?}", result.unwrap_err());
+                    error!("Error: {:?}", result.unwrap_err());
                 }
             }
         }
@@ -297,13 +296,8 @@ impl NetworkProcessor {
             SwarmEvent::NewListenAddr { address, .. } => {
                 let local_peer_id = *self.swarm.local_peer_id();
                 info!(
-                    "RED: {:?}",
-                    address.clone().with(Protocol::P2p(local_peer_id.into()))
-                );
-                debug!(
-                    "{}: Local node is listening on {:?}",
-                    LOG_TARGET,
-                    address.clone().with(Protocol::P2p(local_peer_id.into()))
+                    "listening on {:?}",
+                    &address.with(Protocol::P2p(local_peer_id.into()))
                 );
                 // let addr_with_peer = address.clone().with(Protocol::P2p(local_peer_id.into()));
                 // let addr_with_peer_bytes = addr_with_peer.to_vec();

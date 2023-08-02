@@ -1,6 +1,7 @@
 use jsonschema::JSONSchema;
 use serde_json::{json, Value};
 use std::str::FromStr;
+use log::error;
 
 pub mod gov_models;
 pub mod initial_state;
@@ -30,7 +31,7 @@ impl Schema {
             Ok(_) => true,
             Err(e) => {
                 for error in e {
-                    println!("schema validation error: {:?}", error);
+                    error!("schema validation error: {:?}", error);
                 }
                 false
             }
