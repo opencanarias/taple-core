@@ -30,7 +30,7 @@ impl<C: DatabaseCollection> ApprovalsDb<C> {
         }
     }
 
-    pub fn set_subject_aproval_index(
+    pub fn set_subject_approval_index(
         &self,
         subject_id: &DigestIdentifier,
         request_id: &DigestIdentifier,
@@ -47,7 +47,7 @@ impl<C: DatabaseCollection> ApprovalsDb<C> {
         self.index_collection.put(&key, data)
     }
 
-    pub fn del_subject_aproval_index(
+    pub fn del_subject_approval_index(
         &self,
         subject_id: &DigestIdentifier,
         request_id: &DigestIdentifier,
@@ -61,7 +61,7 @@ impl<C: DatabaseCollection> ApprovalsDb<C> {
         self.index_collection.del(&key)
     }
 
-    pub fn set_governance_aproval_index(
+    pub fn set_governance_approval_index(
         &self,
         governance_id: &DigestIdentifier,
         request_id: &DigestIdentifier,
@@ -78,7 +78,7 @@ impl<C: DatabaseCollection> ApprovalsDb<C> {
         self.index_by_governance_collection.put(&key, data)
     }
 
-    pub fn del_governance_aproval_index(
+    pub fn del_governance_approval_index(
         &self,
         governance_id: &DigestIdentifier,
         request_id: &DigestIdentifier,

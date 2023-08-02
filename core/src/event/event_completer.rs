@@ -1081,9 +1081,9 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         };
         let subject_id = match &approval_request.content.event_request.content {
             // The transfer is not approved
-            EventRequest::Transfer(_) => return Err(EventError::NoAprovalForTransferEvents),
+            EventRequest::Transfer(_) => return Err(EventError::NoApprovalForTransferEvents),
             // EOL is not approved
-            EventRequest::EOL(_) => return Err(EventError::NoAprovalForEOLEvents),
+            EventRequest::EOL(_) => return Err(EventError::NoApprovalForEOLEvents),
             EventRequest::Create(_) => {
                 return Err(EventError::EvaluationOrApprovationInCreationEvent)
             }

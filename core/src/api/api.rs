@@ -6,7 +6,7 @@ use super::{
     APICommands, ApiResponses, GetAllowedSubjects,
 };
 use super::{GetEvents, GetGovernanceSubjects};
-#[cfg(feature = "aproval")]
+#[cfg(feature = "approval")]
 use crate::approval::manager::ApprovalAPI;
 use crate::commons::models::request::TapleRequest;
 use crate::commons::models::state::SubjectData;
@@ -17,7 +17,7 @@ use crate::commons::{
 use crate::event::manager::EventAPI;
 use crate::ledger::manager::EventManagerAPI;
 use crate::signature::Signature;
-#[cfg(feature = "aproval")]
+#[cfg(feature = "approval")]
 use crate::ApprovalEntity;
 use crate::ValidationProof;
 use crate::{
@@ -103,7 +103,7 @@ pub trait ApiModuleInterface {
     /// • [ApiError::InvalidParameters] if the specified request identifier does not match a valid [DigestIdentifier].<br />
     /// • [ApiError::VoteNotNeeded] if the node's vote is no longer required. <br />
     /// This occurs when the acceptance of the changes proposed by the petition has already been resolved by the rest of the nodes in the network or when the node cannot participate in the voting process because it lacks the voting role.
-    #[cfg(feature = "aproval")]
+    #[cfg(feature = "approval")]
     async fn approval_request(
         &self,
         request_id: DigestIdentifier,
@@ -115,7 +115,7 @@ pub trait ApiModuleInterface {
     /// the proposed changes in order for the events to be implemented.
     /// # Possible errors
     /// • [ApiError::InternalError] if an internal error occurs during operation execution.
-    #[cfg(feature = "aproval")]
+    #[cfg(feature = "approval")]
     async fn get_pending_requests(&self) -> Result<Vec<ApprovalEntity>, ApiError>;
     /// It allows to obtain a single voting request pending to be resolved in the node.
     /// This request is received from other nodes in the network when they try to update
@@ -124,7 +124,7 @@ pub trait ApiModuleInterface {
     /// # Possible errors
     /// • [ApiError::InternalError] if an internal error occurs during operation execution.
     /// • [ApiError::NotFound] if the requested request does not exist.
-    #[cfg(feature = "aproval")]
+    #[cfg(feature = "approval")]
     async fn get_single_request(&self, id: DigestIdentifier) -> Result<ApprovalEntity, ApiError>;
     async fn add_preauthorize_subject(
         &self,
@@ -148,9 +148,9 @@ pub trait ApiModuleInterface {
         from: Option<String>,
         quantity: Option<i64>,
     ) -> Result<Vec<SubjectData>, ApiError>;
-    #[cfg(feature = "aproval")]
+    #[cfg(feature = "approval")]
     async fn get_approval(&self, request_id: DigestIdentifier) -> Result<ApprovalEntity, ApiError>;
-    #[cfg(feature = "aproval")]
+    #[cfg(feature = "approval")]
     async fn get_approvals(
         &self,
         state: Option<crate::ApprovalState>,
@@ -203,7 +203,7 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
-    #[cfg(feature = "aproval")]
+    #[cfg(feature = "approval")]
     async fn get_pending_requests(&self) -> Result<Vec<ApprovalEntity>, ApiError> {
         let response = self
             .sender
@@ -217,7 +217,7 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
-    #[cfg(feature = "aproval")]
+    #[cfg(feature = "approval")]
     async fn get_single_request(&self, id: DigestIdentifier) -> Result<ApprovalEntity, ApiError> {
         let response = self
             .sender
@@ -352,7 +352,7 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
-    #[cfg(feature = "aproval")]
+    #[cfg(feature = "approval")]
     async fn approval_request(
         &self,
         request_id: DigestIdentifier,
@@ -469,7 +469,7 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
-    #[cfg(feature = "aproval")]
+    #[cfg(feature = "approval")]
     async fn get_approval(&self, request_id: DigestIdentifier) -> Result<ApprovalEntity, ApiError> {
         let response = self
             .sender
@@ -483,7 +483,7 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
-    #[cfg(feature = "aproval")]
+    #[cfg(feature = "approval")]
     async fn get_approvals(
         &self,
         state: Option<crate::ApprovalState>,
@@ -519,7 +519,7 @@ impl<C: DatabaseCollection> API<C> {
     pub fn new(
         input: MpscChannel<APICommands, ApiResponses>,
         event_api: EventAPI,
-        #[cfg(feature = "aproval")] approval_api: ApprovalAPI,
+        #[cfg(feature = "approval")] approval_api: ApprovalAPI,
         authorized_subjects_api: AuthorizedSubjectsAPI,
         ledger_api: EventManagerAPI,
         settings_sender: Sender<TapleSettings>,
@@ -534,7 +534,7 @@ impl<C: DatabaseCollection> API<C> {
                 event_api,
                 authorized_subjects_api,
                 db,
-                #[cfg(feature = "aproval")]
+                #[cfg(feature = "approval")]
                 approval_api,
                 ledger_api,
             ),
@@ -611,13 +611,13 @@ impl<C: DatabaseCollection> API<C> {
                     APICommands::GetEvent(subject_id, sn) => {
                         self.inner_api.get_event(subject_id, sn)
                     }
-                    #[cfg(feature = "aproval")]
+                    #[cfg(feature = "approval")]
                     APICommands::VoteResolve(acceptance, id) => {
                         self.inner_api.emit_vote(id, acceptance).await?
                     }
-                    #[cfg(feature = "aproval")]
+                    #[cfg(feature = "approval")]
                     APICommands::GetPendingRequests => self.inner_api.get_pending_request().await,
-                    #[cfg(feature = "aproval")]
+                    #[cfg(feature = "approval")]
                     APICommands::GetSingleRequest(data) => {
                         self.inner_api.get_single_request(data).await
                     }
@@ -639,11 +639,11 @@ impl<C: DatabaseCollection> API<C> {
                     APICommands::GetGovernanceSubjects(data) => {
                         self.inner_api.get_governance_subjects(data).await
                     }
-                    #[cfg(feature = "aproval")]
+                    #[cfg(feature = "approval")]
                     APICommands::GetApproval(request_id) => {
                         self.inner_api.get_approval(request_id).await
                     }
-                    #[cfg(feature = "aproval")]
+                    #[cfg(feature = "approval")]
                     APICommands::GetApprovals(get_approvals) => {
                         self.inner_api
                             .get_approvals(

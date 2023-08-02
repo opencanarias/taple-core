@@ -462,22 +462,22 @@ impl<C: DatabaseCollection> DB<C> {
         self.approvals_db.get_approvals_by_subject(subject_id)
     }
 
-    pub fn del_subject_aproval_index(
+    pub fn del_subject_approval_index(
         &self,
         subject_id: &DigestIdentifier,
         request_id: &DigestIdentifier,
     ) -> Result<(), Error> {
         self.approvals_db
-            .del_subject_aproval_index(subject_id, request_id)
+            .del_subject_approval_index(subject_id, request_id)
     }
 
-    pub fn set_subject_aproval_index(
+    pub fn set_subject_approval_index(
         &self,
         subject_id: &DigestIdentifier,
         request_id: &DigestIdentifier,
     ) -> Result<(), Error> {
         self.approvals_db
-            .set_subject_aproval_index(subject_id, request_id)
+            .set_subject_approval_index(subject_id, request_id)
     }
 
     pub fn get_approvals_by_governance(
@@ -487,21 +487,21 @@ impl<C: DatabaseCollection> DB<C> {
         self.approvals_db.get_approvals_by_governance(governance_id)
     }
 
-    pub fn del_governance_aproval_index(
+    pub fn del_governance_approval_index(
         &self,
         governance_id: &DigestIdentifier,
         request_id: &DigestIdentifier,
     ) -> Result<(), Error> {
         self.approvals_db
-            .del_governance_aproval_index(governance_id, request_id)
+            .del_governance_approval_index(governance_id, request_id)
     }
 
-    pub fn set_governance_aproval_index(
+    pub fn set_governance_approval_index(
         &self,
         governance_id: &DigestIdentifier,
         request_id: &DigestIdentifier,
     ) -> Result<(), Error> {
         self.approvals_db
-            .set_governance_aproval_index(governance_id, request_id)
+            .set_governance_approval_index(governance_id, request_id)
     }
 }

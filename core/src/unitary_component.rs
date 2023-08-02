@@ -1,6 +1,6 @@
-#[cfg(feature = "aproval")]
+#[cfg(feature = "approval")]
 use crate::approval::manager::{ApprovalAPI, ApprovalManager};
-#[cfg(feature = "aproval")]
+#[cfg(feature = "approval")]
 use crate::approval::{ApprovalMessages, ApprovalResponses};
 use crate::authorized_subjecs::manager::{AuthorizedSubjectsAPI, AuthorizedSubjectsManager};
 use crate::authorized_subjecs::{AuthorizedSubjectsCommand, AuthorizedSubjectsResponse};
@@ -327,7 +327,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
             Result<(), DistributionErrorResponses>,
         >::new(BUFFER_SIZE);
         // Receiver and sender of approval messages
-        #[cfg(feature = "aproval")]
+        #[cfg(feature = "approval")]
         let (approval_receiver, approval_sender) =
             MpscChannel::<ApprovalMessages, ApprovalResponses>::new(BUFFER_SIZE);
         // Receiver and sender of evaluation messages
@@ -399,7 +399,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
             #[cfg(feature = "validation")]
             validation_sender.clone(),
             event_sender.clone(),
-            #[cfg(feature = "aproval")]
+            #[cfg(feature = "approval")]
             approval_sender.clone(),
             ledger_sender.clone(),
             shutdown_sender.clone(),
@@ -451,7 +451,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
         let api = API::new(
             self.api_input.take().unwrap(),
             EventAPI::new(event_sender),
-            #[cfg(feature = "aproval")]
+            #[cfg(feature = "approval")]
             ApprovalAPI::new(approval_sender),
             AuthorizedSubjectsAPI::new(as_sender),
             EventManagerAPI::new(ledger_sender),
@@ -474,7 +474,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
             task_sender.clone(),
         );
         // Creation ApprovalManager
-        #[cfg(feature = "aproval")]
+        #[cfg(feature = "approval")]
         let approval_manager = ApprovalManager::new(
             GovernanceAPI::new(governance_sender.clone()),
             approval_receiver,
@@ -539,7 +539,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
         tokio::spawn(async move {
             distribution_manager.start().await;
         });
-        #[cfg(feature = "aproval")]
+        #[cfg(feature = "approval")]
         tokio::spawn(async move {
             approval_manager.start().await;
         });

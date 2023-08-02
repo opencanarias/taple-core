@@ -1,8 +1,8 @@
 use super::error::APIInternalError;
 use super::{ApiResponses, GetAllowedSubjects};
-#[cfg(feature = "aproval")]
+#[cfg(feature = "approval")]
 use crate::approval::error::ApprovalErrorResponse;
-#[cfg(feature = "aproval")]
+#[cfg(feature = "approval")]
 use crate::approval::manager::{ApprovalAPI, ApprovalAPIInterface};
 use crate::authorized_subjecs::manager::AuthorizedSubjectsAPI;
 use crate::event::errors::EventError;
@@ -11,7 +11,7 @@ use crate::event::EventResponse;
 use crate::identifier::Derivable;
 use crate::ledger::manager::{EventManagerAPI, EventManagerInterface};
 use crate::signature::Signed;
-#[cfg(feature = "aproval")]
+#[cfg(feature = "approval")]
 use crate::ApprovalState;
 use crate::{KeyDerivator, KeyIdentifier};
 // use crate::ledger::errors::LedgerManagerError;
@@ -33,7 +33,7 @@ use crate::database::Error as DbError;
 
 pub(crate) struct InnerAPI<C: DatabaseCollection> {
     event_api: EventAPI,
-    #[cfg(feature = "aproval")]
+    #[cfg(feature = "approval")]
     approval_api: ApprovalAPI,
     authorized_subjects_api: AuthorizedSubjectsAPI,
     ledger_api: EventManagerAPI,
@@ -47,12 +47,12 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         event_api: EventAPI,
         authorized_subjects_api: AuthorizedSubjectsAPI,
         db: DB<C>,
-        #[cfg(feature = "aproval")] approval_api: ApprovalAPI,
+        #[cfg(feature = "approval")] approval_api: ApprovalAPI,
         ledger_api: EventManagerAPI,
     ) -> Self {
         Self {
             event_api,
-            #[cfg(feature = "aproval")]
+            #[cfg(feature = "approval")]
             approval_api,
             authorized_subjects_api,
             db,
@@ -78,7 +78,7 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         }
     }
 
-    #[cfg(feature = "aproval")]
+    #[cfg(feature = "approval")]
     pub async fn emit_vote(
         &self,
         request_id: DigestIdentifier,
@@ -230,7 +230,7 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         }
     }
 
-    #[cfg(feature = "aproval")]
+    #[cfg(feature = "approval")]
     pub async fn get_pending_request(&self) -> ApiResponses {
         match self.approval_api.get_all_requests().await {
             Ok(data) => return ApiResponses::GetPendingRequests(Ok(data)),
@@ -238,7 +238,7 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         }
     }
 
-    #[cfg(feature = "aproval")]
+    #[cfg(feature = "approval")]
     pub async fn get_single_request(&self, request_id: DigestIdentifier) -> ApiResponses {
         match self
             .approval_api
@@ -340,7 +340,7 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         ApiResponses::GetGovernanceSubjects(Ok(result))
     }
 
-    #[cfg(feature = "aproval")]
+    #[cfg(feature = "approval")]
     pub async fn get_approval(&self, subject_id: DigestIdentifier) -> ApiResponses {
         let result = match self.db.get_approval(&subject_id) {
             Ok(approval) => approval,
@@ -351,7 +351,7 @@ impl<C: DatabaseCollection> InnerAPI<C> {
         ApiResponses::GetApproval(Ok(result))
     }
 
-    #[cfg(feature = "aproval")]
+    #[cfg(feature = "approval")]
     pub async fn get_approvals(
         &self,
         status: Option<ApprovalState>,

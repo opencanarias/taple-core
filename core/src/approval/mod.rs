@@ -12,9 +12,9 @@ use crate::{
 use self::error::ApprovalErrorResponse;
 
 pub(crate) mod error;
-#[cfg(feature = "aproval")]
+#[cfg(feature = "approval")]
 mod inner_manager;
-#[cfg(feature = "aproval")]
+#[cfg(feature = "approval")]
 pub(crate) mod manager;
 
 #[derive(Clone, Serialize, Deserialize, Debug, BorshSerialize, BorshDeserialize)]

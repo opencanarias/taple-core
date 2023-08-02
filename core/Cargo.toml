@@ -11,9 +11,9 @@ keywords.workspace = true
 
 [features]
 default = ["secp256k1"]
-all = ["default", "evaluation", "aproval", "validation"]
+all = ["default", "evaluation", "approval", "validation"]
 evaluation = ["dep:wasmtime", "dep:async-std"]
-aproval = []
+approval = []
 validation = []
 secp256k1 = ["dep:libsecp256k1"]
 

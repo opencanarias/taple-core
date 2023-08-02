@@ -164,10 +164,10 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
                 .del_approval(&request)
                 .map_err(|_| ApprovalManagerError::DatabaseError)?;
             self.database
-                .del_governance_aproval_index(&governance_id, &request)
+                .del_governance_approval_index(&governance_id, &request)
                 .map_err(|_| ApprovalManagerError::DatabaseError)?;
             self.database
-                .del_subject_aproval_index(&subject_id, &request)
+                .del_subject_approval_index(&subject_id, &request)
                 .map_err(|_| ApprovalManagerError::DatabaseError)?;
         }
         Ok(())
@@ -279,11 +279,11 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             sender,
         };
         self.database
-            .set_subject_aproval_index(&subject_id, &id)
+            .set_subject_approval_index(&subject_id, &id)
             .map_err(|_| ApprovalManagerError::DatabaseError)?;
         if !gov_id.digest.is_empty() {
             self.database
-                .set_governance_aproval_index(&gov_id, &id)
+                .set_governance_approval_index(&gov_id, &id)
                 .map_err(|_| ApprovalManagerError::DatabaseError)?;
         }
         let Ok(_result) = self.database.set_approval(&id, approval_entity) else {
@@ -351,10 +351,10 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             return Err(ApprovalManagerError::DatabaseError)
         };
         self.database
-            .del_subject_aproval_index(&subject_id, request_id)
+            .del_subject_approval_index(&subject_id, request_id)
             .map_err(|_| ApprovalManagerError::DatabaseError)?;
         self.database
-            .del_governance_aproval_index(&data.request.content.gov_id, request_id)
+            .del_governance_approval_index(&data.request.content.gov_id, request_id)
             .map_err(|_| ApprovalManagerError::DatabaseError)?;
         let sender = data.sender.clone();
         Ok(Ok((data, sender)))

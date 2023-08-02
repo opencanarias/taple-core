@@ -45,11 +45,11 @@ pub enum EventError {
     #[error("Transfer events are not evaluated")]
     NoEvaluationForTransferEvents,
     #[error("Transfer events are not approved")]
-    NoAprovalForTransferEvents,
+    NoApprovalForTransferEvents,
     #[error("EOL events are not evaluated")]
     NoEvaluationForEOLEvents,
     #[error("EOL events are not approved")]
-    NoAprovalForEOLEvents,
+    NoApprovalForEOLEvents,
     #[error("KeyID: {0}, not authorized for close")]
     CloseNotAuthorized(String),
     #[error("Subject Life Ended: {0}")]

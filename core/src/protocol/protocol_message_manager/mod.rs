@@ -2,7 +2,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 
 use crate::approval::ApprovalMessages;
-#[cfg(feature = "aproval")]
+#[cfg(feature = "approval")]
 use crate::approval::ApprovalResponses;
 use crate::evaluator::EvaluatorMessage;
 #[cfg(feature = "evaluation")]
@@ -42,7 +42,7 @@ pub struct ProtocolManager {
     #[cfg(feature = "validation")]
     validation_sx: SenderEnd<ValidationCommand, ValidationResponse>,
     event_sx: SenderEnd<EventCommand, EventResponse>,
-    #[cfg(feature = "aproval")]
+    #[cfg(feature = "approval")]
     approval_sx: SenderEnd<ApprovalMessages, ApprovalResponses>,
     ledger_sx: SenderEnd<LedgerCommand, LedgerResponse>,
     shutdown_sender: tokio::sync::broadcast::Sender<()>,
@@ -62,7 +62,7 @@ impl ProtocolManager {
             ValidationResponse,
         >,
         event_sx: SenderEnd<EventCommand, EventResponse>,
-        #[cfg(feature = "aproval")] approval_sx: SenderEnd<ApprovalMessages, ApprovalResponses>,
+        #[cfg(feature = "approval")] approval_sx: SenderEnd<ApprovalMessages, ApprovalResponses>,
         ledger_sx: SenderEnd<LedgerCommand, LedgerResponse>,
         shutdown_sender: tokio::sync::broadcast::Sender<()>,
     ) -> Self {
@@ -74,7 +74,7 @@ impl ProtocolManager {
             #[cfg(feature = "validation")]
             validation_sx,
             event_sx,
-            #[cfg(feature = "aproval")]
+            #[cfg(feature = "approval")]
             approval_sx,
             ledger_sx,
             shutdown_receiver: shutdown_sender.subscribe(),
@@ -185,7 +185,7 @@ impl ProtocolManager {
                 log::trace!("Validation Message received. Current node is not able to validate");
             }
             TapleMessages::ApprovalMessages(data) => {
-                #[cfg(feature = "aproval")]
+                #[cfg(feature = "approval")]
                 {
                     let approval_command = match data {
                         ApprovalMessages::RequestApproval(approval) => {
@@ -205,8 +205,8 @@ impl ProtocolManager {
                         .await
                         .map_err(|_| ProtocolErrors::ChannelClosed)?);
                 }
-                #[cfg(not(feature = "aproval"))]
-                log::trace!("Aproval Message received. Current node is not able to aprove");
+                #[cfg(not(feature = "approval"))]
+                log::trace!("Approval Message received. Current node is not able to aprove");
             }
             TapleMessages::LedgerMessages(data) => self
                 .ledger_sx
