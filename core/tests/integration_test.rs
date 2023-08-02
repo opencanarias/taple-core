@@ -3,7 +3,7 @@ use common::{generate_mc, NodeBuilder};
 use serial_test::serial;
 use taple_core::ApiModuleInterface;
 
-use crate::common::{create_governance_request, check_subject};
+use crate::common::{check_subject, create_governance_request};
 
 #[test]
 #[serial]

@@ -31,7 +31,7 @@ use libp2p::{
     tcp::TokioTcpConfig,
     yamux, Multiaddr, NetworkBehaviour, PeerId, Swarm, Transport,
 };
-use log::{debug, info, error};
+use log::{debug, error, info};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::error::Error;
 use tokio::sync::mpsc;

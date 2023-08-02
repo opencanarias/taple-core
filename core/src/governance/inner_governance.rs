@@ -273,8 +273,7 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
             Quorum::PERCENTAGE { percentage } => {
                 let result = (signers.len() as f64 * percentage).ceil() as u32;
                 Ok(Ok(result))
-            }
-            // Quorum::BFT { .. } => todo!(),
+            } // Quorum::BFT { .. } => todo!(),
         }
     }
 

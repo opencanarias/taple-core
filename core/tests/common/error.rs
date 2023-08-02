@@ -6,12 +6,12 @@ pub enum NotifierError {
     #[error("Petition timeout")]
     RequestTimeout,
     #[error("Notification channel closed")]
-    NotificationChannelClosed
+    NotificationChannelClosed,
 }
 
 #[allow(dead_code)]
 #[derive(Error, Debug)]
 pub enum TapleError {
-  #[error("Taple Start Error {0}")]
-  StartError(taple_core::Error)
+    #[error("Taple Start Error {0}")]
+    StartError(taple_core::Error),
 }

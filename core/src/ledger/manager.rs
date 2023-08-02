@@ -332,9 +332,7 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                             },
                             _ => Err(error),
                         },
-                        Ok(event) => {
-                            Ok(event)
-                        }
+                        Ok(event) => Ok(event),
                     };
                     LedgerResponse::GetNextGov(response)
                 }

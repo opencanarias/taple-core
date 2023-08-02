@@ -96,9 +96,9 @@ impl<C: DatabaseCollection> InnerAPI<C> {
                 )))))
             }
             Err(ApprovalErrorResponse::RequestAlreadyResponded) => {
-                return Ok(ApiResponses::VoteResolve(Err(ApiError::Conflict(
-                    format!("Request already responded"),
-                ))))
+                return Ok(ApiResponses::VoteResolve(Err(ApiError::Conflict(format!(
+                    "Request already responded"
+                )))))
             }
             Err(ApprovalErrorResponse::APIChannelNotAvailable) => {
                 return Err(APIInternalError::ChannelError)

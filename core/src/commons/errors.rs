@@ -208,7 +208,6 @@ pub enum ProtocolErrors {
     },
 }
 
-
 /// Errors that can occur during the generation of a [ListenAddr].
 #[derive(Error, Debug, Clone)]
 pub enum ListenAddrErrors {

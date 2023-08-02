@@ -2205,7 +2205,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                             },
                                         );
                                         self.database.del_lce_validation_proof(&subject_id)?;
-                                        
+
                                         self.distribution_channel
                                             .tell(DistributionMessagesNew::SignaturesNeeded {
                                                 subject_id: subject_id.clone(),
@@ -2251,7 +2251,6 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 }
                             }
                             None => {
-
                                 // The following is event 0
                                 if event.content.sn == 0 {
                                     // Check that event 0 is the one I need

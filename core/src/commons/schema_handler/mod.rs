@@ -1,7 +1,7 @@
 use jsonschema::JSONSchema;
+use log::error;
 use serde_json::{json, Value};
 use std::str::FromStr;
-use log::error;
 
 pub mod gov_models;
 pub mod initial_state;

@@ -4,7 +4,7 @@ use taple_core::{
     crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair},
     request::StartRequest,
     signature::{Signature, Signed},
-    DigestIdentifier, EventRequest, KeyIdentifier, NodeAPI, SubjectData, ApiModuleInterface,
+    ApiModuleInterface, DigestIdentifier, EventRequest, KeyIdentifier, NodeAPI, SubjectData,
 };
 
 pub async fn check_subject(

@@ -33,9 +33,7 @@ const DEFAULT_PORT: u32 = 40040;
 #[derive(Debug, Deserialize, Clone)]
 pub enum ListenAddr {
     /// Represents in-memory addressing.
-    Memory {
-        port: Option<u32>,
-    },
+    Memory { port: Option<u32> },
     /// Represents an ip4 address
     IP4 {
         addr: Option<std::net::Ipv4Addr>,

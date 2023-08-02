@@ -15,7 +15,7 @@
 //! # Basic usage
 //! ```
 //! use std::str::FromStr;
-//! 
+//!
 //! use taple_core::crypto;
 //! use taple_core::crypto::Ed25519KeyPair;
 //! use taple_core::crypto::KeyGenerator;
@@ -33,7 +33,7 @@
 //! use taple_core::MemoryManager;
 //! use taple_core::Notification;
 //! use taple_core::Taple;
-//! 
+//!
 //! /**
 //!  * Basic usage of TAPLE Core. It includes:
 //!  * - Node inicialization with on-memory DB (only for testing purpouse)
@@ -47,25 +47,25 @@
 //!         node_key_pair.get_key_derivator(),
 //!         &node_key_pair.public_key_bytes(),
 //!     );
-//! 
+//!
 //!     // Build and start up the TAPLE node
 //!     let mut settings = get_default_settings();
 //!     settings.node.secret_key = Some(hex::encode(&node_key_pair.secret_key_bytes()));
-//! 
+//!
 //!     let mut taple = Taple::new(settings, MemoryManager::new());
 //!     let mut notifier = taple.get_notification_handler();
 //!     let shutdown_manager = taple.get_shutdown_manager();
 //!     let api = taple.get_api();
-//! 
+//!
 //!     taple.start().await.expect("TAPLE started");
-//! 
+//!
 //!     // Create a minimal governance
 //!     // Compose and sign the subject creation request
 //!     let new_key = api
 //!         .add_keys(KeyDerivator::Ed25519)
 //!         .await
 //!         .expect("Error getting server response");
-//! 
+//!
 //!     let create_subject_request = EventRequest::Create(StartRequest {
 //!         governance_id: DigestIdentifier::default(),
 //!         name: "".to_string(),
@@ -73,16 +73,16 @@
 //!         schema_id: "governance".to_string(),
 //!         public_key: new_key,
 //!     });
-//! 
+//!
 //!     let signed_request = Signed::<EventRequest> {
 //!         content: create_subject_request.clone(),
 //!         signature: Signature::new(&create_subject_request, node_identifier, &node_key_pair)
 //!             .unwrap(),
 //!     };
-//! 
+//!
 //!     // Send the signed request to the node
 //!     let _request_id = api.external_request(signed_request).await.unwrap();
-//! 
+//!
 //!     // Wait until notification of subject creation
 //!     let subject_id =
 //!         if let Notification::NewSubject { subject_id } = notifier.receive().await.unwrap() {
@@ -90,21 +90,21 @@
 //!         } else {
 //!             panic!("Unexpected notification");
 //!         };
-//! 
+//!
 //!     // Get the new subject data
 //!     let subject_id =
 //!         DigestIdentifier::from_str(&subject_id).expect("DigestIdentifier from str failed");
-//! 
+//!
 //!     let subject = api.get_subject(subject_id.clone()).await.expect(&format!(
 //!         "Error getting subject content with id: {}",
 //!         subject_id.to_str()
 //!     ));
-//! 
+//!
 //!     println!("{:#?}", subject);
-//! 
+//!
 //!     // Shutdown the TAPLE node
 //!     shutdown_manager.shutdown().await;
-//! 
+//!
 //!     Ok(())
 //! }
 //! ```
@@ -128,10 +128,7 @@ pub(crate) mod event;
 pub(crate) mod protocol;
 
 mod unitary_component;
-pub use api::{
-    ApiError, ApiModuleInterface,
-    NodeAPI,
-};
+pub use api::{ApiError, ApiModuleInterface, NodeAPI};
 // pub(crate) use api::APICommands;
 pub use commons::crypto;
 pub use commons::identifier;
@@ -157,7 +154,9 @@ pub use commons::{
     models::value_wrapper::ValueWrapper,
 };
 pub(crate) use database::DB;
-pub use database::{DatabaseCollection, DatabaseManager, Error as DbError, MemoryManager, MemoryCollection};
+pub use database::{
+    DatabaseCollection, DatabaseManager, Error as DbError, MemoryCollection, MemoryManager,
+};
 pub use error::Error;
 pub use unitary_component::{
     get_default_settings, NotificationHandler, Taple, TapleShutdownManager,

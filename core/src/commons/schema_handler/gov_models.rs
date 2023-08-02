@@ -25,12 +25,11 @@ impl Serialize for Quorum {
                 let mut map = serializer.serialize_map(Some(1))?;
                 map.serialize_entry("PERCENTAGE", percentage)?;
                 map.end()
-            }
-            // Quorum::BFT { BFT } => {
-            //     let mut map = serializer.serialize_map(Some(1))?;
-            //     map.serialize_entry("BFT", BFT)?;
-            //     map.end()
-            // }
+            } // Quorum::BFT { BFT } => {
+              //     let mut map = serializer.serialize_map(Some(1))?;
+              //     map.serialize_entry("BFT", BFT)?;
+              //     map.end()
+              // }
         }
     }
 }

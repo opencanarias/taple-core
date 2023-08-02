@@ -211,7 +211,10 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
                     return Ok(Err(ApprovalErrorResponse::RequestAlreadyKnown))
                 }
                 ApprovalState::RespondedAccepted | ApprovalState::RespondedRejected => {
-                    let response = data.response.clone().expect("Has to have a response because it is Reponded already");
+                    let response = data
+                        .response
+                        .clone()
+                        .expect("Has to have a response because it is Reponded already");
                     let sender = data.sender.clone();
                     return Ok(Ok(Some((response, sender))));
                 }
