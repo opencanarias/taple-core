@@ -5,7 +5,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 authors = ["Open Canarias S.L.<taple@opencanarias.com>"]
 description = "TAPLE Protocol reference implementation"

@@ -1,6 +1,6 @@
 [package]
 name = "basic_usage"
-version = "0.1.1"
+version = "0.2.1"
 edition = "2021"
 authors = ["Open Canarias S.L.<taple@opencanarias.com>"]
 description = "TAPLE Protocol reference implementation"
