@@ -2,6 +2,7 @@ use crate::identifier::derive::{digest::DigestDerivator, Derivator};
 use base64::decode_config;
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
 use super::error::Error;
@@ -46,6 +47,12 @@ impl Default for DigestIdentifier {
             derivator: DigestDerivator::Blake3_256,
             digest: vec![],
         }
+    }
+}
+
+impl Display for DigestIdentifier {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_str(),)
     }
 }
 

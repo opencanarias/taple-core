@@ -43,8 +43,7 @@ impl SelfSignatureInterface for SelfSignatureManager {
     }
 
     fn sign<T: HashId>(&self, content: &T) -> Result<Signature, ProtocolErrors> {
-        Ok(Signature::new(content, self.identifier.clone(), &self.keys)
-            .map_err(|_| ProtocolErrors::SignatureError)?)
+        Ok(Signature::new(content, &self.keys).map_err(|_| ProtocolErrors::SignatureError)?)
     }
 
     fn check_if_signature_present(&self, signers: &HashSet<KeyIdentifier>) -> bool {

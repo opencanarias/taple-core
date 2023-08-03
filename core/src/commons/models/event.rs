@@ -124,8 +124,7 @@ impl Signed<Event> {
             evaluators: HashSet::new(),
             approvers: HashSet::new(),
         };
-        let subject_signature_event = Signature::new(&content, public_key.clone(), &subject_keys)
-            .map_err(|_| {
+        let subject_signature_event = Signature::new(&content, &subject_keys).map_err(|_| {
             SubjectError::CryptoError(String::from("Error signing the hash of the proposal"))
         })?;
         Ok(Self {

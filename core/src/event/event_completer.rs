@@ -16,7 +16,7 @@ use crate::{
         },
         self_signature_manager::SelfSignatureManager,
     },
-    crypto::{KeyMaterial, KeyPair},
+    crypto::KeyPair,
     governance::{stage::ValidationStage, GovernanceAPI, GovernanceInterface},
     identifier::{Derivable, DigestIdentifier, KeyIdentifier},
     ledger::{LedgerCommand, LedgerResponse},
@@ -119,11 +119,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             governance_version,
             subject_id,
         );
-        let public_key = KeyIdentifier::new(
-            subject_keys.get_key_derivator(),
-            &subject_keys.public_key_bytes(),
-        );
-        let subject_signature = Signature::new(&validation_proof, public_key, subject_keys)?;
+        let subject_signature = Signature::new(&validation_proof, subject_keys)?;
         Ok(ValidationEvent {
             proof: validation_proof,
             subject_signature,
@@ -171,7 +167,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         };
         match &subject.keys {
             Some(keys) => {
-                let subject_signature = Signature::new(&proof, subject.public_key.clone(), keys)?;
+                let subject_signature = Signature::new(&proof, keys)?;
                 Ok(ValidationEvent {
                     proof,
                     subject_signature,
@@ -465,7 +461,6 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         };
         let subject_signature = Signature::new(
             &approval_request,
-            subject.public_key.clone(),
             &subject
                 .keys
                 .as_ref()
@@ -978,12 +973,9 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     .as_ref()
                     .expect("Llegados a aquí tenemos que ser owner");
                 let subject_signature =
-                    Signature::new(&approval_request, subject.public_key.clone(), &subject_keys)
-                        .map_err(|_| {
-                            EventError::CryptoError(String::from(
-                                "Error signing the Approval Request",
-                            ))
-                        })?;
+                    Signature::new(&approval_request, &subject_keys).map_err(|_| {
+                        EventError::CryptoError(String::from("Error signing the Approval Request"))
+                    })?;
                 let approval_request = Signed::<ApprovalRequest> {
                     content: approval_request,
                     signature: subject_signature,
@@ -1024,10 +1016,9 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     .keys
                     .as_ref()
                     .expect("Llegados a aquí tenemos que ser owner");
-                let subject_signature =
-                    Signature::new(&event, subject.public_key.clone(), &subject_keys).map_err(
-                        |_| EventError::CryptoError(String::from("Error signing the Event")),
-                    )?;
+                let subject_signature = Signature::new(&event, &subject_keys).map_err(|_| {
+                    EventError::CryptoError(String::from("Error signing the Event"))
+                })?;
                 let signed_event = Signed::<Event> {
                     content: event,
                     signature: subject_signature,
@@ -1224,12 +1215,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 .keys
                 .as_ref()
                 .expect("Llegados a aquí tenemos que ser owner");
-            let subject_signature = Signature::new(
-                &event,
-                subject.public_key.clone(),
-                &subject_keys,
-            )
-            .map_err(|_| {
+            let subject_signature = Signature::new(&event, &subject_keys).map_err(|_| {
                 EventError::CryptoError(String::from("Error signing the Event (Approval stage)"))
             })?;
             let signed_event = Signed::<Event> {
@@ -1569,10 +1555,9 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         };
         let event_content_hash = event.hash_id()?;
         let subject_keys = subject.keys.as_ref().expect("Somos propietario");
-        let event_signature = Signature::new(&event, subject.public_key.clone(), &subject_keys)
-            .map_err(|_| {
-                EventError::CryptoError(String::from("Error signing the hash of the event content"))
-            })?;
+        let event_signature = Signature::new(&event, &subject_keys).map_err(|_| {
+            EventError::CryptoError(String::from("Error signing the hash of the event content"))
+        })?;
         let event = Signed::<Event> {
             content: event,
             signature: event_signature,

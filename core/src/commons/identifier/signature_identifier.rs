@@ -1,7 +1,10 @@
 use base64::decode_config;
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::str::FromStr;
+use std::{
+    fmt::{Display, Formatter},
+    str::FromStr,
+};
 
 use super::{
     derive::{signature::SignatureDerivator, Derivator},
@@ -31,6 +34,12 @@ impl Derivable for SignatureIdentifier {
     }
     fn derivation_code(&self) -> String {
         self.derivator.to_str()
+    }
+}
+
+impl Display for SignatureIdentifier {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_str(),)
     }
 }
 

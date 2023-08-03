@@ -4,7 +4,10 @@ use base64::decode_config;
 
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::str::FromStr;
+use std::{
+    fmt::{Display, Formatter},
+    str::FromStr,
+};
 
 use super::{
     derive::{key::KeyDerivator, signature::SignatureDerivator, Derivator},
@@ -67,6 +70,12 @@ impl KeyIdentifier {
 impl PartialEq for KeyIdentifier {
     fn eq(&self, other: &Self) -> bool {
         self.public_key == other.public_key && self.derivator == other.derivator
+    }
+}
+
+impl Display for KeyIdentifier {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_str(),)
     }
 }
 
