@@ -69,7 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Governance quorum is not possible to validate
 
-## [0.1.0] - 2023-01-17
+## [0.1.0] - 2022-11-30
 
 ### Added
 
