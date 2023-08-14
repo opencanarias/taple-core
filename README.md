@@ -1,7 +1,5 @@
 <div align="center">
-<p><b>This is main branch of work and is not guaranteed to be stable. Released versions are in the "release*" branches</b></p>
-<br/>
-<p><img src="https://raw.githubusercontent.com/opencanarias/public-resources/master/images/taple-logo-readme.png"></p>
+<img src="https://raw.githubusercontent.com/opencanarias/public-resources/master/images/taple-logo-readme.png">
 </div>
 
 # TAPLE Core
@@ -22,8 +20,8 @@ TAPLE Core is the reference library that implements all the necessary functional
 [Discover](https://www.taple.es/docs/discover) | [Learn](https://www.taple.es/docs/learn) | [Build](https://www.taple.es/docs/build) | 
 [Code](https://github.com/search?q=topic%3Ataple+org%3Aopencanarias++fork%3Afalse+archived%3Afalse++is%3Apublic&type=repositories)
 
-## Usage
-Rust versión 1.67 or higher is required.
+## Build
+Minimium supported rust versión (MSRV) is 1.67.
 
 A basic usage example can be found at [examples](./examples) directory. You can find more information about TAPLE technology and how to develop for TAPLE on [TAPLE Website](https://www.taple.es). 
 

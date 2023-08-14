@@ -8,6 +8,7 @@ homepage.workspace = true
 repository.workspace = true
 license.workspace = true
 keywords.workspace = true
+rust-version.workspace = true
 
 [features]
 default = ["secp256k1"]
