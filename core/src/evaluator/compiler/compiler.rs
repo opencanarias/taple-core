@@ -4,7 +4,7 @@ use crate::governance::GovernanceInterface;
 use crate::identifier::{Derivable, DigestIdentifier};
 use crate::{database::DB, evaluator::errors::CompilerErrorResponses, DatabaseCollection};
 use async_std::fs;
-use log::debug;
+use log::{debug, info};
 use std::collections::HashSet;
 use std::fs::create_dir;
 use std::path::Path;
@@ -57,6 +57,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
                     super::gov_contract::get_gov_contract(),
                     "taple",
                     "governance",
+                    0,
                 )
                 .await
                 .map_err(|e| CompilerError::InitError(e.to_string()))?;
@@ -119,8 +120,13 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
                     continue;
                 }
             }
-            self.compile(contract_info.raw, &governance_id.to_str(), &schema_id)
-                .await?;
+            self.compile(
+                contract_info.raw,
+                &governance_id.to_str(),
+                &schema_id,
+                governance_version,
+            )
+            .await?;
             let compiled_contract = self.add_contract().await?;
             self.database
                 .put_contract(
@@ -140,10 +146,12 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
         contract: String,
         governance_id: &str,
         schema_id: &str,
+        sn: u64,
     ) -> Result<(), CompilerErrorResponses> {
         fs::write(format!("{}/src/lib.rs", self.contracts_path), contract)
             .await
             .map_err(|_| CompilerErrorResponses::WriteFileError)?;
+        info!("Compiling contract: {} {} {}", schema_id, governance_id, sn);
         let status = Command::new("cargo")
             .arg("build")
             .arg(format!(
@@ -156,6 +164,10 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
             .output()
             // Does not show stdout. Generates child process and waits
             .map_err(|_| CompilerErrorResponses::CargoExecError)?;
+        info!(
+            "Compiled success contract: {} {} {}",
+            schema_id, governance_id, sn
+        );
         debug!("status {:?}", status);
         if !status.status.success() {
             return Err(CompilerErrorResponses::CargoExecError);
