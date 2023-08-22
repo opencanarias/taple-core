@@ -7,7 +7,7 @@ use crate::{
     governance::{error::RequestError, GovernanceAPI},
     message::MessageTaskCommand,
     protocol::protocol_message_manager::TapleMessages,
-    DatabaseCollection, KeyDerivator, KeyIdentifier, Notification,
+    DatabaseCollection, Derivable, KeyDerivator, KeyIdentifier, Notification,
 };
 
 use super::{errors::LedgerError, ledger::Ledger, LedgerCommand, LedgerResponse};
@@ -194,6 +194,7 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                         .inner_ledger
                         .genesis(event, signatures, validation_proof)
                         .await;
+                    log::info!("Genesis response: {:?}", response);
                     match response {
                         Err(error) => match error {
                             LedgerError::ChannelClosed => {
@@ -224,6 +225,7 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                         .inner_ledger
                         .external_event(event, signatures, sender, validation_proof)
                         .await;
+                    log::info!("ExternalEvent response: {:?}", response);
                     match response {
                         Err(error) => match error {
                             LedgerError::ChannelClosed => {
@@ -246,6 +248,7 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                 }
                 LedgerCommand::ExternalIntermediateEvent { event } => {
                     let response = self.inner_ledger.external_intermediate_event(event).await;
+                    log::info!("ExternalIntermediateEvent response: {:?}", response);
                     match response {
                         Err(error) => match error {
                             LedgerError::ChannelClosed => {
@@ -272,6 +275,7 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                     sn,
                 } => {
                     let response = self.inner_ledger.get_event(who_asked, subject_id, sn).await;
+                    log::info!("GetEvent response: {:?}", response);
                     let response = match response {
                         Err(error) => match error.clone() {
                             LedgerError::ChannelClosed => {
@@ -294,6 +298,7 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                     subject_id,
                 } => {
                     let response = self.inner_ledger.get_lce(who_asked, subject_id).await;
+                    log::info!("FIRST GetLCE response: {:?}", response);
                     let response = match response {
                         Err(error) => match error.clone() {
                             LedgerError::ChannelClosed => {
@@ -309,6 +314,7 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                         },
                         Ok(event) => Ok(event),
                     };
+                    log::info!("SECOND GetLCE response: {:?}", response);
                     LedgerResponse::GetLCE(response)
                 }
                 LedgerCommand::GetNextGov {
@@ -316,10 +322,17 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                     subject_id,
                     sn,
                 } => {
+                    log::info!(
+                        "FIRST GetNextGov, who_asked: {}\nsubject_id: {}\nSN: {}",
+                        who_asked.to_str(),
+                        subject_id.to_str(),
+                        sn
+                    );
                     let response = self
                         .inner_ledger
                         .get_next_gov(who_asked, subject_id, sn)
                         .await;
+                    log::info!("FIRST GetNextGov response: {:?}", response);
                     let response = match response {
                         Err(error) => match error.clone() {
                             LedgerError::ChannelClosed => {
@@ -334,6 +347,7 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                         },
                         Ok(event) => Ok(event),
                     };
+                    log::info!("SECOND GetNextGov response: {:?}", response);
                     LedgerResponse::GetNextGov(response)
                 }
             }
