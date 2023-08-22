@@ -1,9 +1,10 @@
-use super::DatabaseError;
-use crate::{test_database_manager_trait, DatabaseCollection, DatabaseManager};
 use std::{
     collections::{btree_map::Iter, BTreeMap, HashMap},
     iter::Rev,
     sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
+};
+use taple_core::{
+    test_database_manager_trait, DatabaseCollection, DatabaseManager, DbError as Error,
 };
 
 pub struct DataStore {
@@ -76,21 +77,21 @@ pub struct MemoryCollection {
 }
 
 impl DatabaseCollection for MemoryCollection {
-    fn get(&self, key: &str) -> Result<Vec<u8>, DatabaseError> {
+    fn get(&self, key: &str) -> Result<Vec<u8>, Error> {
         let lock = self.data._get_inner_read_lock();
         let Some(data) = lock.get(key) else {
-            return Err(DatabaseError::EntryNotFound);
+            return Err(Error::EntryNotFound);
         };
         Ok(data.clone())
     }
 
-    fn put(&self, key: &str, data: Vec<u8>) -> Result<(), DatabaseError> {
+    fn put(&self, key: &str, data: Vec<u8>) -> Result<(), Error> {
         let mut lock = self.data._get_inner_write_lock();
         lock.insert(key.to_string(), data);
         Ok(())
     }
 
-    fn del(&self, key: &str) -> Result<(), DatabaseError> {
+    fn del(&self, key: &str) -> Result<(), Error> {
         let mut lock = self.data._get_inner_write_lock();
         lock.remove(key);
         Ok(())
@@ -209,5 +210,5 @@ unsafe fn change_lifetime_const<'a, 'b, T>(x: &'a T) -> &'b T {
 }
 
 test_database_manager_trait! {
-    unit_test_memory_manager:crate::MemoryManager:MemoryCollection
+    unit_test_memory_manager:super::MemoryManager:MemoryCollection
 }

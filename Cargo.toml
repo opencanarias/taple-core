@@ -1,6 +1,6 @@
 [workspace]
 
-members = ["core", "db/leveldb"]
+members = ["core", "db/leveldb", "db/memory"]
 
 [workspace.package]
 version = "0.3.0-dev"

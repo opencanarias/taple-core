@@ -1,1 +1,1 @@
-pub use memory;
+pub mod memory;
