@@ -53,7 +53,6 @@ mod tests {
             let bootstrap_network = NetworkProcessor::new(
                 vec![ListenAddr::try_from(String::from("/memory/647988")).unwrap()],
                 vec![],
-                sender_boot,
                 mc1,
                 bsx.subscribe(),
                 vec![]
@@ -70,7 +69,6 @@ mod tests {
             let node1_network = NetworkProcessor::new(
                 vec![ListenAddr::try_from(String::from("/memory/647999")).unwrap()],
                 vec![(bt_pid, String::from("/memory/647988").parse().unwrap())],
-                sender1,
                 mc2,
                 brx,
                 vec![]
@@ -96,10 +94,10 @@ mod tests {
             });
 
             tokio::spawn(async move {
-                bootstrap_network.run().await;
+                bootstrap_network.run(sender_boot).await;
             });
             tokio::spawn(async move {
-                node1_network.run().await;
+                node1_network.run(sender1).await;
             });
 
             std::thread::sleep(Duration::from_secs(5));

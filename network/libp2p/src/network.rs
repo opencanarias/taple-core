@@ -148,8 +148,8 @@ pub struct NetworkProcessor {
     swarm: Swarm<TapleNetworkBehavior>,
     command_sender: mpsc::Sender<Command>,
     command_receiver: mpsc::Receiver<Command>,
-    event_sender: mpsc::Sender<NetworkEvent>,
     // controller_mc: KeyPair,
+    event_sender: mpsc::Sender<NetworkEvent>,
     pendings: HashMap<PeerId, VecDeque<Vec<u8>>>,
     // controller_to_peer: HashMap<Vec<u8>, PeerId>,
     // peer_to_controller: HashMap<PeerId, Vec<u8>>,
@@ -172,7 +172,6 @@ impl NetworkProcessor {
     pub async fn new(
         addr: Vec<ListenAddr>,
         bootstrap_nodes: Vec<(PeerId, Multiaddr)>,
-        event_sender: mpsc::Sender<NetworkEvent>,
         controller_mc: KeyPair,
         shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
         external_addresses: Vec<Multiaddr>,
@@ -216,7 +215,7 @@ impl NetworkProcessor {
             swarm,
             command_sender,
             command_receiver,
-            event_sender,
+            event_sender: tokio::sync::mpsc::channel(0).0,
             // controller_mc,
             pendings,
             // controller_to_peer,
@@ -236,7 +235,8 @@ impl NetworkProcessor {
     }
 
     /// Run network processor.
-    pub async fn run(mut self) {
+    pub async fn run(mut self, event_sender: mpsc::Sender<NetworkEvent>) {
+        self.event_sender = event_sender;
         debug!("Running network");
         for external_address in self.external_addresses.clone().into_iter() {
             self.swarm

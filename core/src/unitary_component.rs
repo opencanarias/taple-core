@@ -30,7 +30,7 @@ use crate::message::{
     MessageContent, MessageReceiver, MessageSender, MessageTaskCommand, MessageTaskManager,
     NetworkEvent,
 };
-use crate::network::network::{NetworkProcessor};
+use crate::network::TapleNetwork;
 use crate::protocol::protocol_message_manager::{ProtocolManager, TapleMessages};
 use crate::signature::Signed;
 #[cfg(feature = "validation")]
@@ -183,7 +183,7 @@ impl TapleShutdownManager {
 #[derive(Debug)]
 pub struct Taple<M: DatabaseManager<C>, C: DatabaseCollection> {
     api: NodeAPI,
-    peer_id: Option<PeerId>,
+    // peer_id: Option<PeerId>,
     controller_id: Option<String>,
     public_key: Option<Vec<u8>>,
     api_input: Option<MpscChannel<APICommands, ApiResponses>>,
@@ -199,9 +199,9 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
     /// Returns the [PeerId] of the node is available.
     /// This ID is the identifier of the node at the network level.
     /// **None** can only be get if the node has not been started yet.
-    pub fn peer_id(&self) -> Option<PeerId> {
-        self.peer_id.clone()
-    }
+    // pub fn peer_id(&self) -> Option<PeerId> {
+    //     self.peer_id.clone()
+    // }
 
     /// Returns the public key (bytes format) of the node is available.
     /// **None** can only be get if the node has not been started yet.
@@ -269,7 +269,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
         let api = NodeAPI { sender: api_sender };
         Self {
             api,
-            peer_id: None,
+            // peer_id: None,
             public_key: None,
             controller_id: None,
             api_input: Some(api_input),
@@ -292,7 +292,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
     /// for the initialization of the components, mainly due to problems in the initial [configuration](Settings).
     /// # Panics
     /// This method panics if it has not been possible to generate the network layer.
-    pub async fn start(&mut self) -> Result<(), Error> {
+    pub async fn start<N: TapleNetwork + 'static>(&mut self, mut network: N) -> Result<(), Error> {
         // Create channels
         let shutdown_sender = self.shutdown_sender.take().unwrap();
         // Channels for network
@@ -356,18 +356,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
             .map_err(|e| Error::DatabaseError(e.to_string()))?;
         let public_key = kp.public_key_bytes();
         let key_identifier = KeyIdentifier::new(kp.get_key_derivator(), &public_key);
-        // Creation Network
-        let network_manager = NetworkProcessor::new(
-            self.settings.network.listen_addr.clone(),
-            network_access_points(&self.settings.network.known_nodes)?, // TODO: Provide Bootraps nodes per configuration
-            sender_network,
-            kp.clone(),
-            shutdown_sender.subscribe(),
-            external_addresses(&self.settings.network.external_address)?,
-        )
-        .await
-        .expect("Error en creación de la capa de red");
-        self.peer_id = Some(network_manager.local_peer_id().to_owned());
+        // self.peer_id = Some(network_manager.local_peer_id().to_owned());
         // Creation Signature Manager
         let signature_manager = SelfSignatureManager::new(kp.clone(), &self.settings);
         // Creation NetworkReceiver
@@ -379,7 +368,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
         );
         // Creation NetworkSender
         let network_sender = MessageSender::new(
-            network_manager.client(),
+            network.client(),
             key_identifier.clone(),
             signature_manager.clone(),
         );
@@ -546,7 +535,9 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
         tokio::spawn(async move {
             as_manager.start().await;
         });
-        tokio::spawn(network_manager.run());
+        tokio::spawn(async move {
+            network.run(sender_network).await;
+        });
         // API Initialization
         tokio::spawn(async move {
             api.start().await;
