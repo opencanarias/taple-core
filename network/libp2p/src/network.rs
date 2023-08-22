@@ -219,7 +219,7 @@ impl NetworkProcessor {
             swarm,
             command_sender,
             command_receiver,
-            event_sender: tokio::sync::mpsc::channel(0).0,
+            event_sender: tokio::sync::mpsc::channel(1).0,
             // controller_mc,
             pendings,
             // controller_to_peer,
