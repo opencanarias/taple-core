@@ -29,7 +29,7 @@ use super::{
     GetSubjects,
 };
 
-use crate::database::Error as DbError;
+use crate::database::DatabaseError as DbError;
 
 pub(crate) struct InnerAPI<C: DatabaseCollection> {
     event_api: EventAPI,

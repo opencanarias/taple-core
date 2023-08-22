@@ -1,4 +1,4 @@
-use crate::database::Error as DbError;
+use crate::database::DatabaseError as DbError;
 use crate::evaluator::errors::CompilerError;
 use crate::governance::GovernanceInterface;
 use crate::identifier::{Derivable, DigestIdentifier};

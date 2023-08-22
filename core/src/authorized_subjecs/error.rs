@@ -1,4 +1,4 @@
-use crate::database::Error as DbError;
+use crate::database::DatabaseError as DbError;
 use thiserror::Error;
 
 #[derive(Error, Debug, Clone, PartialEq)]

@@ -13,7 +13,7 @@ use crate::{
             initial_state::get_governance_initial_state,
         },
     },
-    database::Error as DbError,
+    database::DatabaseError as DbError,
     ValueWrapper,
 };
 use serde_json::Value;

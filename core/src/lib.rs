@@ -155,7 +155,7 @@ pub use commons::{
 };
 pub(crate) use database::DB;
 pub use database::{
-    DatabaseCollection, DatabaseManager, Error as DbError, MemoryCollection, MemoryManager,
+    DatabaseCollection, DatabaseError as DbError, DatabaseManager, MemoryCollection, MemoryManager,
 };
 pub use error::Error;
 pub use unitary_component::{

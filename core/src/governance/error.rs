@@ -1,4 +1,4 @@
-use crate::{commons::errors::SubjectError, database::Error as DbError};
+use crate::{commons::errors::SubjectError, database::DatabaseError as DbError};
 use thiserror::Error;
 
 #[derive(Error, Debug, Clone, PartialEq)]

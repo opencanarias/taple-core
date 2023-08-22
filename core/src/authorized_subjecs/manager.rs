@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use tokio::time::{interval, Duration};
 
-use crate::database::Error as DbError;
+use crate::database::DatabaseError as DbError;
 use crate::{
     commons::channel::{ChannelData, MpscChannel, SenderEnd},
     database::DB,
