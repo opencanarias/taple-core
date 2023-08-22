@@ -5,13 +5,14 @@ pub mod tell;
 
 #[cfg(test)]
 mod tests {
-    use super::{message::Command, routing::RoutingComposedEvent, ListenAddr};
     use super::{
         network::{NetworkComposedEvent, NetworkProcessor, TapleNetworkBehavior},
+        routing::RoutingComposedEvent,
         tell::TellBehaviourEvent,
     };
     use log::debug;
     pub use taple_core::message::{MessageReceiver, MessageSender, NetworkEvent};
+    use taple_core::{message::Command, ListenAddr};
 
     use super::*;
 
@@ -34,8 +35,8 @@ mod tests {
     };
     use tokio_stream::wrappers::ReceiverStream;
 
-    use crate::commons::crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair};
     use std::time::Duration;
+    use taple_core::crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair};
 
     const LOG_TARGET: &str = "NETWORK_TEST";
 
@@ -44,7 +45,7 @@ mod tests {
         let rt = Runtime::new().unwrap();
 
         rt.block_on(async {
-            let mc1 = KeyPair::Ed25519(crate::commons::crypto::Ed25519KeyPair::from_seed(
+            let mc1 = KeyPair::Ed25519(taple_core::crypto::Ed25519KeyPair::from_seed(
                 format!("pepe").as_bytes(),
             ));
             let (sender_boot, receiver_boot) = mpsc::channel(10000);
@@ -62,7 +63,7 @@ mod tests {
             let mut msg_rcv_boot = ReceiverStream::new(receiver_boot);
 
             let bt_pid = bootstrap_network.local_peer_id().clone();
-            let mc2 = KeyPair::Ed25519(crate::commons::crypto::Ed25519KeyPair::from_seed(
+            let mc2 = KeyPair::Ed25519(taple_core::crypto::Ed25519KeyPair::from_seed(
                 format!("paco").as_bytes(),
             ));
             let (sender1, receiver1) = mpsc::channel(10000);
