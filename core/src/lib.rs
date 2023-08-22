@@ -145,7 +145,7 @@ pub use commons::models::request::EventRequest;
 pub use commons::models::signature;
 pub use commons::models::state::SubjectData;
 pub use commons::{
-    config::{ListenAddr, NetworkSettings, NodeSettings, TapleSettings},
+    config::{ListenAddr, NodeSettings, TapleSettings},
     errors::ListenAddrErrors,
     identifier::derive::{digest::DigestDerivator, KeyDerivator},
     models::notification::Notification,
@@ -158,6 +158,7 @@ pub use database::{
     DatabaseCollection, DatabaseError as DbError, DatabaseManager, MemoryCollection, MemoryManager,
 };
 pub use error::Error;
+pub use network::TapleNetwork;
 pub use unitary_component::{
     get_default_settings, NotificationHandler, Taple, TapleShutdownManager,
 };

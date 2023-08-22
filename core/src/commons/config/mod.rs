@@ -10,21 +10,7 @@ use serde::Deserialize;
 /// Configuration parameters of a TAPLE node divided into categories.
 #[derive(Debug, Deserialize, Clone)]
 pub struct TapleSettings {
-    pub network: NetworkSettings,
     pub node: NodeSettings,
-}
-
-/// P2P network configuration parameters of a TAPLE node.
-#[derive(Debug, Deserialize, Clone)]
-pub struct NetworkSettings {
-    /// [Multiaddr](https://github.com/multiformats/multiaddr) to consider by the node.
-    pub listen_addr: Vec<ListenAddr>,
-    #[serde(rename = "knownnodes")]
-    /// List of bootstrap nodes to connect to.
-    pub known_nodes: Vec<String>,
-    #[serde(rename = "externaladdress")]
-    /// List of bootstrap nodes to connect to.
-    pub external_address: Vec<String>,
 }
 
 const DEFAULT_PORT: u32 = 40040;

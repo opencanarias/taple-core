@@ -31,3 +31,4 @@ rand = { workspace = true }
 unsigned-varint = { workspace = true }
 thiserror = { workspace = true }
 tokio-stream = { workspace = true }
+async-trait = { workspace = true }

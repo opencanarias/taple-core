@@ -5,7 +5,6 @@ use crate::approval::{ApprovalMessages, ApprovalResponses};
 use crate::authorized_subjecs::manager::{AuthorizedSubjectsAPI, AuthorizedSubjectsManager};
 use crate::authorized_subjecs::{AuthorizedSubjectsCommand, AuthorizedSubjectsResponse};
 use crate::commons::channel::MpscChannel;
-use crate::commons::config::NetworkSettings;
 use crate::commons::config::{NodeSettings, TapleSettings};
 use crate::commons::crypto::{
     Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair, Secp256k1KeyPair,
@@ -37,10 +36,8 @@ use crate::signature::Signed;
 use crate::validation::manager::ValidationManager;
 #[cfg(feature = "validation")]
 use crate::validation::{ValidationCommand, ValidationResponse};
-use crate::ListenAddr;
 use futures::future::BoxFuture;
 use futures::FutureExt;
-use libp2p::{Multiaddr, PeerId};
 use std::marker::PhantomData;
 use std::sync::Arc;
 use tokio::sync::broadcast::error::{RecvError, TryRecvError};
@@ -53,11 +50,6 @@ const BUFFER_SIZE: usize = 1000;
 /// Instance a default settings to start a new Taple Node
 pub fn get_default_settings() -> TapleSettings {
     TapleSettings {
-        network: NetworkSettings {
-            listen_addr: vec![ListenAddr::default()],
-            known_nodes: Vec::<String>::new(),
-            external_address: vec![],
-        },
         node: NodeSettings {
             key_derivator: KeyDerivator::Ed25519,
             secret_key: Option::<String>::None,
@@ -545,7 +537,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
         Ok(())
     }
 
-    fn create_key_pair(
+    pub fn create_key_pair(
         derivator: &KeyDerivator,
         seed: Option<String>,
         current_key: Option<String>,
@@ -583,53 +575,5 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
         } else {
             Err(Error::NoMCAvailable)
         }
-    }
-}
-
-fn network_access_points(points: &[String]) -> Result<Vec<(PeerId, Multiaddr)>, Error> {
-    let mut access_points: Vec<(PeerId, Multiaddr)> = Vec::new();
-    for point in points {
-        let data: Vec<&str> = point.split("/p2p/").collect();
-        if data.len() != 2 {
-            return Err(Error::AcessPointError(point.to_string()));
-        }
-        if let Some(value) = multiaddr(point) {
-            if let Ok(id) = data[1].parse::<PeerId>() {
-                access_points.push((id, value));
-            } else {
-                return Err(Error::AcessPointError(format!(
-                    "Invalid PeerId conversion: {}",
-                    point
-                )));
-            }
-        } else {
-            return Err(Error::AcessPointError(format!(
-                "Invalid MultiAddress conversion: {}",
-                point
-            )));
-        }
-    }
-    Ok(access_points)
-}
-
-fn external_addresses(addresses: &[String]) -> Result<Vec<Multiaddr>, Error> {
-    let mut external_addresses: Vec<Multiaddr> = Vec::new();
-    for address in addresses {
-        if let Some(value) = multiaddr(address) {
-            external_addresses.push(value);
-        } else {
-            return Err(Error::AcessPointError(format!(
-                "Invalid MultiAddress conversion in External Address: {}",
-                address
-            )));
-        }
-    }
-    Ok(external_addresses)
-}
-
-fn multiaddr(addr: &str) -> Option<Multiaddr> {
-    match addr.parse::<Multiaddr>() {
-        Ok(a) => Some(a),
-        Err(_) => None,
     }
 }

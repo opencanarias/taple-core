@@ -12,7 +12,7 @@ mod tests {
     };
     use log::debug;
     pub use taple_core::message::{MessageReceiver, MessageSender, NetworkEvent};
-    use taple_core::{message::Command, ListenAddr};
+    use taple_core::{message::Command, ListenAddr, TapleNetwork};
 
     use super::*;
 
@@ -50,7 +50,7 @@ mod tests {
             ));
             let (sender_boot, receiver_boot) = mpsc::channel(10000);
             let (bsx, brx) = tokio::sync::broadcast::channel::<()>(10);
-            let bootstrap_network = NetworkProcessor::new(
+            let mut bootstrap_network = NetworkProcessor::new(
                 vec![ListenAddr::try_from(String::from("/memory/647988")).unwrap()],
                 vec![],
                 mc1,
@@ -66,7 +66,7 @@ mod tests {
                 format!("paco").as_bytes(),
             ));
             let (sender1, receiver1) = mpsc::channel(10000);
-            let node1_network = NetworkProcessor::new(
+            let mut node1_network = NetworkProcessor::new(
                 vec![ListenAddr::try_from(String::from("/memory/647999")).unwrap()],
                 vec![(bt_pid, String::from("/memory/647988").parse().unwrap())],
                 mc2,
