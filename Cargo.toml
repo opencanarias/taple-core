@@ -1,6 +1,6 @@
 [workspace]
 
-members = ["core", "db/leveldb", "db/memory"]
+members = ["core", "db/leveldb", "db/memory", "network/libp2p"]
 
 [workspace.package]
 version = "0.3.0-dev"
