@@ -73,15 +73,15 @@ macro_rules! test_database_manager_trait {
                     value: "C".into(),
                 };
                 #[rustfmt::skip] // let-else not supported yet
-                let Ok(data1) = data1.try_to_vec() else {
+                        let Ok(data1) = data1.try_to_vec() else {
                     return Err(DatabaseError::SerializeError);
                 };
                 #[rustfmt::skip] // let-else not supported yet
-                let Ok(data2) = data2.try_to_vec() else {
+                        let Ok(data2) = data2.try_to_vec() else {
                     return Err(DatabaseError::SerializeError);
                 };
                 #[rustfmt::skip] // let-else not supported yet
-                let Ok(data3) = data3.try_to_vec() else {
+                        let Ok(data3) = data3.try_to_vec() else {
                     return Err(DatabaseError::SerializeError);
                 };
                 Ok(vec![data1, data2, data3])

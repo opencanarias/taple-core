@@ -4,7 +4,7 @@ use std::{
     sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 use taple_core::{
-    test_database_manager_trait, DatabaseCollection, DatabaseManager, DbError as Error,
+    test_database_manager_trait, DatabaseCollection, DatabaseManager, DbError as DatabaseError,
 };
 
 pub struct DataStore {
@@ -77,21 +77,21 @@ pub struct MemoryCollection {
 }
 
 impl DatabaseCollection for MemoryCollection {
-    fn get(&self, key: &str) -> Result<Vec<u8>, Error> {
+    fn get(&self, key: &str) -> Result<Vec<u8>, DatabaseError> {
         let lock = self.data._get_inner_read_lock();
         let Some(data) = lock.get(key) else {
-            return Err(Error::EntryNotFound);
+            return Err(DatabaseError::EntryNotFound);
         };
         Ok(data.clone())
     }
 
-    fn put(&self, key: &str, data: Vec<u8>) -> Result<(), Error> {
+    fn put(&self, key: &str, data: Vec<u8>) -> Result<(), DatabaseError> {
         let mut lock = self.data._get_inner_write_lock();
         lock.insert(key.to_string(), data);
         Ok(())
     }
 
-    fn del(&self, key: &str) -> Result<(), Error> {
+    fn del(&self, key: &str) -> Result<(), DatabaseError> {
         let mut lock = self.data._get_inner_write_lock();
         lock.remove(key);
         Ok(())

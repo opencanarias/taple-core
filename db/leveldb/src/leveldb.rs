@@ -9,7 +9,7 @@ use std::cell::Cell;
 use std::path::Path;
 use std::sync::Arc;
 use taple_core::{
-    test_database_manager_trait, DatabaseCollection, DatabaseManager, DbError as Error,
+    test_database_manager_trait, DatabaseCollection, DatabaseManager, DbError as DatabaseError,
 };
 
 #[derive(Debug, PartialEq, Eq)]
@@ -119,25 +119,25 @@ impl LDBCollection {
 }
 
 impl DatabaseCollection for LDBCollection {
-    fn get(&self, key: &str) -> Result<Vec<u8>, Error> {
+    fn get(&self, key: &str) -> Result<Vec<u8>, DatabaseError> {
         let key = self.generate_key(key);
         let result = self.data.get(self.get_read_options(), key);
         match result {
-            Err(_) => Err(Error::EntryNotFound),
+            Err(_) => Err(DatabaseError::EntryNotFound),
             Ok(data) => match data {
                 Some(value) => Ok(value),
-                None => Err(Error::EntryNotFound),
+                None => Err(DatabaseError::EntryNotFound),
             },
         }
     }
 
-    fn put(&self, key: &str, data: Vec<u8>) -> Result<(), Error> {
+    fn put(&self, key: &str, data: Vec<u8>) -> Result<(), DatabaseError> {
         let key = self.generate_key(key);
         let _result = self.data.put(self.get_write_options(), key, &data);
         Ok(())
     }
 
-    fn del(&self, key: &str) -> Result<(), Error> {
+    fn del(&self, key: &str) -> Result<(), DatabaseError> {
         let key = self.generate_key(key);
         let _result = self.data.delete(self.get_write_options(), key);
         Ok(())
