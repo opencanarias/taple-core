@@ -119,7 +119,7 @@ pub mod error;
 pub(crate) mod evaluator;
 pub(crate) mod governance;
 pub(crate) mod ledger;
-pub(crate) mod message;
+pub mod message;
 pub(crate) mod network;
 pub(crate) mod utils;
 pub(crate) mod validation;
