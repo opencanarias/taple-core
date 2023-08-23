@@ -626,6 +626,8 @@ mod test {
                 evaluator.start().await;
             });
             tokio::time::sleep(tokio::time::Duration::from_secs(5)).await; // Pausa para compilar el contrato
+                                                                           // let gov_up =  DigestIdentifier::;
+                                                                           // println!("{}", DigestIdentifier::);
             sx_compiler
                 .send(GovernanceUpdatedMessage::GovernanceUpdated {
                     governance_id: DigestIdentifier::from_str(
