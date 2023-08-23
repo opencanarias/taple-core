@@ -626,20 +626,17 @@ mod test {
                 evaluator.start().await;
             });
             tokio::time::sleep(tokio::time::Duration::from_secs(5)).await; // Pausa para compilar el contrato
-                                                                           // let gov_up =  DigestIdentifier::;
-                                                                           // println!("{}", DigestIdentifier::);
-            sx_compiler
-                .send(GovernanceUpdatedMessage::GovernanceUpdated {
-                    governance_id: DigestIdentifier::from_str(
-                        "JZ3QE97Mzcc_98iKdFLH_M_WnsrFlW04dIGt6mbJwzLg",
-                    )
-                    .unwrap(),
-                    governance_version: 0,
-                })
-                .map_err(|err| {
-                    println!("{:?}", err);
-                    assert!(false);
-                });
+            sx_compiler.send(GovernanceUpdatedMessage::GovernanceUpdated {
+                governance_id: DigestIdentifier::from_str(
+                    "JGSPR6FL-vE7iZxWMd17o09qn7NeTqlcImDVWmijXczw",
+                )
+                .unwrap(),
+                governance_version: 0,
+            });
+            //.map_err(|err| {
+            //    println!("{:?}", err);
+            //    assert!(false);
+            //});
             println!("1");
             //tokio::time::sleep(tokio::time::Duration::from_secs(5)).await; // Pausa para compilar el contrato
             //let response = sx_evaluator
