@@ -96,6 +96,7 @@ impl<
                     }
                 },
                 _ = self.shutdown_receiver.recv() => {
+                    log::debug!("Evaluator module shutdown received");
                     break;
                 }
             }

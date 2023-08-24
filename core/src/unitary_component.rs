@@ -131,26 +131,31 @@ impl NotificationHandler {
 /// Structure that allows a signal to be emitted to stop the TAPLE node.
 /// It can also be used to detect internal shutdown signals, which occur when an internal error occurs.
 pub struct TapleShutdownManager {
-    shutdown_sender: tokio::sync::broadcast::Sender<()>,
+    // shutdown_sender: tokio::sync::broadcast::Sender<()>,
     shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
 }
 
+// impl Clone for TapleShutdownManager {
+//     fn clone(&self) -> Self {
+//         TapleShutdownManager::new(self.shutdown_receiver.clone())
+//     }
+// }
+
 impl TapleShutdownManager {
-    pub(crate) fn new(sender: tokio::sync::broadcast::Sender<()>) -> Self {
+    pub(crate) fn new(shutdown_receiver: tokio::sync::broadcast::Receiver<()>) -> Self {
         Self {
-            shutdown_receiver: sender.subscribe(),
-            shutdown_sender: sender,
+            shutdown_receiver,
         }
     }
     /// Allows to obtain the underlying channel to receive messages
-    pub fn get_raw_receiver(&self) -> tokio::sync::broadcast::Receiver<()> {
-        self.shutdown_sender.subscribe()
-    }
+    // pub fn get_raw_receiver(&self) -> tokio::sync::broadcast::Receiver<()> {
+    //     self.shutdown_sender.subscribe()
+    // }
 
     /// Allows to obtain the underlying channel to send messages
-    pub fn get_raw_sender(&self) -> tokio::sync::broadcast::Sender<()> {
-        self.shutdown_sender.clone()
-    }
+    // pub fn get_raw_sender(&self) -> tokio::sync::broadcast::Sender<()> {
+    //     self.shutdown_sender.clone()
+    // }
 
     /// Wait until a shutdown signal is received from the node.
     pub async fn wait_for_shutdown(mut self) {
@@ -162,17 +167,17 @@ impl TapleShutdownManager {
         }
     }
 
-    /// It issues a shutdown signal and waits until the node has processed it correctly.
-    pub async fn shutdown(mut self) {
-        self.shutdown_sender.send(()).unwrap();
-        drop(self.shutdown_sender);
-        loop {
-            match self.shutdown_receiver.recv().await {
-                Err(RecvError::Closed) => break,
-                _ => continue,
-            }
-        }
-    }
+    // /// It issues a shutdown signal and waits until the node has processed it correctly.
+    // pub async fn shutdown(mut self) {
+    //     self.shutdown_sender.send(()).unwrap();
+    //     drop(self.shutdown_sender);
+    //     loop {
+    //         match self.shutdown_receiver.recv().await {
+    //             Err(RecvError::Closed) => break,
+    //             _ => continue,
+    //         }
+    //     }
+    // }
 }
 
 /// Structure representing a node of a TAPLE network.
@@ -190,7 +195,7 @@ pub struct Taple<M: DatabaseManager<C>, C: DatabaseCollection> {
     notification_sender: tokio::sync::broadcast::Sender<Notification>,
     settings: TapleSettings,
     database: Option<M>,
-    shutdown_sender: Option<tokio::sync::broadcast::Sender<()>>,
+    shutdown_sender: tokio::sync::broadcast::Sender<()>,
     _shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
     _c: PhantomData<C>,
 }
@@ -236,7 +241,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
     /// This method allows to get the receiver of the shutdown channel used by the node.
     /// This can be used by the user/client to detect when the node has emmited the signal to .
     pub fn get_shutdown_manager(&self) -> TapleShutdownManager {
-        TapleShutdownManager::new(self.shutdown_sender.as_ref().unwrap().clone())
+        TapleShutdownManager::new(self.shutdown_sender.subscribe())
     }
 
     /// This method allows the creation of cryptographic material through a
@@ -276,9 +281,22 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
             notification_sender: sender,
             settings,
             database: Some(database),
-            shutdown_sender: Some(bsx),
+            shutdown_sender: bsx,
             _shutdown_receiver: brx,
             _c: PhantomData::default(),
+        }
+    }
+
+    /// It issues a shutdown signal and waits until the node has processed it correctly.
+    pub async fn shutdown(self) {
+        let mut shutdown_receiver = self.shutdown_sender.subscribe();
+        self.shutdown_sender.send(()).unwrap();
+        drop(self.shutdown_sender);
+        loop {
+            match shutdown_receiver.recv().await {
+                Err(RecvError::Closed) => break,
+                _ => continue,
+            }
         }
     }
 
@@ -294,7 +312,6 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
     /// This method panics if it has not been possible to generate the network layer.
     pub async fn start(&mut self) -> Result<(), Error> {
         // Create channels
-        let shutdown_sender = self.shutdown_sender.take().unwrap();
         // Channels for network
         let (sender_network, receiver_network): (
             tokio::sync::mpsc::Sender<NetworkEvent>,
@@ -362,7 +379,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
             network_access_points(&self.settings.network.known_nodes)?, // TODO: Provide Bootraps nodes per configuration
             sender_network,
             kp.clone(),
-            shutdown_sender.subscribe(),
+            self.shutdown_sender.subscribe(),
             external_addresses(&self.settings.network.external_address)?,
         )
         .await
@@ -374,7 +391,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
         let network_receiver = MessageReceiver::new(
             receiver_network,
             protocol_sender,
-            shutdown_sender.subscribe(),
+            self.shutdown_sender.subscribe(),
             signature_manager.get_own_identifier(),
         );
         // Creation NetworkSender
@@ -387,8 +404,8 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
         let mut task_manager = MessageTaskManager::new(
             network_sender.clone(),
             task_receiver,
-            shutdown_sender.clone(),
-            shutdown_sender.subscribe(),
+            self.shutdown_sender.clone(),
+            self.shutdown_sender.subscribe(),
         );
         // Creation ProtocolManager
         let protocol_manager = ProtocolManager::new(
@@ -402,13 +419,13 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
             #[cfg(feature = "approval")]
             approval_sender.clone(),
             ledger_sender.clone(),
-            shutdown_sender.clone(),
+            self.shutdown_sender.clone(),
         );
         // Creation Governance
         let mut governance_manager = Governance::<M, C>::new(
             governance_receiver,
-            shutdown_sender.clone(),
-            shutdown_sender.subscribe(),
+            self.shutdown_sender.clone(),
+            self.shutdown_sender.subscribe(),
             DB::new(db.clone()),
             governance_update_sx.clone(),
         );
@@ -418,8 +435,8 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
             governance_update_rx,
             GovernanceAPI::new(governance_sender.clone()),
             DB::new(db.clone()),
-            shutdown_sender.clone(),
-            shutdown_sender.subscribe(),
+            self.shutdown_sender.clone(),
+            self.shutdown_sender.subscribe(),
             task_sender.clone(),
             self.notification_sender.clone(),
             ledger_sender.clone(),
@@ -429,8 +446,8 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
         // Creation LedgerManager
         let ledger_manager = LedgerManager::new(
             ledger_receiver,
-            shutdown_sender.clone(),
-            shutdown_sender.subscribe(),
+            self.shutdown_sender.clone(),
+            self.shutdown_sender.subscribe(),
             self.notification_sender.clone(),
             GovernanceAPI::new(governance_sender.clone()),
             DB::new(db.clone()),
@@ -444,8 +461,8 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
             DB::new(db.clone()),
             task_sender.clone(),
             key_identifier.clone(),
-            shutdown_sender.clone(),
-            shutdown_sender.subscribe(),
+            self.shutdown_sender.clone(),
+            self.shutdown_sender.subscribe(),
         );
         // Creation API module
         let api = API::new(
@@ -456,8 +473,8 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
             AuthorizedSubjectsAPI::new(as_sender),
             EventManagerAPI::new(ledger_sender),
             wath_sender,
-            shutdown_sender.clone(),
-            shutdown_sender.subscribe(),
+            self.shutdown_sender.clone(),
+            self.shutdown_sender.subscribe(),
             DB::new(db.clone()),
         );
         #[cfg(feature = "evaluation")]
@@ -467,8 +484,8 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
             db.clone(),
             signature_manager.clone(),
             governance_update_sx.subscribe(),
-            shutdown_sender.clone(),
-            shutdown_sender.subscribe(),
+            self.shutdown_sender.clone(),
+            self.shutdown_sender.subscribe(),
             GovernanceAPI::new(governance_sender.clone()),
             self.settings.node.smartcontracts_directory.clone(),
             task_sender.clone(),
@@ -478,8 +495,8 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
         let approval_manager = ApprovalManager::new(
             GovernanceAPI::new(governance_sender.clone()),
             approval_receiver,
-            shutdown_sender.clone(),
-            shutdown_sender.subscribe(),
+            self.shutdown_sender.clone(),
+            self.shutdown_sender.subscribe(),
             task_sender.clone(),
             governance_update_sx.subscribe(),
             signature_manager.clone(),
@@ -491,8 +508,8 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
         let distribution_manager = DistributionManager::new(
             distribution_receiver,
             governance_update_sx.subscribe(),
-            shutdown_sender.clone(),
-            shutdown_sender.subscribe(),
+            self.shutdown_sender.clone(),
+            self.shutdown_sender.subscribe(),
             task_sender.clone(),
             GovernanceAPI::new(governance_sender.clone()),
             signature_manager.clone(),
@@ -505,8 +522,8 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Taple<M, 
             GovernanceAPI::new(governance_sender),
             DB::new(db.clone()),
             signature_manager,
-            shutdown_sender.clone(),
-            shutdown_sender.subscribe(),
+            self.shutdown_sender.clone(),
+            self.shutdown_sender.subscribe(),
             task_sender,
         );
         // Module initialization

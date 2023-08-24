@@ -75,6 +75,7 @@ impl<C: DatabaseCollection> ValidationManager<C> {
                     }
                 },
                 _ = self.shutdown_receiver.recv() => {
+                    log::debug!("Validation module shutdown received");
                     break;
                 }
             }

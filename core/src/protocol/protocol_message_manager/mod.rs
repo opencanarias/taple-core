@@ -102,6 +102,7 @@ impl ProtocolManager {
                     }
                 },
                 _ = self.shutdown_receiver.recv() => {
+                    log::debug!("Protocol module shutdown received");
                     break;
                 }
             }

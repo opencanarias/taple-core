@@ -57,6 +57,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface + Send> TapleCompiler<C, G> {
                     }
                 },
                 _ = self.shutdown_receiver.recv() => {
+                    log::debug!("Compiler module shutdown received");
                     break;
                 }
             }
