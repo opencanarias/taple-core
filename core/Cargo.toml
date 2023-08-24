@@ -1,14 +1,14 @@
 [package]
 name = "taple-core"
-version = "0.2.0-dev"
-edition = "2021"
-authors = ["Open Canarias S.L.<taple@opencanarias.com>"]
-readme = "../README.md"
-homepage = "https://www.taple.es"
-repository = "https://github.com/opencanarias/taple-core"
-license = "AGPL-3.0-only"
-keywords = ["blockchain", "distributed-ledger", "taple", "sustainability"]
-rust-version = "1.67"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+readme.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+rust-version.workspace = true
 
 [features]
 default = ["secp256k1"]
@@ -19,8 +19,8 @@ validation = []
 secp256k1 = ["dep:libsecp256k1"]
 
 [dependencies]
-tokio = { version = "1.20", features = ["time", "sync", "macros"] }
-libp2p = { version = "0.45.1", default_features = false, features = [
+tokio = { workspace = true, features = ["time", "sync", "macros"] }
+libp2p = { workspace = true, default_features = false, features = [
 	"identify",
 	"kad",
 	"dns-tokio",
@@ -29,36 +29,34 @@ libp2p = { version = "0.45.1", default_features = false, features = [
 	"noise",
 	"yamux",
 ] }
-config = { version = "~0.13.2", features = ["toml"] }
-serde = { version = "~1.0", features = ["derive"] }
-serde_json = { version = "~1.0" }
-async-trait = { version = "~0.1.56" }
-futures = { version = "~0.3.24" }
-env_logger = { version = "^0.10" }
-log = { version = "~0.4" }
-hex = { version = "~0.4.3" }
-jsonschema = { version = "~0.16" }
-time = { version = "^0.3", features = ["std"] }
-thiserror = { version = "~1.0" }
-tokio-stream = { version = "~0.1" }
-rmp-serde = { version = "~1" }
-borsh = { version = "~0.10.3" }
-blake3 = { version = "~1.0" }
-rand = { version = "~0.8.5", features = ["small_rng"] }
-instant = { version = "~0.1.11" }
-unsigned-varint = { version = "~0.7", features = ["futures"] }
-base64 = { version = "0.13" }
-async-std = { version = "~1.12.0", features = ["attributes"], optional = true }
-bincode = { version = "~1.3" }
-json-patch = { version = "~0.2" }
-ed25519-dalek = { version = "^1", features = ["serde"] }
-libsecp256k1 = { version = "~0.7", optional = true }
-blake2 = { version = "~0.9" }
-sha2 = { version = "~0.10" }
-sha3 = { version = "~0.10" }
-getrandom = { version = "0.2" }
-wasmtime = { version = "^5.0.0", features = ["cache"], optional = true }
+config = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+log = { workspace = true }
+hex = { workspace = true }
+async-std = { workspace = true, optional = true }
+jsonschema = { workspace = true }
+time = { workspace = true, features = ["std"] }
+thiserror = { workspace = true }
+tokio-stream = { workspace = true }
+rmp-serde = { workspace = true }
+borsh = { workspace = true }
+blake3 = { workspace = true }
+rand = { workspace = true, features = ["small_rng"] }
+instant = { workspace = true }
+unsigned-varint = { workspace = true, features = ["futures"] }
+base64 = { workspace = true }
+getrandom = { workspace = true }
+json-patch = { workspace = true }
+ed25519-dalek = { workspace = true, features = ["serde"] }
+libsecp256k1 = { workspace = true, optional = true }
+blake2 = { workspace = true }
+sha2 = { workspace = true }
+sha3 = { workspace = true }
+wasmtime = { workspace = true, features = ["cache"], optional = true }
 
 [dev-dependencies]
 taple-core = { path = ".", features = ["all"] }
-# serial_test = { workspace = true }
+serial_test = { workspace = true }
