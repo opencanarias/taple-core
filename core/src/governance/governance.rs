@@ -59,6 +59,7 @@ impl<M: DatabaseManager<C>, C: DatabaseCollection> Governance<M, C> {
                     }
                 },
                 _ = self.shutdown_receiver.recv() => {
+                    log::debug!("Governance module shutdown received");
                     break;
                 }
             }

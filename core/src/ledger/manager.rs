@@ -110,6 +110,7 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                     }
                 },
                 _ = self.shutdown_receiver.recv() => {
+                    log::debug!("Ledger module shutdown received");
                     break;
                 }
             }

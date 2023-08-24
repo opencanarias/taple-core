@@ -193,15 +193,21 @@ impl<C: DatabaseCollection> InnerAPI<C> {
     }
 
     pub async fn get_request(&self, request_id: DigestIdentifier) -> ApiResponses {
+        log::debug!("SE LLAMA A GET REQUEST antes de db");
         match self.db.get_taple_request(&request_id) {
-            Ok(request) => ApiResponses::GetRequest(Ok(request)),
+            Ok(request) => {
+                log::debug!("FUNCIONÓ EL GET DE LA DB");
+                ApiResponses::GetRequest(Ok(request))
+            },
             Err(DbError::EntryNotFound) => {
+                log::debug!("entry not found apra get request");
                 return ApiResponses::GetRequest(Err(ApiError::NotFound(format!(
                     "Request {}",
                     request_id.to_str()
                 ))))
             }
             Err(error) => {
+                log::debug!("ENTRY ERROR DE DATABASE");
                 return ApiResponses::GetRequest(Err(ApiError::DatabaseError(error.to_string())))
             }
         }

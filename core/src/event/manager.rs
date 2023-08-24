@@ -130,6 +130,7 @@ impl<C: DatabaseCollection> EventManager<C> {
                     }
                 },
                 _ = self.shutdown_receiver.recv() => {
+                    log::debug!("Event module shutdown received");
                     break;
                 }
             }

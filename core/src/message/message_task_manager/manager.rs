@@ -54,6 +54,7 @@ impl<T: TaskCommandContent + Serialize + DeserializeOwned + 'static> MessageTask
                     }
                 },
                 _ = self.shutdown_receiver.recv() => {
+                    log::debug!("Message module shutdown received");
                     break;
                 }
             }
