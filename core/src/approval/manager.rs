@@ -164,6 +164,7 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
                     }
                 },
                 _ = self.shutdown_receiver.recv() => {
+                    log::debug!("Approval module shutdown received");
                     break;
                 },
                 update = self.governance_update_channel.recv() => {

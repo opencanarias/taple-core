@@ -178,8 +178,11 @@ impl ApiModuleInterface for NodeAPI {
         let response = self
             .sender
             .ask(APICommands::GetRequest(request_id))
-            .await
-            .unwrap();
+            .await;
+        if response.is_err() {
+            log::debug!("EN EL MODULE INTERFACE ES ERROR {}", response.clone().unwrap_err().to_string());
+        }
+        let response = response.unwrap();
         if let ApiResponses::GetRequest(data) = response {
             data
         } else {
@@ -566,7 +569,7 @@ impl<C: DatabaseCollection> API<C> {
                         }
                     };
                     if must_shutdown {
-                        log::error!("must shutdown before unwrap");
+                        log::debug!("must shutdown before unwrap");
                         let sender = self.shutdown_sender.take().unwrap();
                         sender.send(()).expect("Shutdown Channel Closed");
                         drop(sender);
@@ -579,6 +582,7 @@ impl<C: DatabaseCollection> API<C> {
                     }
                 },
                 _ = self.shutdown_receiver.recv() => {
+                    log::debug!("API module shutdown received");
                     break;
                 }
             }

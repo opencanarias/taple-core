@@ -74,6 +74,7 @@ impl<C: DatabaseCollection> DistributionManager<C> {
                     }
                 },
                 _ = self.shutdown_receiver.recv() => {
+                    log::debug!("Distribution module shutdown received");
                     break;
                 },
                 msg = self.governance_update_input.recv() => {

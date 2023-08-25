@@ -272,6 +272,7 @@ impl NetworkProcessor {
                 },
                 Some(_) = self.bootstrap_retries_steam.next() => self.connect_to_pending_bootstraps(),
                 _ = self.shutdown_receiver.recv() => {
+                    log::debug!("Network module shutdown received");
                     break;
                 }
             }
