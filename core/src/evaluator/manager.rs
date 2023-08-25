@@ -206,6 +206,7 @@ impl<
                     }
                 }
                 EvaluatorMessage::AskForEvaluation(_) => {
+                    log::error!("Ask for Evaluation in Evaluator Manager");
                     return Ok(());
                 }
             }
