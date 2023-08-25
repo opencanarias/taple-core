@@ -206,7 +206,6 @@ impl<
                     }
                 }
                 EvaluatorMessage::AskForEvaluation(_) => {
-                    log::error!("Ask for Evaluation in Evaluator Manager");
                     return Ok(());
                 }
             }
@@ -224,7 +223,7 @@ impl<
 #[cfg(test)]
 mod test {
 
-    use std::{collections::HashSet, str::FromStr, sync::Arc};
+    use std::{collections::HashSet, fs, str::FromStr, sync::Arc};
 
     use async_trait::async_trait;
     use json_patch::diff;
@@ -260,6 +259,39 @@ mod test {
 
     use crate::evaluator::manager::EvaluatorManager;
 
+    const SC_DIR: &str = "/tmp/taple_contracts/";
+
+    pub fn create_dir() {
+        remove_dir();
+        match fs::create_dir(SC_DIR) {
+            Ok(_) => (),
+            Err(err) => {
+                println!("Error creating directory: {}", err);
+                assert!(false);
+            }
+        }
+    }
+
+    pub fn remove_dir() {
+        if fs::metadata(SC_DIR).is_ok() {
+            match fs::remove_dir_all(SC_DIR) {
+                Ok(_) => (),
+                Err(err) => {
+                    println!("Error removing directory: {}", err);
+                    assert!(false);
+                }
+            }
+        }
+    }
+
+    // Subject State
+    #[derive(Serialize, Deserialize, Debug)]
+    pub struct Data {
+        pub one: u32,
+        pub two: u32,
+        pub three: u32,
+    }
+
     // Event Family
     #[derive(Serialize, Deserialize, Debug)]
     pub enum EventType {
@@ -284,14 +316,6 @@ mod test {
         },
     }
 
-    // Subject State
-    #[derive(Serialize, Deserialize, Debug)]
-    pub struct Data {
-        pub one: u32,
-        pub two: u32,
-        pub three: u32,
-    }
-
     #[derive(Clone)]
     struct GovernanceMockup {}
 
@@ -299,7 +323,7 @@ mod test {
         String::from(
             r#"
         #[no_mangle]
-        pub unsafe fn main_function(state_ptr: i32, event_ptr: i32, roles_ptr: i32) {
+        pub unsafe fn main_function(state_ptr: i32, event_ptr: i32, is_owner: i32) {
             
         }
         "#,
@@ -310,7 +334,7 @@ mod test {
         String::from(
             r#"
         #[no_mangle]
-        pub unsafe fn main_function(state_ptr: i32, event_ptr: i32, roles_ptr: i32) -> i32 {
+        pub unsafe fn main_function(state_ptr: i32, event_ptr: i32, is_owner: i32) -> i32 {
             4
         }
         "#,
@@ -320,13 +344,12 @@ mod test {
     fn get_file() -> String {
         String::from(
             r#"
-            mod sdk;
+            use taple_sc_rust as sdk;
             use serde::{Deserialize, Serialize};
             
             // Intento de simulación de cómo podría ser un contrato
             
-            // Definir "estado del sujeto"
-            #[repr(C)]
+            // Subject State
             #[derive(Serialize, Deserialize, Clone)]
             pub struct Data {
                 pub one: u32,
@@ -334,20 +357,19 @@ mod test {
                 pub three: u32,
             }
             
-            // Definir "Familia de eventos"
+            // Event Family
             #[derive(Serialize, Deserialize, Debug)]
             pub enum EventType {
-                Notify,
-                Patch { data: String },
-                ModOne { data: u32 },
-                ModTwo { data: u32 },
-                ModThree { data: u32 },
-                ModAll { data: (u32, u32, u32) },
+                Notify { chunk: Vec<u8> },
+                ModOne { data: u32, chunk: Vec<u8> },
+                ModTwo { data: u32, chunk: Vec<u8> },
+                ModThree { data: u32, chunk: Vec<u8> },
+                ModAll { data: (u32, u32, u32), chunk: Vec<u8> },
             }
             
             #[no_mangle]
-            pub unsafe fn main_function(state_ptr: i32, event_ptr: i32, roles_ptr: i32) -> u32 {
-                sdk::execute_contract(state_ptr, event_ptr, roles_ptr, contract_logic)
+            pub unsafe fn main_function(state_ptr: i32, event_ptr: i32, is_owner: i32) -> u32 {
+                sdk::execute_contract(state_ptr, event_ptr, is_owner, contract_logic)
             }
             
             /*
@@ -365,42 +387,34 @@ mod test {
                 // Sería posible añadir gestión de errores
                 // Podría ser interesante hacer las operaciones directamente como serde_json:Value en lugar de "Custom Data"
                 let state = &mut contract_result.final_state;
-                let roles = &context.roles;
                 match &context.event {
-                    EventType::ModAll { data } => {
+                    EventType::Notify { chunk: _ } => {
+                        // Evento que no modifica el estado
+                        // Estos eventos se añadirían a la cadena, pero dentro del contrato apenas harían algo
+                    }
+                    EventType::ModOne { data, chunk: _ } => {
+                        // Evento que modifica Data.one
+                        if context.is_owner {
+                            state.one = *data;
+                        }
+                    }
+                    EventType::ModTwo { data, chunk: _ } => {
+                        // Evento que modifica Data.two
+                        state.two = *data;
+                    }
+                    EventType::ModThree { data, chunk: _ } => {
+                        // Evento que modifica Data.three
+                        state.three = *data;
+                    }
+                    EventType::ModAll { data, chunk: _ } => {
                         // Evento que modifica el estado entero
                         state.one = data.0;
                         state.two = data.1;
                         state.three = data.2;
                     }
-                    EventType::ModOne { data } => {
-                        // Evento que modifica Data.one
-                        if roles.contains(&"RolA".into()) {
-                            state.one = *data;
-                        }
-                    }
-                    EventType::ModTwo { data } => {
-                        // Evento que modifica Data.two
-                        state.two = *data;
-                    }
-                    EventType::ModThree { data } => {
-                        // Evento que modifica Data.three
-                        state.three = *data;
-                    }
-                    EventType::Notify => {
-                        // Evento que no modifica el estado
-                        // Estos eventos se añadirían a la cadena, pero dentro del contrato apenas harían algo
-                    }
-                    EventType::Patch { data } => {
-                        // Se recibe un JSON PATCH
-                        // Se aplica directamente al estado
-                        let patched_state = sdk::apply_patch(&data, &context.initial_state).unwrap();
-                        *state = patched_state;
-                        // El usuario debería añadir una función que compruebe el estado del sujeto.
-                    }
                 }
                 contract_result.success = true;
-            }            
+            }
         "#,
         )
     }
@@ -413,7 +427,11 @@ mod test {
             _schema_id: String,
             _governance_version: u64,
         ) -> Result<ValueWrapper, RequestError> {
-            unimplemented!()
+            return Ok(ValueWrapper(serde_json::json!({
+                "one": 10,
+                "two": 11,
+                "three": 13,
+            })));
         }
 
         async fn get_schema(
@@ -422,7 +440,23 @@ mod test {
             _schema_id: String,
             _governance_version: u64,
         ) -> Result<ValueWrapper, RequestError> {
-            unimplemented!()
+            return Ok(ValueWrapper(serde_json::json!({
+                "id": "test",
+                "type": "object",
+                "properties": {
+                    "one": {
+                        "type": "number"
+                    },
+                    "two": {
+                        "type": "number"
+                    },
+                    "three": {
+                        "type": "number"
+                    },
+                },
+                "required": [ "one", "two", "three" ],
+                "additionalProperties": false
+            })));
         }
 
         async fn get_signers(
@@ -541,7 +575,7 @@ mod test {
             .set_subject(
                 &DigestIdentifier::from_str("JGSPR6FL-vE7iZxWMd17o09qn7NeTqlcImDVWmijXczw")
                     .unwrap(),
-                create_governance_test(),
+                create_governance_test(signature_manager.identifier.clone()),
             )
             .unwrap();
         let manager = EvaluatorManager::new(
@@ -552,13 +586,13 @@ mod test {
             shutdown_sx,
             shutdown_rx,
             governance,
-            "../../contracts".into(),
+            SC_DIR.to_string(),
             msg_sx,
         );
         (manager, sx, sx_compiler, signature_manager, msg_rx)
     }
 
-    fn create_governance_test() -> Subject {
+    fn create_governance_test(identifier: KeyIdentifier) -> Subject {
         let initial_state = Data {
             one: 10,
             two: 11,
@@ -571,17 +605,15 @@ mod test {
                 .unwrap(),
             governance_id: DigestIdentifier::from_str("").unwrap(),
             sn: 0,
-            public_key: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg")
-                .unwrap(),
+            public_key: identifier.clone(),
             namespace: "namespace1".into(),
             schema_id: "test".into(),
-            owner: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
-            creator: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg")
-                .unwrap(),
+            owner: identifier.clone(),
+            creator: identifier,
             properties: ValueWrapper(initial_state_json),
             active: true,
             name: "".to_owned(),
-            genesis_gov_version: 3,
+            genesis_gov_version: 0,
         }
     }
 
@@ -611,8 +643,12 @@ mod test {
     fn contract_execution() {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async move {
+            create_dir();
             let (evaluator, sx_evaluator, sx_compiler, signature_manager, mut msg_rx) =
                 build_module();
+            let handler = tokio::spawn(async move {
+                evaluator.start().await;
+            });
             let initial_state = Data {
                 one: 10,
                 two: 11,
@@ -623,40 +659,39 @@ mod test {
                 data: 100,
                 chunk: vec![123, 45, 20],
             };
-
-            let handler = tokio::spawn(async move {
-                evaluator.start().await;
-            });
-            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await; // Pausa para compilar el contrato
+            let governance_id =
+                DigestIdentifier::from_str("JGSPR6FL-vE7iZxWMd17o09qn7NeTqlcImDVWmijXczw").unwrap();
+            println!("Compiling governance contract");
+            tokio::time::sleep(tokio::time::Duration::from_secs(20)).await; // Pausa para compilar el contrato de la gobernanza
+            println!("Finish compiling");
             sx_compiler
                 .send(GovernanceUpdatedMessage::GovernanceUpdated {
-                    governance_id: DigestIdentifier::from_str(
-                        "JGSPR6FL-vE7iZxWMd17o09qn7NeTqlcImDVWmijXczw",
-                    )
-                    .unwrap(),
+                    governance_id: governance_id.to_owned(),
                     governance_version: 0,
                 })
                 .unwrap();
-            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await; // Pausa para compilar el contrato
+            println!("Compiling simulation contract");
+            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await; // Pausa para compilar el contrato de la simulación
+            println!("Finish compiling");
             let response = sx_evaluator
-                .ask(EvaluatorMessage::AskForEvaluation(EvaluationRequest {
-                    event_request: create_event_request(
-                        serde_json::to_value(&event).unwrap(),
-                        &signature_manager,
-                    ),
-                    context: SubjectContext {
-                        governance_id: DigestIdentifier::from_str(
-                            "JGSPR6FL-vE7iZxWMd17o09qn7NeTqlcImDVWmijXczw",
-                        )
-                        .unwrap(),
-                        schema_id: "test".into(),
-                        namespace: "namespace1".into(),
-                        is_owner: true,
-                        state: ValueWrapper(serde_json::json!("{}")),
+                .ask(EvaluatorMessage::EvaluationEvent {
+                    evaluation_request: EvaluationRequest {
+                        event_request: create_event_request(
+                            serde_json::to_value(&event).unwrap(),
+                            &signature_manager,
+                        ),
+                        context: SubjectContext {
+                            governance_id: governance_id.to_owned(),
+                            schema_id: "test".into(),
+                            namespace: "namespace1".into(),
+                            is_owner: true,
+                            state: ValueWrapper(initial_state_json.clone()),
+                        },
+                        sn: 1,
+                        gov_version: 0,
                     },
-                    sn: 1,
-                    gov_version: 0,
-                }))
+                    sender: signature_manager.identifier.clone(),
+                })
                 .await
                 .unwrap();
             let EvaluatorResponse::AskForEvaluation(result) = response;
@@ -686,12 +721,11 @@ mod test {
                 three: 13,
             };
             let new_state_json = serde_json::to_value(&new_state).unwrap();
-            // let hash = DigestIdentifier::from_serializable_borsh(new_state_json).unwrap();
-            // assert_eq!(hash, evaluation.state_hash); // arreglar
             let patch = generate_json_patch(initial_state_json, new_state_json);
-            assert_eq!(patch, evaluator_response.content.patch.0); // arreglar
-                                                                   // let own_identifier = signature_manager.get_own_identifier();
-                                                                   // assert_eq!(evaluation..signer, own_identifier); // arreglar
+            assert_eq!(patch, evaluator_response.content.patch.0);
+            let own_identifier = signature_manager.identifier.to_owned();
+            assert_eq!(evaluator_response.signature.signer, own_identifier);
+            remove_dir();
             handler.abort();
         });
     }
