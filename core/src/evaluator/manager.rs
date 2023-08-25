@@ -205,7 +205,6 @@ impl<
                     }
                 }
                 EvaluatorMessage::AskForEvaluation(_) => {
-                    log::error!("Ask for Evaluation in Evaluator Manager");
                     return Ok(());
                 }
             }
@@ -388,25 +387,25 @@ mod test {
                 // Podría ser interesante hacer las operaciones directamente como serde_json:Value en lugar de "Custom Data"
                 let state = &mut contract_result.final_state;
                 match &context.event {
-                    EventType::Notify { chunk } => {
+                    EventType::Notify { chunk: _ } => {
                         // Evento que no modifica el estado
                         // Estos eventos se añadirían a la cadena, pero dentro del contrato apenas harían algo
                     }
-                    EventType::ModOne { data, chunk } => {
+                    EventType::ModOne { data, chunk: _ } => {
                         // Evento que modifica Data.one
                         if context.is_owner {
                             state.one = *data;
                         }
                     }
-                    EventType::ModTwo { data, chunk } => {
+                    EventType::ModTwo { data, chunk: _ } => {
                         // Evento que modifica Data.two
                         state.two = *data;
                     }
-                    EventType::ModThree { data, chunk } => {
+                    EventType::ModThree { data, chunk: _ } => {
                         // Evento que modifica Data.three
                         state.three = *data;
                     }
-                    EventType::ModAll { data, chunk } => {
+                    EventType::ModAll { data, chunk: _ } => {
                         // Evento que modifica el estado entero
                         state.one = data.0;
                         state.two = data.1;
@@ -414,7 +413,7 @@ mod test {
                     }
                 }
                 contract_result.success = true;
-            }   
+            }
         "#,
         )
     }
@@ -427,7 +426,11 @@ mod test {
             _schema_id: String,
             _governance_version: u64,
         ) -> Result<ValueWrapper, RequestError> {
-            unimplemented!()
+            return Ok(ValueWrapper(serde_json::json!({
+                "one": 10,
+                "two": 11,
+                "three": 13,
+            })));
         }
 
         async fn get_schema(
@@ -436,7 +439,23 @@ mod test {
             _schema_id: String,
             _governance_version: u64,
         ) -> Result<ValueWrapper, RequestError> {
-            unimplemented!()
+            return Ok(ValueWrapper(serde_json::json!({
+                "id": "test",
+                "type": "object",
+                "properties": {
+                    "one": {
+                        "type": "number"
+                    },
+                    "two": {
+                        "type": "number"
+                    },
+                    "three": {
+                        "type": "number"
+                    },
+                },
+                "required": [ "one", "two", "three" ],
+                "additionalProperties": false
+            })));
         }
 
         async fn get_signers(
@@ -555,7 +574,7 @@ mod test {
             .set_subject(
                 &DigestIdentifier::from_str("JGSPR6FL-vE7iZxWMd17o09qn7NeTqlcImDVWmijXczw")
                     .unwrap(),
-                create_governance_test(),
+                create_governance_test(signature_manager.identifier.clone()),
             )
             .unwrap();
         let manager = EvaluatorManager::new(
@@ -566,13 +585,13 @@ mod test {
             shutdown_sx,
             shutdown_rx,
             governance,
-            SC_DIR.to_string(), // "/tmp/taple_contracts/".into(), // "/tmp/.taple/sc".into(),
+            SC_DIR.to_string(),
             msg_sx,
         );
         (manager, sx, sx_compiler, signature_manager, msg_rx)
     }
 
-    fn create_governance_test() -> Subject {
+    fn create_governance_test(identifier: KeyIdentifier) -> Subject {
         let initial_state = Data {
             one: 10,
             two: 11,
@@ -585,13 +604,11 @@ mod test {
                 .unwrap(),
             governance_id: DigestIdentifier::from_str("").unwrap(),
             sn: 0,
-            public_key: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg")
-                .unwrap(),
+            public_key: identifier.clone(),
             namespace: "namespace1".into(),
             schema_id: "test".into(),
-            owner: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg").unwrap(),
-            creator: KeyIdentifier::from_str("EF3E6fTSLrsEWzkD2tkB6QbJU9R7IOkunImqp0PB_ejg")
-                .unwrap(),
+            owner: identifier.clone(),
+            creator: identifier,
             properties: ValueWrapper(initial_state_json),
             active: true,
             name: "".to_owned(),
@@ -628,6 +645,9 @@ mod test {
             create_dir();
             let (evaluator, sx_evaluator, sx_compiler, signature_manager, mut msg_rx) =
                 build_module();
+            let handler = tokio::spawn(async move {
+                evaluator.start().await;
+            });
             let initial_state = Data {
                 one: 10,
                 two: 11,
@@ -638,77 +658,74 @@ mod test {
                 data: 100,
                 chunk: vec![123, 45, 20],
             };
-            let handler = tokio::spawn(async move {
-                evaluator.start().await;
-            });
             let governance_id =
                 DigestIdentifier::from_str("JGSPR6FL-vE7iZxWMd17o09qn7NeTqlcImDVWmijXczw").unwrap();
-            tokio::time::sleep(tokio::time::Duration::from_secs(15)).await; // Pausa para compilar el contrato
+            println!("Compiling governance contract");
+            tokio::time::sleep(tokio::time::Duration::from_secs(20)).await; // Pausa para compilar el contrato de la gobernanza
+            println!("Finish compiling");
             sx_compiler
                 .send(GovernanceUpdatedMessage::GovernanceUpdated {
                     governance_id: governance_id.to_owned(),
                     governance_version: 0,
                 })
                 .unwrap();
-            println!("Toca recompilar tras actualizarse");
-            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await; // Pausa para compilar el contrato
+            println!("Compiling simulation contract");
+            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await; // Pausa para compilar el contrato de la simulación
+            println!("Finish compiling");
             let response = sx_evaluator
-                .ask(EvaluatorMessage::AskForEvaluation(EvaluationRequest {
-                    event_request: create_event_request(
-                        serde_json::to_value(&event).unwrap(),
-                        &signature_manager,
-                    ),
-                    context: SubjectContext {
-                        governance_id: governance_id.to_owned(),
-                        schema_id: "test".into(),
-                        namespace: "namespace1".into(),
-                        is_owner: true,
-                        state: ValueWrapper(serde_json::json!("{}")),
+                .ask(EvaluatorMessage::EvaluationEvent {
+                    evaluation_request: EvaluationRequest {
+                        event_request: create_event_request(
+                            serde_json::to_value(&event).unwrap(),
+                            &signature_manager,
+                        ),
+                        context: SubjectContext {
+                            governance_id: governance_id.to_owned(),
+                            schema_id: "test".into(),
+                            namespace: "namespace1".into(),
+                            is_owner: true,
+                            state: ValueWrapper(initial_state_json.clone()),
+                        },
+                        sn: 1,
+                        gov_version: 0,
                     },
-                    sn: 1,
-                    gov_version: 0,
-                }))
+                    sender: signature_manager.identifier.clone(),
+                })
                 .await
-                .map_err(|err| {
-                    println!("{:?}", err);
-                    assert!(false);
-                });
-            println!("2");
-            //let EvaluatorResponse::AskForEvaluation(result) = response;
-            //assert!(result.is_ok());
-            //let message = if let ChannelData::TellData(data) = msg_rx.receive().await.unwrap() {
-            //    if let MessageTaskCommand::Request(_, data, _, _) = data.get() {
-            //        data
-            //    } else {
-            //        panic!("Unexpected 2");
-            //    }
-            //} else {
-            //    panic!("Unexpected");
-            //};
-            //let evaluator_response = if let TapleMessages::EventMessage(event) = message {
-            //    match event {
-            //        EventCommand::EvaluatorResponse { evaluator_response } => evaluator_response,
-            //        _ => {
-            //            panic!("Unexpected 4");
-            //        }
-            //    }
-            //} else {
-            //    panic!("Unexpected 3");
-            //};
-            //let new_state = Data {
-            //    one: 10,
-            //    two: 100,
-            //    three: 13,
-            //};
-            //let new_state_json = serde_json::to_value(&new_state).unwrap();
-            //// let hash = DigestIdentifier::from_serializable_borsh(new_state_json).unwrap();
-            //// assert_eq!(hash, evaluation.state_hash); // arreglar
-            //let patch = generate_json_patch(initial_state_json, new_state_json);
-            //assert_eq!(patch, evaluator_response.content.patch.0); // arreglar
-            //                                                       // let own_identifier = signature_manager.get_own_identifier();
-            //                                                       // assert_eq!(evaluation..signer, own_identifier); // arreglar
-            //handler.abort();
+                .unwrap();
+            let EvaluatorResponse::AskForEvaluation(result) = response;
+            assert!(result.is_ok());
+            let message = if let ChannelData::TellData(data) = msg_rx.receive().await.unwrap() {
+                if let MessageTaskCommand::Request(_, data, _, _) = data.get() {
+                    data
+                } else {
+                    panic!("Unexpected 2");
+                }
+            } else {
+                panic!("Unexpected");
+            };
+            let evaluator_response = if let TapleMessages::EventMessage(event) = message {
+                match event {
+                    EventCommand::EvaluatorResponse { evaluator_response } => evaluator_response,
+                    _ => {
+                        panic!("Unexpected 4");
+                    }
+                }
+            } else {
+                panic!("Unexpected 3");
+            };
+            let new_state = Data {
+                one: 10,
+                two: 100,
+                three: 13,
+            };
+            let new_state_json = serde_json::to_value(&new_state).unwrap();
+            let patch = generate_json_patch(initial_state_json, new_state_json);
+            assert_eq!(patch, evaluator_response.content.patch.0);
+            let own_identifier = signature_manager.identifier.to_owned();
+            assert_eq!(evaluator_response.signature.signer, own_identifier);
             remove_dir();
+            handler.abort();
         });
     }
 
