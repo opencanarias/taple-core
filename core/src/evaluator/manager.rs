@@ -191,6 +191,14 @@ impl<
                         Err(ExecutorErrorResponses::DatabaseError(error)) => {
                             return Err(EvaluatorError::DatabaseError(error))
                         }
+                        Err(ExecutorErrorResponses::ContractNotFound(schema, gov)) => {
+                            log::error!("Contract not found: {}, {}", schema, gov);
+                            return Ok(());
+                        }
+                        Err(ExecutorErrorResponses::ContractNotUpdated) => {
+                            log::error!("Contract not Updated");
+                            return Ok(());
+                        }
                         Err(
                             ExecutorErrorResponses::StateJSONDeserializationFailed
                             | ExecutorErrorResponses::JSONPATCHDeserializationFailed,

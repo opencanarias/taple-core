@@ -12,7 +12,7 @@ use crate::{
     governance::GovernanceInterface,
     identifier::DigestIdentifier,
     request::FactRequest,
-    DatabaseCollection, EvaluationResponse, EventRequest, ValueWrapper,
+    DatabaseCollection, Derivable, EvaluationResponse, EventRequest, ValueWrapper,
 };
 
 use super::executor::{ContractExecutor, ContractResult};
@@ -54,11 +54,21 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
         } else {
             execute_contract.context.governance_id.clone()
         };
+        let context_hash = Self::generate_context_hash(execute_contract)?;
         let governance = match self.database.get_subject(&governance_id) {
             Ok(governance) => governance,
             Err(DbError::EntryNotFound) => {
-                // Pedimos LCE
-                return Err(ExecutorErrorResponses::OurGovIsLower);
+                // Revisar esto con yeray
+                return Ok(EvaluationResponse {
+                    patch: ValueWrapper(
+                        serde_json::from_str("[]")
+                            .map_err(|_| ExecutorErrorResponses::JSONPATCHDeserializationFailed)?,
+                    ),
+                    state_hash: execute_contract.context.state.hash_id()?,
+                    eval_req_hash: context_hash,
+                    eval_success: false,
+                    appr_required: false,
+                });
             }
             Err(error) => return Err(ExecutorErrorResponses::DatabaseError(error.to_string())),
         };
@@ -69,13 +79,12 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
             // Nuestra gov es menor: no podemos hacer nada. Pedimos LCE al que nos lo envió
             return Err(ExecutorErrorResponses::OurGovIsLower);
         }
-        let context_hash = Self::generate_context_hash(execute_contract)?;
-        let contract: Vec<u8> = if execute_contract.context.schema_id == "governance"
+        let (contract, contract_gov_version): (Vec<u8>, u64) = if execute_contract.context.schema_id
+            == "governance"
             && execute_contract.context.governance_id.digest.is_empty()
         {
             match self.database.get_governance_contract() {
-                // TODO: Gestionar versión gobernanza
-                Ok(contract) => contract,
+                Ok(contract) => (contract, governance.sn),
                 Err(DbError::EntryNotFound) => {
                     return Ok(EvaluationResponse {
                         patch: ValueWrapper(
@@ -96,23 +105,19 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
                 &execute_contract.context.governance_id,
                 &execute_contract.context.schema_id,
             ) {
-                Ok((contract, _, _)) => contract,
+                Ok((contract, _, contract_gov_version)) => (contract, contract_gov_version),
                 Err(DbError::EntryNotFound) => {
-                    return Ok(EvaluationResponse {
-                        patch: ValueWrapper(
-                            serde_json::from_str("[]").map_err(|_| {
-                                ExecutorErrorResponses::JSONPATCHDeserializationFailed
-                            })?,
-                        ),
-                        state_hash: execute_contract.context.state.hash_id()?,
-                        eval_req_hash: context_hash,
-                        eval_success: false,
-                        appr_required: false,
-                    });
+                    return Err(ExecutorErrorResponses::ContractNotFound(
+                        execute_contract.context.schema_id.clone(),
+                        execute_contract.context.governance_id.to_str(),
+                    ));
                 }
                 Err(error) => return Err(ExecutorErrorResponses::DatabaseError(error.to_string())),
             }
         };
+        if contract_gov_version != execute_contract.gov_version {
+            return Err(ExecutorErrorResponses::ContractNotUpdated);
+        }
         let previous_state = &execute_contract.context.state.clone();
         let mut contract_result = match self
             .executor
