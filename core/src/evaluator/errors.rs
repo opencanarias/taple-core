@@ -73,6 +73,8 @@ pub enum ExecutorErrorResponses {
     BorshSerializationError,
     #[error("Borsh deerialization failed")]
     BorshDeserializationError,
+    #[error("Contract not updated")]
+    ContractNotUpdated,
 }
 
 #[derive(Error, Debug, Clone)]
