@@ -58,17 +58,8 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
         let governance = match self.database.get_subject(&governance_id) {
             Ok(governance) => governance,
             Err(DbError::EntryNotFound) => {
-                // Revisar esto con yeray
-                return Ok(EvaluationResponse {
-                    patch: ValueWrapper(
-                        serde_json::from_str("[]")
-                            .map_err(|_| ExecutorErrorResponses::JSONPATCHDeserializationFailed)?,
-                    ),
-                    state_hash: execute_contract.context.state.hash_id()?,
-                    eval_req_hash: context_hash,
-                    eval_success: false,
-                    appr_required: false,
-                });
+                // Revisar esto
+                return Err(ExecutorErrorResponses::GovernanceNotFound);
             }
             Err(error) => return Err(ExecutorErrorResponses::DatabaseError(error.to_string())),
         };
