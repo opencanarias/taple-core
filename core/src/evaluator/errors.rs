@@ -75,6 +75,8 @@ pub enum ExecutorErrorResponses {
     BorshDeserializationError,
     #[error("Contract not updated")]
     ContractNotUpdated,
+    #[error("GovernanceNotFound")]
+    GovernanceNotFound,
 }
 
 #[derive(Error, Debug, Clone)]

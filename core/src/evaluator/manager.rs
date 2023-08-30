@@ -199,6 +199,10 @@ impl<
                             log::error!("Contract not Updated");
                             return Ok(());
                         }
+                        Err(ExecutorErrorResponses::GovernanceNotFound) => {
+                            log::error!("Governance not found");
+                            return Ok(());
+                        }
                         Err(
                             ExecutorErrorResponses::StateJSONDeserializationFailed
                             | ExecutorErrorResponses::JSONPATCHDeserializationFailed,
