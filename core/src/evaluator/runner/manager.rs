@@ -77,17 +77,10 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
             match self.database.get_governance_contract() {
                 Ok(contract) => (contract, governance.sn),
                 Err(DbError::EntryNotFound) => {
-                    return Ok(EvaluationResponse {
-                        patch: ValueWrapper(
-                            serde_json::from_str("[]").map_err(|_| {
-                                ExecutorErrorResponses::JSONPATCHDeserializationFailed
-                            })?,
-                        ),
-                        state_hash: execute_contract.context.state.hash_id()?,
-                        eval_req_hash: context_hash,
-                        eval_success: false,
-                        appr_required: false,
-                    });
+                    return Err(ExecutorErrorResponses::ContractNotFound(
+                        execute_contract.context.schema_id.clone(),
+                        execute_contract.context.governance_id.to_str(),
+                    ));
                 }
                 Err(error) => return Err(ExecutorErrorResponses::DatabaseError(error.to_string())),
             }
