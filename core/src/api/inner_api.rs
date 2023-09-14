@@ -31,7 +31,7 @@ use super::{
 
 use crate::database::Error as DbError;
 
-pub(crate) struct InnerAPI<C: DatabaseCollection> {
+pub(crate) struct InnerApi<C: DatabaseCollection> {
     event_api: EventAPI,
     #[cfg(feature = "approval")]
     approval_api: ApprovalAPI,
@@ -42,7 +42,7 @@ pub(crate) struct InnerAPI<C: DatabaseCollection> {
 
 const MAX_QUANTITY: isize = 100;
 
-impl<C: DatabaseCollection> InnerAPI<C> {
+impl<C: DatabaseCollection> InnerApi<C> {
     pub fn new(
         event_api: EventAPI,
         authorized_subjects_api: AuthorizedSubjectsAPI,
@@ -198,17 +198,17 @@ impl<C: DatabaseCollection> InnerAPI<C> {
             Ok(request) => {
                 log::debug!("FUNCIONÓ EL GET DE LA DB");
                 ApiResponses::GetRequest(Ok(request))
-            },
+            }
             Err(DbError::EntryNotFound) => {
                 log::debug!("entry not found apra get request");
                 return ApiResponses::GetRequest(Err(ApiError::NotFound(format!(
                     "Request {}",
                     request_id.to_str()
-                ))))
+                ))));
             }
             Err(error) => {
                 log::debug!("ENTRY ERROR DE DATABASE");
-                return ApiResponses::GetRequest(Err(ApiError::DatabaseError(error.to_string())))
+                return ApiResponses::GetRequest(Err(ApiError::DatabaseError(error.to_string())));
             }
         }
     }

@@ -47,7 +47,7 @@ pub struct EventCompleter<C: DatabaseCollection> {
     gov_api: GovernanceAPI,
     database: DB<C>,
     message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
-    notification_sender: tokio::sync::broadcast::Sender<Notification>,
+    notification_tx: tokio::sync::mpsc::Sender<Notification>,
     ledger_sender: SenderEnd<LedgerCommand, LedgerResponse>,
     own_identifier: KeyIdentifier,
     subjects_by_governance: HashMap<DigestIdentifier, HashSet<DigestIdentifier>>,
@@ -77,7 +77,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         gov_api: GovernanceAPI,
         database: DB<C>,
         message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
-        notification_sender: tokio::sync::broadcast::Sender<Notification>,
+        notification_tx: tokio::sync::mpsc::Sender<Notification>,
         ledger_sender: SenderEnd<LedgerCommand, LedgerResponse>,
         own_identifier: KeyIdentifier,
         signature_manager: SelfSignatureManager,
@@ -86,7 +86,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             gov_api,
             database,
             message_channel,
-            notification_sender,
+            notification_tx,
             ledger_sender,
             subjects_completing_event: HashMap::new(),
             // actual_sn: HashMap::new(),
@@ -450,7 +450,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         let approval_request = ApprovalRequest {
             event_request: event_request.clone(),
             sn: subject.sn + 1,
-            gov_version: gov_version,
+            gov_version,
             patch: ValueWrapper(
                 serde_json::from_str("[]")
                     .map_err(|_| EventError::CryptoError("Error parsing empty json".to_string()))?,

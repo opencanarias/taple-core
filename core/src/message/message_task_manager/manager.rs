@@ -1,12 +1,16 @@
-use crate::commons::{
-    channel::{ChannelData, MpscChannel},
-    identifier::KeyIdentifier,
+use crate::{
+    commons::{
+        channel::{ChannelData, MpscChannel},
+        identifier::KeyIdentifier,
+    },
+    Notification,
 };
 use futures::future::{AbortHandle, Abortable, Aborted};
 use log::debug;
 use serde::{de::DeserializeOwned, Serialize};
 use std::collections::HashMap;
 use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 
 use super::algorithm::Algorithm;
 
@@ -22,43 +26,44 @@ where
     list: HashMap<String, (JoinHandle<Result<Result<(), Error>, Aborted>>, AbortHandle)>,
     receiver: MpscChannel<MessageTaskCommand<T>, ()>,
     sender: MessageSender,
-    shutdown_sender: tokio::sync::broadcast::Sender<()>,
-    shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+    token: CancellationToken,
+    notification_tx: tokio::sync::mpsc::Sender<Notification>,
 }
 
 impl<T: TaskCommandContent + Serialize + DeserializeOwned + 'static> MessageTaskManager<T> {
     pub fn new(
         sender: MessageSender,
         receiver: MpscChannel<MessageTaskCommand<T>, ()>,
-        shutdown_sender: tokio::sync::broadcast::Sender<()>,
-        shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+        token: CancellationToken,
+        notification_tx: tokio::sync::mpsc::Sender<Notification>,
     ) -> MessageTaskManager<T> {
         MessageTaskManager {
             list: HashMap::new(),
             receiver,
             sender,
-            shutdown_sender,
-            shutdown_receiver,
+            token,
+            notification_tx,
         }
     }
 
-    pub async fn start(&mut self) {
+    pub async fn run(mut self) {
         loop {
             tokio::select! {
                 msg = self.receiver.receive() => {
                     let result = self.process_input(msg).await;
                     if result.is_err() {
                         log::error!("{}", result.unwrap_err());
-                        self.shutdown_sender.send(()).expect("Shutdown Channel Closed");
+                        self.token.cancel();
                         break;
                     }
                 },
-                _ = self.shutdown_receiver.recv() => {
+                _ = self.token.cancelled() => {
                     log::debug!("Message module shutdown received");
                     break;
                 }
             }
         }
+        log::info!("Ended");
     }
 
     async fn process_input(

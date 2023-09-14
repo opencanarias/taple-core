@@ -139,19 +139,18 @@ impl<'a> Iterator for MemoryIterator<'a> {
             self.current = Some((Arc::new(guard), iter));
             &mut self.current.as_mut().unwrap().1
         };
-        loop {
-            let Some(item) = iter.next() else {
+
+        let Some(item) = iter.next() else {
                 return None;
             };
-            let key = {
-                let value = item.0.clone();
-                if !value.starts_with(&self.table_name) {
-                    return None;
-                }
-                value.replace(&self.table_name, "")
-            };
-            return Some((key, item.1.clone()));
-        }
+        let key = {
+            let value = item.0.clone();
+            if !value.starts_with(&self.table_name) {
+                return None;
+            }
+            value.replace(&self.table_name, "")
+        };
+        return Some((key, item.1.clone()));
     }
 }
 
@@ -188,19 +187,17 @@ impl<'a> Iterator for RevMemoryIterator<'a> {
             self.current = Some((Arc::new(guard), iter));
             &mut self.current.as_mut().unwrap().1
         };
-        loop {
-            let Some(item) = iter.next() else {
+        let Some(item) = iter.next() else {
                 return None;
             };
-            let key = {
-                let value = item.0.clone();
-                if !value.starts_with(&self.table_name) {
-                    return None;
-                }
-                value.replace(&self.table_name, "")
-            };
-            return Some((key, item.1.clone()));
-        }
+        let key = {
+            let value = item.0.clone();
+            if !value.starts_with(&self.table_name) {
+                return None;
+            }
+            value.replace(&self.table_name, "")
+        };
+        return Some((key, item.1.clone()));
     }
 }
 

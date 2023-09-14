@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use super::{
     error::{APIInternalError, ApiError},
-    inner_api::InnerAPI,
+    inner_api::InnerApi,
     APICommands, ApiResponses, GetAllowedSubjects,
 };
 use super::{GetEvents, GetGovernanceSubjects};
@@ -10,10 +10,6 @@ use super::{GetEvents, GetGovernanceSubjects};
 use crate::approval::manager::ApprovalAPI;
 use crate::commons::models::request::TapleRequest;
 use crate::commons::models::state::SubjectData;
-use crate::commons::{
-    channel::{ChannelData, MpscChannel, SenderEnd},
-    config::TapleSettings,
-};
 use crate::event::manager::EventAPI;
 use crate::ledger::manager::EventManagerAPI;
 use crate::signature::Signature;
@@ -23,164 +19,64 @@ use crate::ValidationProof;
 use crate::{
     authorized_subjecs::manager::AuthorizedSubjectsAPI, signature::Signed, Event, EventRequest,
 };
+use crate::{
+    commons::channel::{ChannelData, MpscChannel, SenderEnd},
+    Notification,
+};
 use crate::{identifier::DigestIdentifier, DatabaseCollection, DB};
 use crate::{KeyDerivator, KeyIdentifier};
-use async_trait::async_trait;
-use tokio::sync::watch::Sender;
-
-/// Trait that allows implementing the interface of a TAPLE node.
-/// The only native implementation is [NodeAPI]. Users can use the trait
-/// to add specific behaviors to an existing node interface. For example,
-/// a [NodeAPI] wrapper could be created that again implements the trait
-/// and perform certain intermediate operations, such as incrementing a counter
-/// to find out how many API queries have been made.
-#[async_trait]
-pub trait ApiModuleInterface {
-    /// Allows to make a request to the node from an external Invoker
-    async fn external_request(
-        &self,
-        event_request: Signed<EventRequest>,
-    ) -> Result<DigestIdentifier, ApiError>;
-    /// Allows to get all subjects that are known to the current node, regardless of their governance.
-    /// Paging can be performed using the optional arguments `from` and `quantity`.
-    /// Regarding the first one, note that it admits negative values, in which case the paging is
-    /// performed in the opposite direction starting from the end of the collection. Note that this method
-    /// also returns the subjects that model governance.
-    /// # Possible errors
-    /// • [ApiError::InternalError] if an internal error occurred during the execution of the operation.
-    async fn get_subjects(
-        &self,
-        namespace: String,
-        from: Option<String>,
-        quantity: Option<i64>,
-    ) -> Result<Vec<SubjectData>, ApiError>;
-    /// It allows to obtain all the subjects that model existing governance in the node.
-    /// # Possible errors
-    /// • [ApiError::InternalError] if an internal error occurred during the execution of the operation.
-    async fn get_governances(
-        &self,
-        namespace: String,
-        from: Option<String>,
-        quantity: Option<i64>,
-    ) -> Result<Vec<SubjectData>, ApiError>;
-    async fn get_subjects_by_governance(
-        &self,
-        governance_id: DigestIdentifier,
-        from: Option<String>,
-        quantity: Option<i64>,
-    ) -> Result<Vec<SubjectData>, ApiError>;
-    /// Allows to obtain events from a specific subject previously existing in the node.
-    /// Paging can be performed by means of the optional arguments `from` and `quantity`.
-    /// Regarding the former, it should be noted that negative values are allowed, in which case
-    /// the paging is performed in the opposite direction starting from the end of the string.
-    /// # Possible errors
-    /// • [ApiError::InvalidParameters] if the specified subject identifier does not match a valid [DigestIdentifier].
-    async fn get_events(
-        &self,
-        subject_id: DigestIdentifier,
-        from: Option<i64>,
-        quantity: Option<i64>,
-    ) -> Result<Vec<Signed<Event>>, ApiError>;
-
-    async fn get_event(
-        &self,
-        subject_id: DigestIdentifier,
-        sn: u64,
-    ) -> Result<Signed<Event>, ApiError>;
-    /// Allows to obtain a specified subject by specifying its identifier.
-    /// # Possible errors
-    /// • [ApiError::InvalidParameters] if the specified identifier does not match a valid [DigestIdentifier].<br />
-    /// • [ApiError::NotFound] if the subject does not exist.
-    async fn get_subject(&self, subject_id: DigestIdentifier) -> Result<SubjectData, ApiError>;
-    /// Stops the node, consuming the instance on the fly. This implies that any previously created API
-    /// or [NotificationHandler] instances will no longer be functional.
-    async fn shutdown(self) -> Result<(), ApiError>;
-    /// Allows to vote on a voting request that previously exists in the system.
-    /// This vote will be sent to the corresponding node in charge of its collection.
-    /// # Possible errors
-    /// • [ApiError::InternalError] if an internal error occurs during operation execution.<br />
-    /// • [ApiError::NotFound] if the request does not exist in the system.<br />
-    /// • [ApiError::InvalidParameters] if the specified request identifier does not match a valid [DigestIdentifier].<br />
-    /// • [ApiError::VoteNotNeeded] if the node's vote is no longer required. <br />
-    /// This occurs when the acceptance of the changes proposed by the petition has already been resolved by the rest of the nodes in the network or when the node cannot participate in the voting process because it lacks the voting role.
-    #[cfg(feature = "approval")]
-    async fn approval_request(
-        &self,
-        request_id: DigestIdentifier,
-        acceptance: bool,
-    ) -> Result<ApprovalEntity, ApiError>;
-    /// It allows to obtain all the voting requests pending to be resolved in the node.
-    /// These requests are received from other nodes in the network when they try to update
-    /// a governance subject. It is necessary to vote their agreement or disagreement with
-    /// the proposed changes in order for the events to be implemented.
-    /// # Possible errors
-    /// • [ApiError::InternalError] if an internal error occurs during operation execution.
-    #[cfg(feature = "approval")]
-    async fn get_pending_requests(&self) -> Result<Vec<ApprovalEntity>, ApiError>;
-    /// It allows to obtain a single voting request pending to be resolved in the node.
-    /// This request is received from other nodes in the network when they try to update
-    /// a governance subject. It is necessary to vote its agreement or disagreement with
-    /// the proposed changes in order for the events to be implemented.
-    /// # Possible errors
-    /// • [ApiError::InternalError] if an internal error occurs during operation execution.
-    /// • [ApiError::NotFound] if the requested request does not exist.
-    #[cfg(feature = "approval")]
-    async fn get_single_request(&self, id: DigestIdentifier) -> Result<ApprovalEntity, ApiError>;
-    async fn add_preauthorize_subject(
-        &self,
-        subject_id: &DigestIdentifier,
-        providers: &HashSet<KeyIdentifier>,
-    ) -> Result<(), ApiError>;
-    async fn get_all_allowed_subjects_and_providers(
-        &self,
-        from: Option<String>,
-        quantity: Option<i64>,
-    ) -> Result<Vec<(DigestIdentifier, HashSet<KeyIdentifier>)>, ApiError>;
-    async fn add_keys(&self, derivator: KeyDerivator) -> Result<KeyIdentifier, ApiError>;
-    async fn get_validation_proof(
-        &self,
-        subject_id: DigestIdentifier,
-    ) -> Result<(HashSet<Signature>, ValidationProof), ApiError>;
-    async fn get_request(&self, request_id: DigestIdentifier) -> Result<TapleRequest, ApiError>;
-    async fn get_governance_subjects(
-        &self,
-        governance_id: DigestIdentifier,
-        from: Option<String>,
-        quantity: Option<i64>,
-    ) -> Result<Vec<SubjectData>, ApiError>;
-    #[cfg(feature = "approval")]
-    async fn get_approval(&self, request_id: DigestIdentifier) -> Result<ApprovalEntity, ApiError>;
-    #[cfg(feature = "approval")]
-    async fn get_approvals(
-        &self,
-        state: Option<crate::ApprovalState>,
-        from: Option<String>,
-        quantity: Option<i64>,
-    ) -> Result<Vec<ApprovalEntity>, ApiError>;
-}
+use libp2p::PeerId;
+use log::{error, info};
+use tokio_util::sync::CancellationToken;
 
 /// Object that allows interaction with a TAPLE node.
 ///
-/// It has methods to perform all available read and write operations,
-/// as well as an additional action to stop a running node.
-/// he interaction is performed thanks to the implementation of a trait
-/// known as [ApiModuleInterface]. Consequently, it is necessary to import
-/// the trait in order to properly use the object.
+/// It has methods to perform all available read and write operations.
 #[derive(Clone, Debug)]
-pub struct NodeAPI {
-    pub(crate) sender: SenderEnd<APICommands, ApiResponses>,
+pub struct Api {
+    peer_id: PeerId,
+    controller_id: String,
+    public_key: Vec<u8>,
+    sender: SenderEnd<APICommands, ApiResponses>,
 }
 
-/// Feature that allows implementing the API Rest of an Taple node.
-#[async_trait]
-impl ApiModuleInterface for NodeAPI {
-    async fn get_request(&self, request_id: DigestIdentifier) -> Result<TapleRequest, ApiError> {
-        let response = self
-            .sender
-            .ask(APICommands::GetRequest(request_id))
-            .await;
+impl Api {
+    pub fn new(
+        peer_id: PeerId,
+        controller_id: String,
+        public_key: Vec<u8>,
+        sender: SenderEnd<APICommands, ApiResponses>,
+    ) -> Self {
+        Self {
+            peer_id,
+            controller_id,
+            public_key,
+            sender,
+        }
+    }
+
+    pub fn peer_id(&self) -> &PeerId {
+        &self.peer_id
+    }
+
+    pub fn controller_id(&self) -> &String {
+        &self.controller_id
+    }
+
+    pub fn public_key(&self) -> &Vec<u8> {
+        &self.public_key
+    }
+
+    pub async fn get_request(
+        &self,
+        request_id: DigestIdentifier,
+    ) -> Result<TapleRequest, ApiError> {
+        let response = self.sender.ask(APICommands::GetRequest(request_id)).await;
         if response.is_err() {
-            log::debug!("EN EL MODULE INTERFACE ES ERROR {}", response.clone().unwrap_err().to_string());
+            log::debug!(
+                "EN EL MODULE INTERFACE ES ERROR {}",
+                response.clone().unwrap_err().to_string()
+            );
         }
         let response = response.unwrap();
         if let ApiResponses::GetRequest(data) = response {
@@ -190,7 +86,8 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
-    async fn external_request(
+    /// Allows to make a request to the node from an external Invoker
+    pub async fn external_request(
         &self,
         event_request: Signed<EventRequest>,
     ) -> Result<DigestIdentifier, ApiError> {
@@ -206,8 +103,14 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
+    /// It allows to obtain all the voting requests pending to be resolved in the node.
+    /// These requests are received from other nodes in the network when they try to update
+    /// a governance subject. It is necessary to vote their agreement or disagreement with
+    /// the proposed changes in order for the events to be implemented.
+    /// # Possible errors
+    /// • [ApiError::InternalError] if an internal error occurs during operation execution.
     #[cfg(feature = "approval")]
-    async fn get_pending_requests(&self) -> Result<Vec<ApprovalEntity>, ApiError> {
+    pub async fn get_pending_requests(&self) -> Result<Vec<ApprovalEntity>, ApiError> {
         let response = self
             .sender
             .ask(APICommands::GetPendingRequests)
@@ -220,8 +123,18 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
+    /// It allows to obtain a single voting request pending to be resolved in the node.
+    /// This request is received from other nodes in the network when they try to update
+    /// a governance subject. It is necessary to vote its agreement or disagreement with
+    /// the proposed changes in order for the events to be implemented.
+    /// # Possible errors
+    /// • [ApiError::InternalError] if an internal error occurs during operation execution.
+    /// • [ApiError::NotFound] if the requested request does not exist.
     #[cfg(feature = "approval")]
-    async fn get_single_request(&self, id: DigestIdentifier) -> Result<ApprovalEntity, ApiError> {
+    pub async fn get_single_request(
+        &self,
+        id: DigestIdentifier,
+    ) -> Result<ApprovalEntity, ApiError> {
         let response = self
             .sender
             .ask(APICommands::GetSingleRequest(id))
@@ -234,7 +147,14 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
-    async fn get_subjects(
+    /// Allows to get all subjects that are known to the current node, regardless of their governance.
+    /// Paging can be performed using the optional arguments `from` and `quantity`.
+    /// Regarding the first one, note that it admits negative values, in which case the paging is
+    /// performed in the opposite direction starting from the end of the collection. Note that this method
+    /// also returns the subjects that model governance.
+    /// # Possible errors
+    /// • [ApiError::InternalError] if an internal error occurred during the execution of the operation.
+    pub async fn get_subjects(
         &self,
         namespace: String,
         from: Option<String>,
@@ -256,7 +176,7 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
-    async fn get_subjects_by_governance(
+    pub async fn get_subjects_by_governance(
         &self,
         governance_id: DigestIdentifier,
         from: Option<String>,
@@ -281,7 +201,10 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
-    async fn get_governances(
+    /// It allows to obtain all the subjects that model existing governance in the node.
+    /// # Possible errors
+    /// • [ApiError::InternalError] if an internal error occurred during the execution of the operation.
+    pub async fn get_governances(
         &self,
         namespace: String,
         from: Option<String>,
@@ -303,7 +226,7 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
-    async fn get_event(
+    pub async fn get_event(
         &self,
         subject_id: DigestIdentifier,
         sn: u64,
@@ -320,7 +243,13 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
-    async fn get_events(
+    /// Allows to obtain events from a specific subject previously existing in the node.
+    /// Paging can be performed by means of the optional arguments `from` and `quantity`.
+    /// Regarding the former, it should be noted that negative values are allowed, in which case
+    /// the paging is performed in the opposite direction starting from the end of the string.
+    /// # Possible errors
+    /// • [ApiError::InvalidParameters] if the specified subject identifier does not match a valid [DigestIdentifier].
+    pub async fn get_events(
         &self,
         subject_id: DigestIdentifier,
         from: Option<i64>,
@@ -342,7 +271,11 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
-    async fn get_subject(&self, subject_id: DigestIdentifier) -> Result<SubjectData, ApiError> {
+    /// Allows to obtain a specified subject by specifying its identifier.
+    /// # Possible errors
+    /// • [ApiError::InvalidParameters] if the specified identifier does not match a valid [DigestIdentifier].<br />
+    /// • [ApiError::NotFound] if the subject does not exist.
+    pub async fn get_subject(&self, subject_id: DigestIdentifier) -> Result<SubjectData, ApiError> {
         let response = self
             .sender
             .ask(APICommands::GetSubject(super::GetSubject { subject_id }))
@@ -355,8 +288,17 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
+    /// Allows to vote on a voting request that previously exists in the system.
+    /// This vote will be sent to the corresponding node in charge of its collection.
+    /// # Possible errors
+    /// • [ApiError::InternalError] if an internal error occurs during operation execution.<br />
+    /// • [ApiError::NotFound] if the request does not exist in the system.<br />
+    /// • [ApiError::InvalidParameters] if the specified request identifier does not match a valid [DigestIdentifier].<br />
+    /// • [ApiError::VoteNotNeeded] if the node's vote is no longer required. <br />
+    /// This occurs when the acceptance of the changes proposed by the petition has already been resolved by the rest of
+    /// the nodes in the network or when the node cannot participate in the voting process because it lacks the voting role.
     #[cfg(feature = "approval")]
-    async fn approval_request(
+    pub async fn approval_request(
         &self,
         request_id: DigestIdentifier,
         acceptance: bool,
@@ -373,16 +315,7 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
-    async fn shutdown(self) -> Result<(), ApiError> {
-        let response = self.sender.ask(APICommands::Shutdown).await.unwrap();
-        if let ApiResponses::ShutdownCompleted = response {
-            Ok(())
-        } else {
-            unreachable!()
-        }
-    }
-
-    async fn add_preauthorize_subject(
+    pub async fn add_preauthorize_subject(
         &self,
         subject_id: &DigestIdentifier,
         providers: &HashSet<KeyIdentifier>,
@@ -402,7 +335,7 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
-    async fn get_all_allowed_subjects_and_providers(
+    pub async fn get_all_allowed_subjects_and_providers(
         &self,
         from: Option<String>,
         quantity: Option<i64>,
@@ -421,7 +354,7 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
-    async fn add_keys(&self, derivator: KeyDerivator) -> Result<KeyIdentifier, ApiError> {
+    pub async fn add_keys(&self, derivator: KeyDerivator) -> Result<KeyIdentifier, ApiError> {
         let response = self
             .sender
             .ask(APICommands::AddKeys(derivator))
@@ -434,7 +367,7 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
-    async fn get_validation_proof(
+    pub async fn get_validation_proof(
         &self,
         subject_id: DigestIdentifier,
     ) -> Result<(HashSet<Signature>, ValidationProof), ApiError> {
@@ -450,7 +383,7 @@ impl ApiModuleInterface for NodeAPI {
         }
     }
 
-    async fn get_governance_subjects(
+    pub async fn get_governance_subjects(
         &self,
         governance_id: DigestIdentifier,
         from: Option<String>,
@@ -473,7 +406,10 @@ impl ApiModuleInterface for NodeAPI {
     }
 
     #[cfg(feature = "approval")]
-    async fn get_approval(&self, request_id: DigestIdentifier) -> Result<ApprovalEntity, ApiError> {
+    pub async fn get_approval(
+        &self,
+        request_id: DigestIdentifier,
+    ) -> Result<ApprovalEntity, ApiError> {
         let response = self
             .sender
             .ask(APICommands::GetApproval(request_id))
@@ -487,7 +423,7 @@ impl ApiModuleInterface for NodeAPI {
     }
 
     #[cfg(feature = "approval")]
-    async fn get_approvals(
+    pub async fn get_approvals(
         &self,
         state: Option<crate::ApprovalState>,
         from: Option<String>,
@@ -510,30 +446,27 @@ impl ApiModuleInterface for NodeAPI {
     }
 }
 
-pub struct API<C: DatabaseCollection> {
+pub struct ApiManager<C: DatabaseCollection> {
     input: MpscChannel<APICommands, ApiResponses>,
-    _settings_sender: Sender<TapleSettings>,
-    inner_api: InnerAPI<C>,
-    shutdown_sender: Option<tokio::sync::broadcast::Sender<()>>,
-    shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+    inner_api: InnerApi<C>,
+    token: CancellationToken,
+    notification_tx: tokio::sync::mpsc::Sender<Notification>,
 }
 
-impl<C: DatabaseCollection> API<C> {
+impl<C: DatabaseCollection> ApiManager<C> {
     pub fn new(
         input: MpscChannel<APICommands, ApiResponses>,
         event_api: EventAPI,
         #[cfg(feature = "approval")] approval_api: ApprovalAPI,
         authorized_subjects_api: AuthorizedSubjectsAPI,
         ledger_api: EventManagerAPI,
-        settings_sender: Sender<TapleSettings>,
-        shutdown_sender: tokio::sync::broadcast::Sender<()>,
-        shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+        token: CancellationToken,
+        notification_tx: tokio::sync::mpsc::Sender<Notification>,
         db: DB<C>,
     ) -> Self {
         Self {
             input,
-            _settings_sender: settings_sender,
-            inner_api: InnerAPI::new(
+            inner_api: InnerApi::new(
                 event_api,
                 authorized_subjects_api,
                 db,
@@ -541,66 +474,42 @@ impl<C: DatabaseCollection> API<C> {
                 approval_api,
                 ledger_api,
             ),
-            shutdown_sender: Some(shutdown_sender),
-            shutdown_receiver: shutdown_receiver,
+            token,
+            notification_tx,
         }
     }
 
-    pub async fn start(mut self) {
-        let mut response_channel = None;
+    pub async fn run(mut self) {
         loop {
             tokio::select! {
-                msg = self.input.receive() => {
-                    let must_shutdown = if msg.is_none() {
-                        // Channel closed
-                        true
-                    } else {
-                        let result = self.process_input(msg.unwrap()).await;
+                command = self.input.receive() => {
+                    if command.is_some() {
+                        let result = self.process_command(command.unwrap()).await;
                         if result.is_err() {
-                            true
-                        } else {
-                            let response = result.unwrap();
-                            if response.is_some() {
-                                response_channel = response;
-                                true
-                            } else {
-                                false
-                            }
+                            error!("API error detected");
+                            self.token.cancel();
+                            break;
                         }
-                    };
-                    if must_shutdown {
-                        log::debug!("must shutdown before unwrap");
-                        let sender = self.shutdown_sender.take().unwrap();
-                        sender.send(()).expect("Shutdown Channel Closed");
-                        drop(sender);
-                        _ = self.shutdown_receiver.recv().await;
-                        if response_channel.is_some() {
-                            let response_channel = response_channel.unwrap();
-                            let _ = response_channel.send(ApiResponses::ShutdownCompleted);
-                        }
-                        break;
                     }
                 },
-                _ = self.shutdown_receiver.recv() => {
-                    log::debug!("API module shutdown received");
+                _ = self.token.cancelled() => {
+                    info!("API module shutdown received");
                     break;
                 }
             }
         }
+        info!("Ended");
     }
 
-    async fn process_input(
+    async fn process_command(
         &mut self,
         input: ChannelData<APICommands, ApiResponses>,
-    ) -> Result<Option<tokio::sync::oneshot::Sender<ApiResponses>>, APIInternalError> {
+    ) -> Result<(), APIInternalError> {
         // TODO: API commands to change the configuration are missing
         match input {
             ChannelData::AskData(data) => {
                 let (sx, command) = data.get();
                 let response = match command {
-                    APICommands::Shutdown => {
-                        return Ok(Some(sx));
-                    }
                     APICommands::GetSubjects(data) => self.inner_api.get_all_subjects(data),
                     APICommands::GetGovernances(data) => {
                         self.inner_api.get_all_governances(data).await
@@ -673,6 +582,6 @@ impl<C: DatabaseCollection> API<C> {
                 panic!("Tell in API")
             }
         }
-        Ok(None)
+        Ok(())
     }
 }

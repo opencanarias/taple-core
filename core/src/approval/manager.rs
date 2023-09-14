@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use tokio_util::sync::CancellationToken;
 
 use crate::{
     commons::{
@@ -13,7 +14,7 @@ use crate::{
     protocol::protocol_message_manager::TapleMessages,
     signature::Signed,
     utils::message::event::create_approver_response,
-    ApprovalRequest, DatabaseCollection, Notification, TapleSettings,
+    ApprovalRequest, DatabaseCollection, Notification, Settings,
 };
 
 use super::{
@@ -24,8 +25,8 @@ use super::{
 
 pub struct ApprovalManager<C: DatabaseCollection> {
     input_channel: MpscChannel<ApprovalMessages, ApprovalResponses>,
-    shutdown_sender: tokio::sync::broadcast::Sender<()>,
-    shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+    token: CancellationToken,
+    notification_tx: tokio::sync::mpsc::Sender<Notification>,
     governance_update_channel: tokio::sync::broadcast::Receiver<GovernanceUpdatedMessage>,
     messenger_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
     inner_manager: InnerApprovalManager<GovernanceAPI, RequestNotifier, C>,
@@ -120,33 +121,32 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
     pub fn new(
         gov_api: GovernanceAPI,
         input_channel: MpscChannel<ApprovalMessages, ApprovalResponses>,
-        shutdown_sender: tokio::sync::broadcast::Sender<()>,
-        shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+        token: CancellationToken,
         messenger_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
         governance_update_channel: tokio::sync::broadcast::Receiver<GovernanceUpdatedMessage>,
         signature_manager: SelfSignatureManager,
-        notification_sender: tokio::sync::broadcast::Sender<Notification>,
-        settings: TapleSettings,
+        notification_tx: tokio::sync::mpsc::Sender<Notification>,
+        settings: Settings,
         database: DB<C>,
     ) -> Self {
         let passvotation = settings.node.passvotation.into();
         Self {
             input_channel,
-            shutdown_sender,
-            shutdown_receiver,
+            token,
+            notification_tx: notification_tx.clone(),
             messenger_channel,
             governance_update_channel,
             inner_manager: InnerApprovalManager::new(
                 gov_api,
                 database,
-                RequestNotifier::new(notification_sender),
+                RequestNotifier::new(notification_tx),
                 signature_manager,
                 passvotation,
             ),
         }
     }
 
-    pub async fn start(mut self) {
+    pub async fn run(mut self) {
         loop {
             tokio::select! {
                 command = self.input_channel.receive() => {
@@ -154,16 +154,16 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
                         Some(command) => {
                             let result = self.process_command(command).await;
                             if result.is_err() {
-                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                self.token.cancel();
                             }
                         }
                         None => {
-                            self.shutdown_sender.send(()).expect("Channel Closed");
+                            self.token.cancel();
                             break;
                         },
                     }
                 },
-                _ = self.shutdown_receiver.recv() => {
+                _ = self.token.cancelled() => {
                     log::debug!("Approval module shutdown received");
                     break;
                 },
@@ -174,20 +174,21 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
                                 GovernanceUpdatedMessage::GovernanceUpdated { governance_id, governance_version: _ } => {
                                     if let Err(error) = self.inner_manager.new_governance_version(&governance_id) {
                                         log::error!("NEW GOV VERSION APPROVAL ERROR: {}", error);
-                                        self.shutdown_sender.send(()).expect("Channel Closed");
+                                        self.token.cancel();
                                         break;
                                     }
                                 }
                             }
                         },
                         Err(_) => {
-                            self.shutdown_sender.send(()).expect("Channel Closed");
+                            self.token.cancel();
                             break;
                         }
                     }
                 }
             }
         }
+        log::info!("Ended");
     }
 
     async fn process_command(

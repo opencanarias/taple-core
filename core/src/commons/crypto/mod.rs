@@ -35,6 +35,17 @@ impl KeyPair {
             KeyPair::Secp256k1(_) => KeyDerivator::Secp256k1,
         }
     }
+
+    pub fn from_hex(derivator: &KeyDerivator, hex_key: &str) -> Result<KeyPair, Error> {
+        match derivator {
+            KeyDerivator::Ed25519 => Ok(KeyPair::Ed25519(Ed25519KeyPair::from_secret_key(
+                &hex::decode(hex_key).unwrap(),
+            ))),
+            KeyDerivator::Secp256k1 => Ok(KeyPair::Secp256k1(Secp256k1KeyPair::from_secret_key(
+                &hex::decode(hex_key).unwrap(),
+            ))),
+        }
+    }
 }
 
 /// Generate key pair

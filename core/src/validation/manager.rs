@@ -1,9 +1,12 @@
+use tokio_util::sync::CancellationToken;
+
 use super::{
     errors::ValidationError, validation::Validation, ValidationCommand, ValidationResponse,
 };
 use crate::database::{DatabaseCollection, DB};
 use crate::message::MessageTaskCommand;
 use crate::protocol::protocol_message_manager::TapleMessages;
+use crate::Notification;
 use crate::{
     commons::{
         channel::{ChannelData, MpscChannel, SenderEnd},
@@ -30,8 +33,8 @@ pub struct ValidationManager<C: DatabaseCollection> {
     input_channel: MpscChannel<ValidationCommand, ValidationResponse>,
     /// Validation functions
     inner_validation: Validation<C>,
-    shutdown_sender: tokio::sync::broadcast::Sender<()>,
-    shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+    token: CancellationToken,
+    notification_tx: tokio::sync::mpsc::Sender<Notification>,
 }
 
 impl<C: DatabaseCollection> ValidationManager<C> {
@@ -40,8 +43,8 @@ impl<C: DatabaseCollection> ValidationManager<C> {
         gov_api: GovernanceAPI,
         database: DB<C>,
         signature_manager: SelfSignatureManager,
-        shutdown_sender: tokio::sync::broadcast::Sender<()>,
-        shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+        token: CancellationToken,
+        notification_tx: tokio::sync::mpsc::Sender<Notification>,
         message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
     ) -> Self {
         Self {
@@ -52,12 +55,12 @@ impl<C: DatabaseCollection> ValidationManager<C> {
                 signature_manager,
                 message_channel,
             ),
-            shutdown_receiver,
-            shutdown_sender,
+            token,
+            notification_tx,
         }
     }
 
-    pub async fn start(mut self) {
+    pub async fn run(mut self) {
         loop {
             tokio::select! {
                 command = self.input_channel.receive() => {
@@ -66,20 +69,21 @@ impl<C: DatabaseCollection> ValidationManager<C> {
                             let result = self.process_command(command).await;
                             if result.is_err() {
                                 log::error!("{}", result.unwrap_err());
-                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                self.token.cancel();
                             }
                         }
                         None => {
-                            self.shutdown_sender.send(()).expect("Channel Closed");
+                            self.token.cancel();
                         },
                     }
                 },
-                _ = self.shutdown_receiver.recv() => {
+                _ = self.token.cancelled() => {
                     log::debug!("Validation module shutdown received");
                     break;
                 }
             }
         }
+        log::info!("Ended");
     }
 
     async fn process_command(

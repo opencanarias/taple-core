@@ -1,9 +1,6 @@
-use taple_core::{
-    get_default_settings, DigestIdentifier, ListenAddr, MemoryCollection, MemoryManager, NodeAPI,
-    TapleShutdownManager,
-};
+use taple_core::{Api, DigestIdentifier, ListenAddr, MemoryCollection, MemoryManager};
 
-use taple_core::Taple;
+use taple_core::Node;
 
 use super::error::{NotifierError, TapleError};
 use super::notifier::TapleNotifier;
@@ -27,7 +24,7 @@ impl NodeBuilder {
     }
 
     pub fn build(self) -> TapleTestNode {
-        let mut settings = get_default_settings();
+        let mut settings = Settings::default();
         settings.node.secret_key = Some(self.secret_key);
         settings.network.listen_addr = vec![ListenAddr::Memory {
             port: self.p2p_port,
@@ -38,7 +35,7 @@ impl NodeBuilder {
         std::fs::create_dir_all(&path).expect("TMP DIR could not be created");
         settings.node.smartcontracts_directory = path;
         let database = MemoryManager::new();
-        TapleTestNode::new(Taple::new(settings, database))
+        TapleTestNode::new(Node::new(settings, database))
     }
 
     pub fn with_port(mut self, port: u32) -> Self {
@@ -67,14 +64,14 @@ pub enum PassVotation {
 }
 
 pub struct TapleTestNode {
-    taple: Taple<MemoryManager, MemoryCollection>,
+    taple: Node<MemoryManager, MemoryCollection>,
     notifier: TapleNotifier,
     shutdown_manager: TapleShutdownManager,
 }
 
 impl TapleTestNode {
-    pub fn new(taple: Taple<MemoryManager, MemoryCollection>) -> Self {
-        let notifier = taple.get_notification_handler();
+    pub fn new(taple: Node<MemoryManager, MemoryCollection>) -> Self {
+        let notifier = taple.notification_handler();
         let shutdown_manager = taple.get_shutdown_manager();
         Self {
             taple,
@@ -83,8 +80,8 @@ impl TapleTestNode {
         }
     }
 
-    pub fn get_api(&self) -> NodeAPI {
-        self.taple.get_api()
+    pub fn get_api(&self) -> Api {
+        self.taple.api()
     }
 
     pub async fn start(&mut self) -> Result<(), TapleError> {

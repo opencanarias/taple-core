@@ -8,8 +8,8 @@ use config::Value;
 use serde::Deserialize;
 
 /// Configuration parameters of a TAPLE node divided into categories.
-#[derive(Debug, Deserialize, Clone)]
-pub struct TapleSettings {
+#[derive(Debug, Deserialize, Clone, Default)]
+pub struct Settings {
     pub network: NetworkSettings,
     pub node: NodeSettings,
 }
@@ -25,6 +25,16 @@ pub struct NetworkSettings {
     #[serde(rename = "externaladdress")]
     /// List of bootstrap nodes to connect to.
     pub external_address: Vec<String>,
+}
+
+impl Default for NetworkSettings {
+    fn default() -> Self {
+        Self {
+            listen_addr: vec![ListenAddr::default()],
+            known_nodes: Vec::<String>::new(),
+            external_address: vec![],
+        }
+    }
 }
 
 const DEFAULT_PORT: u32 = 40040;
@@ -227,7 +237,7 @@ pub struct NodeSettings {
     pub key_derivator: KeyDerivator,
     /// Secret key to be used by the node
     #[serde(rename = "secretkey")]
-    pub secret_key: Option<String>,
+    pub secret_key: String,
     /// [DigestDerivator] to be used for future event and subject identifiers
     #[serde(rename = "digestderivator")]
     pub digest_derivator: DigestDerivator,
@@ -240,6 +250,22 @@ pub struct NodeSettings {
     pub passvotation: u8,
     #[cfg(feature = "evaluation")]
     pub smartcontracts_directory: String,
+}
+
+impl Default for NodeSettings {
+    fn default() -> Self {
+        Self {
+            key_derivator: KeyDerivator::Ed25519,
+            secret_key: String::from(""),
+            digest_derivator:
+                crate::commons::identifier::derive::digest::DigestDerivator::Blake3_256,
+            replication_factor: 0.25f64,
+            timeout: 3000u32,
+            passvotation: 0,
+            #[cfg(feature = "evaluation")]
+            smartcontracts_directory: "./contracts".into(),
+        }
+    }
 }
 
 impl From<AccessPoint> for Value {

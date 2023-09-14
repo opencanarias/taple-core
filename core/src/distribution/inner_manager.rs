@@ -18,7 +18,7 @@ use crate::{
     governance::GovernanceInterface,
     DatabaseCollection,
 };
-use crate::{Metadata, TapleSettings};
+use crate::{Metadata, Settings};
 
 use super::error::{DistributionErrorResponses, DistributionManagerError};
 use super::StartDistribution;
@@ -37,7 +37,7 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
         db: DB<C>,
         messenger_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
         signature_manager: SelfSignatureManager,
-        settings: TapleSettings,
+        settings: Settings,
     ) -> Self {
         Self {
             governance,

@@ -10,8 +10,8 @@ use std::collections::HashSet;
 
 mod api;
 
-pub(crate) use api::API;
-pub use api::{ApiModuleInterface, NodeAPI};
+pub use api::Api;
+pub(crate) use api::ApiManager;
 pub use error::ApiError;
 
 mod error;
@@ -42,7 +42,6 @@ pub enum APICommands {
     GetApproval(DigestIdentifier),
     #[cfg(feature = "approval")]
     GetApprovals(GetApprovals),
-    Shutdown,
 }
 
 #[derive(Debug, Clone)]
@@ -68,7 +67,6 @@ pub enum ApiResponses {
     GetApproval(Result<ApprovalEntity, ApiError>),
     #[cfg(feature = "approval")]
     GetApprovals(Result<Vec<ApprovalEntity>, ApiError>),
-    ShutdownCompleted,
     SetPreauthorizedSubjectCompleted,
     GetAllPreauthorizedSubjects(Result<Vec<(DigestIdentifier, HashSet<KeyIdentifier>)>, ApiError>),
 }

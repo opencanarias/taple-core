@@ -41,6 +41,7 @@ jsonschema = { workspace = true }
 time = { workspace = true, features = ["std"] }
 thiserror = { workspace = true }
 tokio-stream = { workspace = true }
+tokio-util = {workspace = true }
 rmp-serde = { workspace = true }
 borsh = { workspace = true }
 blake3 = { workspace = true }

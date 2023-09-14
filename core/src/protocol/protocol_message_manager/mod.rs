@@ -1,7 +1,7 @@
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
+use tokio_util::sync::CancellationToken;
 
-use crate::approval::ApprovalMessages;
 #[cfg(feature = "approval")]
 use crate::approval::ApprovalResponses;
 use crate::evaluator::EvaluatorMessage;
@@ -10,6 +10,7 @@ use crate::evaluator::EvaluatorResponse;
 use crate::validation::ValidationCommand;
 #[cfg(feature = "validation")]
 use crate::validation::ValidationResponse;
+use crate::{approval::ApprovalMessages, Notification};
 use crate::{
     commons::channel::{ChannelData, MpscChannel, SenderEnd},
     distribution::{error::DistributionErrorResponses, DistributionMessagesNew},
@@ -45,8 +46,8 @@ pub struct ProtocolManager {
     #[cfg(feature = "approval")]
     approval_sx: SenderEnd<ApprovalMessages, ApprovalResponses>,
     ledger_sx: SenderEnd<LedgerCommand, LedgerResponse>,
-    shutdown_sender: tokio::sync::broadcast::Sender<()>,
-    shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+    token: CancellationToken,
+    notification_tx: tokio::sync::mpsc::Sender<Notification>,
 }
 
 impl ProtocolManager {
@@ -64,7 +65,8 @@ impl ProtocolManager {
         event_sx: SenderEnd<EventCommand, EventResponse>,
         #[cfg(feature = "approval")] approval_sx: SenderEnd<ApprovalMessages, ApprovalResponses>,
         ledger_sx: SenderEnd<LedgerCommand, LedgerResponse>,
-        shutdown_sender: tokio::sync::broadcast::Sender<()>,
+        token: CancellationToken,
+        notification_tx: tokio::sync::mpsc::Sender<Notification>,
     ) -> Self {
         Self {
             input,
@@ -77,12 +79,12 @@ impl ProtocolManager {
             #[cfg(feature = "approval")]
             approval_sx,
             ledger_sx,
-            shutdown_receiver: shutdown_sender.subscribe(),
-            shutdown_sender,
+            token,
+            notification_tx,
         }
     }
 
-    pub async fn start(mut self) {
+    pub async fn run(mut self) {
         loop {
             tokio::select! {
                 command = self.input.receive() => {
@@ -91,22 +93,23 @@ impl ProtocolManager {
                             let result = self.process_command(command).await;
                             if result.is_err() {
                                 log::error!("Protocol Manager: {}", result.unwrap_err());
-                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                self.token.cancel();
                                 break;
                             }
                         }
                         None => {
-                            self.shutdown_sender.send(()).expect("Channel Closed");
+                            self.token.cancel();
                             break;
                         },
                     }
                 },
-                _ = self.shutdown_receiver.recv() => {
+                _ = self.token.cancelled() => {
                     log::debug!("Protocol module shutdown received");
                     break;
                 }
             }
         }
+        log::info!("Ended");
     }
 
     #[allow(unused_variables)]

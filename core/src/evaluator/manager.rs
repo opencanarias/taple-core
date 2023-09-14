@@ -1,6 +1,7 @@
 use std::marker::PhantomData;
 use std::sync::Arc;
 
+use tokio_util::sync::CancellationToken;
 use wasmtime::Engine;
 
 use super::compiler::manager::TapleCompiler;
@@ -17,7 +18,7 @@ use crate::protocol::protocol_message_manager::TapleMessages;
 use crate::request::EventRequest;
 use crate::signature::Signed;
 use crate::utils::message::event::create_evaluator_response;
-use crate::EvaluationResponse;
+use crate::{EvaluationResponse, Notification};
 
 pub struct EvaluatorManager<
     M: DatabaseManager<C>,
@@ -29,8 +30,8 @@ pub struct EvaluatorManager<
     /// Contract executioner
     runner: TapleRunner<C, G>,
     signature_manager: SelfSignatureManager,
-    shutdown_sender: tokio::sync::broadcast::Sender<()>,
-    shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+    token: CancellationToken,
+    _notification_tx: tokio::sync::mpsc::Sender<Notification>,
     messenger_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
     _m: PhantomData<M>,
     _g: PhantomData<G>,
@@ -47,8 +48,8 @@ impl<
         database: Arc<M>,
         signature_manager: SelfSignatureManager,
         compiler_channel: tokio::sync::broadcast::Receiver<GovernanceUpdatedMessage>,
-        shutdown_sender: tokio::sync::broadcast::Sender<()>,
-        shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+        token: CancellationToken,
+        notification_tx: tokio::sync::mpsc::Sender<Notification>,
         gov_api: G,
         contracts_path: String,
         messenger_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
@@ -60,8 +61,8 @@ impl<
             gov_api.clone(),
             contracts_path,
             engine.clone(),
-            shutdown_sender.subscribe(),
-            shutdown_sender.clone(),
+            token.clone(),
+            notification_tx.clone(),
         );
         tokio::spawn(async move {
             compiler.start().await;
@@ -70,15 +71,15 @@ impl<
             input_channel,
             runner: TapleRunner::new(DB::new(database.clone()), engine, gov_api),
             signature_manager,
-            shutdown_receiver,
-            shutdown_sender,
+            token,
+            _notification_tx: notification_tx,
             messenger_channel,
             _m: PhantomData::default(),
             _g: PhantomData::default(),
         }
     }
 
-    pub async fn start(mut self) {
+    pub async fn run(mut self) {
         loop {
             tokio::select! {
                 command = self.input_channel.receive() => {
@@ -87,20 +88,21 @@ impl<
                             let result = self.process_command(command).await;
                             if result.is_err() {
                                 log::error!("{}", result.unwrap_err());
-                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                self.token.cancel();
                             }
                         }
                         None => {
-                            self.shutdown_sender.send(()).expect("Channel Closed");
+                            self.token.cancel();
                         },
                     }
                 },
-                _ = self.shutdown_receiver.recv() => {
+                _ = self.token.cancelled() => {
                     log::debug!("Evaluator module shutdown received");
                     break;
                 }
             }
         }
+        log::info!("Ended");
     }
 
     async fn process_command(
@@ -660,7 +662,7 @@ mod test {
             let (evaluator, sx_evaluator, sx_compiler, signature_manager, mut msg_rx) =
                 build_module();
             let handler = tokio::spawn(async move {
-                evaluator.start().await;
+                evaluator.run().await;
             });
             let initial_state = Data {
                 one: 10,

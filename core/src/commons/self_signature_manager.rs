@@ -2,14 +2,14 @@ use std::collections::HashSet;
 
 use super::{errors::ProtocolErrors, models::HashId};
 use crate::commons::{
-    config::TapleSettings,
     crypto::{KeyMaterial, KeyPair},
     identifier::{derive::digest::DigestDerivator, KeyIdentifier},
     models::signature::Signature,
+    settings::Settings,
 };
 
 pub trait SelfSignatureInterface {
-    fn change_settings(&mut self, settings: &TapleSettings);
+    fn change_settings(&mut self, settings: &Settings);
     fn get_own_identifier(&self) -> KeyIdentifier;
     fn sign<T: HashId>(&self, content: &T) -> Result<Signature, ProtocolErrors>;
     fn check_if_signature_present(&self, signers: &HashSet<KeyIdentifier>) -> bool;
@@ -23,7 +23,7 @@ pub struct SelfSignatureManager {
 }
 
 impl SelfSignatureManager {
-    pub fn new(keys: KeyPair, settings: &TapleSettings) -> Self {
+    pub fn new(keys: KeyPair, settings: &Settings) -> Self {
         let identifier = KeyIdentifier::new(keys.get_key_derivator(), &keys.public_key_bytes());
         Self {
             keys,
@@ -34,7 +34,7 @@ impl SelfSignatureManager {
 }
 
 impl SelfSignatureInterface for SelfSignatureManager {
-    fn change_settings(&mut self, settings: &TapleSettings) {
+    fn change_settings(&mut self, settings: &Settings) {
         self.digest_derivator = settings.node.digest_derivator.clone();
     }
 

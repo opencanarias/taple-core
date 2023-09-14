@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use tokio_util::sync::CancellationToken;
 
 use super::{errors::EventError, event_completer::EventCompleter, EventCommand, EventResponse};
 use crate::commons::self_signature_manager::SelfSignatureManager;
@@ -48,8 +49,8 @@ pub struct EventManager<C: DatabaseCollection> {
     input_channel: MpscChannel<EventCommand, EventResponse>,
     input_channel_updated_gov: tokio::sync::broadcast::Receiver<GovernanceUpdatedMessage>,
     event_completer: EventCompleter<C>,
-    shutdown_sender: tokio::sync::broadcast::Sender<()>,
-    shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+    token: CancellationToken,
+    notification_tx: tokio::sync::mpsc::Sender<Notification>,
 }
 
 impl<C: DatabaseCollection> EventManager<C> {
@@ -58,10 +59,9 @@ impl<C: DatabaseCollection> EventManager<C> {
         input_channel_updated_gov: tokio::sync::broadcast::Receiver<GovernanceUpdatedMessage>,
         gov_api: GovernanceAPI,
         database: DB<C>,
-        shutdown_sender: tokio::sync::broadcast::Sender<()>,
-        shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+        token: CancellationToken,
         message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
-        notification_sender: tokio::sync::broadcast::Sender<Notification>,
+        notification_tx: tokio::sync::mpsc::Sender<Notification>,
         ledger_sender: SenderEnd<LedgerCommand, LedgerResponse>,
         own_identifier: KeyIdentifier,
         signature_manager: SelfSignatureManager,
@@ -73,22 +73,22 @@ impl<C: DatabaseCollection> EventManager<C> {
                 gov_api,
                 database,
                 message_channel,
-                notification_sender,
+                notification_tx.clone(),
                 ledger_sender,
                 own_identifier,
                 signature_manager,
             ),
-            shutdown_receiver,
-            shutdown_sender,
+            token,
+            notification_tx,
         }
     }
 
-    pub async fn start(mut self) {
+    pub async fn run(mut self) {
         match self.event_completer.init().await {
             Ok(_) => {}
             Err(error) => {
                 log::error!("{}", error);
-                self.shutdown_sender.send(()).expect("Channel Closed");
+                self.token.cancel();
                 return;
             }
         };
@@ -100,12 +100,12 @@ impl<C: DatabaseCollection> EventManager<C> {
                             let result = self.process_command(command).await;
                             if result.is_err() {
                                 log::error!("{}", result.unwrap_err());
-                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                self.token.cancel();
                                 break;
                             }
                         }
                         None => {
-                            self.shutdown_sender.send(()).expect("Channel Closed");
+                            self.token.cancel();
                             break;
                         },
                     }
@@ -117,24 +117,25 @@ impl<C: DatabaseCollection> EventManager<C> {
                                 GovernanceUpdatedMessage::GovernanceUpdated { governance_id, governance_version } => {
                                     let result = self.event_completer.new_governance_version(governance_id, governance_version).await;
                                     if result.is_err() {
-                                        self.shutdown_sender.send(()).expect("Channel Closed");
+                                        self.token.cancel();
                                         break;
                                     }
                                 },
                             }
                         },
                         Err(_) => {
-                            self.shutdown_sender.send(()).expect("Channel Closed");
+                            self.token.cancel();
                             break;
                         },
                     }
                 },
-                _ = self.shutdown_receiver.recv() => {
+                _ = self.token.cancelled() => {
                     log::debug!("Event module shutdown received");
                     break;
                 }
             }
         }
+        log::info!("Ended");
     }
 
     async fn process_command(
@@ -159,14 +160,14 @@ impl<C: DatabaseCollection> EventManager<C> {
                         Err(error) => match error {
                             EventError::ChannelClosed => {
                                 log::error!("Channel Closed");
-                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                self.token.cancel();
                                 return Err(EventError::ChannelClosed);
                             }
                             EventError::GovernanceError(inner_error)
                                 if inner_error == RequestError::ChannelClosed =>
                             {
                                 log::error!("Channel Closed");
-                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                self.token.cancel();
                                 return Err(EventError::ChannelClosed);
                             }
                             _ => {}
@@ -184,14 +185,14 @@ impl<C: DatabaseCollection> EventManager<C> {
                         Err(error) => match error {
                             EventError::ChannelClosed => {
                                 log::error!("Channel Closed");
-                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                self.token.cancel();
                                 return Err(EventError::ChannelClosed);
                             }
                             EventError::GovernanceError(inner_error)
                                 if inner_error == RequestError::ChannelClosed =>
                             {
                                 log::error!("Channel Closed");
-                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                self.token.cancel();
                                 return Err(EventError::ChannelClosed);
                             }
                             _ => {
@@ -207,14 +208,14 @@ impl<C: DatabaseCollection> EventManager<C> {
                         Err(error) => match error {
                             EventError::ChannelClosed => {
                                 log::error!("Channel Closed");
-                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                self.token.cancel();
                                 return Err(EventError::ChannelClosed);
                             }
                             EventError::GovernanceError(inner_error)
                                 if inner_error == RequestError::ChannelClosed =>
                             {
                                 log::error!("Channel Closed");
-                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                self.token.cancel();
                                 return Err(EventError::ChannelClosed);
                             }
                             _ => {}
@@ -236,14 +237,14 @@ impl<C: DatabaseCollection> EventManager<C> {
                         Err(error) => match error {
                             EventError::ChannelClosed => {
                                 log::error!("Channel Closed");
-                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                self.token.cancel();
                                 return Err(EventError::ChannelClosed);
                             }
                             EventError::GovernanceError(inner_error)
                                 if inner_error == RequestError::ChannelClosed =>
                             {
                                 log::error!("Channel Closed");
-                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                self.token.cancel();
                                 return Err(EventError::ChannelClosed);
                             }
                             _ => {
@@ -267,14 +268,14 @@ impl<C: DatabaseCollection> EventManager<C> {
                         Err(error) => match error {
                             EventError::ChannelClosed => {
                                 log::error!("Channel Closed");
-                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                self.token.cancel();
                                 return Err(EventError::ChannelClosed);
                             }
                             EventError::GovernanceError(inner_error)
                                 if inner_error == RequestError::ChannelClosed =>
                             {
                                 log::error!("Channel Closed");
-                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                self.token.cancel();
                                 return Err(EventError::ChannelClosed);
                             }
                             _ => {

@@ -41,7 +41,7 @@ pub struct Ledger<C: DatabaseCollection> {
     distribution_channel:
         SenderEnd<DistributionMessagesNew, Result<(), DistributionErrorResponses>>,
     our_id: KeyIdentifier,
-    notification_sender: tokio::sync::broadcast::Sender<Notification>,
+    notification_sender: tokio::sync::mpsc::Sender<Notification>,
 }
 
 impl<C: DatabaseCollection> Ledger<C> {
@@ -54,7 +54,7 @@ impl<C: DatabaseCollection> Ledger<C> {
             Result<(), DistributionErrorResponses>,
         >,
         our_id: KeyIdentifier,
-        notification_sender: tokio::sync::broadcast::Sender<Notification>,
+        notification_sender: tokio::sync::mpsc::Sender<Notification>,
     ) -> Self {
         Self {
             gov_api,
@@ -246,12 +246,14 @@ impl<C: DatabaseCollection> Ledger<C> {
                 sn,
                 subject_id: subject_id.to_str(),
             })
+            .await
             .map_err(|_| LedgerError::NotificationChannelError);
         let _ = self
             .notification_sender
             .send(Notification::NewSubject {
                 subject_id: subject_id.to_str(),
             })
+            .await
             .map_err(|_| LedgerError::NotificationChannelError);
         // Upgrade Ledger State
         match self.ledger_state.entry(subject_id.clone()) {
@@ -332,6 +334,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                         sn: event.content.sn,
                         subject_id: subject.subject_id.to_str(),
                     })
+                    .await
                     .map_err(|_| LedgerError::NotificationChannelError);
                 self.database.set_event(&subject_id, event.clone())?;
                 self.set_finished_request(
@@ -347,6 +350,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                         sn,
                         subject_id: subject_id.to_str(),
                     })
+                    .await
                     .map_err(|_| LedgerError::NotificationChannelError);
                 self.database.set_subject(&subject_id, subject)?;
                 // Check is_gov
@@ -419,6 +423,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                         sn,
                         subject_id: subject_id.to_str(),
                     })
+                    .await
                     .map_err(|_| LedgerError::NotificationChannelError);
                 subject.sn = event.content.sn;
                 self.database.set_subject(&subject_id, subject)?;
@@ -472,6 +477,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                         sn,
                         subject_id: subject_id.to_str(),
                     })
+                    .await
                     .map_err(|_| LedgerError::NotificationChannelError);
                 subject.sn = sn;
                 subject.eol_event();
@@ -1304,6 +1310,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                     sn: event.content.sn,
                                     subject_id: subject.subject_id.to_str(),
                                 })
+                                .await
                                 .map_err(|_| LedgerError::NotificationChannelError);
                             self.database.set_signatures(
                                 &state_request.subject_id,
@@ -1325,6 +1332,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                     sn,
                                     subject_id: subject_id.to_str(),
                                 })
+                                .await
                                 .map_err(|_| LedgerError::NotificationChannelError);
                             self.database
                                 .set_subject(&state_request.subject_id, subject)?;
@@ -1434,6 +1442,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                     sn,
                                     subject_id: subject_id.to_str(),
                                 })
+                                .await
                                 .map_err(|_| LedgerError::NotificationChannelError);
                             if last_lce.is_some() {
                                 let last_lce_sn = last_lce.unwrap();
@@ -1484,6 +1493,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                             subject_id: subject_id.to_str(),
                                             sn,
                                         })
+                                        .await
                                         .map_err(|_| LedgerError::NotificationChannelError);
                                 }
                             }
@@ -1588,6 +1598,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 sn,
                                 subject_id: subject_id.to_str(),
                             })
+                            .await
                             .map_err(|_| LedgerError::NotificationChannelError);
                         self.set_finished_request(
                             &request_id,
@@ -1773,6 +1784,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                     sn,
                                     subject_id: subject_id.to_str(),
                                 })
+                                .await
                                 .map_err(|_| LedgerError::NotificationChannelError);
                             self.database
                                 .set_subject(&eol_request.subject_id, subject)?;
@@ -1885,6 +1897,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                     sn,
                                     subject_id: subject_id.to_str(),
                                 })
+                                .await
                                 .map_err(|_| LedgerError::NotificationChannelError);
                             if last_lce.is_some() {
                                 let last_lce_sn = last_lce.unwrap();
@@ -2015,6 +2028,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 sn,
                                 subject_id: subject_id.to_str(),
                             })
+                            .await
                             .map_err(|_| LedgerError::NotificationChannelError);
                         self.ledger_state.insert(
                             eol_request.subject_id.clone(),
@@ -2147,6 +2161,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                             sn: event.content.sn,
                                             subject_id: subject_id.to_str(),
                                         })
+                                        .await
                                         .map_err(|_| LedgerError::NotificationChannelError);
                                     let approval_request_hash = &event
                                         .content
@@ -2169,6 +2184,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                                         subject_id: subject_id.to_str(),
                                                         sn: event.content.sn,
                                                     })
+                                                    .await
                                                     .map_err(|_| {
                                                         LedgerError::NotificationChannelError
                                                     });
@@ -2181,7 +2197,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                             }
                                         },
                                     };
-                                    let subject = self.event_sourcing(event.clone())?;
+                                    let subject = self.event_sourcing(event.clone()).await?;
                                     if head == current_sn + 2 {
                                         // Do event sourcing of the LCE as well and update subject
                                         let head_event = self
@@ -2217,7 +2233,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                             &event_hash,
                                             &public_key,
                                         )?;
-                                        self.event_sourcing(head_event)?;
+                                        self.event_sourcing(head_event).await?;
                                         self.ledger_state.insert(
                                             subject_id.clone(),
                                             LedgerState {
@@ -2330,7 +2346,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                             &public_key,
                                         )?;
                                         // Hacer event sourcing del evento 1 tambien y actualizar subject
-                                        self.event_sourcing(head_event)?;
+                                        self.event_sourcing(head_event).await?;
                                         self.ledger_state.insert(
                                             subject_id.clone(),
                                             LedgerState {
@@ -2615,6 +2631,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                 sn,
                 subject_id: subject_id.to_str(),
             })
+            .await
             .map_err(|_| LedgerError::NotificationChannelError);
         self.database.set_subject(&subject_id, subject)?;
         let _ = self
@@ -2622,6 +2639,7 @@ impl<C: DatabaseCollection> Ledger<C> {
             .send(Notification::NewSubject {
                 subject_id: subject_id.to_str(),
             })
+            .await
             .map_err(|_| LedgerError::NotificationChannelError);
         Ok(metadata)
     }
@@ -2712,9 +2730,9 @@ impl<C: DatabaseCollection> Ledger<C> {
         Ok(subject)
     }
 
-    fn event_sourcing(&self, event: Signed<Event>) -> Result<Subject, LedgerError> {
+    async fn event_sourcing(&self, event: Signed<Event>) -> Result<Subject, LedgerError> {
         if !event.content.approved {
-            self.event_sourcing_rejected_event(event)
+            self.event_sourcing_rejected_event(event).await
         } else {
             match &event.content.event_request.content {
                 EventRequest::Transfer(transfer_request) => self.event_sourcing_transfer(
@@ -2723,18 +2741,24 @@ impl<C: DatabaseCollection> Ledger<C> {
                     event.content.event_request.signature.signer.clone(),
                     transfer_request.public_key.clone(),
                 ),
-                EventRequest::Create(_) => return Err(LedgerError::UnexpectedCreateEvent),
-                EventRequest::Fact(state_request) => self.event_sourcing_state(
-                    state_request.subject_id.clone(),
-                    event.content.sn,
-                    event,
-                ),
+                EventRequest::Create(_) => Err(LedgerError::UnexpectedCreateEvent),
+                EventRequest::Fact(state_request) => {
+                    self.event_sourcing_state(
+                        state_request.subject_id.clone(),
+                        event.content.sn,
+                        event,
+                    )
+                    .await
+                }
                 EventRequest::EOL(_) => self.event_sourcing_eol(event),
             }
         }
     }
 
-    fn event_sourcing_rejected_event(&self, event: Signed<Event>) -> Result<Subject, LedgerError> {
+    async fn event_sourcing_rejected_event(
+        &self,
+        event: Signed<Event>,
+    ) -> Result<Subject, LedgerError> {
         let prev_event_hash = DigestIdentifier::from_serializable_borsh(
             &self
                 .database
@@ -2763,13 +2787,14 @@ impl<C: DatabaseCollection> Ledger<C> {
                 sn: event.content.sn,
                 subject_id: subject.subject_id.to_str(),
             })
+            .await
             .map_err(|_| LedgerError::NotificationChannelError);
         self.database
             .set_subject(&event.content.subject_id, subject.clone())?;
         Ok(subject)
     }
 
-    fn event_sourcing_state(
+    async fn event_sourcing_state(
         &self,
         subject_id: DigestIdentifier,
         sn: u64,
@@ -2810,6 +2835,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                 sn: event.content.sn,
                 subject_id: subject.subject_id.to_str(),
             })
+            .await
             .map_err(|_| LedgerError::NotificationChannelError);
         self.database.set_subject(&subject_id, subject.clone())?;
         Ok(subject)

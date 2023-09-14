@@ -10,6 +10,8 @@ repository = "https://github.com/opencanarias/taple-core"
 license = "AGPL-3.0-only"
 keywords = ["blockchain", "distributed-ledger", "taple", "sustainability"]
 
+[workspace]
+
 [dependencies]
 taple-core = { path = "../../core", features = ["validation"] }
 tokio = { version = "1.20", features = [

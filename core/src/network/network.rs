@@ -3,10 +3,13 @@ use super::{
     routing::{RoutingBehaviour, RoutingComposedEvent},
     tell::{TellBehaviour, TellBehaviourEvent},
 };
-use crate::message::{Command, NetworkEvent};
 use crate::{
     commons::crypto::{KeyMaterial, KeyPair},
     ListenAddr,
+};
+use crate::{
+    message::{Command, NetworkEvent},
+    Notification,
 };
 
 use futures::StreamExt;
@@ -35,6 +38,7 @@ use log::{debug, error, info};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::error::Error;
 use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
 
 #[cfg(test)]
 use libp2p::kad::{record::Key, QueryId, Quorum, Record};
@@ -149,12 +153,10 @@ pub struct NetworkProcessor {
     command_sender: mpsc::Sender<Command>,
     command_receiver: mpsc::Receiver<Command>,
     event_sender: mpsc::Sender<NetworkEvent>,
-    // controller_mc: KeyPair,
     pendings: HashMap<PeerId, VecDeque<Vec<u8>>>,
-    // controller_to_peer: HashMap<Vec<u8>, PeerId>,
-    // peer_to_controller: HashMap<PeerId, Vec<u8>>,
     active_get_querys: HashSet<PeerId>,
-    shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+    token: CancellationToken,
+    notification_tx: tokio::sync::mpsc::Sender<Notification>,
     bootstrap_nodes: Vec<(PeerId, Multiaddr)>,
     pending_bootstrap_nodes: HashMap<PeerId, Multiaddr>,
     bootstrap_retries_steam:
@@ -169,12 +171,13 @@ enum ListenProtocols {
 }
 
 impl NetworkProcessor {
-    pub async fn new(
+    pub fn new(
         addr: Vec<ListenAddr>,
         bootstrap_nodes: Vec<(PeerId, Multiaddr)>,
         event_sender: mpsc::Sender<NetworkEvent>,
         controller_mc: KeyPair,
-        shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+        token: CancellationToken,
+        notification_tx: tokio::sync::mpsc::Sender<Notification>,
         external_addresses: Vec<Multiaddr>,
     ) -> Result<Self, Box<dyn Error>> {
         let transport_protocol = check_listen_addr_integrity(&addr)?;
@@ -222,7 +225,8 @@ impl NetworkProcessor {
             // controller_to_peer,
             // peer_to_controller,
             active_get_querys,
-            shutdown_receiver,
+            token,
+            notification_tx,
             bootstrap_nodes,
             pending_bootstrap_nodes: HashMap::new(),
             bootstrap_retries_steam: futures::stream::futures_unordered::FuturesUnordered::new(),
@@ -271,12 +275,13 @@ impl NetworkProcessor {
                     None =>  {return;},
                 },
                 Some(_) = self.bootstrap_retries_steam.next() => self.connect_to_pending_bootstraps(),
-                _ = self.shutdown_receiver.recv() => {
+                _ = self.token.cancelled() => {
                     log::debug!("Network module shutdown received");
                     break;
                 }
             }
         }
+        log::info!("Ended");
     }
 
     fn connect_to_pending_bootstraps(&mut self) {

@@ -1,10 +1,11 @@
+use tokio_util::sync::CancellationToken;
 use wasmtime::Engine;
 
 use crate::{
     database::DB,
     evaluator::errors::CompilerError,
     governance::{GovernanceInterface, GovernanceUpdatedMessage},
-    DatabaseCollection,
+    DatabaseCollection, Notification,
 };
 
 use super::compiler::Compiler;
@@ -12,8 +13,8 @@ use super::compiler::Compiler;
 pub struct TapleCompiler<C: DatabaseCollection, G: GovernanceInterface> {
     input_channel: tokio::sync::broadcast::Receiver<GovernanceUpdatedMessage>,
     inner_compiler: Compiler<C, G>,
-    shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
-    shutdown_sender: tokio::sync::broadcast::Sender<()>,
+    token: CancellationToken,
+    notification_tx: tokio::sync::mpsc::Sender<Notification>,
 }
 
 impl<C: DatabaseCollection, G: GovernanceInterface + Send> TapleCompiler<C, G> {
@@ -23,14 +24,14 @@ impl<C: DatabaseCollection, G: GovernanceInterface + Send> TapleCompiler<C, G> {
         gov_api: G,
         contracts_path: String,
         engine: Engine,
-        shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
-        shutdown_sender: tokio::sync::broadcast::Sender<()>,
+        token: CancellationToken,
+        notification_tx: tokio::sync::mpsc::Sender<Notification>,
     ) -> Self {
         Self {
             input_channel,
             inner_compiler: Compiler::<C, G>::new(database, gov_api, engine, contracts_path),
-            shutdown_receiver,
-            shutdown_sender,
+            token,
+            notification_tx,
         }
     }
 
@@ -38,7 +39,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface + Send> TapleCompiler<C, G> {
         let init = self.inner_compiler.init().await;
         if let Err(error) = init {
             log::error!("Evaluator Compiler error: {}", error);
-            self.shutdown_sender.send(()).unwrap();
+            self.token.cancel();
             return;
         }
         loop {
@@ -56,7 +57,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface + Send> TapleCompiler<C, G> {
                         }
                     }
                 },
-                _ = self.shutdown_receiver.recv() => {
+                _ = self.token.cancelled() => {
                     log::debug!("Compiler module shutdown received");
                     break;
                 }

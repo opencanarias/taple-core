@@ -1,12 +1,12 @@
 use crate::{
     commons::{
-        config::VotationType,
         models::{
             approval::{ApprovalEntity, ApprovalResponse, ApprovalState},
             event::Metadata,
             state::{generate_subject_id, Subject},
         },
         self_signature_manager::{SelfSignatureInterface, SelfSignatureManager},
+        settings::VotationType,
     },
     database::DB,
     governance::{error::RequestError, GovernanceInterface},
@@ -24,11 +24,11 @@ pub trait NotifierInterface {
 }
 
 pub struct RequestNotifier {
-    sender: tokio::sync::broadcast::Sender<Notification>,
+    sender: tokio::sync::mpsc::Sender<Notification>,
 }
 
 impl RequestNotifier {
-    pub fn new(sender: tokio::sync::broadcast::Sender<Notification>) -> Self {
+    pub fn new(sender: tokio::sync::mpsc::Sender<Notification>) -> Self {
         Self { sender }
     }
 }
@@ -43,11 +43,9 @@ impl NotifierInterface for RequestNotifier {
     }
 
     fn request_obsolete(&self, id: String, subject_id: String, sn: u64) {
-        let _ = self.sender.send(Notification::ObsoletedApproval {
-            id: id,
-            subject_id: subject_id,
-            sn,
-        });
+        let _ = self
+            .sender
+            .send(Notification::ObsoletedApproval { id, subject_id, sn });
     }
 }
 

@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use tokio_util::sync::CancellationToken;
 
 use crate::{
     commons::channel::{ChannelData, MpscChannel, SenderEnd},
@@ -48,16 +49,15 @@ pub struct LedgerManager<C: DatabaseCollection> {
     /// Communication channel for incoming petitions
     input_channel: MpscChannel<LedgerCommand, LedgerResponse>,
     inner_ledger: Ledger<C>,
-    shutdown_sender: tokio::sync::broadcast::Sender<()>,
-    shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+    token: CancellationToken,
+    notification_tx: tokio::sync::mpsc::Sender<Notification>,
 }
 
 impl<C: DatabaseCollection> LedgerManager<C> {
     pub fn new(
         input_channel: MpscChannel<LedgerCommand, LedgerResponse>,
-        shutdown_sender: tokio::sync::broadcast::Sender<()>,
-        shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
-        notification_sender: tokio::sync::broadcast::Sender<Notification>,
+        token: CancellationToken,
+        notification_tx: tokio::sync::mpsc::Sender<Notification>,
         gov_api: GovernanceAPI,
         database: DB<C>,
         message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
@@ -75,19 +75,19 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                 message_channel,
                 distribution_channel,
                 our_id,
-                notification_sender,
+                notification_tx.clone(),
             ),
-            shutdown_receiver,
-            shutdown_sender,
+            token,
+            notification_tx,
         }
     }
 
-    pub async fn start(mut self) {
+    pub async fn run(mut self) {
         match self.inner_ledger.init().await {
             Ok(_) => {}
             Err(error) => {
                 log::error!("Ledger Manager Init fails: {:?}", error);
-                self.shutdown_sender.send(()).expect("Channel Closed");
+                self.token.cancel();
                 return;
             }
         };
@@ -99,22 +99,23 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                             let result = self.process_command(command).await;
                             if result.is_err() {
                                 log::error!("{}", result.unwrap_err());
-                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                self.token.cancel();
                                 break;
                             }
                         }
                         None => {
-                            self.shutdown_sender.send(()).expect("Channel Closed");
+                            self.token.cancel();
                             break;
                         },
                     }
                 },
-                _ = self.shutdown_receiver.recv() => {
+                _ = self.token.cancelled() => {
                     log::debug!("Ledger module shutdown received");
                     break;
                 }
             }
         }
+        log::info!("Ended");
     }
 
     async fn process_command(
@@ -139,14 +140,14 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                         Err(error) => match error {
                             LedgerError::ChannelClosed => {
                                 log::error!("Channel Closed");
-                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                self.token.cancel();
                                 return Err(LedgerError::ChannelClosed);
                             }
                             LedgerError::GovernanceError(inner_error)
                                 if *inner_error == RequestError::ChannelClosed =>
                             {
                                 log::error!("Channel Closed");
-                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                self.token.cancel();
                                 return Err(LedgerError::ChannelClosed);
                             }
                             _ => {}
@@ -168,14 +169,14 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                         Err(error) => match error {
                             LedgerError::ChannelClosed => {
                                 log::error!("Channel Closed");
-                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                self.token.cancel();
                                 return Err(LedgerError::ChannelClosed);
                             }
                             LedgerError::GovernanceError(inner_error)
                                 if inner_error == RequestError::ChannelClosed =>
                             {
                                 log::error!("Channel Closed");
-                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                self.token.cancel();
                                 return Err(LedgerError::ChannelClosed);
                             }
                             _ => {
@@ -199,14 +200,14 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                         Err(error) => match error {
                             LedgerError::ChannelClosed => {
                                 log::error!("Channel Closed");
-                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                self.token.cancel();
                                 return Err(LedgerError::ChannelClosed);
                             }
                             LedgerError::GovernanceError(inner_error)
                                 if inner_error == RequestError::ChannelClosed =>
                             {
                                 log::error!("Channel Closed");
-                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                self.token.cancel();
                                 return Err(LedgerError::ChannelClosed);
                             }
                             _ => {}
@@ -229,14 +230,14 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                         Err(error) => match error {
                             LedgerError::ChannelClosed => {
                                 log::error!("Channel Closed");
-                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                self.token.cancel();
                                 return Err(LedgerError::ChannelClosed);
                             }
                             LedgerError::GovernanceError(inner_error)
                                 if inner_error == RequestError::ChannelClosed =>
                             {
                                 log::error!("Channel Closed");
-                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                self.token.cancel();
                                 return Err(LedgerError::ChannelClosed);
                             }
                             _ => {}
@@ -251,14 +252,14 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                         Err(error) => match error {
                             LedgerError::ChannelClosed => {
                                 log::error!("Channel Closed");
-                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                self.token.cancel();
                                 return Err(LedgerError::ChannelClosed);
                             }
                             LedgerError::GovernanceError(inner_error)
                                 if inner_error == RequestError::ChannelClosed =>
                             {
                                 log::error!("Channel Closed");
-                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                self.token.cancel();
                                 return Err(LedgerError::ChannelClosed);
                             }
                             _ => {}
@@ -277,7 +278,7 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                         Err(error) => match error.clone() {
                             LedgerError::ChannelClosed => {
                                 log::error!("Channel Closed");
-                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                self.token.cancel();
                                 return Err(LedgerError::ChannelClosed);
                             }
                             LedgerError::DatabaseError(err) => match err {
@@ -299,7 +300,7 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                         Err(error) => match error.clone() {
                             LedgerError::ChannelClosed => {
                                 log::error!("Channel Closed");
-                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                self.token.cancel();
                                 return Err(LedgerError::ChannelClosed);
                             }
                             LedgerError::DatabaseError(err) => match err {
@@ -324,7 +325,7 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                     let response = match response {
                         Err(error) => match error.clone() {
                             LedgerError::ChannelClosed => {
-                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                self.token.cancel();
                                 return Err(LedgerError::ChannelClosed);
                             }
                             LedgerError::DatabaseError(err) => match err {

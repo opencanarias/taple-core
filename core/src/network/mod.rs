@@ -56,8 +56,7 @@ mod tests {
                 mc1,
                 bsx.subscribe(),
                 vec![]
-            )
-            .await.unwrap();
+            );
             let msg_sender_boot = bootstrap_network.client();
             let mut msg_rcv_boot = ReceiverStream::new(receiver_boot);
 

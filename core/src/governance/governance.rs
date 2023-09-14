@@ -1,6 +1,7 @@
 use std::{collections::HashSet, marker::PhantomData};
 
 use async_trait::async_trait;
+use tokio_util::sync::CancellationToken;
 
 use crate::{
     commons::{
@@ -9,7 +10,7 @@ use crate::{
         models::event::Metadata,
         schema_handler::{get_governance_schema, gov_models::Contract},
     },
-    DatabaseCollection, DatabaseManager, ValueWrapper, DB,
+    DatabaseCollection, DatabaseManager, Notification, ValueWrapper, DB,
 };
 
 use super::{
@@ -21,8 +22,8 @@ use super::{
 
 pub struct Governance<M: DatabaseManager<C>, C: DatabaseCollection> {
     input: MpscChannel<GovernanceMessage, GovernanceResponse>,
-    shutdown_sender: tokio::sync::broadcast::Sender<()>,
-    shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+    token: CancellationToken,
+    notification_tx: tokio::sync::mpsc::Sender<Notification>,
     inner_governance: InnerGovernance<C>,
     _m: PhantomData<M>,
 }
@@ -30,15 +31,15 @@ pub struct Governance<M: DatabaseManager<C>, C: DatabaseCollection> {
 impl<M: DatabaseManager<C>, C: DatabaseCollection> Governance<M, C> {
     pub fn new(
         input: MpscChannel<GovernanceMessage, GovernanceResponse>,
-        shutdown_sender: tokio::sync::broadcast::Sender<()>,
-        shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+        token: CancellationToken,
+        notification_tx: tokio::sync::mpsc::Sender<Notification>,
         repo_access: DB<C>,
         update_channel: tokio::sync::broadcast::Sender<GovernanceUpdatedMessage>,
     ) -> Self {
         Self {
             input,
-            shutdown_sender,
-            shutdown_receiver,
+            token,
+            notification_tx,
             inner_governance: InnerGovernance::new(
                 repo_access,
                 get_governance_schema(),
@@ -48,22 +49,23 @@ impl<M: DatabaseManager<C>, C: DatabaseCollection> Governance<M, C> {
         }
     }
 
-    pub async fn start(&mut self) {
+    pub async fn run(&mut self) {
         loop {
             tokio::select! {
                 msg = self.input.receive() => {
                     let result = self.process_input(msg).await;
                     if result.is_err() {
                         log::error!("Error at governance module {}", result.unwrap_err());
-                        self.shutdown_sender.send(()).expect("Channel Closed");
+                        self.token.cancel();
                     }
                 },
-                _ = self.shutdown_receiver.recv() => {
+                _ = self.token.cancelled() => {
                     log::debug!("Governance module shutdown received");
                     break;
                 }
             }
         }
+        log::info!("Ended");
     }
 
     async fn process_input(

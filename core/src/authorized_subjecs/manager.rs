@@ -1,8 +1,10 @@
 use std::collections::HashSet;
 
 use tokio::time::{interval, Duration};
+use tokio_util::sync::CancellationToken;
 
 use crate::database::Error as DbError;
+use crate::Notification;
 use crate::{
     commons::channel::{ChannelData, MpscChannel, SenderEnd},
     database::DB,
@@ -46,8 +48,8 @@ pub struct AuthorizedSubjectsManager<C: DatabaseCollection> {
     /// Communication channel for incoming petitions
     input_channel: MpscChannel<AuthorizedSubjectsCommand, AuthorizedSubjectsResponse>,
     inner_authorized_subjects: AuthorizedSubjects<C>,
-    shutdown_sender: tokio::sync::broadcast::Sender<()>,
-    shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+    token: CancellationToken,
+    notification_tx: tokio::sync::mpsc::Sender<Notification>,
 }
 
 impl<C: DatabaseCollection> AuthorizedSubjectsManager<C> {
@@ -57,26 +59,26 @@ impl<C: DatabaseCollection> AuthorizedSubjectsManager<C> {
         database: DB<C>,
         message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
         our_id: KeyIdentifier,
-        shutdown_sender: tokio::sync::broadcast::Sender<()>,
-        shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+        token: CancellationToken,
+        notification_tx: tokio::sync::mpsc::Sender<Notification>,
     ) -> Self {
         Self {
             input_channel,
             inner_authorized_subjects: AuthorizedSubjects::new(database, message_channel, our_id),
-            shutdown_sender,
-            shutdown_receiver,
+            token,
+            notification_tx,
         }
     }
 
     /// Starts the `AuthorizedSubjectsManager` and processes incoming commands.
-    pub async fn start(mut self) {
+    pub async fn run(mut self) {
         // Ask for all authorized subjects from the database
         match self.inner_authorized_subjects.ask_for_all().await {
             Ok(_) => {}
             Err(AuthorizedSubjectsError::DatabaseError(DbError::EntryNotFound)) => {}
             Err(error) => {
                 log::error!("{}", error);
-                self.shutdown_sender.send(()).expect("Channel Closed");
+                self.token.cancel();
                 return;
             }
         };
@@ -91,12 +93,12 @@ impl<C: DatabaseCollection> AuthorizedSubjectsManager<C> {
                             let result = self.process_command(command).await;
                             if result.is_err() {
                                 log::error!("{}", result.unwrap_err());
-                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                self.token.cancel();
                                 break;
                             }
                         }
                         None => {
-                            self.shutdown_sender.send(()).expect("Channel Closed");
+                            self.token.cancel();
                             break;
                         },
                     }
@@ -108,17 +110,18 @@ impl<C: DatabaseCollection> AuthorizedSubjectsManager<C> {
                         Err(AuthorizedSubjectsError::DatabaseError(DbError::EntryNotFound)) => {}
                         Err(error) => {
                             log::error!("{}", error);
-                            self.shutdown_sender.send(()).expect("Channel Closed");
+                            self.token.cancel();
                             break;
                         }
                     };
                 },
                 // Shutdown the manager when a shutdown signal is received
-                _ = self.shutdown_receiver.recv() => {
+                _ = self.token.cancelled() => {
                     break;
                 }
             }
         }
+        log::info!("Ended");
     }
 
     /// Processes an incoming command from the input channel.

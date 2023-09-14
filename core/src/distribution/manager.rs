@@ -1,3 +1,5 @@
+use tokio_util::sync::CancellationToken;
+
 use crate::{
     commons::{
         channel::{ChannelData, MpscChannel, SenderEnd},
@@ -7,7 +9,7 @@ use crate::{
     governance::{GovernanceAPI, GovernanceUpdatedMessage},
     message::MessageTaskCommand,
     protocol::protocol_message_manager::TapleMessages,
-    DatabaseCollection, TapleSettings,
+    DatabaseCollection, Notification, Settings,
 };
 
 use super::{
@@ -19,8 +21,8 @@ use super::{
 pub struct DistributionManager<C: DatabaseCollection> {
     governance_update_input: tokio::sync::broadcast::Receiver<GovernanceUpdatedMessage>,
     input_channel: MpscChannel<DistributionMessagesNew, Result<(), DistributionErrorResponses>>,
-    shutdown_sender: tokio::sync::broadcast::Sender<()>,
-    shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+    token: CancellationToken,
+    notification_tx: tokio::sync::mpsc::Sender<Notification>,
     inner_manager: InnerDistributionManager<GovernanceAPI, C>,
 }
 
@@ -28,19 +30,19 @@ impl<C: DatabaseCollection> DistributionManager<C> {
     pub fn new(
         input_channel: MpscChannel<DistributionMessagesNew, Result<(), DistributionErrorResponses>>,
         governance_update_input: tokio::sync::broadcast::Receiver<GovernanceUpdatedMessage>,
-        shutdown_sender: tokio::sync::broadcast::Sender<()>,
-        shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+        token: CancellationToken,
+        notification_tx: tokio::sync::mpsc::Sender<Notification>,
         messenger_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
         gov_api: GovernanceAPI,
         signature_manager: SelfSignatureManager,
-        settings: TapleSettings,
+        settings: Settings,
         db: DB<C>,
     ) -> Self {
         Self {
             input_channel,
             governance_update_input,
-            shutdown_sender,
-            shutdown_receiver,
+            token,
+            notification_tx,
             inner_manager: InnerDistributionManager::new(
                 gov_api,
                 db,
@@ -51,7 +53,7 @@ impl<C: DatabaseCollection> DistributionManager<C> {
         }
     }
 
-    pub async fn start(mut self) {
+    pub async fn run(mut self) {
         if let Err(error) = self.inner_manager.init().await {
             log::error!("{}", error);
         }
@@ -63,17 +65,17 @@ impl<C: DatabaseCollection> DistributionManager<C> {
                             let result = self.process_command(command).await;
                             if result.is_err() {
                                 log::error!("{}", result.unwrap_err());
-                                self.shutdown_sender.send(()).expect("Channel Closed");
+                                self.token.cancel();
                                 break;
                             }
                         }
                         None => {
-                            self.shutdown_sender.send(()).expect("Channel Closed");
+                            self.token.cancel();
                             break;
                         },
                     }
                 },
-                _ = self.shutdown_receiver.recv() => {
+                _ = self.token.cancelled() => {
                     log::debug!("Distribution module shutdown received");
                     break;
                 },
@@ -84,20 +86,21 @@ impl<C: DatabaseCollection> DistributionManager<C> {
                                 GovernanceUpdatedMessage::GovernanceUpdated{ governance_id, governance_version: _governance_version } => {
                                     if let Err(error) = self.inner_manager.governance_updated(&governance_id).await {
                                         log::error!("{}", error);
-                                        self.shutdown_sender.send(()).expect("Channel Closed");
+                                        self.token.cancel();
                                         break;
                                     }
                                 }
                             }
                         },
                         Err(_) => {
-                            self.shutdown_sender.send(()).expect("Channel Closed");
+                            self.token.cancel();
                             break;
                         }
                     }
                 }
             }
         }
+        log::info!("Ended");
     }
 
     async fn process_command(

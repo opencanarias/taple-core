@@ -4,8 +4,9 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::io::Cursor;
 use tokio::sync::mpsc::{self};
 use tokio_stream::wrappers::ReceiverStream;
+use tokio_util::sync::CancellationToken;
 
-use crate::{commons::channel::SenderEnd, signature::Signed, KeyIdentifier};
+use crate::{commons::channel::SenderEnd, signature::Signed, KeyIdentifier, Notification};
 
 use super::{MessageContent, TaskCommandContent};
 
@@ -20,7 +21,8 @@ where
 {
     receiver: ReceiverStream<NetworkEvent>,
     sender: SenderEnd<Signed<MessageContent<T>>, ()>,
-    shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+    token: CancellationToken,
+    notification_tx: tokio::sync::mpsc::Sender<Notification>,
     own_id: KeyIdentifier,
 }
 
@@ -28,14 +30,16 @@ impl<T: TaskCommandContent + Serialize + DeserializeOwned + 'static> MessageRece
     pub fn new(
         receiver: mpsc::Receiver<NetworkEvent>,
         sender: SenderEnd<Signed<MessageContent<T>>, ()>,
-        shutdown_receiver: tokio::sync::broadcast::Receiver<()>,
+        token: CancellationToken,
+        notification_tx: tokio::sync::mpsc::Sender<Notification>,
         own_id: KeyIdentifier,
     ) -> Self {
         let receiver = ReceiverStream::new(receiver);
         Self {
             receiver,
             sender,
-            shutdown_receiver,
+            token,
+            notification_tx,
             own_id,
         }
     }
@@ -61,10 +65,11 @@ impl<T: TaskCommandContent + Serialize + DeserializeOwned + 'static> MessageRece
                     },
                     None => {}
                 },
-                _ = self.shutdown_receiver.recv() => {
+                _ = self.token.cancelled() => {
                     break;
                 }
             }
         }
+        log::info!("Ended");
     }
 }
