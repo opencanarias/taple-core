@@ -154,17 +154,16 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
                         Some(command) => {
                             let result = self.process_command(command).await;
                             if result.is_err() {
-                                self.token.cancel();
+                                break;
                             }
                         }
                         None => {
-                            self.token.cancel();
                             break;
                         },
                     }
                 },
                 _ = self.token.cancelled() => {
-                    log::debug!("Approval module shutdown received");
+                    log::debug!("Shutdown received");
                     break;
                 },
                 update = self.governance_update_channel.recv() => {
@@ -174,20 +173,19 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
                                 GovernanceUpdatedMessage::GovernanceUpdated { governance_id, governance_version: _ } => {
                                     if let Err(error) = self.inner_manager.new_governance_version(&governance_id) {
                                         log::error!("NEW GOV VERSION APPROVAL ERROR: {}", error);
-                                        self.token.cancel();
                                         break;
                                     }
                                 }
                             }
                         },
                         Err(_) => {
-                            self.token.cancel();
                             break;
                         }
                     }
                 }
             }
         }
+        self.token.cancel();
         log::info!("Ended");
     }
 

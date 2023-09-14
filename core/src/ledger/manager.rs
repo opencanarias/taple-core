@@ -99,22 +99,21 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                             let result = self.process_command(command).await;
                             if result.is_err() {
                                 log::error!("{}", result.unwrap_err());
-                                self.token.cancel();
                                 break;
                             }
                         }
                         None => {
-                            self.token.cancel();
                             break;
                         },
                     }
                 },
                 _ = self.token.cancelled() => {
-                    log::debug!("Ledger module shutdown received");
+                    log::debug!("Shutdown received");
                     break;
                 }
             }
         }
+        self.token.cancel();
         log::info!("Ended");
     }
 

@@ -65,18 +65,16 @@ impl<C: DatabaseCollection> DistributionManager<C> {
                             let result = self.process_command(command).await;
                             if result.is_err() {
                                 log::error!("{}", result.unwrap_err());
-                                self.token.cancel();
                                 break;
                             }
                         }
                         None => {
-                            self.token.cancel();
                             break;
                         },
                     }
                 },
                 _ = self.token.cancelled() => {
-                    log::debug!("Distribution module shutdown received");
+                    log::debug!("Shutdown received");
                     break;
                 },
                 msg = self.governance_update_input.recv() => {
@@ -86,20 +84,19 @@ impl<C: DatabaseCollection> DistributionManager<C> {
                                 GovernanceUpdatedMessage::GovernanceUpdated{ governance_id, governance_version: _governance_version } => {
                                     if let Err(error) = self.inner_manager.governance_updated(&governance_id).await {
                                         log::error!("{}", error);
-                                        self.token.cancel();
                                         break;
                                     }
                                 }
                             }
                         },
                         Err(_) => {
-                            self.token.cancel();
                             break;
                         }
                     }
                 }
             }
         }
+        self.token.cancel();
         log::info!("Ended");
     }
 

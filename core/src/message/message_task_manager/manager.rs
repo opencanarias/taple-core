@@ -53,7 +53,6 @@ impl<T: TaskCommandContent + Serialize + DeserializeOwned + 'static> MessageTask
                     let result = self.process_input(msg).await;
                     if result.is_err() {
                         log::error!("{}", result.unwrap_err());
-                        self.token.cancel();
                         break;
                     }
                 },
@@ -63,6 +62,7 @@ impl<T: TaskCommandContent + Serialize + DeserializeOwned + 'static> MessageTask
                 }
             }
         }
+        self.token.cancel();
         log::info!("Ended");
     }
 

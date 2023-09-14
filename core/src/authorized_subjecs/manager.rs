@@ -93,12 +93,10 @@ impl<C: DatabaseCollection> AuthorizedSubjectsManager<C> {
                             let result = self.process_command(command).await;
                             if result.is_err() {
                                 log::error!("{}", result.unwrap_err());
-                                self.token.cancel();
                                 break;
                             }
                         }
                         None => {
-                            self.token.cancel();
                             break;
                         },
                     }
@@ -110,17 +108,18 @@ impl<C: DatabaseCollection> AuthorizedSubjectsManager<C> {
                         Err(AuthorizedSubjectsError::DatabaseError(DbError::EntryNotFound)) => {}
                         Err(error) => {
                             log::error!("{}", error);
-                            self.token.cancel();
                             break;
                         }
                     };
                 },
                 // Shutdown the manager when a shutdown signal is received
                 _ = self.token.cancelled() => {
+                    log::debug!("Shutdown received");
                     break;
                 }
             }
         }
+        self.token.cancel();
         log::info!("Ended");
     }
 

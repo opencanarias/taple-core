@@ -276,11 +276,12 @@ impl NetworkProcessor {
                 },
                 Some(_) = self.bootstrap_retries_steam.next() => self.connect_to_pending_bootstraps(),
                 _ = self.token.cancelled() => {
-                    log::debug!("Network module shutdown received");
+                    log::debug!("Shutdown received");
                     break;
                 }
             }
         }
+        self.token.cancel();
         log::info!("Ended");
     }
 

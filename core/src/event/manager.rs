@@ -100,12 +100,10 @@ impl<C: DatabaseCollection> EventManager<C> {
                             let result = self.process_command(command).await;
                             if result.is_err() {
                                 log::error!("{}", result.unwrap_err());
-                                self.token.cancel();
                                 break;
                             }
                         }
                         None => {
-                            self.token.cancel();
                             break;
                         },
                     }
@@ -117,24 +115,23 @@ impl<C: DatabaseCollection> EventManager<C> {
                                 GovernanceUpdatedMessage::GovernanceUpdated { governance_id, governance_version } => {
                                     let result = self.event_completer.new_governance_version(governance_id, governance_version).await;
                                     if result.is_err() {
-                                        self.token.cancel();
                                         break;
                                     }
                                 },
                             }
                         },
                         Err(_) => {
-                            self.token.cancel();
                             break;
                         },
                     }
                 },
                 _ = self.token.cancelled() => {
-                    log::debug!("Event module shutdown received");
+                    log::debug!("Shutdown received");
                     break;
                 }
             }
         }
+        self.token.cancel();
         log::info!("Ended");
     }
 

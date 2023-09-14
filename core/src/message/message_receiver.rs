@@ -66,10 +66,12 @@ impl<T: TaskCommandContent + Serialize + DeserializeOwned + 'static> MessageRece
                     None => {}
                 },
                 _ = self.token.cancelled() => {
+                    log::debug!("Shutdown received");
                     break;
                 }
             }
         }
+        self.token.cancel();
         log::info!("Ended");
     }
 }

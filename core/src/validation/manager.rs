@@ -1,3 +1,4 @@
+use tokio::time::{sleep, Duration};
 use tokio_util::sync::CancellationToken;
 
 use super::{
@@ -69,20 +70,21 @@ impl<C: DatabaseCollection> ValidationManager<C> {
                             let result = self.process_command(command).await;
                             if result.is_err() {
                                 log::error!("{}", result.unwrap_err());
-                                self.token.cancel();
+                                break;
                             }
                         }
                         None => {
-                            self.token.cancel();
+                            break;
                         },
                     }
                 },
                 _ = self.token.cancelled() => {
-                    log::debug!("Validation module shutdown received");
+                    log::debug!("Shutdown received");
                     break;
                 }
             }
         }
+        self.token.cancel();
         log::info!("Ended");
     }
 

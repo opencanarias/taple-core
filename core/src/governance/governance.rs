@@ -56,15 +56,16 @@ impl<M: DatabaseManager<C>, C: DatabaseCollection> Governance<M, C> {
                     let result = self.process_input(msg).await;
                     if result.is_err() {
                         log::error!("Error at governance module {}", result.unwrap_err());
-                        self.token.cancel();
+                        break;
                     }
                 },
                 _ = self.token.cancelled() => {
-                    log::debug!("Governance module shutdown received");
+                    log::debug!("Shutdown received");
                     break;
                 }
             }
         }
+        self.token.cancel();
         log::info!("Ended");
     }
 
