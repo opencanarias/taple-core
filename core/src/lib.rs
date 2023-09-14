@@ -28,18 +28,18 @@
 //!  */
 //! #[tokio::main]
 //! async fn main() {
-//!     // Generate ramdom node ID key pair
-//!     let node_key_pair = crypto::KeyPair::Ed25519(Ed25519KeyPair::from_seed(&[]));
+//!      // Generate ramdom node ID key pair
+//!      let node_key_pair = crypto::KeyPair::Ed25519(Ed25519KeyPair::from_seed(&[]));
 //!
-//!    // Configure minimal settings
-//!    let settings = {
-//!        let mut settings = Settings::default();
-//!        settings.node.secret_key = hex::encode(node_key_pair.secret_key_bytes());
-//!        settings
-//!    };
+//!     // Configure minimal settings
+//!     let settings = {
+//!         let mut settings = Settings::default();
+//!         settings.node.secret_key = hex::encode(node_key_pair.secret_key_bytes());
+//!         settings
+//!     };
 //!
-//!    // Build node
-//!    let (mut node, api) = Node::build(settings, MemoryManager::new()).expect("TAPLE node built");
+//!     // Build node
+//!     let (mut node, api) = Node::build(settings, MemoryManager::new()).expect("TAPLE node built");
 //!
 //!     // Create a minimal governance
 //!     // Compose and sign the subject creation request

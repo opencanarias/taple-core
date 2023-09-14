@@ -245,7 +245,8 @@ mod test {
     use json_patch::diff;
     use serde::{Deserialize, Serialize};
     use serde_json::Value;
-    use tokio::sync::broadcast::Sender;
+    use tokio::sync::{broadcast::Sender, mpsc};
+    use tokio_util::sync::CancellationToken;
 
     use crate::{
         commons::{
@@ -583,7 +584,8 @@ mod test {
             identifier: KeyIdentifier::new(crate::KeyDerivator::Ed25519, &pk),
             digest_derivator: crate::DigestDerivator::Blake3_256,
         };
-        let (shutdown_sx, shutdown_rx) = tokio::sync::broadcast::channel(100);
+        let (notification_tx, notification_rx) = mpsc::channel(1000);
+        let token = CancellationToken::new();
         let governance = GovernanceMockup {};
         let collection = Arc::new(MemoryManager::new());
         let database = DB::new(collection.clone());
@@ -599,8 +601,8 @@ mod test {
             collection,
             signature_manager.clone(),
             rx_compiler,
-            shutdown_sx,
-            shutdown_rx,
+            token,
+            notification_tx,
             governance,
             SC_DIR.to_string(),
             msg_sx,

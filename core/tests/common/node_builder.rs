@@ -1,9 +1,14 @@
-use taple_core::{Api, DigestIdentifier, ListenAddr, MemoryCollection, MemoryManager};
+use std::str::FromStr;
+
+use taple_core::{
+    Api, DigestIdentifier, Error, ListenAddr, MemoryCollection, MemoryManager, Notification,
+    Settings,
+};
 
 use taple_core::Node;
+use tokio::time::{sleep, Duration};
 
-use super::error::{NotifierError, TapleError};
-use super::notifier::TapleNotifier;
+use super::error::NotifierError;
 
 pub struct NodeBuilder {
     p2p_port: Option<u32>,
@@ -23,9 +28,9 @@ impl NodeBuilder {
         }
     }
 
-    pub fn build(self) -> TapleTestNode {
+    pub fn build(self) -> Result<OnMemoryNode, Error> {
         let mut settings = Settings::default();
-        settings.node.secret_key = Some(self.secret_key);
+        settings.node.secret_key = self.secret_key;
         settings.network.listen_addr = vec![ListenAddr::Memory {
             port: self.p2p_port,
         }];
@@ -35,12 +40,8 @@ impl NodeBuilder {
         std::fs::create_dir_all(&path).expect("TMP DIR could not be created");
         settings.node.smartcontracts_directory = path;
         let database = MemoryManager::new();
-        TapleTestNode::new(Node::new(settings, database))
-    }
-
-    pub fn with_port(mut self, port: u32) -> Self {
-        self.p2p_port = Some(port);
-        self
+        let (node, api) = Node::build(settings, database)?;
+        Ok(OnMemoryNode::new(node, api))
     }
 
     pub fn add_access_point(mut self, know_node: String) -> Self {
@@ -63,44 +64,79 @@ pub enum PassVotation {
     AlwaysReject,
 }
 
-pub struct TapleTestNode {
+pub struct OnMemoryNode {
     taple: Node<MemoryManager, MemoryCollection>,
-    notifier: TapleNotifier,
-    shutdown_manager: TapleShutdownManager,
+    api: Api,
 }
 
-impl TapleTestNode {
-    pub fn new(taple: Node<MemoryManager, MemoryCollection>) -> Self {
-        let notifier = taple.notification_handler();
-        let shutdown_manager = taple.get_shutdown_manager();
-        Self {
-            taple,
-            notifier: TapleNotifier::new(notifier),
-            shutdown_manager,
-        }
+const MAX_TIMEOUT_MS: u16 = 5000;
+
+impl OnMemoryNode {
+    pub fn new(taple: Node<MemoryManager, MemoryCollection>, api: Api) -> Self {
+        Self { taple, api }
     }
 
     pub fn get_api(&self) -> Api {
-        self.taple.api()
-    }
-
-    pub async fn start(&mut self) -> Result<(), TapleError> {
-        self.taple
-            .start()
-            .await
-            .map_err(|e| TapleError::StartError(e))
+        self.api.clone()
     }
 
     pub async fn shutdown(self) {
-        self.shutdown_manager.shutdown().await;
+        self.taple.shutdown_gracefully().await;
     }
 
     pub async fn wait_for_new_subject(&mut self) -> Result<DigestIdentifier, NotifierError> {
-        self.notifier.wait_for_new_subject().await
+        let subject_id = self
+            .wait_for_notification(|data| {
+                if let Notification::NewSubject { subject_id } = data {
+                    Some(subject_id)
+                } else {
+                    None
+                }
+            })
+            .await?;
+        Ok(DigestIdentifier::from_str(&subject_id)
+            .expect("Invalid conversion to digest identifier"))
     }
 
-    #[allow(dead_code)]
     pub async fn wait_for_new_event(&mut self) -> Result<(u64, DigestIdentifier), NotifierError> {
-        self.notifier.wait_for_new_event().await
+        let (sn, subject_id) = self
+            .wait_for_notification(|data| {
+                if let Notification::NewEvent { sn, subject_id } = data {
+                    Some((sn, subject_id))
+                } else {
+                    None
+                }
+            })
+            .await?;
+        Ok((
+            sn,
+            DigestIdentifier::from_str(&subject_id)
+                .expect("Invalid conversion to digest identifier"),
+        ))
+    }
+
+    async fn wait_for_notification<V, F: Fn(Notification) -> Option<V>>(
+        &mut self,
+        callback: F,
+    ) -> Result<V, NotifierError> {
+        loop {
+            tokio::select! {
+                _ = sleep(Duration::from_millis(MAX_TIMEOUT_MS as u64)) => {
+                    return Err(NotifierError::RequestTimeout);
+                },
+                notification = self.taple.recv_notification() => {
+                    match notification {
+                        Some(data) => {
+                            if let Some(result) = callback(data) {
+                                return Ok(result);
+                            }
+                        },
+                        None => {
+                            break Err(NotifierError::NotificationChannelClosed);
+                        }
+                    }
+                }
+            }
+        }
     }
 }

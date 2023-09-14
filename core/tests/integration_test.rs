@@ -11,10 +11,9 @@ fn init_node() {
     rt.block_on(async {
         std::env::set_var("RUST_LOG", "info");
         let mc_data_node1 = generate_mc();
-        let mut node = NodeBuilder::new(mc_data_node1.get_private_key()).build();
-        let result = node.start().await;
+        let result = NodeBuilder::new(mc_data_node1.get_private_key()).build();
         assert!(result.is_ok());
-        node.shutdown().await
+        result.unwrap().shutdown().await;
     });
 }
 
@@ -24,9 +23,9 @@ fn create_governance() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
         let mc_data_node1 = generate_mc();
-        let mut node = NodeBuilder::new(mc_data_node1.get_private_key()).build();
-        let result = node.start().await;
+        let result = NodeBuilder::new(mc_data_node1.get_private_key()).build();
         assert!(result.is_ok());
+        let mut node = result.unwrap();
         let node_api = node.get_api();
         let public_key = node_api
             .add_keys(taple_core::KeyDerivator::Ed25519)

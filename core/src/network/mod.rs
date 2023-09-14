@@ -12,6 +12,7 @@ mod tests {
     };
     use crate::{message::Command, network::routing::RoutingComposedEvent, ListenAddr};
     use log::debug;
+    use tokio_util::sync::CancellationToken;
 
     use super::*;
 
@@ -48,15 +49,17 @@ mod tests {
                 format!("pepe").as_bytes(),
             ));
             let (sender_boot, receiver_boot) = mpsc::channel(10000);
-            let (bsx, brx) = tokio::sync::broadcast::channel::<()>(10);
+            let (notification_tx, notification_rx) = mpsc::channel(1000);
+            let token = CancellationToken::new();
             let bootstrap_network = NetworkProcessor::new(
                 vec![ListenAddr::try_from(String::from("/memory/647988")).unwrap()],
                 vec![],
                 sender_boot,
                 mc1,
-                bsx.subscribe(),
+                token.clone(),
+                notification_tx.clone(),
                 vec![]
-            );
+            ).unwrap();
             let msg_sender_boot = bootstrap_network.client();
             let mut msg_rcv_boot = ReceiverStream::new(receiver_boot);
 
@@ -70,10 +73,10 @@ mod tests {
                 vec![(bt_pid, String::from("/memory/647988").parse().unwrap())],
                 sender1,
                 mc2,
-                brx,
+                token,
+                notification_tx,
                 vec![]
-            )
-            .await.unwrap();
+            ).unwrap();
             let msg_sender_1 = node1_network.client();
             let mut msg_rcv_1 = ReceiverStream::new(receiver1);
 
