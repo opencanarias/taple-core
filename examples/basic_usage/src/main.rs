@@ -4,6 +4,9 @@ use taple_core::crypto::*;
 use taple_core::request::*;
 use taple_core::signature::*;
 use taple_core::*;
+use taple_network_libp2p::network::*;
+use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
 
 /**
  * Basic usage of TAPLE Core. It includes:
@@ -22,8 +25,25 @@ async fn main() {
         settings
     };
 
+    // Create network
+    let (sender, _receiver) = mpsc::channel(10000);
+    let (notification_tx, _notification_rx) = mpsc::channel(1000);
+    let token = CancellationToken::new();
+    let network = NetworkProcessor::new(
+        settings.network.listen_addr.clone(),
+        network_access_points(&settings.network.known_nodes).unwrap(),
+        sender,
+        node_key_pair.clone(),
+        token,
+        notification_tx,
+        external_addresses(&settings.network.external_address).unwrap(),
+    )
+    .await
+    .expect("Network created");
+
     // Build node
-    let (mut node, api) = Node::build(settings, MemoryManager::new()).expect("TAPLE node built");
+    let (mut node, api) =
+        Node::build(settings, network, MemoryManager::new()).expect("TAPLE node built");
 
     // Create a minimal governance
     // Compose and sign the subject creation request

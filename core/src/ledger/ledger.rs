@@ -10,7 +10,7 @@ use crate::{
         models::{evaluation::SubjectContext, state::Subject, validation::ValidationProof},
     },
     crypto::{Ed25519KeyPair, KeyMaterial, KeyPair},
-    database::{Error as DbError, DB},
+    database::{DatabaseError as DbError, DB},
     distribution::{error::DistributionErrorResponses, DistributionMessagesNew},
     governance::{stage::ValidationStage, GovernanceAPI, GovernanceInterface},
     identifier::{Derivable, DigestIdentifier, KeyIdentifier},
@@ -2204,7 +2204,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                             .database
                                             .get_event(&subject_id, head)
                                             .map_err(|error| match error {
-                                                crate::database::Error::EntryNotFound => {
+                                                crate::database::DatabaseError::EntryNotFound => {
                                                     LedgerError::UnexpectEventMissingInEventSourcing
                                                 }
                                                 _ => LedgerError::DatabaseError(error),
@@ -2316,7 +2316,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                             .database
                                             .get_event(&subject_id, head)
                                             .map_err(|error| match error {
-                                                crate::database::Error::EntryNotFound => {
+                                                crate::database::DatabaseError::EntryNotFound => {
                                                     LedgerError::UnexpectEventMissingInEventSourcing
                                                 }
                                                 _ => LedgerError::DatabaseError(error),
@@ -2657,7 +2657,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                 .database
                 .get_event(&subject_id, sn - 1)
                 .map_err(|error| match error {
-                    crate::database::Error::EntryNotFound => {
+                    crate::database::DatabaseError::EntryNotFound => {
                         LedgerError::UnexpectEventMissingInEventSourcing
                     }
                     _ => LedgerError::DatabaseError(error),
@@ -2687,7 +2687,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                 .database
                 .get_event(&subject_id, sn - 1)
                 .map_err(|error| match error {
-                    crate::database::Error::EntryNotFound => {
+                    crate::database::DatabaseError::EntryNotFound => {
                         LedgerError::UnexpectEventMissingInEventSourcing
                     }
                     _ => LedgerError::DatabaseError(error),
@@ -2699,7 +2699,7 @@ impl<C: DatabaseCollection> Ledger<C> {
             .database
             .get_event(&subject_id, sn)
             .map_err(|error| match error {
-                crate::database::Error::EntryNotFound => {
+                crate::database::DatabaseError::EntryNotFound => {
                     LedgerError::UnexpectEventMissingInEventSourcing
                 }
                 _ => LedgerError::DatabaseError(error),
@@ -2764,7 +2764,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                 .database
                 .get_event(&event.content.subject_id, event.content.sn - 1)
                 .map_err(|error| match error {
-                    crate::database::Error::EntryNotFound => {
+                    crate::database::DatabaseError::EntryNotFound => {
                         LedgerError::UnexpectEventMissingInEventSourcing
                     }
                     _ => LedgerError::DatabaseError(error),
@@ -2805,7 +2805,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                 .database
                 .get_event(&subject_id, sn - 1)
                 .map_err(|error| match error {
-                    crate::database::Error::EntryNotFound => {
+                    crate::database::DatabaseError::EntryNotFound => {
                         LedgerError::UnexpectEventMissingInEventSourcing
                     }
                     _ => LedgerError::DatabaseError(error),

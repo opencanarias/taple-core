@@ -1,12 +1,16 @@
 use std::str::FromStr;
 
+use taple_core::crypto::{KeyGenerator, KeyPair};
 use taple_core::{
     Api, DigestIdentifier, Error, ListenAddr, MemoryCollection, MemoryManager, Notification,
     Settings,
 };
 
 use taple_core::Node;
+use taple_network_libp2p::network::{external_addresses, network_access_points, NetworkProcessor};
+use tokio::sync::mpsc;
 use tokio::time::{sleep, Duration};
+use tokio_util::sync::CancellationToken;
 
 use super::error::NotifierError;
 
@@ -28,9 +32,9 @@ impl NodeBuilder {
         }
     }
 
-    pub fn build(self) -> Result<OnMemoryNode, Error> {
+    pub async fn build(self) -> Result<OnMemoryNode, Error> {
         let mut settings = Settings::default();
-        settings.node.secret_key = self.secret_key;
+        settings.node.secret_key = self.secret_key.clone();
         settings.network.listen_addr = vec![ListenAddr::Memory {
             port: self.p2p_port,
         }];
@@ -40,7 +44,24 @@ impl NodeBuilder {
         std::fs::create_dir_all(&path).expect("TMP DIR could not be created");
         settings.node.smartcontracts_directory = path;
         let database = MemoryManager::new();
-        let (node, api) = Node::build(settings, database)?;
+        let (sender, _receiver) = mpsc::channel(10000);
+        let (notification_tx, _notification_rx) = mpsc::channel(1000);
+        let token = CancellationToken::new();
+        let mc = KeyPair::Ed25519(taple_core::crypto::Ed25519KeyPair::from_secret_key(
+            self.secret_key.as_bytes(),
+        ));
+        let network = NetworkProcessor::new(
+            settings.network.listen_addr.clone(),
+            network_access_points(&settings.network.known_nodes)?,
+            sender,
+            mc,
+            token,
+            notification_tx,
+            external_addresses(&settings.network.external_address)?,
+        )
+        .await
+        .expect("Network created");
+        let (node, api) = Node::build(settings, network, database)?;
         Ok(OnMemoryNode::new(node, api))
     }
 

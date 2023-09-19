@@ -1,9 +1,10 @@
-use super::DatabaseError;
-use crate::{test_database_manager_trait, DatabaseCollection, DatabaseManager};
 use std::{
     collections::{btree_map::Iter, BTreeMap, HashMap},
     iter::Rev,
     sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
+};
+use taple_core::{
+    test_database_manager_trait, DatabaseCollection, DatabaseManager, DbError as DatabaseError,
 };
 
 pub struct DataStore {
@@ -139,17 +140,19 @@ impl<'a> Iterator for MemoryIterator<'a> {
             self.current = Some((Arc::new(guard), iter));
             &mut self.current.as_mut().unwrap().1
         };
-        let Some(item) = iter.next() else {
+        loop {
+            let Some(item) = iter.next() else {
                 return None;
             };
-        let key = {
-            let value = item.0.clone();
-            if !value.starts_with(&self.table_name) {
-                return None;
-            }
-            value.replace(&self.table_name, "")
-        };
-        return Some((key, item.1.clone()));
+            let key = {
+                let value = item.0.clone();
+                if !value.starts_with(&self.table_name) {
+                    return None;
+                }
+                value.replace(&self.table_name, "")
+            };
+            return Some((key, item.1.clone()));
+        }
     }
 }
 
@@ -186,17 +189,19 @@ impl<'a> Iterator for RevMemoryIterator<'a> {
             self.current = Some((Arc::new(guard), iter));
             &mut self.current.as_mut().unwrap().1
         };
-        let Some(item) = iter.next() else {
+        loop {
+            let Some(item) = iter.next() else {
                 return None;
             };
-        let key = {
-            let value = item.0.clone();
-            if !value.starts_with(&self.table_name) {
-                return None;
-            }
-            value.replace(&self.table_name, "")
-        };
-        return Some((key, item.1.clone()));
+            let key = {
+                let value = item.0.clone();
+                if !value.starts_with(&self.table_name) {
+                    return None;
+                }
+                value.replace(&self.table_name, "")
+            };
+            return Some((key, item.1.clone()));
+        }
     }
 }
 
@@ -205,5 +210,5 @@ unsafe fn change_lifetime_const<'a, 'b, T>(x: &'a T) -> &'b T {
 }
 
 test_database_manager_trait! {
-    unit_test_memory_manager:crate::MemoryManager:MemoryCollection
+    unit_test_memory_manager:super::MemoryManager:MemoryCollection
 }

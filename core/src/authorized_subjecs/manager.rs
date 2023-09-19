@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use tokio::time::{interval, Duration};
 use tokio_util::sync::CancellationToken;
 
-use crate::database::Error as DbError;
+use crate::database::DatabaseError as DbError;
 use crate::Notification;
 use crate::{
     commons::channel::{ChannelData, MpscChannel, SenderEnd},

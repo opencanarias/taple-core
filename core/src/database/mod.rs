@@ -5,7 +5,7 @@ mod memory;
 
 pub use self::memory::{MemoryCollection, MemoryManager};
 pub use db::DB;
-pub use error::Error;
+pub use error::DatabaseError;
 
 /// Trait to define a database compatible with Taple
 pub trait DatabaseManager<C>: Sync + Send
@@ -23,11 +23,11 @@ where
 /// A trait representing a collection of key-value pairs in a database.
 pub trait DatabaseCollection: Sync + Send {
     /// Retrieves the value associated with the given key.
-    fn get(&self, key: &str) -> Result<Vec<u8>, Error>;
+    fn get(&self, key: &str) -> Result<Vec<u8>, DatabaseError>;
     /// Associates the given value with the given key.
-    fn put(&self, key: &str, data: Vec<u8>) -> Result<(), Error>;
+    fn put(&self, key: &str, data: Vec<u8>) -> Result<(), DatabaseError>;
     /// Removes the value associated with the given key.
-    fn del(&self, key: &str) -> Result<(), Error>;
+    fn del(&self, key: &str) -> Result<(), DatabaseError>;
     /// Returns an iterator over the key-value pairs in the collection.
     fn iter<'a>(
         &'a self,
@@ -59,7 +59,7 @@ macro_rules! test_database_manager_trait {
             }
 
             #[allow(dead_code)]
-            fn get_data() -> Result<Vec<Vec<u8>>, Error> {
+            fn get_data() -> Result<Vec<Vec<u8>>, DatabaseError> {
                 let data1 = Data {
                     id: 1,
                     value: "A".into(),
@@ -74,15 +74,15 @@ macro_rules! test_database_manager_trait {
                 };
                 #[rustfmt::skip] // let-else not supported yet
                 let Ok(data1) = data1.try_to_vec() else {
-                    return Err(Error::SerializeError);
+                    return Err(DatabaseError::SerializeError);
                 };
                 #[rustfmt::skip] // let-else not supported yet
                 let Ok(data2) = data2.try_to_vec() else {
-                    return Err(Error::SerializeError);
+                    return Err(DatabaseError::SerializeError);
                 };
                 #[rustfmt::skip] // let-else not supported yet
                 let Ok(data3) = data3.try_to_vec() else {
-                    return Err(Error::SerializeError);
+                    return Err(DatabaseError::SerializeError);
                 };
                 Ok(vec![data1, data2, data3])
             }

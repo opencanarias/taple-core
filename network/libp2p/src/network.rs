@@ -3,15 +3,26 @@ use super::{
     routing::{RoutingBehaviour, RoutingComposedEvent},
     tell::{TellBehaviour, TellBehaviourEvent},
 };
-use crate::{
-    commons::crypto::{KeyMaterial, KeyPair},
-    ListenAddr,
+
+// use crate::{
+//     commons::crypto::{KeyMaterial, KeyPair},
+//     Error as CoreError, ListenAddr,
+// };
+// use crate::{
+//     message::{Command, NetworkEvent},
+//     Notification, TapleNetwork,
+// };
+
+use taple_core::{
+    crypto::{KeyMaterial, KeyPair},
+    Error as CoreError, ListenAddr,
 };
-use crate::{
+use taple_core::{
     message::{Command, NetworkEvent},
-    Notification,
+    Notification, TapleNetwork,
 };
 
+use async_trait::async_trait;
 use futures::StreamExt;
 use instant::Duration;
 use libp2p::{
@@ -171,7 +182,7 @@ enum ListenProtocols {
 }
 
 impl NetworkProcessor {
-    pub fn new(
+    pub async fn new(
         addr: Vec<ListenAddr>,
         bootstrap_nodes: Vec<(PeerId, Multiaddr)>,
         event_sender: mpsc::Sender<NetworkEvent>,
@@ -663,6 +674,65 @@ impl NetworkProcessor {
     }
 }
 
+#[async_trait]
+impl TapleNetwork for NetworkProcessor {
+    /// Network client
+    fn client(&self) -> mpsc::Sender<Command> {
+        self.command_sender.clone()
+    }
+
+    /// Run network processor.
+    async fn run(&mut self, event_sender: mpsc::Sender<NetworkEvent>) {
+        debug!("Running network");
+        self.event_sender = event_sender;
+        for external_address in self.external_addresses.clone().into_iter() {
+            self.swarm
+                .add_external_address(external_address, AddressScore::Infinite);
+        }
+        for addr in self.addr.iter() {
+            if let Some(_) = addr.get_port() {
+                let multiadd: Multiaddr = addr
+                    .to_string()
+                    .unwrap()
+                    .parse()
+                    .expect("String para multiaddress es válida");
+                let result = self.swarm.listen_on(multiadd);
+                if result.is_err() {
+                    error!("Error: {:?}", result.unwrap_err());
+                }
+            }
+        }
+        for (_peer_id, addr) in self.bootstrap_nodes.iter() {
+            let Ok(()) = self.swarm.dial(addr.to_owned()) else {
+                    panic!("Conection with bootstrap failed");
+                };
+        }
+        loop {
+            tokio::select! {
+                event = self.swarm.next() => self.handle_event(
+                    event.expect("Swarm stream to be infinite.")).await,
+                command = self.command_receiver.recv() => match command {
+                    Some(c) => self.handle_command(c).await,
+                    // Command channel closed, thus shutting down the network
+                    // event loop.
+                    None =>  {return;},
+                },
+                Some(_) = self.bootstrap_retries_steam.next() => self.connect_to_pending_bootstraps(),
+                _ = self.token.cancelled() => {
+                    log::debug!("Shutdown received");
+                    break;
+                }
+            }
+        }
+        self.token.cancel();
+        log::info!("Ended");
+    }
+
+    fn local_peer_id(&self) -> &PeerId {
+        self.swarm.local_peer_id()
+    }
+}
+
 fn create_ip4_ip6_transport(
     noise_key: noise::AuthenticKeypair<noise::X25519Spec>,
 ) -> Boxed<(PeerId, StreamMuxerBox)> {
@@ -712,5 +782,53 @@ fn create_transport_by_protocol(
             .authenticate(noise::NoiseConfig::xx(noise_key.clone()).into_authenticated())
             .multiplex(yamux::YamuxConfig::default())
             .boxed(),
+    }
+}
+
+pub fn network_access_points(points: &[String]) -> Result<Vec<(PeerId, Multiaddr)>, CoreError> {
+    let mut access_points: Vec<(PeerId, Multiaddr)> = Vec::new();
+    for point in points {
+        let data: Vec<&str> = point.split("/p2p/").collect();
+        if data.len() != 2 {
+            return Err(CoreError::AcessPointError(point.to_string()));
+        }
+        if let Some(value) = multiaddr(point) {
+            if let Ok(id) = data[1].parse::<PeerId>() {
+                access_points.push((id, value));
+            } else {
+                return Err(CoreError::AcessPointError(format!(
+                    "Invalid PeerId conversion: {}",
+                    point
+                )));
+            }
+        } else {
+            return Err(CoreError::AcessPointError(format!(
+                "Invalid MultiAddress conversion: {}",
+                point
+            )));
+        }
+    }
+    Ok(access_points)
+}
+
+pub fn external_addresses(addresses: &[String]) -> Result<Vec<Multiaddr>, CoreError> {
+    let mut external_addresses: Vec<Multiaddr> = Vec::new();
+    for address in addresses {
+        if let Some(value) = multiaddr(address) {
+            external_addresses.push(value);
+        } else {
+            return Err(CoreError::AcessPointError(format!(
+                "Invalid MultiAddress conversion in External Address: {}",
+                address
+            )));
+        }
+    }
+    Ok(external_addresses)
+}
+
+fn multiaddr(addr: &str) -> Option<Multiaddr> {
+    match addr.parse::<Multiaddr>() {
+        Ok(a) => Some(a),
+        Err(_) => None,
     }
 }

@@ -14,7 +14,7 @@ use crate::utils::message::distribution::{
 };
 use crate::utils::message::ledger::{request_gov_event, request_lce};
 use crate::{
-    database::{Error as DbError, DB},
+    database::{DatabaseError as DbError, DB},
     governance::GovernanceInterface,
     DatabaseCollection,
 };

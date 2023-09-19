@@ -16,7 +16,7 @@ use crate::{
 };
 
 use super::executor::{ContractExecutor, ContractResult};
-use crate::database::Error as DbError;
+use crate::database::DatabaseError as DbError;
 pub struct TapleRunner<C: DatabaseCollection, G: GovernanceInterface> {
     database: DB<C>,
     executor: ContractExecutor,

@@ -27,7 +27,7 @@ use crate::message::{
     MessageContent, MessageReceiver, MessageSender, MessageTaskCommand, MessageTaskManager,
     NetworkEvent,
 };
-use crate::network::network::NetworkProcessor;
+use crate::network::TapleNetwork;
 use crate::protocol::protocol_message_manager::{ProtocolManager, TapleMessages};
 use crate::signature::Signed;
 #[cfg(feature = "validation")]
@@ -68,7 +68,11 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Node<M, C
     /// for the initialization of the components, mainly due to problems in the initial [configuration](Settings).
     /// # Panics
     /// This method panics if it has not been possible to generate the network layer.
-    pub fn build(settings: Settings, database: M) -> Result<(Self, Api), Error> {
+    pub fn build<N: TapleNetwork + 'static>(
+        settings: Settings,
+        mut network: N,
+        database: M,
+    ) -> Result<(Self, Api), Error> {
         let (api_rx, api_tx) = MpscChannel::new(BUFFER_SIZE);
 
         let (notification_tx, notification_rx) = mpsc::channel(BUFFER_SIZE);
@@ -125,22 +129,11 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Node<M, C
 
         let token = CancellationToken::new();
 
-        let network_manager = NetworkProcessor::new(
-            settings.network.listen_addr.clone(),
-            network_access_points(&settings.network.known_nodes)?,
-            network_tx,
-            kp.clone(),
-            token.clone(),
-            notification_tx.clone(),
-            external_addresses(&settings.network.external_address)?,
-        )
-        .expect("Network created");
-
         //TODO: change name. It's not a task
         let signature_manager = SelfSignatureManager::new(kp.clone(), &settings);
 
         //TODO: change name. It's a task
-        let network_rx = MessageReceiver::new(
+        let network_receiver = MessageReceiver::new(
             network_rx,
             protocol_tx,
             token.clone(),
@@ -148,14 +141,18 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Node<M, C
             signature_manager.get_own_identifier(),
         );
 
-        let network_tx = MessageSender::new(
-            network_manager.client(),
+        let network_sender = MessageSender::new(
+            network.client(),
             controller_id.clone(),
             signature_manager.clone(),
         );
 
-        let task_manager =
-            MessageTaskManager::new(network_tx, task_rx, token.clone(), notification_tx.clone());
+        let task_manager = MessageTaskManager::new(
+            network_sender,
+            task_rx,
+            token.clone(),
+            notification_tx.clone(),
+        );
 
         let protocol_manager = ProtocolManager::new(
             protocol_rx,
@@ -282,7 +279,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Node<M, C
         };
 
         let api = Api::new(
-            network_manager.local_peer_id().to_owned(),
+            network.local_peer_id().to_owned(),
             controller_id.to_str(),
             kp.public_key_bytes(),
             api_tx,
@@ -309,7 +306,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Node<M, C
         });
 
         tokio::spawn(async move {
-            network_rx.run().await;
+            network_receiver.run().await;
         });
 
         #[cfg(feature = "evaluation")]
@@ -336,7 +333,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Node<M, C
         });
 
         tokio::spawn(async move {
-            network_manager.run().await;
+            network.run(network_tx).await;
         });
 
         tokio::spawn(async move {

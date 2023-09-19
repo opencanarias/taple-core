@@ -1,4 +1,4 @@
-use crate::database::Error as DbError;
+use crate::database::DatabaseError as DbError;
 use crate::{commons::errors::SubjectError, governance::error::RequestError};
 use thiserror::Error;
 

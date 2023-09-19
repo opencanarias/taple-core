@@ -11,7 +11,9 @@ fn init_node() {
     rt.block_on(async {
         std::env::set_var("RUST_LOG", "info");
         let mc_data_node1 = generate_mc();
-        let result = NodeBuilder::new(mc_data_node1.get_private_key()).build();
+        let result = NodeBuilder::new(mc_data_node1.get_private_key())
+            .build()
+            .await;
         assert!(result.is_ok());
         result.unwrap().shutdown().await;
     });
@@ -23,7 +25,9 @@ fn create_governance() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
         let mc_data_node1 = generate_mc();
-        let result = NodeBuilder::new(mc_data_node1.get_private_key()).build();
+        let result = NodeBuilder::new(mc_data_node1.get_private_key())
+            .build()
+            .await;
         assert!(result.is_ok());
         let mut node = result.unwrap();
         let node_api = node.get_api();

@@ -1,6 +1,6 @@
 [workspace]
 
-members = ["core"]
+members = ["core", "db/leveldb", "db/memory", "network/libp2p"]
 
 [workspace.package]
 version = "0.3.0-dev"
@@ -46,6 +46,12 @@ hex = "0.4.3"
 libp2p = { version = "0.45.1", default_features = false }
 wasmtime = "9.0.4"
 serial_test = "1"
+leveldb = "0.8"
+db-key = "0.0.5"
+tempfile = "3.4"
+
+# taple-core = { git = "https://github.com/opencanarias/taple-core" }
+taple-core = { path = "../taple-core/core" }
 
 [profile.release]
 lto = true
