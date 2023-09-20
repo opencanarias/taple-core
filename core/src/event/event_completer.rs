@@ -287,7 +287,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     match self.database.get_request(subject_id) {
                         Ok(event_request) => {
                             let EventRequest::Fact(_) = &event_request.content else {
-                                return Err(EventError::GenesisInGovUpdate)
+                                return Err(EventError::GenesisInGovUpdate);
                             };
                             self.new_event(event_request).await?;
                         }
@@ -811,7 +811,9 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             EventRequest::Fact(state_request) => state_request.subject_id.clone(),
         };
         // Look at the status of the event, whether it is under evaluation or not.
-        let Some((ValidationStage::Evaluate, signers, quorum_size)) = self.subjects_completing_event.get(&subject_id) else {
+        let Some((ValidationStage::Evaluate, signers, quorum_size)) =
+            self.subjects_completing_event.get(&subject_id)
+        else {
             return Err(EventError::WrongEventPhase);
         };
         let signer = evaluator_response.signature.signer.clone();
@@ -1080,7 +1082,9 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             }
             EventRequest::Fact(state_request) => state_request.subject_id.clone(),
         };
-        let Some((ValidationStage::Approve, signers, quorum_size)) = self.subjects_completing_event.get(&subject_id) else {
+        let Some((ValidationStage::Approve, signers, quorum_size)) =
+            self.subjects_completing_event.get(&subject_id)
+        else {
             return Err(EventError::WrongEventPhase);
         };
         let signer = approval.signature.signer.clone();
@@ -1265,7 +1269,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             Some(event) => event,
             None => {
                 return Err(EventError::CryptoError(String::from(
-                    "The hash of the event does not match any of the events",
+                    "The hash of the event does not match any of the events 1",
                 )));
             }
         };
@@ -1356,7 +1360,9 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             return Ok(());
         }
         // Check phase
-        let Some((ValidationStage::Validate, signers, quorum_size)) = self.subjects_completing_event.get(&subject_id) else {
+        let Some((ValidationStage::Validate, signers, quorum_size)) =
+            self.subjects_completing_event.get(&subject_id)
+        else {
             return Err(EventError::WrongEventPhase);
         };
         let signer = signature.signer.clone();
@@ -1367,8 +1373,6 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             )));
         }
         // Check that everything is cryptographically correct
-        let event_hash = DigestIdentifier::from_serializable_borsh(&validation_event.proof)
-            .map_err(|error| EventError::CryptoError(error.to_string()))?;
         signature
             .verify(&validation_event.proof)
             .map_err(|error| EventError::CryptoError(error.to_string()))?;
@@ -1391,15 +1395,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         let quorum_size = quorum_size.to_owned();
         // Check if we reach Quorum and if so stop asking for signatures.
         if (validation_set.len() as u32) < quorum_size.0 {
-            let validation_event = match self.event_validation_events.get(&event_hash) {
-                Some(validation_event) => validation_event.to_owned(),
-                None => {
-                    return Err(EventError::CryptoError(String::from(
-                        "The hash of the event does not match any of the events",
-                    )))
-                }
-            };
-            let event_message = create_validator_request(validation_event);
+            let event_message = create_validator_request(validation_event.to_owned());
             let mut new_signers: HashSet<KeyIdentifier> =
                 signers.into_iter().map(|s| s.clone()).collect();
             new_signers.remove(&signer);
@@ -1619,11 +1615,15 @@ fn hash_match_after_patch(
         Ok(state_hash_calculated == evaluation.state_hash)
     } else {
         let Ok(patch_json) = serde_json::from_value::<Patch>(json_patch.0) else {
-            return Err(EventError::ErrorParsingJsonString("Error Parsing Patch".to_owned()));
-    };
+            return Err(EventError::ErrorParsingJsonString(
+                "Error Parsing Patch".to_owned(),
+            ));
+        };
         let Ok(()) = patch(&mut prev_properties.0, &patch_json) else {
-        return Err(EventError::ErrorApplyingPatch("Error applying patch".to_owned()));
-    };
+            return Err(EventError::ErrorApplyingPatch(
+                "Error applying patch".to_owned(),
+            ));
+        };
         let state_hash_calculated = DigestIdentifier::from_serializable_borsh(&prev_properties)
             .map_err(|_| {
                 EventError::CryptoError(String::from("Error calculating the hash of the state"))
