@@ -4,15 +4,6 @@ use super::{
     tell::{TellBehaviour, TellBehaviourEvent},
 };
 
-// use crate::{
-//     commons::crypto::{KeyMaterial, KeyPair},
-//     Error as CoreError, ListenAddr,
-// };
-// use crate::{
-//     message::{Command, NetworkEvent},
-//     Notification, TapleNetwork,
-// };
-
 use taple_core::{
     crypto::{KeyMaterial, KeyPair},
     Error as CoreError, ListenAddr,
