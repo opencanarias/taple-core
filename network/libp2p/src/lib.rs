@@ -61,7 +61,7 @@ mod tests {
                 notification_tx.clone(),
                 vec![]
             )
-            .await.expect("Network created");
+            .expect("Network created");
 
             let msg_sender_boot = bootstrap_network.client();
             let mut msg_rcv_boot = ReceiverStream::new(receiver_boot);
@@ -80,7 +80,7 @@ mod tests {
                 token,
                 notification_tx,
                 vec![]
-            ).await.expect("Network created");
+            ).expect("Network created");
             
             let msg_sender_1 = node1_network.client();
             let mut msg_rcv_1 = ReceiverStream::new(receiver1);

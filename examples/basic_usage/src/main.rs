@@ -38,7 +38,6 @@ async fn main() {
         notification_tx,
         external_addresses(&settings.network.external_address).unwrap(),
     )
-    .await
     .expect("Network created");
 
     // Build node

@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use taple_core::crypto::{KeyGenerator, KeyPair};
+use taple_core::crypto::{KeyMaterial, KeyPair};
 use taple_core::{
     Api, DigestIdentifier, Error, ListenAddr, MemoryCollection, MemoryManager, Notification,
     Settings,
@@ -18,23 +18,23 @@ pub struct NodeBuilder {
     p2p_port: Option<u32>,
     access_points: Vec<String>,
     pass_votation: Option<u8>,
-    secret_key: String,
+    keypair: KeyPair,
 }
 
 #[allow(dead_code)]
 impl NodeBuilder {
-    pub fn new(private_key: String) -> Self {
+    pub fn new(keypair: KeyPair) -> Self {
         Self {
             p2p_port: None,
             access_points: Vec::new(),
             pass_votation: None,
-            secret_key: private_key,
+            keypair: keypair,
         }
     }
 
-    pub async fn build(self) -> Result<OnMemoryNode, Error> {
+    pub fn build(self) -> Result<OnMemoryNode, Error> {
         let mut settings = Settings::default();
-        settings.node.secret_key = self.secret_key.clone();
+        settings.node.secret_key = hex::encode(self.keypair.secret_key_bytes());
         settings.network.listen_addr = vec![ListenAddr::Memory {
             port: self.p2p_port,
         }];
@@ -47,19 +47,15 @@ impl NodeBuilder {
         let (sender, _receiver) = mpsc::channel(10000);
         let (notification_tx, _notification_rx) = mpsc::channel(1000);
         let token = CancellationToken::new();
-        let mc = KeyPair::Ed25519(taple_core::crypto::Ed25519KeyPair::from_secret_key(
-            self.secret_key.as_bytes(),
-        ));
         let network = NetworkProcessor::new(
             settings.network.listen_addr.clone(),
             network_access_points(&settings.network.known_nodes)?,
             sender,
-            mc,
+            self.keypair,
             token,
             notification_tx,
             external_addresses(&settings.network.external_address)?,
         )
-        .await
         .expect("Network created");
         let (node, api) = Node::build(settings, network, database)?;
         Ok(OnMemoryNode::new(node, api))

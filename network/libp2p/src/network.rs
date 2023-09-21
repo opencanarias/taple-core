@@ -182,7 +182,7 @@ enum ListenProtocols {
 }
 
 impl NetworkProcessor {
-    pub async fn new(
+    pub fn new(
         addr: Vec<ListenAddr>,
         bootstrap_nodes: Vec<(PeerId, Multiaddr)>,
         event_sender: mpsc::Sender<NetworkEvent>,

@@ -48,6 +48,10 @@ impl McNodeData {
             signature: Signature::new(content, &self.keys).unwrap(),
         }
     }
+
+    pub fn get_keys(&self) -> KeyPair {
+        self.keys.clone()
+    }
 }
 
 pub fn generate_mc() -> McNodeData {

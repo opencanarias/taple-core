@@ -50,8 +50,8 @@ leveldb = "0.8"
 db-key = "0.0.5"
 tempfile = "3.4"
 
-taple-core = { git = "https://github.com/opencanarias/taple-core" }
-# taple-core = { path = "../taple-core/core" }
+# taple-core = { git = "https://github.com/opencanarias/taple-core" }
+taple-core = { path = "../taple-core/core" }
 
 [profile.release]
 lto = true
