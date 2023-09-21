@@ -1420,21 +1420,25 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             // If quorum is reached we send it to the ledger.
             if event.content.sn == 0 {
                 // TODO: Go from tell to ask to check that it goes well and that there are no weird glitches?
-                self.ledger_sender
-                    .tell(LedgerCommand::Genesis {
+                let response = self
+                    .ledger_sender
+                    .ask(LedgerCommand::Genesis {
                         event: event.clone(),
                         signatures: validation_signatures,
                         validation_proof: validation_event.proof.clone(),
                     })
                     .await?;
+                log::debug!("LEDGER RESPONSE: {:?}", response);
             } else {
-                self.ledger_sender
-                    .tell(LedgerCommand::OwnEvent {
+                let response = self
+                    .ledger_sender
+                    .ask(LedgerCommand::OwnEvent {
                         event: event.clone(),
                         signatures: validation_signatures,
                         validation_proof: validation_event.proof.clone(),
                     })
                     .await?;
+                log::debug!("LEDGER RESPONSE: {:?}", response);
             }
             self.database
                 .del_prevalidated_event(&subject_id)
