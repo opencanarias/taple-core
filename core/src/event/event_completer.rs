@@ -1418,8 +1418,8 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 .map(|unique_signature| unique_signature.signature.clone())
                 .collect();
             // If quorum is reached we send it to the ledger.
+            // Message to Ledger Are in ask because is we use tell we can accept anotheer event with same sn if the ledger function has not finished and block the subject for validation
             if event.content.sn == 0 {
-                // TODO: Go from tell to ask to check that it goes well and that there are no weird glitches?
                 let response = self
                     .ledger_sender
                     .ask(LedgerCommand::Genesis {
