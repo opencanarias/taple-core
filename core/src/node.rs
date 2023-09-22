@@ -90,7 +90,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Node<M, C
         let (governance_update_sx, governance_update_rx) = broadcast::channel(BUFFER_SIZE);
 
         let (task_rx, task_tx) =
-            MpscChannel::<MessageTaskCommand<TapleMessages>, ()>::new(BUFFER_SIZE * 10);
+            MpscChannel::<MessageTaskCommand<TapleMessages>, ()>::new(BUFFER_SIZE);
 
         let (protocol_rx, protocol_tx) =
             MpscChannel::<Signed<MessageContent<TapleMessages>>, ()>::new(BUFFER_SIZE);
