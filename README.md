@@ -15,15 +15,14 @@ TAPLE Core is the reference library that implements all the necessary functional
 [![AGPL licensed][agpl-badge]][agpl-url]
 
 [agpl-badge]: https://img.shields.io/badge/license-AGPL-blue.svg
-[agpl-url]: https://github.com/opencanarias/taple-core/blob/master/LICENSE
+[agpl-url]: https://github.com/opencanarias/taple-core/blob/main/LICENSE
 
-[Discover](https://www.taple.es/docs/discover) | [Learn](https://www.taple.es/docs/learn) | [Build](https://www.taple.es/docs/build) | 
-[Code](https://github.com/search?q=topic%3Ataple+org%3Aopencanarias++fork%3Afalse+archived%3Afalse++is%3Apublic&type=repositories)
+[Discover](https://www.taple.es/docs/discover) | [Learn](https://www.taple.es/docs/learn) | [Build](https://www.taple.es/docs/build) | [Code](https://github.com/search?q=topic%3Ataple+org%3Aopencanarias++fork%3Afalse+archived%3Afalse++is%3Apublic&type=repositories)
 
 ## Build
 Minimium supported rust versión (MSRV) is 1.67.
 
-A basic usage example can be found at [examples](./examples) directory. You can find more information about TAPLE technology and how to develop for TAPLE on [TAPLE Website](https://www.taple.es). 
+A basic usage example can be found at [examples](https://github.com/opencanarias/taple-core/tree/main/examples) directory. You can find more information about TAPLE technology and how to develop for TAPLE on [TAPLE Website](https://www.taple.es). 
 
 ## License
-This project is licensed under the [AGPL license](./LICENSE).
+This project is licensed under the [AGPL license][agpl-url].
