@@ -52,28 +52,4 @@ impl<C: DatabaseCollection> ContractDb<C> {
         };
         self.collection.put(&key, data)
     }
-
-    pub fn get_governance_contract(&self) -> Result<Vec<u8>, DbError> {
-        let key_elements: Vec<Element> = vec![
-            Element::S(self.prefix.clone()),
-            Element::S("governance".to_string()),
-        ];
-        let key = get_key(key_elements)?;
-        let contract = self.collection.get(&key)?;
-        let contract = deserialize::<(Vec<u8>, DigestIdentifier, u64)>(&contract)
-            .map_err(|_| DbError::DeserializeError)?;
-        Ok(contract.0)
-    }
-
-    pub fn put_governance_contract(&self, contract: Vec<u8>) -> Result<(), DbError> {
-        let key_elements: Vec<Element> = vec![
-            Element::S(self.prefix.clone()),
-            Element::S("governance".to_string()),
-        ];
-        let key = get_key(key_elements)?;
-        let Ok(data) = serialize::<(Vec<u8>, DigestIdentifier, u64)>(&(contract, DigestIdentifier::default(), 0)) else {
-            return Err(DbError::SerializeError);
-        };
-        self.collection.put(&key, data)
-    }
 }

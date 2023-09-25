@@ -2,6 +2,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 
 use crate::Error;
 pub mod message;
+pub mod patch;
 
 pub fn serialize<T: BorshSerialize>(data: &T) -> Result<Vec<u8>, Error> {
     data.try_to_vec().map_err(|_| Error::SerializeError)
