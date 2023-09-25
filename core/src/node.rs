@@ -346,10 +346,27 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Node<M, C
         Ok((taple, api))
     }
 
+    /// Receive a single notification
+    ///
+    /// All notifications must be consumed. If the notification buffer is full the node
+    /// will be blocked until there is space in the buffer. Notifications can be consumed
+    /// in different ways.
+    ///
+    /// `recv_notification` allows to consume the notifications one by one and keep control
+    /// of the execution flow.  
     pub async fn recv_notification(&mut self) -> Option<Notification> {
         self.notification_rx.recv().await
     }
 
+    /// Handle all notifications
+    ///
+    /// All notifications must be consumed. If the notification buffer is full the node
+    /// will be blocked until there is space in the buffer. Notifications can be consumed
+    /// in different ways.
+    ///
+    /// `handle_notifications` processes all notifications from the node. For this purpose,
+    /// the function in charge of processing the notifications is passed as input.  This
+    /// function blocks the task where it is invoked until the shutdown signal is produced.
     pub async fn handle_notifications<H>(mut self, handler: H)
     where
         H: Fn(Notification),
@@ -359,6 +376,13 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Node<M, C
         }
     }
 
+    /// Drop all notifications
+    ///
+    /// All notifications must be consumed. If the notification buffer is full the node
+    /// will be blocked until there is space in the buffer. Notifications can be consumed
+    /// in different ways.
+    ///
+    /// `drop_notifications` discards all notifications from the node.
     pub async fn drop_notifications(self) {
         self.handle_notifications(|_| {}).await;
     }
@@ -375,6 +399,10 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Node<M, C
         });
     }
 
+    /// Shutdown gracefully the node
+    ///
+    /// This function triggers the shutdown signal and waits until the node is safely terminated.
+    /// This function can only be used if Y or Z has not been used to process the notifications.
     pub async fn shutdown_gracefully(self) {
         self.token.cancel();
         self.drop_notifications().await;
