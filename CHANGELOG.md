@@ -5,16 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.1] - 2023-09-25
+## [0.3.2] - 2023-09-25
 
 ### Changed
 
 - Governance contract is now embedded in code. Governance contract is not evaluated through WASM.
-
-## [0.3.0] - 2023-09-20
-
-### Changed
-
 - API refacoring. Now the API is immutable and does not include a shutdown method.
 - Notification and shutdown channels refactor. They are now the same channel. The taple node will stop when the notification channel is closed. 
 
