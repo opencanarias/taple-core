@@ -116,3 +116,27 @@ pub enum CompilerErrorResponses {
     #[error("No SDK found")]
     NoSDKFound,
 }
+
+#[derive(Error, Debug)]
+pub enum GovernanceStateError {
+    #[error("A member's name is duplicated")]
+    DuplicatedMemberName,
+    #[error("A member's ID is duplicated")]
+    DuplicatedMemberID,
+    #[error("A policy identifier is duplicated")]
+    DuplicatedPolicyID,
+    #[error("No governace policy detected")]
+    NoGvernancePolicy,
+    #[error("It is not allowed to specify a different schema for the governnace")]
+    GovernanceShchemaIDDetected,
+    #[error("Schema ID is does not have a policy")]
+    NoCorrelationSchemaPolicy,
+    #[error("There are policies not correlated to any schema")]
+    PoliciesWithoutSchema,
+    #[error("Role assigned to not defined schema")]
+    InvalidRoleSchema,
+    #[error("ID specified for Role::Who does not exist")]
+    IdWhoRoleNoExist,
+    #[error("Name specified for Role::Who does not exist")]
+    NameWhoRoleNoExist
+}

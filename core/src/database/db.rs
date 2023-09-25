@@ -293,14 +293,6 @@ impl<C: DatabaseCollection> DB<C> {
             .put_contract(governance_id, schema_id, contract, hash, gov_version)
     }
 
-    pub fn get_governance_contract(&self) -> Result<Vec<u8>, Error> {
-        self.contract_db.get_governance_contract()
-    }
-
-    pub fn put_governance_contract(&self, contract: Vec<u8>) -> Result<(), Error> {
-        self.contract_db.put_governance_contract(contract)
-    }
-
     pub fn get_witness_signatures(
         &self,
         subject_id: &DigestIdentifier,

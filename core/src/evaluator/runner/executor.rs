@@ -1,4 +1,13 @@
-use crate::{evaluator::errors::ExecutorErrorResponses, ValueWrapper};
+use std::collections::HashSet;
+
+use crate::{
+    commons::schema_handler::gov_models::{
+        Governance, GovernanceEvent, Member, Policy, Role, Schema, SchemaEnum, Who,
+    },
+    evaluator::errors::{ExecutorErrorResponses, GovernanceStateError},
+    utils::patch::apply_patch,
+    ValueWrapper,
+};
 
 use super::context::MemoryManager;
 use borsh::{BorshDeserialize, BorshSerialize};
@@ -19,6 +28,21 @@ pub struct ContractResult {
     pub success: bool,
 }
 
+impl ContractResult {
+    pub fn error() -> Self {
+        Self {
+            final_state: ValueWrapper(serde_json::Value::Null),
+            approval_required: false,
+            success: false,
+        }
+    }
+}
+
+pub enum Contract {
+    CompiledContract(Vec<u8>),
+    GovContract,
+}
+
 pub struct ContractExecutor {
     engine: Engine,
 }
@@ -28,15 +52,50 @@ impl ContractExecutor {
         Self { engine }
     }
 
+    async fn execute_gov_contract(
+        &self,
+        state: &ValueWrapper,
+        event: &ValueWrapper,
+    ) -> Result<ContractResult, ExecutorErrorResponses> {
+        let Ok(event) = serde_json::from_value::<GovernanceEvent>(event.0.clone()) else {
+            return Ok(ContractResult::error())
+        };
+        match &event {
+            GovernanceEvent::Patch { data } => {
+                let Ok(patched_state) = apply_patch(data.0.clone(), state.0.clone()) else {
+                    return Ok(ContractResult::error());
+                };
+                if let Ok(_) = check_governance_state(&patched_state) {
+                    Ok(ContractResult {
+                        final_state: ValueWrapper(serde_json::to_value(patched_state).unwrap()),
+                        approval_required: true,
+                        success: true,
+                    })
+                } else {
+                    Ok(ContractResult {
+                        final_state: state.clone(),
+                        approval_required: false,
+                        success: false,
+                    })
+                }
+            }
+        }
+    }
+
     pub async fn execute_contract(
         &self,
         state: &ValueWrapper,
         event: &ValueWrapper,
-        compiled_contract: Vec<u8>,
+        compiled_contract: Contract,
         is_owner: bool,
     ) -> Result<ContractResult, ExecutorErrorResponses> {
+        let Contract::CompiledContract(contract_bytes) = compiled_contract else {
+            return self.execute_gov_contract(
+                state, event
+            ).await;
+        };
         // Cargar wasm
-        let module = unsafe { Module::deserialize(&self.engine, compiled_contract).unwrap() };
+        let module = unsafe { Module::deserialize(&self.engine, contract_bytes).unwrap() };
         // Generar contexto
         let (context, state_ptr, event_ptr) = self.generate_context(&state, &event)?;
         let mut store = Store::new(&self.engine, context);
@@ -150,4 +209,107 @@ impl ContractExecutor {
             .expect("Failed write_byte link");
         Ok(linker)
     }
+}
+
+fn check_governance_state(state: &Governance) -> Result<(), GovernanceStateError> {
+    // Debemos comprobar varios aspectos del estado.
+    // No pueden haber miembros duplicados, ya sean en name o en ID
+    let (id_set, name_set) = check_members(&state.members)?;
+    // No pueden haber policies duplicadas y la asociada a la propia gobernanza debe estar presente
+    let policies_names = check_policies(&state.policies)?;
+    // No se pueden indicar policies de schema que no existen. Así mismo, no pueden haber
+    // schemas sin policies. La correlación debe ser uno-uno
+    check_schemas(&state.schemas, policies_names.clone())?;
+    check_roles(&state.roles, policies_names, id_set, name_set)
+}
+
+fn check_roles(
+    roles: &Vec<Role>,
+    mut schemas_names: HashSet<String>,
+    id_set: HashSet<String>,
+    name_set: HashSet<String>,
+) -> Result<(), GovernanceStateError> {
+    schemas_names.insert("governance".into());
+    for role in roles {
+        if let SchemaEnum::ID { ID } = &role.schema {
+            if !schemas_names.contains(ID) {
+                return Err(GovernanceStateError::InvalidRoleSchema);
+            }
+        }
+        match &role.who {
+            Who::ID { ID } => {
+                if !id_set.contains(ID) {
+                    return Err(GovernanceStateError::IdWhoRoleNoExist);
+                }
+            }
+            Who::NAME { NAME } => {
+                if !name_set.contains(NAME) {
+                    return Err(GovernanceStateError::NameWhoRoleNoExist);
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+fn check_members(
+    members: &Vec<Member>,
+) -> Result<(HashSet<String>, HashSet<String>), GovernanceStateError> {
+    let mut name_set = HashSet::new();
+    let mut id_set = HashSet::new();
+    for member in members {
+        if name_set.contains(&member.name) {
+            return Err(GovernanceStateError::DuplicatedMemberName);
+        }
+        name_set.insert(member.name.clone());
+        if id_set.contains(&member.id) {
+            return Err(GovernanceStateError::DuplicatedMemberID);
+        }
+        id_set.insert(member.id.clone());
+    }
+    Ok((id_set, name_set))
+}
+
+fn check_policies(policies: &Vec<Policy>) -> Result<HashSet<String>, GovernanceStateError> {
+    // Se comprueban de que no hayan policies duplicadas y de que se incluya la de gobernanza
+    let mut is_governance_present = false;
+    let mut id_set = HashSet::new();
+    for policy in policies {
+        if id_set.contains(&policy.id) {
+            return Err(GovernanceStateError::DuplicatedPolicyID);
+        }
+        id_set.insert(&policy.id);
+        if &policy.id == "governance" {
+            is_governance_present = true
+        }
+    }
+    if !is_governance_present {
+        return Err(GovernanceStateError::NoGvernancePolicy);
+    }
+    id_set.remove(&String::from("governance"));
+    Ok(id_set.into_iter().cloned().collect())
+}
+
+fn check_schemas(
+    schemas: &Vec<Schema>,
+    mut policies_names: HashSet<String>,
+) -> Result<(), GovernanceStateError> {
+    // Comprobamos que no hayan esquemas duplicados
+    // También se tiene que comprobar que los estados iniciales sean válidos según el json_schema
+    // Así mismo no puede haber un schema con id "governance"
+    for schema in schemas {
+        if &schema.id == "governance" {
+            return Err(GovernanceStateError::GovernanceShchemaIDDetected);
+        }
+        // No pueden haber duplicados y tienen que tener correspondencia con policies_names
+        if !policies_names.remove(&schema.id) {
+            // No tiene relación con policies_names
+            return Err(GovernanceStateError::NoCorrelationSchemaPolicy);
+        }
+    }
+    if !policies_names.is_empty() {
+        return Err(GovernanceStateError::PoliciesWithoutSchema);
+    }
+    Ok(())
 }

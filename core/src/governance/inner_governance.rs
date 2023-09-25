@@ -9,7 +9,7 @@ use crate::{
         identifier::{Derivable, DigestIdentifier, KeyIdentifier},
         models::{event::Metadata, state::Subject},
         schema_handler::{
-            gov_models::{Contract, Quorum, Role, Schema, Who},
+            gov_models::{Contract, Quorum, Role, SchemaEnum, Who},
             initial_state::get_governance_initial_state,
         },
     },
@@ -133,17 +133,17 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                 }
             }
             match role.schema {
-                Schema::ID { ID } => {
+                SchemaEnum::ID { ID } => {
                     if &ID != schema_id {
                         continue;
                     }
                 }
-                Schema::NOT_GOVERNANCE => {
+                SchemaEnum::NOT_GOVERNANCE => {
                     if is_gov {
                         continue;
                     }
                 }
-                Schema::ALL => {}
+                SchemaEnum::ALL => {}
             }
             if !namespace_contiene(&role.namespace, namespace) {
                 continue;
@@ -339,17 +339,17 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
                 continue;
             }
             match role.schema {
-                Schema::ID { ID } => {
+                SchemaEnum::ID { ID } => {
                     if &ID != schema_id {
                         continue;
                     }
                 }
-                Schema::NOT_GOVERNANCE => {
+                SchemaEnum::NOT_GOVERNANCE => {
                     if is_gov {
                         continue;
                     }
                 }
-                Schema::ALL => {}
+                SchemaEnum::ALL => {}
             }
             if !namespace_contiene(&role.namespace, namespace) {
                 continue;

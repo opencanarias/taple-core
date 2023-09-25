@@ -50,27 +50,6 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
                 CompilerErrorResponses::FolderNotCreated(src_path.to_string(), e.to_string())
             })?;
         }
-        match self.database.get_governance_contract() {
-            Ok(_) => return Ok(()),
-            Err(DbError::EntryNotFound) => {
-                self.compile(
-                    super::gov_contract::get_gov_contract(),
-                    "taple",
-                    "governance",
-                    0,
-                )
-                .await
-                .map_err(|e| CompilerError::InitError(e.to_string()))?;
-                let compiled_contract = self
-                    .add_contract()
-                    .await
-                    .map_err(|e| CompilerError::InitError(e.to_string()))?;
-                self.database
-                    .put_governance_contract(compiled_contract)
-                    .map_err(|error| CompilerError::DatabaseError(error.to_string()))?;
-            }
-            Err(error) => return Err(CompilerError::DatabaseError(error.to_string())),
-        }
         Ok(())
     }
 
