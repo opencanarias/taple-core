@@ -1,6 +1,7 @@
 [package]
 name = "taple-core"
 version.workspace = true
+description.workspace = true
 authors.workspace = true
 edition.workspace = true
 readme.workspace = true
