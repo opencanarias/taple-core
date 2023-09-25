@@ -15,7 +15,7 @@ use crate::{
     DatabaseCollection, Derivable, EvaluationResponse, EventRequest, ValueWrapper,
 };
 
-use super::executor::{ContractExecutor, ContractResult};
+use super::executor::{Contract, ContractExecutor, ContractResult};
 use crate::database::Error as DbError;
 pub struct TapleRunner<C: DatabaseCollection, G: GovernanceInterface> {
     database: DB<C>,
@@ -70,26 +70,23 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
             // Nuestra gov es menor: no podemos hacer nada. Pedimos LCE al que nos lo envió
             return Err(ExecutorErrorResponses::OurGovIsLower);
         }
-        let (contract, contract_gov_version): (Vec<u8>, u64) = if execute_contract.context.schema_id
+
+        // Governances can be updated without WASM because we know the contract beforehand
+        let (contract, contract_gov_version): (Contract, u64) = if execute_contract
+            .context
+            .schema_id
             == "governance"
             && execute_contract.context.governance_id.digest.is_empty()
         {
-            match self.database.get_governance_contract() {
-                Ok(contract) => (contract, governance.sn),
-                Err(DbError::EntryNotFound) => {
-                    return Err(ExecutorErrorResponses::ContractNotFound(
-                        execute_contract.context.schema_id.clone(),
-                        execute_contract.context.governance_id.to_str(),
-                    ));
-                }
-                Err(error) => return Err(ExecutorErrorResponses::DatabaseError(error.to_string())),
-            }
+            (Contract::GovContract, governance.sn)
         } else {
             match self.database.get_contract(
                 &execute_contract.context.governance_id,
                 &execute_contract.context.schema_id,
             ) {
-                Ok((contract, _, contract_gov_version)) => (contract, contract_gov_version),
+                Ok((contract, _, contract_gov_version)) => {
+                    (Contract::CompiledContract(contract), contract_gov_version)
+                }
                 Err(DbError::EntryNotFound) => {
                     return Err(ExecutorErrorResponses::ContractNotFound(
                         execute_contract.context.schema_id.clone(),

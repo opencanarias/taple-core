@@ -1,6 +1,8 @@
 use serde::{de::Visitor, ser::SerializeMap, Deserialize, Serialize};
 
-#[derive(Debug)]
+use crate::ValueWrapper;
+
+#[derive(Debug, Clone)]
 #[allow(non_snake_case)]
 pub enum Quorum {
     MAJORITY,
@@ -15,7 +17,7 @@ impl Serialize for Quorum {
         S: serde::Serializer,
     {
         match self {
-            Quorum::MAJORITY => serializer.serialize_str("MAJOTIRY"),
+            Quorum::MAJORITY => serializer.serialize_str("MAJORITY"),
             Quorum::FIXED { fixed } => {
                 let mut map = serializer.serialize_map(Some(1))?;
                 map.serialize_entry("FIXED", fixed)?;
@@ -101,7 +103,7 @@ impl<'de> Deserialize<'de> for Quorum {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[allow(non_snake_case)]
 #[allow(non_camel_case_types)]
 pub enum Who {
@@ -203,40 +205,40 @@ impl<'de> Deserialize<'de> for Who {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[allow(non_snake_case)]
 #[allow(non_camel_case_types)]
-pub enum Schema {
+pub enum SchemaEnum {
     ID { ID: String },
     NOT_GOVERNANCE,
     ALL,
 }
 
-impl Serialize for Schema {
+impl Serialize for SchemaEnum {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
         match self {
-            Schema::ID { ID } => {
+            SchemaEnum::ID { ID } => {
                 let mut map = serializer.serialize_map(Some(1))?;
                 map.serialize_entry("ID", ID)?;
                 map.end()
             }
-            Schema::NOT_GOVERNANCE => serializer.serialize_str("NOT_GOVERNANCE"),
-            Schema::ALL => serializer.serialize_str("ALL"),
+            SchemaEnum::NOT_GOVERNANCE => serializer.serialize_str("NOT_GOVERNANCE"),
+            SchemaEnum::ALL => serializer.serialize_str("ALL"),
         }
     }
 }
 
-impl<'de> Deserialize<'de> for Schema {
+impl<'de> Deserialize<'de> for SchemaEnum {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
         struct SchemaEnumVisitor;
         impl<'de> Visitor<'de> for SchemaEnumVisitor {
-            type Value = Schema;
+            type Value = SchemaEnum;
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
                 formatter.write_str("Schema")
             }
@@ -251,7 +253,7 @@ impl<'de> Deserialize<'de> for Schema {
                 let result = match key.as_str() {
                     "ID" => {
                         let id: String = map.next_value()?;
-                        Schema::ID { ID: id }
+                        SchemaEnum::ID { ID: id }
                     }
                     _ => return Err(serde::de::Error::unknown_field(&key, &["ID", "NAME"])),
                 };
@@ -291,15 +293,57 @@ impl<'de> Deserialize<'de> for Schema {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
+pub struct Schema {
+    pub id: String,
+    pub schema: serde_json::Value,
+    pub initial_value: serde_json::Value,
+    pub contract: Contract,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Role {
     pub who: Who,
     pub namespace: String,
     pub role: String,
-    pub schema: Schema,
+    pub schema: SchemaEnum,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Contract {
     pub raw: String,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct Member {
+    pub id: String,
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct Validation {
+    quorum: Quorum,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct Policy {
+    pub id: String,
+    pub approve: Validation,
+    pub evaluate: Validation,
+    pub validate: Validation,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct Governance {
+    pub members: Vec<Member>,
+    pub roles: Vec<Role>,
+    pub schemas: Vec<Schema>,
+    pub policies: Vec<Policy>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum GovernanceEvent {
+    Patch { data: ValueWrapper },
 }
