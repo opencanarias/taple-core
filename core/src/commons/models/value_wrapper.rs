@@ -4,7 +4,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Number, Value};
 
-use crate::{commons::errors::SubjectError, DigestIdentifier};
+use crate::{commons::errors::SubjectError, DigestIdentifier, DigestDerivator};
 
 use super::HashId;
 
@@ -23,8 +23,8 @@ impl ValueWrapper {
 }
 
 impl HashId for ValueWrapper {
-    fn hash_id(&self) -> Result<DigestIdentifier, SubjectError> {
-        DigestIdentifier::from_serializable_borsh(&self)
+    fn hash_id(&self, derivator: DigestDerivator) -> Result<DigestIdentifier, SubjectError> {
+        DigestIdentifier::from_serializable_borsh(&self, derivator)
             .map_err(|_| SubjectError::CryptoError("Hashing error".to_string()))
     }
 }

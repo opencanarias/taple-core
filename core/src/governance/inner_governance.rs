@@ -491,7 +491,12 @@ impl<C: DatabaseCollection> InnerGovernance<C> {
         } else if gov_subject.sn > governance_version {
             let gov_genesis = self.repo_access.get_event(governance_id, 0)?;
             let init_state = get_governance_initial_state();
-            let mut gov_subject = Subject::from_genesis_event(gov_genesis, init_state, None)?;
+            let mut gov_subject = Subject::from_genesis_event(
+                gov_genesis,
+                init_state,
+                None,
+                governance_id.derivator.clone(),
+            )?;
             for i in 1..=governance_version {
                 let event = self.repo_access.get_event(governance_id, i)?;
                 gov_subject.update_subject(event.content.patch, i)?;

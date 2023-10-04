@@ -2,8 +2,7 @@ use crate::{
     commons::{
         models::{
             approval::{ApprovalEntity, ApprovalResponse, ApprovalState},
-            event::Metadata,
-            state::{generate_subject_id, Subject},
+            state::{generate_subject_id},
         },
         self_signature_manager::{SelfSignatureInterface, SelfSignatureManager},
         settings::VotationType,
@@ -13,7 +12,7 @@ use crate::{
     identifier::{Derivable, DigestIdentifier, KeyIdentifier},
     request::EventRequest,
     signature::Signed,
-    ApprovalRequest, DatabaseCollection, Notification,
+    ApprovalRequest, DatabaseCollection, Notification, DigestDerivator,
 };
 
 use super::error::{ApprovalErrorResponse, ApprovalManagerError};
@@ -58,6 +57,7 @@ pub struct InnerApprovalManager<G: GovernanceInterface, N: NotifierInterface, C:
     // Cola de 1 elemento por sujeto
     // subject_been_approved: HashMap<DigestIdentifier, DigestIdentifier>, // SubjectID -> ReqId
     pass_votation: VotationType,
+    derivator: DigestDerivator
 }
 
 impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
@@ -69,6 +69,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         notifier: N,
         signature_manager: SelfSignatureManager,
         pass_votation: VotationType,
+        derivator: DigestDerivator
     ) -> Self {
         Self {
             governance,
@@ -77,6 +78,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             signature_manager,
             // subject_been_approved: HashMap::new(),
             pass_votation,
+            derivator
         }
     }
 
@@ -148,6 +150,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
                         create_request.public_key.to_str(),
                         create_request.governance_id.to_str(),
                         approval_entity.request.content.gov_version,
+                        self.derivator
                     )
                     .map_err(|_| ApprovalManagerError::UnexpectedError)?,
                     _ => return Err(ApprovalManagerError::UnexpectedRequestType),
@@ -196,7 +199,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
             We must always check if we already have the request sent to us.
         */
         let id: DigestIdentifier =
-            match DigestIdentifier::from_serializable_borsh(&approval_request.content)
+            match DigestIdentifier::generate_with_blake3(&approval_request.content)
                 .map_err(|_| ApprovalErrorResponse::ErrorHashing)
             {
                 Ok(id) => id,
@@ -224,6 +227,7 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         let subject_id = subject_id_by_request(
             &approval_request.content.event_request.content,
             approval_request.content.gov_version,
+            self.derivator
         )?;
         let request_queue = self
             .database
@@ -334,10 +338,11 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
         let subject_id = subject_id_by_request(
             &data.request.content.event_request.content,
             data.request.content.gov_version,
+            self.derivator
         )?;
         let signature = self
             .signature_manager
-            .sign(&response)
+            .sign(&response, self.derivator)
             .map_err(|_| ApprovalManagerError::SignProcessFailed)?;
         data.state = if acceptance {
             ApprovalState::RespondedAccepted
@@ -362,28 +367,10 @@ impl<G: GovernanceInterface, N: NotifierInterface, C: DatabaseCollection>
     }
 }
 
-#[allow(dead_code)]
-fn event_proposal_hash_gen(
-    approval_request: &Signed<ApprovalRequest>,
-) -> Result<DigestIdentifier, ApprovalManagerError> {
-    Ok(DigestIdentifier::from_serializable_borsh(approval_request)
-        .map_err(|_| ApprovalManagerError::HashGenerationFailed)?)
-}
-
-#[allow(dead_code)]
-fn create_metadata(subject_data: &Subject, governance_version: u64) -> Metadata {
-    Metadata {
-        namespace: subject_data.namespace.clone(),
-        subject_id: subject_data.subject_id.clone(),
-        governance_id: subject_data.governance_id.clone(),
-        governance_version,
-        schema_id: subject_data.schema_id.clone(),
-    }
-}
-
 fn subject_id_by_request(
     request: &EventRequest,
     gov_version: u64,
+    derivator: DigestDerivator
 ) -> Result<DigestIdentifier, ApprovalManagerError> {
     let subject_id = match request {
         EventRequest::Fact(ref fact_request) => fact_request.subject_id.clone(),
@@ -393,6 +380,7 @@ fn subject_id_by_request(
             create_request.public_key.to_str(),
             create_request.governance_id.to_str(),
             gov_version,
+            derivator
         )
         .map_err(|_| ApprovalManagerError::UnexpectedError)?,
         _ => return Err(ApprovalManagerError::UnexpectedRequestType),

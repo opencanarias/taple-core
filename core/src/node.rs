@@ -152,6 +152,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Node<M, C
             network_manager.client(),
             controller_id.clone(),
             signature_manager.clone(),
+            settings.node.digest_derivator
         );
 
         let task_manager =
@@ -191,6 +192,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Node<M, C
             ledger_tx.clone(),
             signature_manager.get_own_identifier(),
             signature_manager.clone(),
+            settings.node.digest_derivator
         );
 
         let ledger_manager = LedgerManager::new(
@@ -202,6 +204,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Node<M, C
             task_tx.clone(),
             distribution_tx,
             controller_id.clone(),
+            settings.node.digest_derivator
         );
 
         let as_manager = AuthorizedSubjectsManager::new(
@@ -236,6 +239,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Node<M, C
             GovernanceAPI::new(governance_tx.clone()),
             settings.node.smartcontracts_directory.clone(),
             task_tx.clone(),
+            settings.node.digest_derivator
         );
 
         #[cfg(feature = "approval")]
@@ -249,6 +253,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Node<M, C
             notification_tx.clone(),
             settings.clone(),
             DB::new(database.clone()),
+            settings.node.digest_derivator
         );
 
         let distribution_manager = DistributionManager::new(
@@ -259,8 +264,9 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Node<M, C
             task_tx.clone(),
             GovernanceAPI::new(governance_tx.clone()),
             signature_manager.clone(),
-            settings,
+            settings.clone(),
             DB::new(database.clone()),
+            settings.node.digest_derivator
         );
 
         #[cfg(feature = "validation")]
@@ -272,6 +278,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Node<M, C
             token.clone(),
             notification_tx,
             task_tx,
+            settings.node.digest_derivator
         );
 
         let taple = Node {

@@ -11,7 +11,7 @@ use crate::commons::{
 pub trait SelfSignatureInterface {
     fn change_settings(&mut self, settings: &Settings);
     fn get_own_identifier(&self) -> KeyIdentifier;
-    fn sign<T: HashId>(&self, content: &T) -> Result<Signature, ProtocolErrors>;
+    fn sign<T: HashId>(&self, content: &T, derivator: DigestDerivator) -> Result<Signature, ProtocolErrors>;
     fn check_if_signature_present(&self, signers: &HashSet<KeyIdentifier>) -> bool;
 }
 
@@ -42,8 +42,8 @@ impl SelfSignatureInterface for SelfSignatureManager {
         self.identifier.clone()
     }
 
-    fn sign<T: HashId>(&self, content: &T) -> Result<Signature, ProtocolErrors> {
-        Ok(Signature::new(content, &self.keys).map_err(|_| ProtocolErrors::SignatureError)?)
+    fn sign<T: HashId>(&self, content: &T, derivator: DigestDerivator) -> Result<Signature, ProtocolErrors> {
+        Ok(Signature::new(content, &self.keys, derivator).map_err(|_| ProtocolErrors::SignatureError)?)
     }
 
     fn check_if_signature_present(&self, signers: &HashSet<KeyIdentifier>) -> bool {

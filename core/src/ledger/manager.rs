@@ -8,7 +8,7 @@ use crate::{
     governance::{error::RequestError, GovernanceAPI},
     message::MessageTaskCommand,
     protocol::protocol_message_manager::TapleMessages,
-    DatabaseCollection, KeyDerivator, KeyIdentifier, Notification,
+    DatabaseCollection, KeyDerivator, KeyIdentifier, Notification, DigestDerivator,
 };
 
 use super::{errors::LedgerError, ledger::Ledger, LedgerCommand, LedgerResponse};
@@ -66,6 +66,7 @@ impl<C: DatabaseCollection> LedgerManager<C> {
             Result<(), DistributionErrorResponses>,
         >,
         our_id: KeyIdentifier,
+        derivator: DigestDerivator,
     ) -> Self {
         Self {
             input_channel,
@@ -76,6 +77,7 @@ impl<C: DatabaseCollection> LedgerManager<C> {
                 distribution_channel,
                 our_id,
                 notification_tx.clone(),
+                derivator
             ),
             token,
             notification_tx,

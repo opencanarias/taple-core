@@ -10,7 +10,7 @@ use crate::identifier::KeyIdentifier;
 use crate::ledger::{LedgerCommand, LedgerResponse};
 use crate::protocol::protocol_message_manager::TapleMessages;
 use crate::signature::Signed;
-use crate::EventRequest;
+use crate::{EventRequest, DigestDerivator};
 use crate::{
     commons::channel::{ChannelData, MpscChannel, SenderEnd},
     governance::GovernanceAPI,
@@ -65,6 +65,7 @@ impl<C: DatabaseCollection> EventManager<C> {
         ledger_sender: SenderEnd<LedgerCommand, LedgerResponse>,
         own_identifier: KeyIdentifier,
         signature_manager: SelfSignatureManager,
+        derivator: DigestDerivator,
     ) -> Self {
         Self {
             input_channel,
@@ -77,6 +78,7 @@ impl<C: DatabaseCollection> EventManager<C> {
                 ledger_sender,
                 own_identifier,
                 signature_manager,
+                derivator
             ),
             token,
             notification_tx,

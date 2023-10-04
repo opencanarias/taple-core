@@ -12,7 +12,7 @@ use crate::{
     message::{MessageConfig, MessageTaskCommand},
     protocol::protocol_message_manager::TapleMessages,
     signature::Signature,
-    Derivable, KeyIdentifier, Metadata,
+    Derivable, DigestDerivator, KeyIdentifier, Metadata,
 };
 
 use super::{errors::ValidationError, ValidationEvent, ValidationEventResponse};
@@ -23,6 +23,7 @@ pub struct Validation<C: DatabaseCollection> {
     database: DB<C>,
     signature_manager: SelfSignatureManager,
     message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
+    derivator: DigestDerivator,
 }
 
 impl<C: DatabaseCollection> Validation<C> {
@@ -31,12 +32,14 @@ impl<C: DatabaseCollection> Validation<C> {
         database: DB<C>,
         signature_manager: SelfSignatureManager,
         message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
+        derivator: DigestDerivator,
     ) -> Self {
         Self {
             gov_api,
             database,
             signature_manager,
             message_channel,
+            derivator,
         }
     }
 
@@ -128,7 +131,7 @@ impl<C: DatabaseCollection> Validation<C> {
         // Now we sign and send
         let validation_signature = self
             .signature_manager
-            .sign(&validation_event.proof)
+            .sign(&validation_event.proof, self.derivator)
             .map_err(ValidationError::ProtocolErrors)?;
         self.message_channel
             .tell(MessageTaskCommand::Request(

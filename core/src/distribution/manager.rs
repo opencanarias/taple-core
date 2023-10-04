@@ -9,7 +9,7 @@ use crate::{
     governance::{GovernanceAPI, GovernanceUpdatedMessage},
     message::MessageTaskCommand,
     protocol::protocol_message_manager::TapleMessages,
-    DatabaseCollection, Notification, Settings,
+    DatabaseCollection, Notification, Settings, DigestDerivator,
 };
 
 use super::{
@@ -37,6 +37,7 @@ impl<C: DatabaseCollection> DistributionManager<C> {
         signature_manager: SelfSignatureManager,
         settings: Settings,
         db: DB<C>,
+        derivator: DigestDerivator,
     ) -> Self {
         Self {
             input_channel,
@@ -49,6 +50,7 @@ impl<C: DatabaseCollection> DistributionManager<C> {
                 messenger_channel,
                 signature_manager,
                 settings,
+                derivator
             ),
         }
     }

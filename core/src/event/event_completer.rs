@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use json_patch::{patch, Patch};
+use log::warn;
 
 use crate::{
     commons::{
@@ -30,8 +31,8 @@ use crate::{
         ledger::request_gov_event, validation::create_validator_request,
     },
     validation::ValidationEvent,
-    ApprovalRequest, ApprovalResponse, DatabaseCollection, EvaluationResponse, EventRequest,
-    Notification, ValueWrapper,
+    ApprovalRequest, ApprovalResponse, DatabaseCollection, DigestDerivator, EvaluationResponse,
+    EventRequest, Notification, ValueWrapper,
 };
 use std::hash::Hash;
 
@@ -69,6 +70,7 @@ pub struct EventCompleter<C: DatabaseCollection> {
     event_validation_events: HashMap<DigestIdentifier, ValidationEvent>,
     // SignatureManager
     signature_manager: SelfSignatureManager,
+    derivator: DigestDerivator,
 }
 
 #[allow(dead_code)]
@@ -81,6 +83,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         ledger_sender: SenderEnd<LedgerCommand, LedgerResponse>,
         own_identifier: KeyIdentifier,
         signature_manager: SelfSignatureManager,
+        derivator: DigestDerivator,
     ) -> Self {
         Self {
             gov_api,
@@ -102,6 +105,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             event_validation_events: HashMap::new(),
             own_identifier,
             signature_manager,
+            derivator,
         }
     }
 
@@ -119,7 +123,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             governance_version,
             subject_id,
         );
-        let subject_signature = Signature::new(&validation_proof, subject_keys)?;
+        let subject_signature = Signature::new(&validation_proof, subject_keys, self.derivator)?;
         Ok(ValidationEvent {
             proof: validation_proof,
             subject_signature,
@@ -140,7 +144,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     subject,
                     event.content.sn,
                     event.content.hash_prev_event.clone(),
-                    event.content.hash_id()?,
+                    event.content.hash_id(self.derivator)?,
                     gov_version,
                 )
             }
@@ -148,7 +152,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 subject,
                 event.content.sn,
                 event.content.hash_prev_event.clone(),
-                event.content.hash_id()?,
+                event.content.hash_id(self.derivator)?,
                 gov_version,
                 transfer_request.public_key.clone(),
             ),
@@ -167,7 +171,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         };
         match &subject.keys {
             Some(keys) => {
-                let subject_signature = Signature::new(&proof, keys)?;
+                let subject_signature = Signature::new(&proof, keys, self.derivator)?;
                 Ok(ValidationEvent {
                     proof,
                     subject_signature,
@@ -220,6 +224,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     .await?;
                     let last_event_hash = DigestIdentifier::from_serializable_borsh(
                         &last_event.content,
+                        self.derivator,
                     )
                     .map_err(|_| {
                         EventError::CryptoError("Error generating last event hash".to_owned())
@@ -350,6 +355,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                             let event_prevalidated_hash =
                                 DigestIdentifier::from_serializable_borsh(
                                     &event_prevalidated.content,
+                                    self.derivator,
                                 )
                                 .map_err(|_| {
                                     EventError::CryptoError(
@@ -404,7 +410,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 }
             }
             EventRequest::EOL(_) => {
-                if subject.creator != event_request.signature.signer {
+                if subject.owner != event_request.signature.signer {
                     return Err(EventError::CloseNotAuthorized(
                         event_request.signature.signer.to_str(),
                     ));
@@ -415,7 +421,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         // Add to the hashmap to be able to access it when the validator signatures arrive.
         let event =
             &self.create_event_prevalidated_no_eval(event_request, &subject, gov_version)?;
-        let event_hash = DigestIdentifier::from_serializable_borsh(&event.content)
+        let event_hash = DigestIdentifier::from_serializable_borsh(&event.content, self.derivator)
             .map_err(|_| EventError::CryptoError("Error generating event hash".to_owned()))?;
         let validation_event = self.create_validation_event(&subject, &event, gov_version)?;
         let event_message = create_validator_request(validation_event.clone());
@@ -437,12 +443,22 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         subject: &Subject,
         gov_version: u64,
     ) -> Result<Signed<ApprovalRequest>, EventError> {
+        // We need to get the derivator from the previous validation proof if any
+        let derivator = match self
+            .database
+            .get_signatures(&subject.subject_id, subject.sn)
+        {
+            Ok((_, proof)) => proof.event_hash.derivator,
+            Err(crate::database::Error::EntryNotFound) => self.derivator,
+            Err(e) => return Err(EventError::DatabaseError(e.to_string())),
+        };
         let hash_prev_event = DigestIdentifier::from_serializable_borsh(
             &self
                 .database
                 .get_event(&subject.subject_id, subject.sn)
                 .map_err(|e| EventError::DatabaseError(e.to_string()))?
                 .content,
+            derivator,
         )
         .map_err(|_| {
             EventError::CryptoError("Error calculating the hash of the previous event".to_string())
@@ -455,7 +471,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 serde_json::from_str("[]")
                     .map_err(|_| EventError::CryptoError("Error parsing empty json".to_string()))?,
             ),
-            state_hash: subject.properties.hash_id()?,
+            state_hash: subject.properties.hash_id(self.derivator)?,
             hash_prev_event,
             gov_id: subject.governance_id.clone(),
         };
@@ -465,6 +481,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 .keys
                 .as_ref()
                 .expect("Llegados a aquí tenemos que ser owner"),
+            self.derivator,
         )
         .map_err(|_| {
             EventError::CryptoError(String::from("Error signing the hash of the proposal"))
@@ -481,8 +498,10 @@ impl<C: DatabaseCollection> EventCompleter<C> {
     ) -> Result<DigestIdentifier, EventError> {
         // Check if the content is correct (signature, invoker, etc)
         // Signature check:
+        warn!("Entra en pre event");
         event_request.verify().map_err(EventError::SubjectError)?;
-        let request_id = DigestIdentifier::from_serializable_borsh(&event_request)
+        warn!("After first verify");
+        let request_id = DigestIdentifier::generate_with_blake3(&event_request)
             .map_err(|_| EventError::HashGenerationFailed)?;
         // Comprobamos si ya tenemos la request registrada en el sistema
         match self.database.get_taple_request(&request_id) {
@@ -510,7 +529,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         &mut self,
         event_request: Signed<EventRequest>,
     ) -> Result<DigestIdentifier, EventError> {
-        let request_id = DigestIdentifier::from_serializable_borsh(&event_request)
+        let request_id = DigestIdentifier::generate_with_blake3(&event_request)
             .map_err(|_| EventError::HashGenerationFailed)?;
         if let EventRequest::Create(create_request) = &event_request.content {
             // Check if it is governance, then anything goes, otherwise check that the invoker is me and I can do it.
@@ -583,6 +602,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 create_request.public_key.to_str(),
                 create_request.governance_id.to_str(),
                 governance_version,
+                self.derivator,
             )?;
             // Once everything goes well, we create the pre-validated event and send it to validation.
             let event = Signed::<Event>::from_genesis_request(
@@ -590,10 +610,12 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 &subject_keys,
                 governance_version,
                 &initial_state,
+                self.derivator,
             )
             .map_err(EventError::SubjectError)?;
-            let event_hash = DigestIdentifier::from_serializable_borsh(&event.content)
-                .map_err(|_| EventError::HashGenerationFailed)?;
+            let event_hash =
+                DigestIdentifier::from_serializable_borsh(&event.content, self.derivator)
+                    .map_err(|_| EventError::HashGenerationFailed)?;
             let validation_event = self.create_validation_event_from_genesis(
                 create_request.clone(),
                 event_hash.clone(),
@@ -744,14 +766,12 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 // for signer in signers.iter() {
                 //     log::warn!("{}", signer.to_str());
                 // }
-                let event_preevaluation_hash = DigestIdentifier::from_serializable_borsh(
-                    &event_preevaluation,
-                )
-                .map_err(|_| {
-                    EventError::CryptoError(String::from(
-                        "Error calculating the hash of the event pre-evaluation",
-                    ))
-                })?;
+                let event_preevaluation_hash =
+                    DigestIdentifier::generate_with_blake3(&event_preevaluation).map_err(|_| {
+                        EventError::CryptoError(String::from(
+                            "Error calculating the hash of the event pre-evaluation",
+                        ))
+                    })?;
                 self.event_pre_evaluations
                     .insert(event_preevaluation_hash, event_preevaluation.clone());
                 // Add the event to the hashset to not complete two at the same time for the same subject
@@ -827,7 +847,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         evaluator_response
             .verify()
             .map_err(|error| EventError::CryptoError(error.to_string()))?;
-        let evaluation_hash = evaluator_response.content.hash_id()?;
+        let evaluation_hash = evaluator_response.content.hash_id(self.derivator)?;
         // Get subject to know if we have it and the subject metadata
         let subject = self
             .database
@@ -931,12 +951,22 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 })
                 .map(|(signature, _, _)| signature.signature.clone())
                 .collect();
+            // We need to get the derivator from the previous validation proof if any
+            let derivator = match self
+                .database
+                .get_signatures(&subject.subject_id, subject.sn)
+            {
+                Ok((_, proof)) => proof.event_hash.derivator,
+                Err(crate::database::Error::EntryNotFound) => self.derivator,
+                Err(e) => return Err(EventError::DatabaseError(e.to_string())),
+            };
             let hash_prev_event = DigestIdentifier::from_serializable_borsh(
                 &self
                     .database
                     .get_event(&subject.subject_id, subject.sn)
                     .map_err(|e| EventError::DatabaseError(e.to_string()))?
                     .content,
+                derivator,
             )
             .map_err(|_| {
                 EventError::CryptoError(
@@ -965,7 +995,9 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     hash_prev_event,
                     gov_id: subject.governance_id.clone(),
                 };
-                let approval_request_hash = approval_request.hash_id().map_err(|_| {
+                let approval_request_hash = approval_request
+                    .hash_id(DigestDerivator::Blake3_256)
+                    .map_err(|_| {
                     EventError::CryptoError(String::from(
                         "Error calculating the hash of the proposal",
                     ))
@@ -974,10 +1006,14 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     .keys
                     .as_ref()
                     .expect("Llegados a aquí tenemos que ser owner");
-                let subject_signature =
-                    Signature::new(&approval_request, &subject_keys).map_err(|_| {
-                        EventError::CryptoError(String::from("Error signing the Approval Request"))
-                    })?;
+                let subject_signature = Signature::new(
+                    &approval_request,
+                    &subject_keys,
+                    self.derivator,
+                )
+                .map_err(|_| {
+                    EventError::CryptoError(String::from("Error signing the Approval Request"))
+                })?;
                 let approval_request = Signed::<ApprovalRequest> {
                     content: approval_request,
                     signature: subject_signature,
@@ -1013,14 +1049,15 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                     evaluators: evaluator_signatures,
                     approvers: HashSet::new(),
                 };
-                let event_hash = event.hash_id()?;
+                let event_hash = event.hash_id(self.derivator)?;
                 let subject_keys = subject
                     .keys
                     .as_ref()
                     .expect("Llegados a aquí tenemos que ser owner");
-                let subject_signature = Signature::new(&event, &subject_keys).map_err(|_| {
-                    EventError::CryptoError(String::from("Error signing the Event"))
-                })?;
+                let subject_signature = Signature::new(&event, &subject_keys, self.derivator)
+                    .map_err(|_| {
+                        EventError::CryptoError(String::from("Error signing the Event"))
+                    })?;
                 let signed_event = Signed::<Event> {
                     content: event,
                     signature: subject_signature,
@@ -1214,14 +1251,17 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 evaluators,
                 approvers: approvals,
             };
-            let event_hash = event.hash_id()?;
+            let event_hash = event.hash_id(self.derivator)?;
             let subject_keys = subject
                 .keys
                 .as_ref()
                 .expect("Llegados a aquí tenemos que ser owner");
-            let subject_signature = Signature::new(&event, &subject_keys).map_err(|_| {
-                EventError::CryptoError(String::from("Error signing the Event (Approval stage)"))
-            })?;
+            let subject_signature =
+                Signature::new(&event, &subject_keys, self.derivator).map_err(|_| {
+                    EventError::CryptoError(String::from(
+                        "Error signing the Event (Approval stage)",
+                    ))
+                })?;
             let signed_event = Signed::<Event> {
                 content: event,
                 signature: subject_signature,
@@ -1286,6 +1326,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 create_request.public_key.to_str(),
                 create_request.governance_id.to_str(),
                 event.content.gov_version,
+                self.derivator,
             )?,
             EventRequest::Fact(state_request) => state_request.subject_id.clone(),
         };
@@ -1530,12 +1571,21 @@ impl<C: DatabaseCollection> EventCompleter<C> {
         subject: &Subject,
         gov_version: u64,
     ) -> Result<Signed<Event>, EventError> {
+        // We need to get the derivator from the previous validation proof if any
+        let derivator = match self
+            .database
+            .get_signatures(&subject.subject_id, subject.sn)
+        {
+            Ok((_, proof)) => proof.event_hash.derivator,
+            Err(crate::database::Error::EntryNotFound) => self.derivator,
+            Err(e) => return Err(EventError::DatabaseError(e.to_string())),
+        };
         let hash_prev_event = self
             .database
             .get_event(&subject.subject_id, subject.sn)
             .map_err(|e| EventError::DatabaseError(e.to_string()))?
             .content
-            .hash_id()?;
+            .hash_id(derivator)?;
         let event = Event {
             subject_id: subject.subject_id.clone(),
             event_request,
@@ -1545,7 +1595,7 @@ impl<C: DatabaseCollection> EventCompleter<C> {
                 serde_json::from_str("[]")
                     .map_err(|_| EventError::CryptoError("Error parsing empty json".to_string()))?,
             ),
-            state_hash: subject.properties.hash_id()?,
+            state_hash: subject.properties.hash_id(self.derivator)?,
             eval_success: true,
             appr_required: false,
             approved: true,
@@ -1553,11 +1603,12 @@ impl<C: DatabaseCollection> EventCompleter<C> {
             evaluators: HashSet::new(),
             approvers: HashSet::new(),
         };
-        let event_content_hash = event.hash_id()?;
+        let event_content_hash = event.hash_id(self.derivator)?;
         let subject_keys = subject.keys.as_ref().expect("Somos propietario");
-        let event_signature = Signature::new(&event, &subject_keys).map_err(|_| {
-            EventError::CryptoError(String::from("Error signing the hash of the event content"))
-        })?;
+        let event_signature =
+            Signature::new(&event, &subject_keys, self.derivator).map_err(|_| {
+                EventError::CryptoError(String::from("Error signing the hash of the event content"))
+            })?;
         let event = Signed::<Event> {
             content: event,
             signature: event_signature,
@@ -1612,10 +1663,13 @@ fn hash_match_after_patch(
     mut prev_properties: ValueWrapper,
 ) -> Result<bool, EventError> {
     if !evaluation.eval_success {
-        let state_hash_calculated = DigestIdentifier::from_serializable_borsh(&prev_properties)
-            .map_err(|_| {
-                EventError::CryptoError(String::from("Error calculating the hash of the state"))
-            })?;
+        let state_hash_calculated = DigestIdentifier::from_serializable_borsh(
+            &prev_properties,
+            evaluation.state_hash.derivator,
+        )
+        .map_err(|_| {
+            EventError::CryptoError(String::from("Error calculating the hash of the state"))
+        })?;
         Ok(state_hash_calculated == evaluation.state_hash)
     } else {
         let Ok(patch_json) = serde_json::from_value::<Patch>(json_patch.0) else {
@@ -1628,10 +1682,13 @@ fn hash_match_after_patch(
                 "Error applying patch".to_owned(),
             ));
         };
-        let state_hash_calculated = DigestIdentifier::from_serializable_borsh(&prev_properties)
-            .map_err(|_| {
-                EventError::CryptoError(String::from("Error calculating the hash of the state"))
-            })?;
+        let state_hash_calculated = DigestIdentifier::from_serializable_borsh(
+            &prev_properties,
+            evaluation.state_hash.derivator,
+        )
+        .map_err(|_| {
+            EventError::CryptoError(String::from("Error calculating the hash of the state"))
+        })?;
         Ok(state_hash_calculated == evaluation.state_hash)
     }
 }
