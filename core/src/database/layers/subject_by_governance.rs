@@ -1,4 +1,4 @@
-use super::utils::{get_by_range_governances, get_key, Element};
+use super::utils::{get_by_range, get_key, Element};
 use crate::commons::models::state::Subject;
 use crate::utils::{deserialize, serialize};
 use crate::DbError;
@@ -59,13 +59,13 @@ impl<C: DatabaseCollection> SubjectByGovernanceDb<C> {
         quantity: isize,
     ) -> Result<Vec<Subject>, DbError> {
         let governances = match from {
-            Some(_) => get_by_range_governances(
+            Some(_) => get_by_range(
                 from,
                 quantity,
                 &self.collection,
                 &format!("{}{}", &self.prefix.clone(), char::MAX),
             )?,
-            None => get_by_range_governances(
+            None => get_by_range(
                 from,
                 quantity,
                 &self.collection,
@@ -81,7 +81,7 @@ impl<C: DatabaseCollection> SubjectByGovernanceDb<C> {
         from: Option<String>,
         quantity: isize,
     ) -> Result<Vec<Subject>, DbError> {
-        let subjects = get_by_range_governances(
+        let subjects = get_by_range(
             from,
             quantity,
             &self.collection,
