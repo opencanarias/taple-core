@@ -9,7 +9,7 @@ use crate::{
     identifier::{DigestIdentifier, KeyIdentifier},
     request::EventRequest,
     signature::{Signature, Signed},
-    ApprovalResponse, Derivable, EvaluationRequest, EvaluationResponse,
+    ApprovalResponse, Derivable, DigestDerivator, EvaluationRequest, EvaluationResponse,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use json_patch::diff;
@@ -54,6 +54,7 @@ impl Event {
     pub(crate) fn get_approval_hash(
         &self,
         gov_id: DigestIdentifier,
+        derivator: DigestDerivator,
     ) -> Result<DigestIdentifier, SubjectError> {
         ApprovalRequest {
             event_request: self.event_request.clone(),
@@ -64,20 +65,20 @@ impl Event {
             hash_prev_event: self.hash_prev_event.clone(),
             gov_id,
         }
-        .hash_id()
+        .hash_id(derivator)
     }
 }
 
 impl HashId for Event {
-    fn hash_id(&self) -> Result<DigestIdentifier, SubjectError> {
-        DigestIdentifier::from_serializable_borsh(&self)
+    fn hash_id(&self, derivator: DigestDerivator) -> Result<DigestIdentifier, SubjectError> {
+        DigestIdentifier::from_serializable_borsh(&self, derivator)
             .map_err(|_| SubjectError::SignatureCreationFails("HashId for Event Fails".to_string()))
     }
 }
 
 impl HashId for Signed<Event> {
-    fn hash_id(&self) -> Result<DigestIdentifier, SubjectError> {
-        DigestIdentifier::from_serializable_borsh(&self).map_err(|_| {
+    fn hash_id(&self, derivator: DigestDerivator) -> Result<DigestIdentifier, SubjectError> {
+        DigestIdentifier::from_serializable_borsh(&self, derivator).map_err(|_| {
             SubjectError::SignatureCreationFails("HashId for Signed Event Fails".to_string())
         })
     }
@@ -89,6 +90,7 @@ impl Signed<Event> {
         subject_keys: &KeyPair,
         gov_version: u64,
         init_state: &ValueWrapper,
+        derivator: DigestDerivator,
     ) -> Result<Self, SubjectError> {
         let EventRequest::Create(start_request) = event_request.content.clone() else {
             return Err(SubjectError::NotCreateEvent)
@@ -106,10 +108,12 @@ impl Signed<Event> {
             public_key.to_str(),
             start_request.governance_id.to_str(),
             gov_version,
+            derivator
         )?;
-        let state_hash = DigestIdentifier::from_serializable_borsh(init_state).map_err(|_| {
-            SubjectError::CryptoError(String::from("Error converting state to hash"))
-        })?;
+        let state_hash =
+            DigestIdentifier::from_serializable_borsh(init_state, derivator).map_err(|_| {
+                SubjectError::CryptoError(String::from("Error converting state to hash"))
+            })?;
         let content = Event {
             subject_id,
             event_request,
@@ -124,9 +128,10 @@ impl Signed<Event> {
             evaluators: HashSet::new(),
             approvers: HashSet::new(),
         };
-        let subject_signature_event = Signature::new(&content, &subject_keys).map_err(|_| {
-            SubjectError::CryptoError(String::from("Error signing the hash of the proposal"))
-        })?;
+        let subject_signature_event =
+            Signature::new(&content, &subject_keys, derivator).map_err(|_| {
+                SubjectError::CryptoError(String::from("Error signing the hash of the proposal"))
+            })?;
         Ok(Self {
             content,
             signature: subject_signature_event,
@@ -162,7 +167,7 @@ impl Signed<Event> {
         };
         let eval_response = EvaluationResponse {
             patch: self.content.patch.clone(), // Esto no hace falta realmente
-            eval_req_hash: eval_request.hash_id()?,
+            eval_req_hash: eval_request.hash_id(DigestDerivator::Blake3_256)?,
             state_hash: self.content.state_hash.clone(),
             eval_success: self.content.eval_success,
             appr_required: self.content.appr_required,
@@ -205,7 +210,7 @@ impl Signed<Event> {
             gov_id,
         };
         let appr_response = ApprovalResponse {
-            appr_req_hash: appr_request.hash_id()?,
+            appr_req_hash: appr_request.hash_id(DigestDerivator::Blake3_256)?,
             approved: self.content.approved,
         };
         let mut approvers = HashSet::new();

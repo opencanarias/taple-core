@@ -18,7 +18,7 @@ use crate::{
     governance::GovernanceInterface,
     DatabaseCollection,
 };
-use crate::{Metadata, Settings};
+use crate::{Metadata, Settings, DigestDerivator};
 
 use super::error::{DistributionErrorResponses, DistributionManagerError};
 use super::StartDistribution;
@@ -29,6 +29,7 @@ pub struct InnerDistributionManager<G: GovernanceInterface, C: DatabaseCollectio
     signature_manager: SelfSignatureManager,
     timeout: u32,
     replication_factor: f64,
+    derivator: DigestDerivator,
 }
 
 impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, C> {
@@ -38,6 +39,7 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
         messenger_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
         signature_manager: SelfSignatureManager,
         settings: Settings,
+        derivator: DigestDerivator,
     ) -> Self {
         Self {
             governance,
@@ -46,6 +48,7 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
             signature_manager,
             timeout: settings.node.timeout,
             replication_factor: settings.node.replication_factor,
+            derivator
         }
     }
 
@@ -260,7 +263,7 @@ impl<G: GovernanceInterface, C: DatabaseCollection> InnerDistributionManager<G, 
         };
         let signature = self
             .signature_manager
-            .sign(&event)
+            .sign(&event, self.derivator)
             .map_err(|_| DistributionManagerError::SignGenerarionFailed)?;
         // Delete the previous signatures before adding the new ones
         self.db

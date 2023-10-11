@@ -6,7 +6,7 @@ use super::{
 use crate::database::{DatabaseCollection, DB};
 use crate::message::MessageTaskCommand;
 use crate::protocol::protocol_message_manager::TapleMessages;
-use crate::Notification;
+use crate::{Notification, DigestDerivator};
 use crate::{
     commons::{
         channel::{ChannelData, MpscChannel, SenderEnd},
@@ -46,6 +46,7 @@ impl<C: DatabaseCollection> ValidationManager<C> {
         token: CancellationToken,
         notification_tx: tokio::sync::mpsc::Sender<Notification>,
         message_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
+        derivator: DigestDerivator,
     ) -> Self {
         Self {
             input_channel,
@@ -54,6 +55,7 @@ impl<C: DatabaseCollection> ValidationManager<C> {
                 database,
                 signature_manager,
                 message_channel,
+                derivator
             ),
             token,
             notification_tx,

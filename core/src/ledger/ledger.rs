@@ -21,7 +21,9 @@ use crate::{
     utils::message::ledger::{request_event, request_gov_event},
     DatabaseCollection,
 };
-use crate::{ApprovalResponse, Event, KeyDerivator, Metadata, Notification, ValueWrapper};
+use crate::{
+    ApprovalResponse, DigestDerivator, Event, KeyDerivator, Metadata, Notification, ValueWrapper,
+};
 use std::collections::{hash_map::Entry, HashMap, HashSet};
 
 use super::errors::LedgerError;
@@ -42,6 +44,7 @@ pub struct Ledger<C: DatabaseCollection> {
         SenderEnd<DistributionMessagesNew, Result<(), DistributionErrorResponses>>,
     our_id: KeyIdentifier,
     notification_sender: tokio::sync::mpsc::Sender<Notification>,
+    derivator: DigestDerivator,
 }
 
 impl<C: DatabaseCollection> Ledger<C> {
@@ -55,6 +58,7 @@ impl<C: DatabaseCollection> Ledger<C> {
         >,
         our_id: KeyIdentifier,
         notification_sender: tokio::sync::mpsc::Sender<Notification>,
+        derivator: DigestDerivator,
     ) -> Self {
         Self {
             gov_api,
@@ -65,6 +69,7 @@ impl<C: DatabaseCollection> Ledger<C> {
             distribution_channel,
             our_id,
             notification_sender,
+            derivator
         }
     }
 
@@ -179,7 +184,7 @@ impl<C: DatabaseCollection> Ledger<C> {
         signatures: HashSet<Signature>,
         validation_proof: ValidationProof,
     ) -> Result<(), LedgerError> {
-        let request_id = DigestIdentifier::from_serializable_borsh(&event.content.event_request)
+        let request_id = DigestIdentifier::generate_with_blake3(&event.content.event_request)
             .map_err(|_| LedgerError::CryptoError("Error generating request hash".to_owned()))?;
         // Add to subject_is_gov if it is a governance and it is not
         let EventRequest::Create(create_request) = event.content.event_request.content.clone() else {
@@ -214,8 +219,13 @@ impl<C: DatabaseCollection> Ledger<C> {
             }
         };
         // Create subject from genesis and event
-        let subject = Subject::from_genesis_event(event.clone(), init_state, Some(subject_keys))
-            .map_err(LedgerError::SubjectError)?;
+        let subject = Subject::from_genesis_event(
+            event.clone(),
+            init_state,
+            Some(subject_keys),
+            self.derivator,
+        )
+        .map_err(LedgerError::SubjectError)?;
         let sn = event.content.sn;
         // Add subject and event to database
         let subject_id = subject.subject_id.clone();
@@ -297,7 +307,7 @@ impl<C: DatabaseCollection> Ledger<C> {
         validation_proof: ValidationProof,
     ) -> Result<(), LedgerError> {
         let event_request = event.content.event_request.clone();
-        let request_id = DigestIdentifier::from_serializable_borsh(&event_request)
+        let request_id = DigestIdentifier::generate_with_blake3(&event_request)
             .map_err(|_| LedgerError::CryptoError("Error generating request hash".to_owned()))?;
         let sn = event.content.sn;
         let subject_id = match &event_request.content {
@@ -548,10 +558,13 @@ impl<C: DatabaseCollection> Ledger<C> {
     ) -> Result<(), LedgerError> {
         // Check that no request with the same hash exists
         let event_request = event.content.event_request.clone();
-        let request_id = DigestIdentifier::from_serializable_borsh(&event_request)
+        let request_id = DigestIdentifier::generate_with_blake3(&event_request)
             .map_err(|_| LedgerError::CryptoError("Error generating request hash".to_owned()))?;
-        let event_hash = DigestIdentifier::from_serializable_borsh(&event.content)
-            .map_err(|_| LedgerError::CryptoError("Error generating event hash".to_owned()))?;
+        let event_hash = DigestIdentifier::from_serializable_borsh(
+            &event.content,
+            validation_proof.event_hash.derivator.clone(),
+        )
+        .map_err(|_| LedgerError::CryptoError("Error generating event hash".to_owned()))?;
         match self.database.get_taple_request(&request_id) {
             Ok(_) => return Err(LedgerError::RepeatedRequestId(request_id.to_str())),
             Err(error) => match error {
@@ -1044,6 +1057,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                     create_request.public_key.to_str(),
                     create_request.governance_id.to_str(),
                     event.content.gov_version,
+                    validation_proof.event_hash.derivator.clone(),
                 )?;
                 match self.database.get_subject(&subject_id) {
                     Ok(_) => {
@@ -1091,7 +1105,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                         },
                     }
                     // Send message to gov of governance updated with id and sn
-                    self.check_genesis(event, subject_id.clone()).await?;
+                    self.check_genesis(
+                        event,
+                        subject_id.clone(),
+                        validation_proof.event_hash.derivator.clone(),
+                    )
+                    .await?;
                     self.gov_api
                         .governance_updated(subject_id.clone(), 0)
                         .await?;
@@ -1116,7 +1135,12 @@ impl<C: DatabaseCollection> Ledger<C> {
                             },
                         }
                     }
-                    self.check_genesis(event, subject_id.clone()).await?;
+                    self.check_genesis(
+                        event,
+                        subject_id.clone(),
+                        validation_proof.event_hash.derivator.clone(),
+                    )
+                    .await?;
                     self.subject_is_gov.insert(subject_id.clone(), false);
                 }
                 match self.ledger_state.get_mut(&subject_id) {
@@ -1186,8 +1210,10 @@ impl<C: DatabaseCollection> Ledger<C> {
                             }
                         };
                         let gov_id = subject.governance_id.clone();
-                        let approval_request_hash =
-                            &event.content.get_approval_hash(gov_id).map_err(|_| {
+                        let approval_request_hash = &event
+                            .content
+                            .get_approval_hash(gov_id, DigestDerivator::Blake3_256)
+                            .map_err(|_| {
                                 LedgerError::CryptoError(
                                     "Error generating approval request hash".to_owned(),
                                 )
@@ -2062,7 +2088,7 @@ impl<C: DatabaseCollection> Ledger<C> {
         event: Signed<Event>,
     ) -> Result<(), LedgerError> {
         let event_request = event.content.event_request.clone();
-        let request_id = DigestIdentifier::from_serializable_borsh(&event_request)
+        let request_id = DigestIdentifier::generate_with_blake3(&event_request)
             .map_err(|_| LedgerError::CryptoError("Error generating request hash".to_owned()))?;
         match self.database.get_taple_request(&request_id) {
             Ok(_) => return Err(LedgerError::RepeatedRequestId(request_id.to_str())),
@@ -2073,8 +2099,6 @@ impl<C: DatabaseCollection> Ledger<C> {
         }
         // Cryptographic checks
         event.verify_signatures()?;
-        let _event_hash = DigestIdentifier::from_serializable_borsh(&event.content)
-            .map_err(|_| LedgerError::CryptoError("Error generating event hash".to_owned()))?;
         // Check if it is genesis or state
         let subject_id = match &event.content.event_request.content {
             EventRequest::Create(create_request) => {
@@ -2085,6 +2109,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                     create_request.public_key.to_str(),
                     create_request.governance_id.to_str(),
                     event.content.gov_version,
+                    event.content.subject_id.derivator.clone(),
                 )?
             }
             EventRequest::Fact(state_request) => state_request.subject_id.clone(),
@@ -2165,7 +2190,10 @@ impl<C: DatabaseCollection> Ledger<C> {
                                         .map_err(|_| LedgerError::NotificationChannelError);
                                     let approval_request_hash = &event
                                         .content
-                                        .get_approval_hash(subject.governance_id.clone())
+                                        .get_approval_hash(
+                                            subject.governance_id.clone(),
+                                            DigestDerivator::Blake3_256,
+                                        )
                                         .map_err(|_| {
                                             LedgerError::CryptoError(
                                                 "Error generating approval request hash".to_owned(),
@@ -2221,6 +2249,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                         };
                                         let event_hash = DigestIdentifier::from_serializable_borsh(
                                             &head_event.content,
+                                            validation_proof.event_hash.derivator.clone(),
                                         )
                                         .map_err(|_| {
                                             LedgerError::CryptoError(
@@ -2292,7 +2321,11 @@ impl<C: DatabaseCollection> Ledger<C> {
                                 if event.content.sn == 0 {
                                     // Check that event 0 is the one I need
                                     let metadata = self
-                                        .check_genesis(event.clone(), subject_id.clone())
+                                        .check_genesis(
+                                            event.clone(),
+                                            subject_id.clone(),
+                                            event.content.subject_id.derivator.clone(),
+                                        )
                                         .await?;
                                     // Check LCE validity. Ya no hace falta porque lo hacemos con la prueba de validación.
                                     // let lce = self.database.get_event(&subject_id, head)?;
@@ -2333,6 +2366,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                                         };
                                         let event_hash = DigestIdentifier::from_serializable_borsh(
                                             &head_event.content,
+                                            validation_proof.event_hash.derivator.clone(),
                                         )
                                         .map_err(|_| {
                                             LedgerError::CryptoError(
@@ -2510,13 +2544,13 @@ impl<C: DatabaseCollection> Ledger<C> {
         public_key: &KeyIdentifier,
     ) -> Result<(), LedgerError> {
         let hash_prev_event = match self.database.get_event(&subject.subject_id, subject.sn) {
-            Ok(event) => {
-                DigestIdentifier::from_serializable_borsh(&event.content).map_err(|_| {
-                    LedgerError::ValidationProofError(
-                        "Error parsing prev event content".to_string(),
-                    )
-                })?
-            }
+            Ok(event) => DigestIdentifier::from_serializable_borsh(
+                &event.content,
+                validation_proof.prev_event_hash.derivator.clone(),
+            )
+            .map_err(|_| {
+                LedgerError::ValidationProofError("Error parsing prev event content".to_string())
+            })?,
             Err(error) => match error {
                 crate::DbError::EntryNotFound => {
                     if subject.sn == 0 {
@@ -2576,6 +2610,7 @@ impl<C: DatabaseCollection> Ledger<C> {
         &self,
         event: Signed<Event>,
         subject_id: DigestIdentifier,
+        derivator: DigestDerivator,
     ) -> Result<Metadata, LedgerError> {
         let EventRequest::Create(create_request) = &event.content.event_request.content else {
             return Err(LedgerError::StateInGenesis);
@@ -2609,11 +2644,11 @@ impl<C: DatabaseCollection> Ledger<C> {
                 metadata.governance_version.clone(),
             )
             .await?;
-        let subject = Subject::from_genesis_event(event.clone(), init_state, None)?;
+        let subject = Subject::from_genesis_event(event.clone(), init_state, None, derivator)?;
         self.database
             .set_governance_index(&subject_id, &subject.governance_id)?;
         let event_request = event.content.event_request.clone();
-        let request_id = DigestIdentifier::from_serializable_borsh(&event_request)
+        let request_id = DigestIdentifier::generate_with_blake3(&event_request)
             .map_err(|_| LedgerError::CryptoError("Error generating request hash".to_owned()))?;
         let sn = event.content.sn;
         let success = event.content.eval_success && event.content.approved;
@@ -2663,6 +2698,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                     _ => LedgerError::DatabaseError(error),
                 })?
                 .content,
+            event.content.hash_prev_event.derivator.clone(),
         )
         .map_err(|_| LedgerError::CryptoError("Error generating hash".to_owned()))?;
         // Check previous event fits
@@ -2682,6 +2718,15 @@ impl<C: DatabaseCollection> Ledger<C> {
         owner: KeyIdentifier,
         public_key: KeyIdentifier,
     ) -> Result<Subject, LedgerError> {
+        let event = self
+            .database
+            .get_event(&subject_id, sn)
+            .map_err(|error| match error {
+                crate::database::Error::EntryNotFound => {
+                    LedgerError::UnexpectEventMissingInEventSourcing
+                }
+                _ => LedgerError::DatabaseError(error),
+            })?;
         let prev_event_hash = DigestIdentifier::from_serializable_borsh(
             &self
                 .database
@@ -2693,17 +2738,9 @@ impl<C: DatabaseCollection> Ledger<C> {
                     _ => LedgerError::DatabaseError(error),
                 })?
                 .content,
+                event.content.hash_prev_event.derivator.clone()
         )
         .map_err(|_| LedgerError::CryptoError("Error generating hash".to_owned()))?;
-        let event = self
-            .database
-            .get_event(&subject_id, sn)
-            .map_err(|error| match error {
-                crate::database::Error::EntryNotFound => {
-                    LedgerError::UnexpectEventMissingInEventSourcing
-                }
-                _ => LedgerError::DatabaseError(error),
-            })?;
         // Check previous event fits
         if event.content.hash_prev_event != prev_event_hash {
             return Err(LedgerError::EventDoesNotFitHash);
@@ -2770,6 +2807,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                     _ => LedgerError::DatabaseError(error),
                 })?
                 .content,
+                event.content.hash_prev_event.derivator.clone()
         )
         .map_err(|_| LedgerError::CryptoError("Error generating hash".to_owned()))?;
         // Check previous event fits
@@ -2811,6 +2849,7 @@ impl<C: DatabaseCollection> Ledger<C> {
                     _ => LedgerError::DatabaseError(error),
                 })?
                 .content,
+                event.content.hash_prev_event.derivator.clone()
         )
         .map_err(|_| LedgerError::CryptoError("Error generating hash".to_owned()))?;
         // Check previous event fits

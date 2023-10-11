@@ -1,6 +1,6 @@
 use borsh::BorshSerialize;
 
-use crate::DigestIdentifier;
+use crate::{DigestIdentifier, DigestDerivator};
 
 use super::errors::SubjectError;
 
@@ -16,5 +16,5 @@ pub mod validation;
 pub mod value_wrapper;
 
 pub trait HashId: BorshSerialize {
-    fn hash_id(&self) -> Result<DigestIdentifier, SubjectError>;
+    fn hash_id(&self, derivator: DigestDerivator) -> Result<DigestIdentifier, SubjectError>;
 }

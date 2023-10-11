@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     commons::errors::SubjectError,
     signature::{Signature, Signed},
-    DigestIdentifier, KeyIdentifier, ValueWrapper,
+    DigestIdentifier, KeyIdentifier, ValueWrapper, DigestDerivator,
 };
 
 use super::HashId;
@@ -74,8 +74,8 @@ impl EventRequest {
 }
 
 impl HashId for EventRequest {
-    fn hash_id(&self) -> Result<DigestIdentifier, SubjectError> {
-        DigestIdentifier::from_serializable_borsh(&self).map_err(|_| {
+    fn hash_id(&self, derivator: DigestDerivator) -> Result<DigestIdentifier, SubjectError> {
+        DigestIdentifier::from_serializable_borsh(&self, derivator).map_err(|_| {
             SubjectError::SignatureCreationFails("HashId for EventRequest Fails".to_string())
         })
     }
@@ -123,7 +123,7 @@ impl TryFrom<Signed<EventRequest>> for TapleRequest {
     type Error = SubjectError;
 
     fn try_from(event_request: Signed<EventRequest>) -> Result<Self, Self::Error> {
-        let id = DigestIdentifier::from_serializable_borsh(&event_request)
+        let id = DigestIdentifier::generate_with_blake3(&event_request)
             .map_err(|_| SubjectError::CryptoError("Error generation request hash".to_owned()))?;
         let subject_id = match &event_request.content {
             crate::EventRequest::Create(_) => None,

@@ -5,7 +5,7 @@ use crate::{
         identifier::{DigestIdentifier, KeyIdentifier},
     },
     signature::Signed,
-    Derivable, Event,
+    Derivable, Event, DigestDerivator,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use json_patch::{patch, Patch};
@@ -138,6 +138,7 @@ impl Subject {
         event: Signed<Event>,
         init_state: ValueWrapper,
         keys: Option<KeyPair>,
+        derivator: DigestDerivator
     ) -> Result<Self, SubjectError> {
         let EventRequest::Create(create_request) = event.content.event_request.content.clone() else {
             return Err(SubjectError::NotCreateEvent)
@@ -148,6 +149,7 @@ impl Subject {
             create_request.public_key.to_str(),
             create_request.governance_id.to_str(),
             event.content.gov_version,
+            derivator
         )?;
         Ok(Subject {
             keys,
@@ -194,9 +196,9 @@ impl Subject {
         self.sn = sn;
     }
 
-    pub fn get_state_hash(&self) -> Result<DigestIdentifier, SubjectError> {
+    pub fn get_state_hash(&self, derivator: DigestDerivator) -> Result<DigestIdentifier, SubjectError> {
         Ok(
-            DigestIdentifier::from_serializable_borsh(&self.properties).map_err(|_| {
+            DigestIdentifier::from_serializable_borsh(&self.properties, derivator).map_err(|_| {
                 SubjectError::CryptoError(String::from("Error calculating the hash of the state"))
             })?,
         )
@@ -209,6 +211,7 @@ impl Subject {
     pub fn state_hash_after_apply(
         &self,
         json_patch: ValueWrapper,
+        derivator: DigestDerivator
     ) -> Result<DigestIdentifier, SubjectError> {
         let mut subject_properties = self.properties.clone();
         let json_patch = serde_json::from_value::<Patch>(json_patch.0)
@@ -217,7 +220,7 @@ impl Subject {
             SubjectError::CryptoError(String::from("Error applying the json patch"))
         })?;
         Ok(
-            DigestIdentifier::from_serializable_borsh(&subject_properties).map_err(|_| {
+            DigestIdentifier::from_serializable_borsh(&subject_properties, derivator).map_err(|_| {
                 SubjectError::CryptoError(String::from("Error calculating the hash of the state"))
             })?,
         )
@@ -230,6 +233,7 @@ pub fn generate_subject_id(
     public_key: String,
     governance_id: String,
     governance_version: u64,
+    derivator: DigestDerivator
 ) -> Result<DigestIdentifier, SubjectError> {
     let subject_id = DigestIdentifier::from_serializable_borsh((
         namespace,
@@ -237,7 +241,7 @@ pub fn generate_subject_id(
         public_key,
         governance_id,
         governance_version,
-    ))
+    ), derivator)
     .map_err(|_| SubjectError::ErrorCreatingSubjectId)?;
     Ok(subject_id)
 }
