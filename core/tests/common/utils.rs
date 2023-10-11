@@ -4,7 +4,7 @@ use taple_core::{
     crypto::{Ed25519KeyPair, KeyGenerator, KeyMaterial, KeyPair},
     request::StartRequest,
     signature::{Signature, Signed},
-    Api, DigestIdentifier, EventRequest, KeyIdentifier, SubjectData,
+    Api, DigestIdentifier, EventRequest, KeyIdentifier, SubjectData, DigestDerivator,
 };
 
 pub async fn check_subject(
@@ -42,10 +42,10 @@ impl McNodeData {
         self.peer_id.clone()
     }
 
-    pub fn sign_event_request(&self, content: &EventRequest) -> Signed<EventRequest> {
+    pub fn sign_event_request(&self, content: &EventRequest, derivator: DigestDerivator) -> Signed<EventRequest> {
         Signed {
             content: content.clone(),
-            signature: Signature::new(content, &self.keys).unwrap(),
+            signature: Signature::new(content, &self.keys, derivator).unwrap(),
         }
     }
 }
