@@ -14,7 +14,7 @@ use crate::{
     protocol::protocol_message_manager::TapleMessages,
     signature::Signed,
     utils::message::event::create_approver_response,
-    ApprovalRequest, DatabaseCollection, Notification, Settings,
+    ApprovalRequest, DatabaseCollection, Notification, Settings, DigestDerivator,
 };
 
 use super::{
@@ -128,6 +128,7 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
         notification_tx: tokio::sync::mpsc::Sender<Notification>,
         settings: Settings,
         database: DB<C>,
+        derivator: DigestDerivator,
     ) -> Self {
         let passvotation = settings.node.passvotation.into();
         Self {
@@ -142,6 +143,7 @@ impl<C: DatabaseCollection> ApprovalManager<C> {
                 RequestNotifier::new(notification_tx),
                 signature_manager,
                 passvotation,
+                derivator
             ),
         }
     }

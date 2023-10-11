@@ -12,7 +12,7 @@ use crate::{
     governance::GovernanceInterface,
     identifier::DigestIdentifier,
     request::FactRequest,
-    DatabaseCollection, Derivable, EvaluationResponse, EventRequest, ValueWrapper,
+    DatabaseCollection, Derivable, EvaluationResponse, EventRequest, ValueWrapper, DigestDerivator,
 };
 
 use super::executor::{Contract, ContractExecutor, ContractResult};
@@ -21,21 +21,23 @@ pub struct TapleRunner<C: DatabaseCollection, G: GovernanceInterface> {
     database: DB<C>,
     executor: ContractExecutor,
     gov_api: G,
+    derivator: DigestDerivator
 }
 
 impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
-    pub fn new(database: DB<C>, engine: Engine, gov_api: G) -> Self {
+    pub fn new(database: DB<C>, engine: Engine, gov_api: G, derivator: DigestDerivator,) -> Self {
         Self {
             database,
             executor: ContractExecutor::new(engine),
             gov_api,
+            derivator
         }
     }
 
     pub fn generate_context_hash(
         execute_contract: &EvaluationRequest,
     ) -> Result<DigestIdentifier, ExecutorErrorResponses> {
-        DigestIdentifier::from_serializable_borsh(execute_contract)
+        DigestIdentifier::generate_with_blake3(execute_contract)
             .map_err(|_| ExecutorErrorResponses::ContextHashGenerationFailed)
     }
 
@@ -135,6 +137,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
                             })?),
                             state_hash: DigestIdentifier::from_serializable_borsh(
                                 &execute_contract.context.state,
+                                self.derivator
                             )
                             .map_err(|_| ExecutorErrorResponses::StateHashGenerationFailed)?,
                             eval_req_hash: context_hash,
@@ -170,12 +173,12 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
                             serde_json::from_str("[]").map_err(|_| {
                                 ExecutorErrorResponses::JSONPATCHDeserializationFailed
                             })?,
-                            execute_contract.context.state.hash_id()?,
+                            execute_contract.context.state.hash_id(self.derivator)?,
                         )
                     }
                     _ => (
                         generate_json_patch(&previous_state.0, &contract_result.final_state.0)?,
-                        DigestIdentifier::from_serializable_borsh(&contract_result.final_state)
+                        DigestIdentifier::from_serializable_borsh(&contract_result.final_state, self.derivator)
                             .map_err(|_| ExecutorErrorResponses::StateHashGenerationFailed)?,
                     ),
                 }
@@ -183,7 +186,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> TapleRunner<C, G> {
             false => (
                 serde_json::from_str("[]")
                     .map_err(|_| ExecutorErrorResponses::JSONPATCHDeserializationFailed)?,
-                execute_contract.context.state.hash_id()?,
+                execute_contract.context.state.hash_id(self.derivator)?,
             ),
         };
         Ok(EvaluationResponse {

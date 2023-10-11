@@ -24,6 +24,18 @@ impl DigestIdentifier {
 
     pub fn from_serializable_borsh<T: BorshSerialize>(
         serializable: T,
+        digest_derivator: DigestDerivator
+    ) -> Result<Self, crate::commons::errors::Error> {
+        let bytes = match serializable.try_to_vec() {
+            Ok(bytes) => bytes,
+            Err(_) => return Err(crate::commons::errors::Error::BorshSerializationFailed),
+        };
+        let bytes = digest_derivator.digest(&bytes);
+        Ok(DigestIdentifier::new(digest_derivator, &bytes))
+    }
+
+    pub fn generate_with_blake3<T: BorshSerialize>(
+        serializable: T,
     ) -> Result<Self, crate::commons::errors::Error> {
         let bytes = match serializable.try_to_vec() {
             Ok(bytes) => bytes,

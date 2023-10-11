@@ -1,5 +1,7 @@
+use crate::DigestDerivator;
 use crate::commons::identifier::KeyIdentifier;
 use crate::commons::self_signature_manager::SelfSignatureManager;
+use crate::identifier::derive::Derivator;
 use crate::signature::Signed;
 use log::debug;
 use rmp_serde;
@@ -17,6 +19,7 @@ pub struct MessageSender {
     sender: mpsc::Sender<Command>,
     controller_id: KeyIdentifier,
     signature_manager: SelfSignatureManager,
+    derivator: DigestDerivator,
 }
 
 /// Network MessageSender implementation
@@ -26,11 +29,13 @@ impl MessageSender {
         sender: mpsc::Sender<Command>,
         controller_id: KeyIdentifier,
         signature_manager: SelfSignatureManager,
+        derivator: DigestDerivator,
     ) -> Self {
         Self {
             sender,
             controller_id,
             signature_manager,
+            derivator
         }
     }
 
@@ -46,6 +51,7 @@ impl MessageSender {
             target.clone(),
             message,
             &self.signature_manager,
+            self.derivator
         )?;
         let bytes = rmp_serde::to_vec(&complete_message).unwrap();
         self.sender

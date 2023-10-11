@@ -12,7 +12,7 @@ use crate::{
         self_signature_manager::{SelfSignatureInterface, SelfSignatureManager},
     },
     signature::Signed,
-    DigestIdentifier,
+    DigestIdentifier, DigestDerivator,
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 pub use command::*;
@@ -38,8 +38,8 @@ pub struct MessageContent<T: TaskCommandContent> {
 }
 
 impl<T: TaskCommandContent> HashId for MessageContent<T> {
-    fn hash_id(&self) -> Result<DigestIdentifier, SubjectError> {
-        DigestIdentifier::from_serializable_borsh(&self)
+    fn hash_id(&self, derivator: DigestDerivator) -> Result<DigestIdentifier, SubjectError> {
+        DigestIdentifier::from_serializable_borsh(&self, derivator)
             .map_err(|_| SubjectError::CryptoError("Hashing error in MessageContent".to_string()))
     }
 }
@@ -50,6 +50,7 @@ impl<T: TaskCommandContent> Signed<MessageContent<T>> {
         receiver: KeyIdentifier,
         content: T,
         sender_sm: &SelfSignatureManager,
+        derivator: DigestDerivator,
     ) -> Result<Self, Error> {
         let message_content = MessageContent {
             sender_id: sender.clone(),
@@ -57,7 +58,7 @@ impl<T: TaskCommandContent> Signed<MessageContent<T>> {
             receiver,
         };
         let signature = sender_sm
-            .sign(&message_content)
+            .sign(&message_content, derivator)
             .map_err(|_| Error::CreatingMessageError)?;
         Ok(Self {
             content: message_content,

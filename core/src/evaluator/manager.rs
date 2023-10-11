@@ -18,7 +18,7 @@ use crate::protocol::protocol_message_manager::TapleMessages;
 use crate::request::EventRequest;
 use crate::signature::Signed;
 use crate::utils::message::event::create_evaluator_response;
-use crate::{EvaluationResponse, Notification};
+use crate::{EvaluationResponse, Notification, DigestDerivator};
 
 pub struct EvaluatorManager<
     M: DatabaseManager<C>,
@@ -33,6 +33,7 @@ pub struct EvaluatorManager<
     token: CancellationToken,
     _notification_tx: tokio::sync::mpsc::Sender<Notification>,
     messenger_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
+    derivator: DigestDerivator,
     _m: PhantomData<M>,
     _g: PhantomData<G>,
 }
@@ -53,6 +54,7 @@ impl<
         gov_api: G,
         contracts_path: String,
         messenger_channel: SenderEnd<MessageTaskCommand<TapleMessages>, ()>,
+        derivator: DigestDerivator,
     ) -> Self {
         let engine = Engine::default();
         let compiler = TapleCompiler::new(
@@ -69,13 +71,14 @@ impl<
         });
         Self {
             input_channel,
-            runner: TapleRunner::new(DB::new(database.clone()), engine, gov_api),
+            runner: TapleRunner::new(DB::new(database.clone()), engine, gov_api, derivator.clone()),
             signature_manager,
             token,
             _notification_tx: notification_tx,
             messenger_channel,
             _m: PhantomData::default(),
             _g: PhantomData::default(),
+            derivator
         }
     }
 
@@ -137,7 +140,7 @@ impl<
                         Ok(executor_response) => {
                             let signature = self
                                 .signature_manager
-                                .sign(&executor_response)
+                                .sign(&executor_response, self.derivator)
                                 .map_err(|_| EvaluatorError::SignatureGenerationFailed)?;
                             let signed_evaluator_response: crate::signature::Signed<
                                 crate::EvaluationResponse,
@@ -606,6 +609,7 @@ mod test {
             governance,
             SC_DIR.to_string(),
             msg_sx,
+            crate::DigestDerivator::Blake3_256
         );
         (manager, sx, sx_compiler, signature_manager, msg_rx)
     }
@@ -644,7 +648,7 @@ mod test {
                 .unwrap(),
             payload: ValueWrapper(json),
         });
-        let signature = signature_manager.sign(&request).unwrap();
+        let signature = signature_manager.sign(&request, crate::DigestDerivator::Blake3_256).unwrap();
         let event_request = Signed::<EventRequest> {
             content: request,
             signature,
