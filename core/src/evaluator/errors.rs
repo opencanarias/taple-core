@@ -115,6 +115,8 @@ pub enum CompilerErrorResponses {
     InvalidImportFound,
     #[error("No SDK found")]
     NoSDKFound,
+    #[error("Folder does not exists")]
+    FolderNotFound
 }
 
 #[derive(Error, Debug)]

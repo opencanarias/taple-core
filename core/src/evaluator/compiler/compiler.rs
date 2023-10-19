@@ -6,12 +6,10 @@ use crate::{database::DB, evaluator::errors::CompilerErrorResponses, DatabaseCol
 use async_std::fs;
 use log::{debug, info};
 use std::collections::HashSet;
-use std::fs::create_dir;
 use std::path::Path;
 use std::process::Command;
 use wasmtime::{Engine, ExternType};
 
-use super::manifest::get_toml;
 
 pub struct Compiler<C: DatabaseCollection, G: GovernanceInterface> {
     database: DB<C>,
@@ -36,19 +34,8 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
     pub async fn init(&self) -> Result<(), CompilerError> {
         // Checks if the governance contract exists in the system
         // If it does not exist, it compiles and saves it.
-        let cargo_path = format!("{}/Cargo.toml", self.contracts_path);
-        if !Path::new(&cargo_path).exists() {
-            let toml: String = get_toml();
-            // We write cargo.toml
-            fs::write(cargo_path, toml)
-                .await
-                .map_err(|_| CompilerErrorResponses::WriteFileError)?;
-        }
-        let src_path = format!("{}/src", self.contracts_path);
-        if !Path::new(&src_path).exists() {
-            create_dir(&src_path).map_err(|e| {
-                CompilerErrorResponses::FolderNotCreated(src_path.to_string(), e.to_string())
-            })?;
+        if !Path::new(&self.contracts_path).exists() {
+            return Err(CompilerError::InternalError(CompilerErrorResponses::FolderNotFound));
         }
         Ok(())
     }
@@ -133,6 +120,7 @@ impl<C: DatabaseCollection, G: GovernanceInterface> Compiler<C, G> {
         info!("Compiling contract: {} {} {}", schema_id, governance_id, sn);
         let status = Command::new("cargo")
             .arg("build")
+            .arg("--offline")
             .arg(format!(
                 "--manifest-path={}/Cargo.toml",
                 self.contracts_path
