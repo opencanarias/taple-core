@@ -138,5 +138,11 @@ pub enum GovernanceStateError {
     #[error("ID specified for Role::Who does not exist")]
     IdWhoRoleNoExist,
     #[error("Name specified for Role::Who does not exist")]
-    NameWhoRoleNoExist
+    NameWhoRoleNoExist,
+    #[error("Invalid initial state for schema")]
+    InvalidInitialState,
+    #[error("Invalid schema defined")]
+    InvalidSchemaDefined,
+    #[error("Invalid JSON value defined")]
+    InvalidJSONValue,
 }

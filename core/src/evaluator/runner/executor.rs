@@ -4,6 +4,7 @@ use crate::{
     commons::schema_handler::gov_models::{
         Governance, GovernanceEvent, Member, Policy, Role, Schema, SchemaEnum, Who,
     },
+    commons::schema_handler::Schema as SchemaCompile,
     evaluator::errors::{ExecutorErrorResponses, GovernanceStateError},
     utils::patch::apply_patch,
     ValueWrapper,
@@ -307,6 +308,16 @@ fn check_schemas(
             // No tiene relación con policies_names
             return Err(GovernanceStateError::NoCorrelationSchemaPolicy);
         }
+        // We will check if the initial value associated is correct in accordance to the schema itself
+        let schema_compiled = SchemaCompile::compile(&schema.schema)
+            .map_err(|_| GovernanceStateError::InvalidSchemaDefined)?;
+        schema_compiled
+            .validate(
+                &serde_json::to_value(&schema.initial_value)
+                    .map_err(|_| GovernanceStateError::InvalidJSONValue)?,
+            )
+            .then(|| ())
+            .ok_or(GovernanceStateError::InvalidInitialState)?;
     }
     if !policies_names.is_empty() {
         return Err(GovernanceStateError::PoliciesWithoutSchema);
