@@ -104,6 +104,7 @@ pub(crate) mod event;
 pub(crate) mod protocol;
 
 mod node;
+pub use crate::network::network::GoogleDns;
 pub use api::{Api, ApiError};
 pub use commons::crypto;
 pub use commons::identifier;

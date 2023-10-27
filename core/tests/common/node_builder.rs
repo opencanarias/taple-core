@@ -1,8 +1,8 @@
 use std::str::FromStr;
 
 use taple_core::{
-    Api, DigestIdentifier, Error, ListenAddr, MemoryCollection, MemoryManager, Notification,
-    Settings,
+    Api, DigestIdentifier, Error, GoogleDns, ListenAddr, MemoryCollection, MemoryManager,
+    Notification, Settings,
 };
 
 use taple_core::Node;
@@ -40,7 +40,8 @@ impl NodeBuilder {
         std::fs::create_dir_all(&path).expect("TMP DIR could not be created");
         settings.node.smartcontracts_directory = path;
         let database = MemoryManager::new();
-        let (node, api) = Node::build(settings, database)?;
+        let google_dns = GoogleDns::new();
+        let (node, api) = Node::build(settings, database, google_dns)?;
         Ok(OnMemoryNode::new(node, api))
     }
 
@@ -65,14 +66,14 @@ pub enum PassVotation {
 }
 
 pub struct OnMemoryNode {
-    taple: Node<MemoryManager, MemoryCollection>,
+    taple: Node<MemoryManager, MemoryCollection, GoogleDns>,
     api: Api,
 }
 
 const MAX_TIMEOUT_MS: u16 = 5000;
 
 impl OnMemoryNode {
-    pub fn new(taple: Node<MemoryManager, MemoryCollection>, api: Api) -> Self {
+    pub fn new(taple: Node<MemoryManager, MemoryCollection, GoogleDns>, api: Api) -> Self {
         Self { taple, api }
     }
 

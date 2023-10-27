@@ -6,11 +6,14 @@ pub mod tell;
 #[cfg(test)]
 mod tests {
     pub use crate::message::{MessageReceiver, MessageSender, NetworkEvent};
-    use crate::network::{
-        network::{NetworkComposedEvent, NetworkProcessor, TapleNetworkBehavior},
-        tell::TellBehaviourEvent,
-    };
     use crate::{message::Command, network::routing::RoutingComposedEvent, ListenAddr};
+    use crate::{
+        network::{
+            network::{NetworkComposedEvent, NetworkProcessor, TapleNetworkBehavior},
+            tell::TellBehaviourEvent,
+        },
+        GoogleDns,
+    };
     use log::debug;
     use tokio_util::sync::CancellationToken;
 
@@ -51,6 +54,7 @@ mod tests {
             let (sender_boot, receiver_boot) = mpsc::channel(10000);
             let (notification_tx, notification_rx) = mpsc::channel(1000);
             let token = CancellationToken::new();
+            let dns1 = GoogleDns::new();
             let bootstrap_network = NetworkProcessor::new(
                 vec![ListenAddr::try_from(String::from("/memory/647988")).unwrap()],
                 vec![],
@@ -58,7 +62,8 @@ mod tests {
                 mc1,
                 token.clone(),
                 notification_tx.clone(),
-                vec![]
+                vec![],
+                dns1
             ).unwrap();
             let msg_sender_boot = bootstrap_network.client();
             let mut msg_rcv_boot = ReceiverStream::new(receiver_boot);
@@ -68,6 +73,7 @@ mod tests {
                 format!("paco").as_bytes(),
             ));
             let (sender1, receiver1) = mpsc::channel(10000);
+            let dns2 = GoogleDns::new();
             let node1_network = NetworkProcessor::new(
                 vec![ListenAddr::try_from(String::from("/memory/647999")).unwrap()],
                 vec![(bt_pid, String::from("/memory/647988").parse().unwrap())],
@@ -75,7 +81,8 @@ mod tests {
                 mc2,
                 token,
                 notification_tx,
-                vec![]
+                vec![],
+                dns2
             ).unwrap();
             let msg_sender_1 = node1_network.client();
             let mut msg_rcv_1 = ReceiverStream::new(receiver1);

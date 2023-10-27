@@ -21,7 +21,7 @@ use libp2p::{
         transport::{Boxed, MemoryTransport},
         upgrade,
     },
-    dns,
+    dns::{self, ResolverConfig},
     identity::{ed25519, Keypair},
     kad::{
         AddProviderOk, GetClosestPeersError, GetClosestPeersOk, KademliaEvent, PeerRecord,
@@ -35,10 +35,14 @@ use libp2p::{
     yamux, Multiaddr, NetworkBehaviour, PeerId, Swarm, Transport,
 };
 use log::{debug, error, info};
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::error::Error;
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    net::IpAddr,
+};
+use std::{error::Error, net::Ipv4Addr};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
+use trust_dns_resolver::{self, config::NameServerConfigGroup};
 
 #[cfg(test)]
 use libp2p::kad::{record::Key, QueryId, Quorum, Record};
@@ -171,7 +175,7 @@ enum ListenProtocols {
 }
 
 impl NetworkProcessor {
-    pub fn new(
+    pub fn new<T: CustomDns>(
         addr: Vec<ListenAddr>,
         bootstrap_nodes: Vec<(PeerId, Multiaddr)>,
         event_sender: mpsc::Sender<NetworkEvent>,
@@ -179,6 +183,7 @@ impl NetworkProcessor {
         token: CancellationToken,
         notification_tx: tokio::sync::mpsc::Sender<Notification>,
         external_addresses: Vec<Multiaddr>,
+        dns: T,
     ) -> Result<Self, Box<dyn Error>> {
         let transport_protocol = check_listen_addr_integrity(&addr)?;
         let public_key = controller_mc.public_key_bytes();
@@ -193,7 +198,8 @@ impl NetworkProcessor {
                 .into_authentic(&local_key)
                 .expect("Signing libp2p-noise static DH keypair failed.");
 
-        let transport = create_transport_by_protocol(transport_protocol, noise_key);
+        // Se tiene que tener en cuenta los custom DNS
+        let transport = create_transport_by_protocol(transport_protocol, noise_key, dns);
         let peer_id = local_key.public().to_peer_id();
 
         // Swarm creation
@@ -663,8 +669,9 @@ impl NetworkProcessor {
     }
 }
 
-fn create_ip4_ip6_transport(
+fn create_ip4_ip6_transport<T: CustomDns>(
     noise_key: noise::AuthenticKeypair<noise::X25519Spec>,
+    dns: T,
 ) -> Boxed<(PeerId, StreamMuxerBox)> {
     let transport = TokioTcpConfig::new()
         .nodelay(true)
@@ -684,10 +691,33 @@ fn create_ip4_ip6_transport(
                 .multiplex(mplex::MplexConfig::new())
                 .boxed();
             // TODO: Lo mismo aquí
+
+            // No puedo utilizar el NameServerConfig ... Por lo que no puedo pasarle la configuracion
+            let my_dns_config = dns.custom_dns();
+            let my_name_server_config: NameServerConfigGroup =
+                NameServerConfigGroup::from_ips_clear(
+                    my_dns_config
+                        .ip
+                        .into_iter()
+                        .map(|ip| IpAddr::V4(Ipv4Addr::from(ip)))
+                        .collect::<Vec<IpAddr>>()
+                        .as_slice(),
+                    my_dns_config.port,
+                    my_dns_config.nx_responses,
+                );
+
+            // De momento solo usamos el name_server y se deja vacio el dominio y search
+            // let my_name: Name
+            // let my_dns_names: Vec<Name>;
+            // my_dns.set_domain(my_name);
+            // my_dns.add_search(my_name[0]);
+            let my_resolver_config =
+                ResolverConfig::from_parts(None, vec![], my_name_server_config);
+
             match dns::GenDnsConfig::custom(
                 transport,
-                dns::ResolverConfig::cloudflare(),
-                dns::ResolverOpts::default(),
+                my_resolver_config, //Esto es lo que se quiere parametrizar
+                dns::ResolverOpts::default(), //Esto se deja como default
             ) {
                 Ok(t) => t.boxed(),
                 Err(_) => TokioTcpConfig::new()
@@ -701,16 +731,45 @@ fn create_ip4_ip6_transport(
     }
 }
 
-fn create_transport_by_protocol(
+fn create_transport_by_protocol<T: CustomDns>(
     protocol: ListenProtocols,
     noise_key: noise::AuthenticKeypair<noise::X25519Spec>,
+    dns: T,
 ) -> Boxed<(PeerId, StreamMuxerBox)> {
     match protocol {
-        ListenProtocols::IP => create_ip4_ip6_transport(noise_key),
+        ListenProtocols::IP => create_ip4_ip6_transport(noise_key, dns),
         ListenProtocols::Memory => MemoryTransport
             .upgrade(upgrade::Version::V1)
             .authenticate(noise::NoiseConfig::xx(noise_key.clone()).into_authenticated())
             .multiplex(yamux::YamuxConfig::default())
             .boxed(),
+    }
+}
+
+pub struct CustomDnsConfig {
+    pub ip: Vec<[u8; 4]>,
+    pub port: u16,
+    pub nx_responses: bool,
+}
+
+pub trait CustomDns {
+    fn custom_dns(&self) -> CustomDnsConfig;
+}
+
+pub struct GoogleDns {}
+
+impl GoogleDns {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+impl CustomDns for GoogleDns {
+    fn custom_dns(&self) -> CustomDnsConfig {
+        CustomDnsConfig {
+            ip: vec![[8, 8, 8, 8], [8, 8, 4, 4]],
+            port: 53,
+            nx_responses: true,
+        }
     }
 }

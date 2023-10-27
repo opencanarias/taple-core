@@ -46,6 +46,9 @@ hex = "0.4.3"
 libp2p = { version = "0.45.1", default_features = false }
 wasmtime = "9.0.4"
 serial_test = "1"
+# TODO: Pendiente la version de LibP2P es la 0.21.2 pero si probamamos con * o con ^0 coge la 0.23.1
+# trust-dns-resolver = "^0"
+trust-dns-resolver = "0.21.2"
 
 [profile.release]
 lto = true

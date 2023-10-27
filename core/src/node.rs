@@ -27,7 +27,7 @@ use crate::message::{
     MessageContent, MessageReceiver, MessageSender, MessageTaskCommand, MessageTaskManager,
     NetworkEvent,
 };
-use crate::network::network::NetworkProcessor;
+use crate::network::network::{CustomDns, NetworkProcessor};
 use crate::protocol::protocol_message_manager::{ProtocolManager, TapleMessages};
 use crate::signature::Signed;
 #[cfg(feature = "validation")]
@@ -53,14 +53,15 @@ const BUFFER_SIZE: usize = 1000;
 /// of [configuration](Settings) parameters in order to be properly initialized.
 ///
 #[derive(Debug)]
-pub struct Node<M: DatabaseManager<C>, C: DatabaseCollection> {
+pub struct Node<M: DatabaseManager<C>, C: DatabaseCollection, D: CustomDns> {
     notification_rx: mpsc::Receiver<Notification>,
     token: CancellationToken,
     _m: PhantomData<M>,
     _c: PhantomData<C>,
+    _d: PhantomData<D>,
 }
 
-impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Node<M, C> {
+impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static, D: CustomDns> Node<M, C, D> {
     /// This method creates and initializes a TAPLE node.
     /// # Possible results
     /// If the process is successful, the method will return `Ok(())`.
@@ -68,7 +69,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Node<M, C
     /// for the initialization of the components, mainly due to problems in the initial [configuration](Settings).
     /// # Panics
     /// This method panics if it has not been possible to generate the network layer.
-    pub fn build(settings: Settings, database: M) -> Result<(Self, Api), Error> {
+    pub fn build(settings: Settings, database: M, dns: D) -> Result<(Self, Api), Error> {
         let (api_rx, api_tx) = MpscChannel::new(BUFFER_SIZE);
 
         let (notification_tx, notification_rx) = mpsc::channel(BUFFER_SIZE);
@@ -133,6 +134,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Node<M, C
             token.clone(),
             notification_tx.clone(),
             external_addresses(&settings.network.external_address)?,
+            dns,
         )
         .expect("Network created");
 
@@ -152,7 +154,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Node<M, C
             network_manager.client(),
             controller_id.clone(),
             signature_manager.clone(),
-            settings.node.digest_derivator
+            settings.node.digest_derivator,
         );
 
         let task_manager =
@@ -192,7 +194,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Node<M, C
             ledger_tx.clone(),
             signature_manager.get_own_identifier(),
             signature_manager.clone(),
-            settings.node.digest_derivator
+            settings.node.digest_derivator,
         );
 
         let ledger_manager = LedgerManager::new(
@@ -204,7 +206,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Node<M, C
             task_tx.clone(),
             distribution_tx,
             controller_id.clone(),
-            settings.node.digest_derivator
+            settings.node.digest_derivator,
         );
 
         let as_manager = AuthorizedSubjectsManager::new(
@@ -239,7 +241,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Node<M, C
             GovernanceAPI::new(governance_tx.clone()),
             settings.node.smartcontracts_directory.clone(),
             task_tx.clone(),
-            settings.node.digest_derivator
+            settings.node.digest_derivator,
         );
 
         #[cfg(feature = "approval")]
@@ -253,7 +255,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Node<M, C
             notification_tx.clone(),
             settings.clone(),
             DB::new(database.clone()),
-            settings.node.digest_derivator
+            settings.node.digest_derivator,
         );
 
         let distribution_manager = DistributionManager::new(
@@ -266,7 +268,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Node<M, C
             signature_manager.clone(),
             settings.clone(),
             DB::new(database.clone()),
-            settings.node.digest_derivator
+            settings.node.digest_derivator,
         );
 
         #[cfg(feature = "validation")]
@@ -278,7 +280,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Node<M, C
             token.clone(),
             notification_tx,
             task_tx,
-            settings.node.digest_derivator
+            settings.node.digest_derivator,
         );
 
         let taple = Node {
@@ -286,6 +288,7 @@ impl<M: DatabaseManager<C> + 'static, C: DatabaseCollection + 'static> Node<M, C
             token,
             _m: PhantomData::default(),
             _c: PhantomData::default(),
+            _d: PhantomData::default(),
         };
 
         let api = Api::new(
